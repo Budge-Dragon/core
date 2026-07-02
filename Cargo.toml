@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["core"]
+# Future host crates live under hosts/ (see hosts/README.md) and are added
+# here when created. Hosts embed mu-core; mu-core never depends on a host.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Portability rules (no wall-clock, no threads, no logging) are enforced
+# mechanically via disallowed-types/methods/macros in clippy.toml.
+pedantic = { level = "warn", priority = -1 }

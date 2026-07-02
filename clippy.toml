@@ -1,0 +1,19 @@
+# Mechanical enforcement of mu-core portability rules (see README).
+
+disallowed-types = [
+    { path = "std::time::SystemTime", reason = "no wall-clock time in core; timing is tick-based" },
+    { path = "std::time::Instant", reason = "no wall-clock time in core; timing is tick-based" },
+]
+
+disallowed-methods = [
+    { path = "std::thread::spawn", reason = "no threading in core" },
+    { path = "std::thread::sleep", reason = "no blocking or timing in core" },
+]
+
+disallowed-macros = [
+    { path = "std::println", reason = "no logging in core; return events instead" },
+    { path = "std::print", reason = "no logging in core; return events instead" },
+    { path = "std::eprintln", reason = "no logging in core; return events instead" },
+    { path = "std::eprint", reason = "no logging in core; return events instead" },
+    { path = "std::dbg", reason = "no logging in core; return events instead" },
+]

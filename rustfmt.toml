@@ -1,0 +1,2 @@
+# Default stable rustfmt style. Only stable options may be added here.
+newline_style = "Unix"

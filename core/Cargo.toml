@@ -1,0 +1,16 @@
+[package]
+name = "mu-core"
+description = "Pure, host-agnostic game logic for the MU Online rewrite."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The ONLY allowed dependencies. Anything else breaks the portability
+# contract (native server / SpacetimeDB module / browser wasm / Unity FFI).
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+rand_core = "0.9"
+
+[lints]
+workspace = true
