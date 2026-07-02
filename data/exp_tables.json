@@ -1,12 +1,9 @@
 {
-  "schema_version": 1,
   "records": [
     {
       "source_version": "075",
       "max_level": 400,
-      "formula": "10*(level+8)*(level-1)^2 [+ 1000*(level-247)*(level-256)^2 for level>=256]",
       "total_exp_by_level": [
-        0,
         0,
         100,
         440,
@@ -406,9 +403,9 @@
         3617254800,
         3684656540,
         3752952280,
-        3822148080,
-        3892250000
-      ]
+        3822148080
+      ],
+      "review": "curve and 400 cap applied to every era per decision 6 - OpenMU flattens one curve onto 0.75/0.95d whose historical caps were lower; accepted as shipped data"
     }
   ]
 }

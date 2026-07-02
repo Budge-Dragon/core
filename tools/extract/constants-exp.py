@@ -1,38 +1,64 @@
 #!/usr/bin/env python3
-"""Extract game_constants.json + exp_tables.json (spec sections 15 and 16).
+"""Extract exp_tables.json + game_config.json (v2 schema, section constants_exp).
 
-Sources (all values verified against /tmp/openmu-ref):
-  GameConfigurationInitializerBase.cs   scalar game config values + global
-                                        base attribute values + exp formula
-  InitializerBase.cs                    MaximumOptionLevel (4)
-  GameLogic/DefaultDropGenerator.cs     BaseMoneyDrop, DropLevelMaxGap,
-                                        SkillDropChancePercent
-  GameLogic/AttackableExtensions.cs     min hit chance 0.03, overrate 0.3
-  DataModel/InventoryConstants.cs       storage sizes
-  MovementSpeedConstants.cs             running gear / wing / iced speeds
+Sources (all numbers verified against /tmp/openmu-ref):
+  Persistence/Initialization/GameConfigurationInitializerBase.cs
+      MaximumLevel, ItemDropDuration, MaximumItemOptionLevelDrop,
+      MaximumPartySize, RandomExperience{Min,Max}Multiplier, the four default
+      DropItemGroup chances (money/item/excellent/jewel), zen-cap sentinels,
+      the item-option AddChance default.
+  GameLogic/DefaultDropGenerator.cs        SkillDropChancePercent.
+  DataModel/InventoryConstants.cs          storage-grid geometry (rows x cols).
+  Version095d/Items/Pets.cs                dinorant option AddChance.
+  Items/ExcellentOptions.cs                extra-excellent-slot AddChance.
+  Version075/Items/Jewelery.cs             luck AddChance.
+  VersionSeasonSix/Items/Wings.cs          2nd-wing bonus AddChance.
 
-Approved overrides (not OpenMU values):
-  tick_duration_ms = 100                ours, decision 4
-  max_inventory_money / max_vault_money = 2_000_000_000
-                                        classic zen cap, decision 7 (OpenMU
-                                        uses int.MaxValue)
+v2 shape (locked by the R2 Rust serde types; see R3-json-contract.md and the
+constants_exp / drops / options design sections):
+  exp_tables.json  -> ExpTable: max_level + dense total_exp_by_level
+      (index = level-1, levels 1..=max_level; the v1 `formula` string field and
+       the two padding cells are gone).
+  game_config.json -> GameConfig: one FULL record. Two owned top-level
+      durations (tick_duration_ms ours, item_drop_duration_ms authentic) plus
+      typed per-domain sub-structs: `drops` (DropConfig, drops-owned shape),
+      `option_roll` (OptionRollPolicy, options-owned shape), progression,
+      zen_caps, inventory. The nested `drops` / `option_roll` sections carry
+      ONLY a `review` string (no source_version).
 
-The 402-entry exp table is computed here with exact integer math from the
-two-piece formula (GameConfigurationInitializerBase.CalculateNeededExperience,
-table shape from GameContext.CreateExpTable: MaximumLevel + 2 entries).
+Approved non-OpenMU values (decisions, carried in `notes`/`review`, not silently
+relabeled authentic):
+  tick_duration_ms = 100          ours (decision 4); OpenMU has no tick base.
+  zen_caps = 2_000_000_000        classic cap (decision 7); OpenMU int.MaxValue.
 
-All values are identical across Version075/095d/S6 (shared base initializer,
-no per-version overrides) -> source_version "075" on both records.
+OpenMU-invented values survive verbatim but every one carries a `review` string
+naming it an OpenMU default pending an authentic source: the four drop category
+rates + skill roll (drops section review), the five option-roll rates + the
+2-excellent cap (option_roll section review), and the exp jitter range +
+personal-store grid (record review). The exp curve's flat 400 cap over the
+0.75/0.95d eras carries its own review on the exp record.
+
+All base-initializer values are identical across Version075/095d/S6 (shared
+base initializer, no per-version override) -> source_version "075" on both.
 """
 
+import json
 import os
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, load_stat_map, write_datafile
+from common import coverage, item_ref, write_datafile
 
 OPENMU = "/tmp/openmu-ref/src"
+
+GAME_CFG = "Persistence/Initialization/GameConfigurationInitializerBase.cs"
+DROP_GEN = "GameLogic/DefaultDropGenerator.cs"
+INVENTORY = "DataModel/InventoryConstants.cs"
+DINO_OPTS = "Persistence/Initialization/Version095d/Items/Pets.cs"
+EXC_OPTS = "Persistence/Initialization/Items/ExcellentOptions.cs"
+LUCK_OPTS = "Persistence/Initialization/Version075/Items/Jewelery.cs"
+WING_OPTS = "Persistence/Initialization/VersionSeasonSix/Items/Wings.cs"
 
 
 def read(rel):
@@ -67,182 +93,282 @@ def parse_consts(text):
     return out
 
 
+def parse_drop_group_chances(text):
+    """<name>DropItemGroup.Chance = <fraction>;  -> {name: float}"""
+    return {name: float(v)
+            for name, v in re.findall(r"(\w+?)DropItemGroup\.Chance = ([0-9.]+);", text)}
+
+
 def expect(actual, wanted, what):
     if actual != wanted:
         sys.exit("%s: expected %r, source has %r" % (what, wanted, actual))
     return actual
 
 
+def per_10000(fraction, what):
+    """Convert an OpenMU fraction to a ChancePer10000 numerator, exactly."""
+    scaled = fraction * 10_000
+    numerator = round(scaled)
+    if abs(scaled - numerator) > 1e-9:
+        sys.exit("%s: %r does not convert exactly to a per-10000 numerator" % (what, fraction))
+    if not 0 <= numerator <= 10_000:
+        sys.exit("%s: per-10000 numerator %d out of range" % (what, numerator))
+    return numerator
+
+
+def expect_literal(needle, text, where):
+    """The source fraction must literally appear in its cited file."""
+    if needle not in text:
+        sys.exit("%s: expected literal %r in source" % (where, needle))
+
+
 def total_exp(level):
-    """Exact integer two-piece formula (CalculateNeededExperience)."""
-    if level == 0:
-        return 0
+    """Exact integer two-piece Webzen curve (CalculateNeededExperience).
+
+    total(level) = 10*(level+8)*(level-1)^2  for level < 256,
+    plus          1000*(level-247)*(level-256)^2  for level >= 256.
+    total(1) = 0.
+    """
     base = 10 * (level + 8) * (level - 1) * (level - 1)
     if level < 256:
         return base
     return base + 1000 * (level - 247) * (level - 256) * (level - 256)
 
 
-def main():
-    cfg = parse_game_config(read("Persistence/Initialization/GameConfigurationInitializerBase.cs"))
-    glob = parse_global_base_values(read("Persistence/Initialization/GameConfigurationInitializerBase.cs"))
-    drop = parse_consts(read("GameLogic/DefaultDropGenerator.cs"))
-    inv = parse_consts(read("DataModel/InventoryConstants.cs"))
-    move = parse_consts(read("Persistence/Initialization/MovementSpeedConstants.cs"))
-    attackable = read("GameLogic/AttackableExtensions.cs")
-    init_base = read("Persistence/Initialization/InitializerBase.cs")
-    stat_map = load_stat_map()
-
-    # The global base attribute values feed stats.json; make sure the stats
-    # agent shipped them before we mirror their values here.
-    for prop in ("MoneyAmountRate", "RandomExperienceMinMultiplier",
-                 "RandomExperienceMaxMultiplier"):
-        if prop not in stat_map:
-            sys.exit("stat_map.json is missing %s (run stats.py first)" % prop)
-
-    # -- game_constants.json (spec section 16), field order as in the spec --
-    constants = {
-        "source_version": "075",
-        "tick_duration_ms": 100,  # ours (decision 4), not an OpenMU value
-        "recovery_interval_ms": expect(int(cfg["RecoveryInterval"]), 3000, "RecoveryInterval"),
-        "info_range": expect(int(cfg["InfoRange"]), 12, "InfoRange"),
-        "item_drop_duration_ms": 1000 * int(grab(
-            r"TimeSpan\.FromSeconds\((\d+)\)", cfg["ItemDropDuration"], "ItemDropDuration")),
-        "max_item_option_level_drop": expect(int(cfg["MaximumItemOptionLevelDrop"]), 3,
-                                             "MaximumItemOptionLevelDrop"),
-        "excellent_drop_level_delta": expect(int(cfg["ExcellentItemDropLevelDelta"]), 25,
-                                             "ExcellentItemDropLevelDelta"),
-        "max_option_level": expect(int(grab(
-            r"protected virtual int MaximumOptionLevel => (\d+);", init_base,
-            "InitializerBase.cs")), 4, "MaximumOptionLevel"),
-        "should_drop_money": expect(cfg["ShouldDropMoney"], "true", "ShouldDropMoney") == "true",
-        "money_amount_rate": expect(glob["MoneyAmountRate"], 1.0, "MoneyAmountRate"),
-        "base_money_drop": expect(drop["BaseMoneyDrop"], 7, "BaseMoneyDrop"),
-        "drop_level_max_gap": expect(drop["DropLevelMaxGap"], 12, "DropLevelMaxGap"),
-        "skill_drop_chance": expect(drop["SkillDropChancePercent"], 50,
-                                    "SkillDropChancePercent") / 100.0,
-        # decision 7: classic zen cap, replaces OpenMU's int.MaxValue
-        "max_inventory_money": (expect(cfg["MaximumInventoryMoney"], "int.MaxValue",
-                                       "MaximumInventoryMoney") and 2_000_000_000),
-        "max_vault_money": (expect(cfg["MaximumVaultMoney"], "int.MaxValue",
-                                   "MaximumVaultMoney") and 2_000_000_000),
-        "clamp_money_on_pickup": expect(cfg["ClampMoneyOnPickup"], "false",
-                                        "ClampMoneyOnPickup") == "true",
-        "maximum_party_size": expect(int(cfg["MaximumPartySize"]), 5, "MaximumPartySize"),
-        "max_characters_per_account": expect(int(cfg["MaximumCharactersPerAccount"]), 5,
-                                             "MaximumCharactersPerAccount"),
-        "character_name_regex": expect(cfg["CharacterNameRegex"].strip('"'),
-                                       "^[a-zA-Z0-9]{3,10}$", "CharacterNameRegex"),
-        "prevent_experience_overflow": expect(cfg["PreventExperienceOverflow"], "false",
-                                              "PreventExperienceOverflow") == "true",
-        "area_skill_hits_player": expect(cfg["AreaSkillHitsPlayer"], "false",
-                                         "AreaSkillHitsPlayer") == "true",
-        "random_exp_multiplier_range": [
-            expect(glob["RandomExperienceMinMultiplier"], 0.8, "RandomExperienceMinMultiplier"),
-            expect(glob["RandomExperienceMaxMultiplier"], 1.2, "RandomExperienceMaxMultiplier"),
-        ],
-        "damage_per_one_item_durability": expect(int(cfg["DamagePerOneItemDurability"]),
-                                                 2000, "DamagePerOneItemDurability"),
-        "damage_per_one_pet_durability": expect(int(cfg["DamagePerOnePetDurability"]),
-                                                100000, "DamagePerOnePetDurability"),
-        "hits_per_one_item_durability": expect(int(cfg["HitsPerOneItemDurability"]),
-                                               10000, "HitsPerOneItemDurability"),
-        "minimum_hit_chance": float(grab(r"float hitChance = ([0-9.]+)f;", attackable,
-                                         "AttackableExtensions.cs")),
-        "overrate_damage_factor": float(grab(r"dmg = \(int\)\(dmg \* ([0-9.]+)\);",
-                                             attackable, "AttackableExtensions.cs")),
-        "inventory": {
-            "equipped_slots": expect(inv["LastEquippableItemSlotIndex"]
-                                     - inv["FirstEquippableItemSlotIndex"] + 1, 12,
-                                     "equippable slots"),
-            "main_rows": expect(inv["InventoryRows"], 8, "InventoryRows"),
-            "main_columns": expect(inv["RowSize"], 8, "RowSize"),
-            "store_slots": expect(inv["StoreRows"] * inv["RowSize"], 32, "store slots"),
-            "vault_slots": expect(inv["WarehouseRows"] * inv["RowSize"], 120, "vault slots"),
-            "temp_storage_slots": expect(inv["TemporaryStorageRows"] * inv["RowSize"], 32,
-                                         "temp storage slots"),
-        },
-        "movement": {
-            "running_gear_min_level": expect(move["RunningGearMinimumLevel"], 5,
-                                             "RunningGearMinimumLevel"),
-            "running_gear_speed": float(expect(move["RunningGearMovementSpeed"], 15.0,
-                                               "RunningGearMovementSpeed")),
-            "wing_speed": float(expect(move["DefaultWingMovementSpeed"], 15.0,
-                                       "DefaultWingMovementSpeed")),
-            "fast_wing_speed": float(expect(move["FastWingMovementSpeed"], 16.0,
-                                            "FastWingMovementSpeed")),
-            "iced_speed_factor": float(expect(move["IcedMovementSpeedFactor"], 0.5,
-                                              "IcedMovementSpeedFactor")),
-        },
-    }
-    expect(float(cfg["MinimumHitChance"]) if "MinimumHitChance" in cfg else
-           constants["minimum_hit_chance"], 0.03, "minimum hit chance")
-    expect(constants["overrate_damage_factor"], 0.3, "overrate damage factor")
-    expect(drop["DefaultMaxItemOptionLevelDrop"],
-           constants["max_item_option_level_drop"], "drop generator option-level cross-check")
-
-    # -- exp_tables.json (spec section 15) --
-    max_level = expect(int(cfg["MaximumLevel"]), 400, "MaximumLevel")
-    table = [total_exp(level) for level in range(max_level + 2)]
-    expect(len(table), 402, "exp table length")
-    expect(table[:3], [0, 0, 100], "exp table head")
-    expect(table[10], 14580, "exp table level 10 (facts sample)")
+def build_exp_table(max_level):
+    """Dense total-exp curve, index = level-1, levels 1..=max_level."""
+    table = [total_exp(level) for level in range(1, max_level + 1)]
+    expect(len(table), max_level, "exp table length")
+    expect(table[:10], [0, 100, 440, 1080, 2080, 3500, 5400, 7840, 10880, 14580],
+           "exp table head (levels 1..10)")
+    expect(table[-1], 3_822_148_080, "exp table tail (exp to hold level 400)")
     if any(b < a for a, b in zip(table, table[1:])):
         sys.exit("exp table is not monotonic")
-    if table[-1] >= 2**64:
+    if table[-1] >= 2 ** 64:
         sys.exit("exp table overflows u64")
+    return table
+
+
+def build_drops_section(cfg_text, drop):
+    """DropConfig — drops-owned shape; kill-scoped category rates + jewel roster.
+
+    Per-drop option caps and the option/luck/excellent rolls are NOT here: they
+    have one home, the option_roll section. Nested section carries review only.
+    """
+    chances = parse_drop_group_chances(cfg_text)
+    money = per_10000(chances["money"], "money DropItemGroup.Chance")
+    item = per_10000(chances["randomItem"], "randomItem DropItemGroup.Chance")
+    excellent = per_10000(chances["excellentItem"], "excellentItem DropItemGroup.Chance")
+    jewel = per_10000(chances["jewels"], "jewels DropItemGroup.Chance")
+    skill = per_10000(drop["SkillDropChancePercent"] / 100.0, "SkillDropChancePercent")
+
+    expect(money, 5000, "money_roll_per_10000")
+    expect(item, 3000, "item_roll_per_10000")
+    expect(jewel, 10, "jewel_roll_per_10000")
+    expect(excellent, 1, "excellent_roll_per_10000")
+    expect(skill, 5000, "skill_roll_per_10000")
+    # DropConfig parse proves the four category numerators sum <= 10,000.
+    expect(money + item + jewel + excellent <= 10_000, True, "category sum <= 10000")
+
+    return {
+        "money_roll_per_10000": money,
+        "item_roll_per_10000": item,
+        "jewel_roll_per_10000": jewel,
+        "excellent_roll_per_10000": excellent,
+        "skill_roll_per_10000": skill,
+        # Jewel of Bless 14/13, Jewel of Soul 14/14, Jewel of Life 12/15.
+        # 075 roster: no Jewel of Chaos.
+        "jewel_drops": [item_ref(14, 13), item_ref(14, 14), item_ref(12, 15)],
+        "review": (
+            "all rates are OpenMU defaults (categories 0.5/0.3/0.001/0.0001 from "
+            "GameConfigurationInitializerBase; skill 50% from DefaultDropGenerator) "
+            "- authentic model is per-monster ItemRate/MoneyRate (Monster.txt) x "
+            "global ItemDropRate/ZenDropRate (CommonServer.cfg); replace when "
+            "classic sources land"),
+    }
+
+
+def build_option_roll_section(cfg_text, cfg):
+    """OptionRollPolicy — options-owned shape; every option roll + both caps.
+
+    Chances are scattered per-item AddChance defaults across several
+    initializers; each source fraction is verified present in its cited file,
+    then converted exactly. Nested section carries review only.
+    """
+    item_option = per_10000(0.25, "item option AddChance")   # GameConfigInit:115
+    luck = per_10000(0.25, "luck AddChance")                 # 075 Jewelery:125
+    extra_excellent = per_10000(0.001, "excellent AddChance")  # ExcellentOptions:66
+    second_wing = per_10000(0.1, "2nd-wing AddChance")       # s6 Wings:260
+    dinorant = per_10000(0.3, "dinorant AddChance")          # 095d Pets:89
+
+    expect_literal("AddChance = 0.25f", cfg_text, "item option AddChance in GameConfigInit")
+    expect_literal("AddChance = 0.25f", read(LUCK_OPTS), "luck AddChance in 075 Jewelery")
+    expect_literal("AddChance = 0.001f", read(EXC_OPTS), "excellent AddChance in ExcellentOptions")
+    expect_literal("AddChance = 0.1f", read(WING_OPTS), "2nd-wing AddChance in s6 Wings")
+    expect_literal("AddChance = 0.3f", read(DINO_OPTS), "dinorant AddChance in 095d Pets")
+
+    expect(item_option, 2500, "item_option_roll_per_10000")
+    expect(luck, 2500, "luck_roll_per_10000")
+    expect(extra_excellent, 10, "extra_excellent_option_roll_per_10000")
+    expect(second_wing, 1000, "second_wing_bonus_roll_per_10000")
+    expect(dinorant, 3000, "dinorant_option_roll_per_10000")
+
+    # max_dropped_option_level: authentic (cross-checked against the config
+    # scalar); knob framing killed, cap kept as OptionLevel policy.
+    max_option_level = expect(int(cfg["MaximumItemOptionLevelDrop"]), 3,
+                              "MaximumItemOptionLevelDrop")
+
+    return {
+        "item_option_roll_per_10000": item_option,
+        "luck_roll_per_10000": luck,
+        "extra_excellent_option_roll_per_10000": extra_excellent,
+        "second_wing_bonus_roll_per_10000": second_wing,
+        "dinorant_option_roll_per_10000": dinorant,
+        # OpenMU excellent-option MaximumOptionsPerItem = 2.
+        "max_excellent_options_per_drop": 2,
+        "max_dropped_option_level": max_option_level,
+        "review": (
+            "chances and the 2-excellent cap are OpenMU initializer defaults "
+            "pending authentic classic sources; max_dropped_option_level 3 is "
+            "commonly held classic knowledge stated here as policy"),
+    }
+
+
+def build_game_config(cfg, cfg_text, drop, inv, glob):
+    item_drop_ms = 1000 * int(grab(
+        r"TimeSpan\.FromSeconds\((\d+)\)", cfg["ItemDropDuration"], "ItemDropDuration"))
+    expect(item_drop_ms, 60000, "item_drop_duration_ms")
+
+    exp_min = int(round(expect(glob["RandomExperienceMinMultiplier"], 0.8,
+                               "RandomExperienceMinMultiplier") * 100))
+    exp_max = int(round(expect(glob["RandomExperienceMaxMultiplier"], 1.2,
+                               "RandomExperienceMaxMultiplier") * 100))
+    expect((exp_min, exp_max), (80, 120), "exp_jitter_percent")
+
+    # Zen caps: OpenMU stores int.MaxValue; decision 7 restores the classic
+    # 2,000,000,000 cap. Verify the sentinel, then override.
+    expect(cfg["MaximumInventoryMoney"], "int.MaxValue", "MaximumInventoryMoney")
+    expect(cfg["MaximumVaultMoney"], "int.MaxValue", "MaximumVaultMoney")
+    zen_cap = 2_000_000_000
+
+    row_size = expect(inv["RowSize"], 8, "RowSize")
+    grid = lambda rows, cols: {"rows": rows, "columns": cols}
+
+    return {
+        "source_version": "075",
+        "tick_duration_ms": 100,  # ours (decision 4), not an OpenMU value
+        "item_drop_duration_ms": item_drop_ms,
+        "drops": build_drops_section(cfg_text, drop),
+        "option_roll": build_option_roll_section(cfg_text, cfg),
+        "progression": {
+            "max_party_size": expect(int(cfg["MaximumPartySize"]), 5, "MaximumPartySize"),
+            "exp_jitter_percent": {"min": exp_min, "max": exp_max},
+        },
+        "zen_caps": {"inventory": zen_cap, "vault": zen_cap},
+        "inventory": {
+            "main": grid(expect(inv["InventoryRows"], 8, "InventoryRows"), row_size),
+            "vault": grid(expect(inv["WarehouseRows"], 15, "WarehouseRows"), row_size),
+            "personal_store": grid(expect(inv["StoreRows"], 4, "StoreRows"), row_size),
+            # OpenMU's unified TemporaryStorage splits into the two distinct
+            # client windows that share 4x8: trade and chaos_machine.
+            "trade": grid(expect(inv["TemporaryStorageRows"], 4, "TemporaryStorageRows"), row_size),
+            "chaos_machine": grid(inv["TemporaryStorageRows"], row_size),
+        },
+        "review": (
+            "exp_jitter_percent: OpenMU uniform-jitter mechanism and 0.8-1.2 "
+            "values, no classic corroboration - pending classic GS verification; "
+            "personal_store: ~1.0-era feature, curated backport per decision 1"),
+    }
+
+
+def verify_written(path, expected_records):
+    with open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    count = len(doc.get("records", []))
+    if count != expected_records:
+        sys.exit("%s: %d records, expected %d" % (path, count, expected_records))
+    return count
+
+
+def main():
+    cfg_text = read(GAME_CFG)
+    cfg = parse_game_config(cfg_text)
+    glob = parse_global_base_values(cfg_text)
+    drop = parse_consts(read(DROP_GEN))
+    inv = parse_consts(read(INVENTORY))
+
+    max_level = expect(int(cfg["MaximumLevel"]), 400, "MaximumLevel")
+    table = build_exp_table(max_level)
     exp_record = {
         "source_version": "075",
         "max_level": max_level,
-        "formula": "10*(level+8)*(level-1)^2 [+ 1000*(level-247)*(level-256)^2 for level>=256]",
         "total_exp_by_level": table,
+        "review": (
+            "curve and 400 cap applied to every era per decision 6 - OpenMU "
+            "flattens one curve onto 0.75/0.95d whose historical caps were lower; "
+            "accepted as shipped data"),
     }
 
-    constants_path = write_datafile("game_constants.json", [constants])
+    game_config = build_game_config(cfg, cfg_text, drop, inv, glob)
+
     exp_path = write_datafile("exp_tables.json", [exp_record])
+    cfg_path = write_datafile("game_config.json", [game_config])
+
+    exp_count = verify_written(exp_path, 1)
+    cfg_count = verify_written(cfg_path, 1)
 
     gaps = {
-        "max_letters": "letters/inbox are host-owned social features (50); excluded per spec section 16",
-        "letter_send_price": "letters/inbox are host-owned social features (1000 zen); excluded per spec section 16",
-        "max_password_length": "account/password constants excluded wholesale (spec exclusions)",
-        "experience_rate": "global exp multiplier (1.0) is modeled as the stats.json stat 'experience_rate', not a constant; spec section 16 shape omits it",
-        "movement_speed_factor": "global base value (1.0) is modeled as the stats.json stat 'movement_speed_factor'; spec section 16 shape omits it",
-        "basic_mount_speed": "Uniria/Dinorant mount speed (15.0) rides in item_definitions power-ups, not in the constants shape",
-        "cold_speed_factor": "ColdMovementSpeedFactor (0.33) is wired only by S6 cold-effect initializers; skills agent owns it if the ice-arrow backport needs it",
-        "horse_fenrir_speeds": "17/19 belong to trainable pets, excluded wholesale",
-        "master_experience": "master level/exp formula, MaximumMasterLevel 200, MinimumMonsterLevelForMasterExperience 95: post-S3",
-        "maximum_alliance_size": "guild alliances, S6-only global value (5); decision 5 open",
-        "per_kill_exp_formula": "(lvl+25)*lvl/3 with gap scaling, >=65 bonus, x1.25: formula shape -> Rust rule (decision 3)",
-        "min_damage_floor": "max(1, attackerLevel/10): formula shape -> Rust rule (decision 3)",
-        "dinorant_damage_factor": "x1.3 skill-less attack multiplier: formula shape -> Rust rule (decision 3)",
-        "double_wield_factor": "halve-then-double wield rule: formula shape -> Rust rule (decision 3)",
-        "classic_duel_damage_factor": "0.6 duel damage factor: formula shape -> Rust rule (decision 3)",
-        "level_dependent_damage": "dead data even in OpenMU (populated and read nowhere); excluded per spec",
+        "exp_tables.formula": "v1 formula string killed; curve content is the "
+        "ExpTable doc comment, table stays authoritative",
+        "recovery_interval_ms": "-> services vitals::REGEN_PULSE_INTERVAL_MS (3000 ms), review-flagged",
+        "info_range": "-> services world::VIEW_RANGE_TILES (15); OpenMU's 12 rejected",
+        "base_money_drop": "-> drops services BASE_MONEY_DROP=7, review-flagged (not data)",
+        "drop_level_max_gap": "-> drops services DROP_POOL_LEVEL_GAP=12, review-flagged (not data)",
+        "excellent_drop_level_delta": "-> items services EXCELLENT_DROP_LEVEL_BONUS=25 (not data)",
+        "max_option_level": "jewel ceiling +16 -> item-options domain (not this file)",
+        "minimum_hit_chance/overrate_damage_factor": "-> services combat consts",
+        "min_damage/double_wield/duel/dinorant factors": "-> services combat consts (W-CMB)",
+        "per_kill_exp_x1.25": "-> services progression::KILL_EXP_FLAT_BONUS_PERCENT=125",
+        "money_amount_rate/should_drop_money/clamp_money_on_pickup": "deleted (fixed classic rules / no-op knobs)",
+        "prevent_experience_overflow/area_skill_hits_player": "deleted (fixed classic rules / typed combat context)",
+        "character_name_regex/max_characters_per_account": "deleted (host parse-boundary / no Account aggregate in core)",
+        "durability economy (2000/100000/10000)": "deleted (OpenMU accumulator wear model; W-CMB sources fresh)",
+        "movement struct (speeds, running-gear level)": "deleted; iced 0.5 -> skills_effects ICED_SPEED_REDUCTION_PERCENT=50",
+        "iced_speed_factor": "-> skills_effects domain (not this file)",
+    }
+    reviews = {
+        "exp_tables[075]": exp_record["review"],
+        "game_config[075].review": game_config["review"],
+        "game_config[075].drops.review": game_config["drops"]["review"],
+        "game_config[075].option_roll.review": game_config["option_roll"]["review"],
     }
     notes = [
-        "spec section 15 sample shows total_exp_by_level[3] = 396; the formula "
-        "(and OpenMU's CalculateNeededExperience) gives 440 - the computed table "
-        "follows the formula, the spec sample value looks like a typo",
-        "facts doc sample 'level 255 = 1697560640' disagrees with the formula "
-        "(169677080); levels 2 and 10 samples match, formula followed",
-        "max_inventory_money/max_vault_money overridden to 2000000000 (decision 7); "
-        "OpenMU source has int.MaxValue",
-        "tick_duration_ms 100 is a mu-core decision (4), not extracted from OpenMU",
+        "exp table trimmed 402 -> 400 entries (index = level-1, levels 1..=400); "
+        "OpenMU's two padding cells (index-0 and the +1 read guard) have no v2 reader",
+        "v1 spec sample total_exp_by_level level 3 = 396 was a typo; authentic value 440 (formula-correct)",
+        "tick_duration_ms 100 is a mu-core decision (4), not an OpenMU value",
+        "zen_caps 2000000000 override decision 7; OpenMU source has int.MaxValue",
+        "nested drops/option_roll sections carry review only, no source_version "
+        "(provenance is the enclosing record's source_version)",
+        "option_roll shape is options-owned, drops shape is drops-owned; this "
+        "extractor owns the game_config.json envelope/record around them",
     ]
     cov = {
-        "files": [constants_path, exp_path],
-        "records": 2,
-        "by_source_version": {"075": 2},
-        "review_count": 0,
-        "reviews": {},
+        "files": [exp_path, cfg_path],
+        "records": exp_count + cfg_count,
+        "by_source_version": {"075": exp_count + cfg_count},
+        "review_count": exp_count + cfg_count,  # both records carry a review
+        "reviews": reviews,
         "gaps": gaps,
         "notes": notes,
     }
     cov_path = coverage("constants_exp", cov)
 
-    print("wrote %s (1 record)" % constants_path)
-    print("wrote %s (1 record, %d exp entries, max %d)" % (exp_path, len(table), table[-1]))
-    print("wrote %s (%d gaps, 0 reviews)" % (cov_path, len(gaps)))
+    print("wrote %s (%d record, %d exp entries, max %d)" % (
+        exp_path, exp_count, len(table), table[-1]))
+    print("wrote %s (%d record: full GameConfig)" % (cfg_path, cfg_count))
+    print("wrote %s (%d records total, by_source_version=%s, %d reviews, %d gaps)" % (
+        cov_path, cov["records"], cov["by_source_version"], cov["review_count"], len(gaps)))
 
 
 if __name__ == "__main__":

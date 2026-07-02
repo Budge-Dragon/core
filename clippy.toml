@@ -1,13 +1,18 @@
 # Mechanical enforcement of mu-core portability rules (see README).
 
 # Proper nouns clippy::doc_markdown should not demand backticks for.
+# OpenMU (the reference server) and MonsterSetBase (a classic data file) are
+# domain proper nouns the schema docs cite for provenance — names, not code,
+# so backticking them would misrender them as identifiers.
 # ".." keeps clippy's built-in defaults.
-doc-valid-idents = ["SpacetimeDB", "NPCs", ".."]
+doc-valid-idents = ["SpacetimeDB", "NPCs", "OpenMU", "MonsterSetBase", ".."]
 
-# data::game_constants::GameConstants mirrors four independent toggles of
-# the approved data schema spec; they are source-data scalars, not a state
-# machine.
-max-struct-bools = 4
+# components::class::ClassSet is the total membership structure over the
+# eight-class roster: eight named bools whose exhaustive `allows` match makes
+# an out-of-roster query unrepresentable (the spec's total-structure pattern).
+# A HashSet/enum-set would reintroduce the Option-returning lookup that design
+# kills, so the eight bools are the correct shape.
+max-struct-bools = 8
 
 # Iron Law 3 lints (unwrap_used, expect_used, panic) apply to core code;
 # tests assert freely.

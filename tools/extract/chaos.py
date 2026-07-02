@@ -1,31 +1,34 @@
 #!/usr/bin/env python3
-"""Extract chaos machine mixes (spec section 14) -> data/chaos_mixes.json.
+"""Extract the chaos machine's closed recipe catalog -> data/chaos_mixes.json (v2).
 
-Sources (verified against /tmp/openmu-ref):
-  Version075/ChaosMixes.cs   -> #1 chaos weapon (identical in 095d => "075")
-  Version095d/ChaosMixes.cs  -> #2 DS ticket, #3 +10, #4 +11, #5 dinorant, #11 1st wings
-  VersionSeasonSix/ChaosMixes.cs (curated 1.0-era backports, "s6" + review)
-                             -> #6 fruits, #7 2nd wings, #8 BC ticket, #24 cape of lord
+The v1 generic ingredient-matcher engine is dead: MixBehavior, MixCost,
+MixSuccess, MixInput, ItemMatch, MixAmount, MixItemAction, ResultSelection,
+ResultChances, ref-linking and both npc_price_divisors were OpenMU's
+SimpleCraftingSettings evaluator transcribed field-for-field, and they became
+Rust (services/crafting.rs). v2 emits ChaosMix: a provenance envelope
+{name, source_version, review?, recipe} wrapping a kind-tagged ChaosRecipe
+where each family carries exactly its own typed facts and economics.
 
-The initializers are procedural C# building tiny object graphs; the recipes
-are transcribed literally below (with the source's computed expressions kept
-as expressions) instead of parsing C#. Mapping notes:
+Sources (verified against /tmp/openmu-ref); the numbers below are the same
+authentic values the v1 extractor pulled, re-shaped to the v2 contract:
+  Version075/ChaosMixes.cs        -> Chaos Weapon (identical in 095d => "075")
+  Version095d/ChaosMixes.cs       -> 1st Wings, +10, +11, Dinorant
+  GameLogic/.../DevilSquareTicketCrafting.cs (version-shared handler) -> DS ticket
+  VersionSeasonSix/ChaosMixes.cs + BloodCastleTicketCrafting.cs (curated
+    1.0-era backports, "s6" + review) -> 2nd Wings, Cape of Lord, Fruits, BC ticket
 
-  - MaximumAmount == 0 in OpenMU means "no upper bound" -> amount.max = null.
-    The spec's chaos-weapon example shows max 1 for the random-item input;
-    the source has no maximum. Kept the source value, flagged in coverage.
-  - MaximumSuccessPercent == 0 means "no explicit cap"; the engine clamps at
-    100 -> max_percent = 100.
-  - Settings-level NpcPriceDivisor == 0 / per-input divisor == 0 -> null.
-  - MixResult: Disappear -> "disappear", StaysAsIs -> "stays",
-    ChaosWeaponAndFirstWingsDowngradedRandom -> "downgrade_chaos_weapon".
-  - Item level bounds apply to every requirement (RequiredItemMatches checks
-    them regardless of PossibleItems), so "specific_items" matches carry
-    min_level/max_level when the constraint is real (the matched items can
-    have levels). For level-0-only ingredients (jewels, horns) the 0..0
-    default is vacuous and omitted, matching the spec example.
-  - s6 item-level caps of 15 are clamped to 11 (approved decision 2; both
-    pre-S3 datasets use Constants.MaximumItemLevel = 11).
+Contract notes (integrate phase MUST know):
+  - Item-level WINDOWS emit {"min","max"} (the Interval canonical wire shared
+    with box_drops item_level_range), NOT min_level/max_level. Per the R3 task
+    brief's explicit override of the older R3-json-contract Window note.
+  - feather/crest are ItemAtLevel {"item","level"} (an exact item+level, not a
+    window) and keep those field names.
+  - Every OpenMU-invented value (2nd-wings/cape 4M/40k value rates and 20/20
+    luck/exc, Dinorant 3 horns/250k, fruit weights, ticket 80/70 & breadth)
+    survives verbatim carrying a review string naming it an OpenMU default.
+  - Killed mechanisms (bonus-roll formulas, downgrade, fruit stat weights, rate
+    /fee evaluators, jewel identities the rules consume) live in
+    services/crafting.rs, not here.
 """
 
 import os
@@ -34,362 +37,365 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import coverage, item_ref, write_datafile
 
+# Constants.MaximumItemLevel = 11 for both pre-S3 datasets; s6 caps of 15 are
+# clamped to 11 (approved decision 2).
 MAX_ITEM_LEVEL = 11
 
 # Item identities (group, number), verified in the item initializers.
-JEWEL_OF_CHAOS = item_ref(12, 15)
-JEWEL_OF_BLESS = item_ref(14, 13)
-JEWEL_OF_SOUL = item_ref(14, 14)
-JEWEL_OF_CREATION = item_ref(14, 22)
-HORN_OF_UNIRIA = item_ref(13, 2)
-HORN_OF_DINORANT = item_ref(13, 3)
-LOCHS_FEATHER = item_ref(13, 14)  # +1 = Monarch's Crest
+LOCHS_FEATHER = item_ref(13, 14)          # +0 = feather; +1 = Monarch's Crest
 FRUITS = item_ref(13, 15)
 CAPE_OF_LORD = item_ref(13, 30)
+HORN_OF_UNIRIA = item_ref(13, 2)
+HORN_OF_DINORANT = item_ref(13, 3)
+JEWEL_OF_CREATION = item_ref(14, 22)
+DEVILS_EYE = item_ref(14, 17)
+DEVILS_KEY = item_ref(14, 18)
+DEVILS_INVITATION = item_ref(14, 19)
+SCROLL_OF_ARCHANGEL = item_ref(13, 16)
+BLOOD_BONE = item_ref(13, 17)
+INVISIBILITY_CLOAK = item_ref(13, 18)
 CHAOS_DRAGON_AXE = item_ref(2, 6)
 CHAOS_NATURE_BOW = item_ref(4, 6)
 CHAOS_LIGHTNING_STAFF = item_ref(5, 7)
 CHAOS_WEAPONS = [CHAOS_DRAGON_AXE, CHAOS_NATURE_BOW, CHAOS_LIGHTNING_STAFF]
-FIRST_WINGS = [item_ref(12, n) for n in (0, 1, 2)]   # fairy / heaven / satan
+FIRST_WINGS = [item_ref(12, n) for n in (0, 1, 2)]      # fairy / heaven / satan
 SECOND_WINGS = [item_ref(12, n) for n in (3, 4, 5, 6)]  # spirit/soul/dragon/darkness
 
 
-def specific(items, min_level=None, max_level=None, required_option_types=None):
-    m = {"kind": "specific_items", "items": items}
-    if min_level is not None:
-        m["min_level"] = min_level
-        m["max_level"] = max_level
-    if required_option_types:
-        m["required_option_types"] = required_option_types
-    return m
+def window(mn, mx):
+    """Inclusive item-level window on the Interval canonical wire {min,max}."""
+    return {"min": mn, "max": mx}
 
 
-def any_item(min_level, max_level, required_option_types):
-    return {"kind": "any_item", "min_level": min_level, "max_level": max_level,
-            "required_option_types": required_option_types}
+def at_level(item, level):
+    """An exact item at an exact level (ItemAtLevel)."""
+    return {"item": item, "level": level}
 
 
-def inp(match, mn, mx, on_success="disappear", on_fail="disappear",
-        npc_price_divisor=None, add_percent_per_extra=0, ref=None):
-    return {"match": match, "amount": {"min": mn, "max": mx},
-            "on_success": on_success, "on_fail": on_fail,
-            "npc_price_divisor": npc_price_divisor,
-            "add_percent_per_extra": add_percent_per_extra, "ref": ref}
+def wing_economics():
+    """WingEconomics shared verbatim by second_wings and cape_of_lord.
+
+    fee 5M / 90% cap are authentic; the two value-per-percent rates
+    (4M / 40k) and the 20/20 luck/exc chances are OpenMU-only (flagged on
+    each record's review).
+    """
+    return {
+        "fee_zen": 5_000_000,
+        "max_success_percent": 90,
+        "wing_value_zen_per_percent": 4_000_000,
+        "excellent_value_zen_per_percent": 40_000,
+        "luck_chance_percent": 20,
+        "excellent_chance_percent": 20,
+    }
 
 
-def create(item, level_range=(0, 0), durability=None):
-    return {"kind": "create", "item": item,
-            "level_range": list(level_range), "durability": durability}
-
-
-def modify(ref, add_level):
-    return {"kind": "modify", "ref": ref, "add_level": add_level}
-
-
-def mix(number, slug, name, source_version, behavior, review=None,
-        flat_zen=0, zen_per_success_percent=0,
-        base_percent=0, max_percent=100, npc_price_divisor=None,
-        luck_bonus_percent=0, inputs=(), results=(),
-        result_selection="any", multiple_allowed=False,
-        luck_percent=0, skill_percent=0, excellent_percent=0):
-    rec = {"number": number, "id": slug, "name": name,
-           "source_version": source_version}
+def mix(name, source_version, recipe, review=None):
+    rec = {"name": name, "source_version": source_version}
     if review:
         rec["review"] = review
-    rec.update({
-        "behavior": behavior,
-        "cost": {"flat_zen": flat_zen,
-                 "zen_per_success_percent": zen_per_success_percent},
-        "success": {"base_percent": base_percent, "max_percent": max_percent,
-                    "npc_price_divisor": npc_price_divisor,
-                    "luck_bonus_percent": luck_bonus_percent},
-        "inputs": list(inputs),
-        "results": list(results),
-        "result_selection": result_selection,
-        "multiple_allowed": multiple_allowed,
-        "result_chances": {"luck_percent": luck_percent,
-                           "skill_percent": skill_percent,
-                           "excellent_percent": excellent_percent},
-    })
+    rec["recipe"] = recipe
     return rec
 
 
-def jewel(item, mn, mx):
-    """Plain jewel/ingredient input: disappears either way, no level bounds."""
-    return inp(specific([item]), mn, mx)
+RECORDS = [
+    mix("Chaos Weapon", "075", {
+        "kind": "chaos_weapon",
+        "sacrifice_levels": window(4, MAX_ITEM_LEVEL),
+        "weapons": CHAOS_WEAPONS,
+    }),
+
+    mix("1st Level Wings", "095d", {
+        "kind": "first_wings",
+        "chaos_weapons": CHAOS_WEAPONS,
+        "chaos_weapon_levels": window(4, MAX_ITEM_LEVEL),
+        "extra_sacrifice_levels": window(4, MAX_ITEM_LEVEL),
+        "wings": FIRST_WINGS,
+    }),
+
+    mix("2nd Level Wings", "s6", {
+        "kind": "second_wings",
+        "first_wings": FIRST_WINGS,
+        "wing_levels": window(0, MAX_ITEM_LEVEL),
+        "excellent_levels": window(4, MAX_ITEM_LEVEL),
+        "feather": at_level(LOCHS_FEATHER, 0),
+        "economics": wing_economics(),
+        "wings": SECOND_WINGS,
+    }, review=(
+        "2nd wings are 1.0-era, data only in S6 (Summoner input/result "
+        "removed, level caps clamped 15->11); wing_value_zen_per_percent "
+        "4,000,000 and excellent_value_zen_per_percent 40,000 exist only as "
+        "OpenMU divisor encodings, and luck/excellent 20/20 only in OpenMU's "
+        "S6 initializer — all four are OpenMU defaults pending classic "
+        "sourcing")),
+
+    mix("Cape of Lord", "s6", {
+        "kind": "cape_of_lord",
+        "first_wings": FIRST_WINGS,
+        "wing_levels": window(0, MAX_ITEM_LEVEL),
+        "excellent_levels": window(4, MAX_ITEM_LEVEL),
+        "crest": at_level(LOCHS_FEATHER, 1),
+        "economics": wing_economics(),
+        "cape": CAPE_OF_LORD,
+    }, review=(
+        "Cape of Lord is the 1.0-era Dark Lord wing but this crafting "
+        "(Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; "
+        "value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are "
+        "OpenMU defaults pending classic sourcing")),
+
+    mix("+10 Item Combination", "095d", {
+        "kind": "item_upgrade",
+        "target": "plus_ten",
+        "bless": 1,
+        "soul": 1,
+        "base_success_percent": 50,
+        "fee_zen": 2_000_000,
+    }),
+
+    mix("+11 Item Combination", "095d", {
+        "kind": "item_upgrade",
+        "target": "plus_eleven",
+        "bless": 2,
+        "soul": 2,
+        "base_success_percent": 45,
+        "fee_zen": 4_000_000,
+    }),
+
+    mix("Dinorant", "095d", {
+        "kind": "dinorant",
+        "horn": HORN_OF_UNIRIA,
+        "horn_count": 3,
+        "success_percent": 70,
+        "fee_zen": 250_000,
+        "dinorant": HORN_OF_DINORANT,
+    }, review=(
+        "horn_count 3 and fee 250,000 exist only in OpenMU's 095d dataset; "
+        "every classic source (and OpenMU's own S6 data) documents 10 "
+        "full-durability Horns of Uniria for 500,000 zen — OpenMU "
+        "defaults pending catalog decision; 70% and the full-durability horn "
+        "rule are authentic")),
+
+    mix("Fruits", "s6", {
+        "kind": "fruits",
+        "catalyst": JEWEL_OF_CREATION,
+        "success_percent": 90,
+        "fee_zen": 3_000_000,
+        "fruit": FRUITS,
+    }, review=(
+        "stat fruits are 1.0-era, data only in S6; the created fruit's stat "
+        "kind is a weighted services roll (weights are OpenMU defaults, see "
+        "FRUIT_STAT_WEIGHTS), not data")),
+
+    mix("Devil's Square Ticket", "095d", {
+        "kind": "devil_square_ticket",
+        "eye": DEVILS_EYE,
+        "key": DEVILS_KEY,
+        "invitation": DEVILS_INVITATION,
+        "fee_zen_by_level": [100_000, 200_000, 400_000, 700_000,
+                             1_100_000, 1_600_000, 2_000_000],
+        "success_percent_by_level": [80, 80, 80, 80, 70, 70, 70],
+    }, review=(
+        "fee band and 7-level breadth come from OpenMU's version-shared "
+        "handler table (classic-documented fees; pre-S3 Devil's Square level "
+        "count pending era verification); the 80/70 success split at level 5 "
+        "is an OpenMU handler constant pending classic sourcing")),
+
+    mix("Blood Castle Ticket", "s6", {
+        "kind": "blood_castle_ticket",
+        "scroll": SCROLL_OF_ARCHANGEL,
+        "bone": BLOOD_BONE,
+        "cloak": INVISIBILITY_CLOAK,
+        "fee_zen_by_level": [50_000, 80_000, 150_000, 250_000,
+                             400_000, 600_000, 850_000, 1_050_000],
+        "success_percent_by_level": [80, 80, 80, 80, 80, 80, 80, 80],
+    }, review=(
+        "Blood Castle is 0.97/1.0-era; fee band is the documented classic "
+        "recipe, 8-level breadth pending era verification; flat 80% success "
+        "is an OpenMU handler constant pending classic sourcing")),
+]
 
 
-def item_upgrade(number, target_level):
-    """095d ItemLevelUpgradeCrafting(craftingNumber, targetLevel)."""
-    return mix(
-        number, "item_upgrade_%d" % target_level,
-        "+%d Item Combination" % target_level, "095d", "simple",
-        flat_zen=2_000_000 * (target_level - 9),
-        base_percent=50 if target_level == 10 else 45,
-        luck_bonus_percent=25,
-        inputs=[
-            inp(any_item(target_level - 1, target_level - 1, []), 1, 1,
-                on_success="stays", ref=1),
-            jewel(JEWEL_OF_CHAOS, 1, 1),
-            jewel(JEWEL_OF_BLESS, target_level - 9, target_level - 9),
-            jewel(JEWEL_OF_SOUL, target_level - 9, target_level - 9),
-        ],
-        results=[modify(1, 1)])
+RECIPE_KINDS = {
+    "chaos_weapon", "first_wings", "second_wings", "cape_of_lord",
+    "item_upgrade", "dinorant", "fruits", "devil_square_ticket",
+    "blood_castle_ticket",
+}
+UPGRADE_TARGETS = {"plus_ten", "plus_eleven"}
 
 
-def chaos_weapon_mix():
-    """Version075 ChaosWeaponCrafting (identical in 095d)."""
-    return mix(
-        1, "chaos_weapon", "Chaos Weapon", "075",
-        "chaos_weapon_and_first_wings",
-        zen_per_success_percent=10_000, npc_price_divisor=20_000,
-        inputs=[
-            inp(any_item(4, MAX_ITEM_LEVEL, ["option"]), 1, None,
-                on_fail="downgrade_chaos_weapon"),
-            jewel(JEWEL_OF_CHAOS, 1, None),
-            jewel(JEWEL_OF_BLESS, 0, None),
-            jewel(JEWEL_OF_SOUL, 0, None),
-        ],
-        results=[create(w, (0, 4)) for w in CHAOS_WEAPONS])
+def is_item_ref(v):
+    return isinstance(v, dict) and set(v) == {"group", "number"} \
+        and isinstance(v["group"], int) and isinstance(v["number"], int)
 
 
-def first_wings_mix():
-    """Version095d FirstWingsCrafting."""
-    return mix(
-        11, "first_wings", "1st Level Wings", "095d",
-        "chaos_weapon_and_first_wings",
-        zen_per_success_percent=10_000, npc_price_divisor=20_000,
-        inputs=[
-            inp(specific(CHAOS_WEAPONS, 4, MAX_ITEM_LEVEL, ["option"]), 1, 1,
-                on_fail="downgrade_chaos_weapon"),
-            inp(any_item(4, MAX_ITEM_LEVEL, ["option"]), 0, None),
-            jewel(JEWEL_OF_CHAOS, 1, None),
-            jewel(JEWEL_OF_BLESS, 0, None),
-            jewel(JEWEL_OF_SOUL, 0, None),
-        ],
-        results=[create(w) for w in FIRST_WINGS])
+def check_window(w, rid):
+    assert set(w) == {"min", "max"}, rid
+    assert 0 <= w["min"] <= w["max"] <= 15, rid
 
 
-def dinorant_mix():
-    """Version095d DinorantCrafting (3 horns / 250k; the S6 10/500k is not used)."""
-    return mix(
-        5, "dinorant", "Dinorant", "095d", "dinorant",
-        flat_zen=250_000, base_percent=70, skill_percent=100,
-        inputs=[
-            jewel(JEWEL_OF_CHAOS, 1, 1),
-            jewel(HORN_OF_UNIRIA, 3, 3),
-        ],
-        results=[create(HORN_OF_DINORANT)])
+def check_zen_table(t, n, rid):
+    assert len(t) == n, rid
+    assert all(isinstance(z, int) and z >= 0 for z in t), rid
 
 
-def devil_square_ticket_mix():
-    """Version095d DevilSquareTicketCrafting: handler-only, no settings."""
-    return mix(2, "devil_square_ticket", "Devil's Square Ticket", "095d",
-               "ticket_devil_square")
-
-
-def blood_castle_ticket_mix():
-    """VersionSeasonSix BloodCastleTicketCrafting: handler-only backport."""
-    return mix(8, "blood_castle_ticket", "Blood Castle Ticket", "s6",
-               "ticket_blood_castle",
-               review="Blood Castle is 0.97/1.0-era; recipe, prices and "
-                      "success rates live in the ticket rule (S6 handler "
-                      "values, see coverage rules)")
-
-
-def second_wings_mix():
-    """VersionSeasonSix SecondWingsCrafting, curated."""
-    return mix(
-        7, "second_wings", "2nd Level Wings", "s6", "second_wings",
-        review="2nd wings are 1.0-era, data only in S6: Summoner wings "
-               "removed (Wing of Misery 12/41 input, Wings of Despair 12/42 "
-               "result), level caps clamped 15->11; luck/exc result chances "
-               "(20/20, max 1 exc) are S6 values",
-        flat_zen=5_000_000, max_percent=90,
-        luck_percent=20, excellent_percent=20,
-        inputs=[
-            # first wing: explicit 0..15 bounds in source, clamped
-            inp(specific(FIRST_WINGS, 0, MAX_ITEM_LEVEL), 1, 1,
-                npc_price_divisor=4_000_000),
-            inp(any_item(4, MAX_ITEM_LEVEL, ["excellent"]), 0, None,
-                npc_price_divisor=40_000),
-            jewel(JEWEL_OF_CHAOS, 1, 1),
-            # feather at +0 only (a +1 feather is the Monarch's Crest)
-            inp(specific([LOCHS_FEATHER], 0, 0), 1, 1),
-        ],
-        results=[create(w) for w in SECOND_WINGS])
-
-
-def fruits_mix():
-    """VersionSeasonSix FruitCrafting."""
-    return mix(
-        6, "fruits", "Fruits", "s6", "simple",
-        review="stat fruits are 1.0-era, data only in S6; created fruit "
-               "level (stat kind) is weighted-random 0-4 in the crafting "
-               "rule, not data",
-        flat_zen=3_000_000, base_percent=90,
-        inputs=[
-            jewel(JEWEL_OF_CHAOS, 1, 1),
-            jewel(JEWEL_OF_CREATION, 1, 1),
-        ],
-        results=[create(FRUITS)])
-
-
-def cape_of_lord_mix():
-    """VersionSeasonSix CapeCrafting, curated to the DL cape only."""
-    return mix(
-        24, "cape_of_lord", "Cape of Lord", "s6", "second_wings",
-        review="era-check: Cape of Lord is the 1.0-era Dark Lord wing, but "
-               "this crafting (#24, Monarch's Crest = Loch's Feather+1 "
-               "recipe) may postdate 1.0; Cape of Fighter (12/49, Rage "
-               "Fighter) result and Wing of Misery (12/41) input removed, "
-               "level caps clamped 15->11",
-        flat_zen=5_000_000, max_percent=90,
-        luck_percent=20, excellent_percent=20,
-        inputs=[
-            inp(specific(FIRST_WINGS, 0, MAX_ITEM_LEVEL), 1, 1,
-                npc_price_divisor=4_000_000),
-            inp(any_item(4, MAX_ITEM_LEVEL, ["excellent"]), 0, None,
-                npc_price_divisor=40_000),
-            jewel(JEWEL_OF_CHAOS, 1, 1),
-            inp(specific([LOCHS_FEATHER], 1, 1), 1, 1),  # Monarch's Crest
-        ],
-        results=[create(CAPE_OF_LORD)])
-
-
-RECORDS = sorted([
-    chaos_weapon_mix(),
-    devil_square_ticket_mix(),
-    item_upgrade(3, 10),
-    item_upgrade(4, 11),
-    dinorant_mix(),
-    fruits_mix(),
-    second_wings_mix(),
-    blood_castle_ticket_mix(),
-    first_wings_mix(),
-    cape_of_lord_mix(),
-], key=lambda r: r["number"])
-
-BEHAVIORS = {"simple", "chaos_weapon_and_first_wings", "second_wings",
-             "dinorant", "ticket_devil_square", "ticket_blood_castle"}
-MIX_RESULTS = {"disappear", "stays", "downgrade_chaos_weapon"}
-OPTION_TYPES = {"option", "luck", "excellent", "ancient_option",
-                "ancient_bonus", "wing"}
+def check_percent_table(t, n, rid):
+    assert len(t) == n, rid
+    assert all(isinstance(p, int) and 0 <= p <= 100 for p in t), rid
 
 
 def verify(records):
-    numbers, slugs = set(), set()
+    names = set()
     for r in records:
-        assert r["source_version"] in ("075", "095d", "s6"), r["id"]
-        assert r["source_version"] != "s6" or r.get("review"), r["id"]
-        assert r["behavior"] in BEHAVIORS, r["id"]
-        assert r["result_selection"] in ("any", "all"), r["id"]
-        assert r["number"] not in numbers and r["id"] not in slugs, r["id"]
-        numbers.add(r["number"])
-        slugs.add(r["id"])
-        for i in r["inputs"]:
-            m = i["match"]
-            assert m["kind"] in ("specific_items", "any_item"), r["id"]
-            assert m["kind"] != "specific_items" or m["items"], r["id"]
-            assert m["kind"] != "any_item" or (
-                "min_level" in m and "max_level" in m
-                and "required_option_types" in m), r["id"]
-            for t in m.get("required_option_types", []):
-                assert t in OPTION_TYPES, r["id"]
-            assert i["amount"]["min"] >= 0, r["id"]
-            assert i["on_success"] in MIX_RESULTS, r["id"]
-            assert i["on_fail"] in MIX_RESULTS, r["id"]
-        refs = {i["ref"] for i in r["inputs"] if i["ref"] is not None}
-        for res in r["results"]:
-            assert res["kind"] in ("create", "modify"), r["id"]
-            if res["kind"] == "modify":
-                assert res["ref"] in refs, r["id"]
-        for pct in r["result_chances"].values():
-            assert isinstance(pct, int) and 0 <= pct <= 100, r["id"]
+        rid = r["name"]
+        assert r["source_version"] in ("075", "095d", "s6"), rid
+        assert r["source_version"] != "s6" or r.get("review"), rid
+        assert rid not in names, rid
+        names.add(rid)
+        assert set(r) <= {"name", "source_version", "review", "recipe"}, rid
+        rec = r["recipe"]
+        kind = rec["kind"]
+        assert kind in RECIPE_KINDS, rid
+
+        if kind == "chaos_weapon":
+            check_window(rec["sacrifice_levels"], rid)
+            assert len(rec["weapons"]) == 3 and all(map(is_item_ref, rec["weapons"])), rid
+        elif kind == "first_wings":
+            assert len(rec["chaos_weapons"]) == 3, rid
+            check_window(rec["chaos_weapon_levels"], rid)
+            check_window(rec["extra_sacrifice_levels"], rid)
+            assert len(rec["wings"]) == 3, rid
+        elif kind == "second_wings":
+            assert len(rec["first_wings"]) == 3, rid
+            check_window(rec["wing_levels"], rid)
+            check_window(rec["excellent_levels"], rid)
+            assert is_item_ref(rec["feather"]["item"]) and 0 <= rec["feather"]["level"] <= 15, rid
+            assert len(rec["wings"]) == 4, rid
+            verify_wing_economics(rec["economics"], rid)
+        elif kind == "cape_of_lord":
+            assert len(rec["first_wings"]) == 3, rid
+            check_window(rec["wing_levels"], rid)
+            check_window(rec["excellent_levels"], rid)
+            assert is_item_ref(rec["crest"]["item"]) and 0 <= rec["crest"]["level"] <= 15, rid
+            assert is_item_ref(rec["cape"]), rid
+            verify_wing_economics(rec["economics"], rid)
+        elif kind == "item_upgrade":
+            assert rec["target"] in UPGRADE_TARGETS, rid
+            assert rec["bless"] >= 1 and rec["soul"] >= 1, rid
+            assert 0 <= rec["base_success_percent"] <= 100, rid
+            assert rec["fee_zen"] >= 0, rid
+        elif kind == "dinorant":
+            assert is_item_ref(rec["horn"]) and is_item_ref(rec["dinorant"]), rid
+            assert rec["horn_count"] >= 1, rid
+            assert 0 <= rec["success_percent"] <= 100 and rec["fee_zen"] >= 0, rid
+        elif kind == "fruits":
+            assert is_item_ref(rec["catalyst"]) and is_item_ref(rec["fruit"]), rid
+            assert 0 <= rec["success_percent"] <= 100 and rec["fee_zen"] >= 0, rid
+        elif kind == "devil_square_ticket":
+            assert all(is_item_ref(rec[k]) for k in ("eye", "key", "invitation")), rid
+            check_zen_table(rec["fee_zen_by_level"], 7, rid)
+            check_percent_table(rec["success_percent_by_level"], 7, rid)
+        elif kind == "blood_castle_ticket":
+            assert all(is_item_ref(rec[k]) for k in ("scroll", "bone", "cloak")), rid
+            check_zen_table(rec["fee_zen_by_level"], 8, rid)
+            check_percent_table(rec["success_percent_by_level"], 8, rid)
+
+
+def verify_wing_economics(e, rid):
+    assert set(e) == {
+        "fee_zen", "max_success_percent", "wing_value_zen_per_percent",
+        "excellent_value_zen_per_percent", "luck_chance_percent",
+        "excellent_chance_percent"}, rid
+    assert e["fee_zen"] >= 0 and e["wing_value_zen_per_percent"] >= 0, rid
+    assert e["excellent_value_zen_per_percent"] >= 0, rid
+    for p in ("max_success_percent", "luck_chance_percent",
+              "excellent_chance_percent"):
+        assert 0 <= e[p] <= 100, rid
 
 
 def main():
+    assert len(RECORDS) == 10, len(RECORDS)
     verify(RECORDS)
     path = write_datafile("chaos_mixes.json", RECORDS)
+
     by_version = {}
     for r in RECORDS:
         by_version[r["source_version"]] = by_version.get(r["source_version"], 0) + 1
-    reviews = {r["id"]: r["review"] for r in RECORDS if "review" in r}
+    reviews = {r["name"]: r["review"] for r in RECORDS if "review" in r}
+
     coverage("chaos_mixes", {
         "records": len(RECORDS),
         "by_source_version": by_version,
         "review_count": len(reviews),
         "reviews": reviews,
-        "rules": {
-            "ticket_devil_square": "handler recipe (not data): 1 Devil's Eye "
-                "(14,17) + 1 Devil's Key (14,18) of EQUAL item level + 1 Jewel of "
-                "Chaos -> Devil's Invitation (14,19) at the input level, durability "
-                "1; success 80% for level<5 else 70%; zen by level 1-7 = 100k/200k/"
-                "400k/700k/1.1m/1.6m/2m",
-            "ticket_blood_castle": "handler recipe (not data): 1 Scroll of "
-                "Archangel (13,16) + 1 Blood Bone (13,17) of EQUAL item level + 1 "
-                "Jewel of Chaos -> Invisibility Cloak (13,18) at the input level, "
-                "durability 1; success 80% flat; zen by level 1-8 = 50k/80k/150k/"
-                "250k/400k/600k/850k/1.05m",
-            "chaos_weapon_and_first_wings_options": "result option/luck/skill are "
-                "formulas of the final success rate, not result_chances data: roll "
-                "i in 0..2, item option level 3-i with chance rate/5 + 4*(i+1) "
-                "percent; luck with rate/5 + 4; skill with rate/5 + 6",
-            "second_wings_option": "wing item-option roll (20%/10%/4% for levels "
-                "1/2/3) is in the second_wings rule; luck/excellent come from "
-                "result_chances",
-            "downgrade_chaos_weapon": "on-fail semantics: level -> random "
-                "0..level-1, 50% skill loss (if not excellent), 50% item option "
-                "-1 level (removed at 1), durability rescaled",
-            "fruits_level": "created Fruits level (= fruit stat kind) is "
-                "weighted-random 0-4 with weights 30/25/20/20/5",
-            "success_npc_price_divisor": "settings-level divisor REPLACES the "
-                "additive success path: rate = sum(npc old-buying prices of all "
-                "inputs) / divisor; per-input divisor ADDS sum(prices)/divisor "
-                "percent; final zen = flat_zen + zen_per_success_percent * rate",
-            "max_percent_default": "OpenMU MaximumSuccessPercent 0 = uncapped; "
-                "engine clamps at 100 -> emitted as max_percent 100",
-        },
-        "notes": {
-            "chaos_weapon_amount": "spec section 14 example shows amount max 1 "
-                "for the chaos-weapon random item; source has no maximum "
-                "(MaximumAmount 0 = unbounded) -> emitted max null",
-            "specific_items_levels": "specific_items matches carry min_level/"
-                "max_level when the constraint is real (first wings weapon 4..11, "
-                "Loch's Feather 0..0 vs Monarch's Crest 1..1); omitted for "
-                "level-0-only ingredients where 0..0 is vacuous",
-            "second_wings_max_exc_options": "S6 sets max 1 excellent option on "
-                "2nd-wings/cape results; result_chances has no such field -> "
-                "cap lives in the second_wings rule",
-            "item_upgrade_success": "095d +10/+11 use flat 50%/45% + luck 25; the "
-                "S6 penalty fields (exc/ancient/380/socket) are S6-only data, not "
-                "backported",
+        "invented_values": {
+            "second_wings_cape_value_rates": "wing_value_zen_per_percent "
+                "4,000,000 and excellent_value_zen_per_percent 40,000 exist "
+                "only as OpenMU divisor encodings (2nd Level Wings, Cape of "
+                "Lord) — OpenMU defaults pending re-derivation from "
+                "classic sources",
+            "second_wings_cape_bonus_chances": "luck/excellent 20/20 come "
+                "only from OpenMU's S6 initializer (2nd Level Wings, Cape of "
+                "Lord) — OpenMU defaults pending classic sourcing",
+            "dinorant_horns_and_fee": "horn_count 3 / fee 250,000 (095d "
+                "dataset); classic and OpenMU S6 both document 10 "
+                "full-durability horns / 500,000 zen — kept verbatim "
+                "pending catalog decision",
+            "devil_square_success_split": "80/70 success split at level 5 is "
+                "an OpenMU handler constant pending classic sourcing",
+            "blood_castle_flat_success": "flat 80% success is an OpenMU "
+                "handler constant pending classic sourcing",
+            "ticket_level_breadth": "Devil's Square 7-level and Blood Castle "
+                "8-level breadth come from OpenMU's version-shared handler "
+                "tables; pre-S3 level counts pending era verification",
+            "fruit_stat_weights": "the created fruit's stat kind is a "
+                "weighted services roll (FRUIT_STAT_WEIGHTS 30/25/20/20/5); "
+                "weights are OpenMU code constants, live in services not data",
         },
         "gaps": {
-            "item_upgrade_12_to_15": "S6 mixes #22/#23/#49/#50: item level cap "
-                "is 11 (approved decision 2)",
+            "item_upgrade_12_to_15": "S6 mixes #22/#23/#49/#50: item level "
+                "cap is 11 (approved decision 2)",
             "illusion_temple_ticket": "S6 mix #37: Illusion Temple is Season 3",
             "potion_of_bless_soul": "S6 mixes #15/#16: castle siege potions (S3+)",
-            "shield_potions": "S6 mixes #30/#31/#32: SD stat system is S3+ "
-                "(classic PvP instead)",
+            "shield_potions": "S6 mixes #30/#31/#32: SD stat system is S3+",
             "life_stone": "S6 mix #17: castle siege (S3)",
             "fenrir_craftings": "S6 mixes #25/#26/#27/#28: Fenrir is S2 but "
                 "trainable pets are excluded wholesale (decision 5)",
-            "dark_horse_dark_raven": "S6 mixes #13/#14 (Pet Trainer): trainable "
-                "pets excluded (decision 5)",
+            "dark_horse_dark_raven": "S6 mixes #13/#14 (Pet Trainer): "
+                "trainable pets excluded (decision 5)",
             "third_wings": "S6 mixes #38/#39: 3rd wings are Season 3",
             "level_380_option": "S6 mix #36: guardian/380 options are post-S3",
             "secromicon": "S6 mix #46: Season 6",
-            "gemstone_refinery_refine_restore": "S6 mixes #33/#34/#35 (Elphis/"
-                "Osbourne/Jerridon): Jewel of Harmony ecosystem (S4)",
+            "gemstone_refinery_refine_restore": "S6 mixes #33/#34/#35: Jewel "
+                "of Harmony ecosystem (S4)",
             "cherry_blossom_mix": "S6 mix #41: seasonal event (S4+)",
-            "first_wings_misery_result": "S6 adds Wings of Misery (12,41) to the "
-                "1st-wings results; Summoner (S3) - 095d result list used",
-            "jewel_mixes_lahap": "Lahap jewel packing (10 S6 JewelMix records): "
-                "pending decision 5, era-questionable packed-item ids",
+            "first_wings_misery_result": "S6 adds Wings of Misery (12,41) to "
+                "the 1st-wings results; Summoner (S3) — 095d result list "
+                "used",
+            "jewel_mixes_lahap": "Lahap jewel packing (10 S6 JewelMix "
+                "records): not a chaos mix, excluded by decision (crafting.md)",
+        },
+        "notes": {
+            "window_wire_shape": "item-level windows emit {min,max} (Interval "
+                "canonical wire, shared with box_drops item_level_range) per "
+                "the R3 task-brief override of the older Window note; "
+                "feather/crest stay ItemAtLevel {item,level}",
+            "no_number_no_id": "pre-S3 wire carries no recipe id; the server "
+                "deduces the recipe from placed ingredients (services "
+                "match_recipe). number and id slug both killed; name covers "
+                "display",
+            "killed_to_services": "MixBehavior/MixCost/MixSuccess/MixInput/"
+                "ItemMatch/MixAmount/MixItemAction/ResultSelection/"
+                "ResultChances/ref-linking and both npc_price_divisors became "
+                "services/crafting.rs (rate & fee formulas, downgrade, bonus "
+                "rolls, fruit stat weights, jewel identities)",
         },
     })
-    print(path)
+
+    import json
+    with open(path, encoding="utf-8") as f:
+        parsed = json.load(f)
+    assert len(parsed["records"]) == 10, len(parsed["records"])
+    print("%s\nrecords=%d by_source_version=%s" % (
+        path, len(parsed["records"]), by_version))
 
 
 if __name__ == "__main__":

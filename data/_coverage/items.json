@@ -6,18 +6,37 @@
         "075": 196,
         "095d": 14,
         "s6": 33
-      }
-    },
-    "item_level_bonus_tables.json": {
-      "records": 15,
-      "by_source_version": {
-        "075": 13,
-        "095d": 1,
-        "s6": 1
+      },
+      "by_kind": {
+        "weapon": 45,
+        "bow": 7,
+        "bolts": 1,
+        "crossbow": 8,
+        "arrows": 1,
+        "staff": 9,
+        "shield": 15,
+        "helm": 17,
+        "body_armor": 18,
+        "pants": 18,
+        "gloves": 18,
+        "boots": 18,
+        "wings": 8,
+        "orb": 5,
+        "jewel": 5,
+        "pet": 4,
+        "ring": 6,
+        "transformation_ring": 1,
+        "pendant": 6,
+        "mix_material": 5,
+        "stat_fruit": 1,
+        "event_ticket": 2,
+        "consumable": 10,
+        "lucky_box": 1,
+        "skill_scroll": 14
       }
     }
   },
-  "review_count": 34,
+  "review_count": 41,
   "reviews": {
     "7/26": "1.0-era Dark Lord (Adamantine) piece backported from the S6 dataset for the agnis/broy ancient sets; other DL gear is not backported this wave",
     "7/40": "Red Wing is Summoner (post-pre-S3 class) gear, not 1.0-era; backported only as a piece of the approved chrono/semeden ancient-set backports; classes empty -> unequippable in baseline",
@@ -51,29 +70,41 @@
     "13/27": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); water resistance",
     "13/28": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); no resistance; S6-only +1%/level maximum_ability option",
     "13/30": "1.0-era Dark Lord wing backported from S6 Wings.cs (cape_of_lord chaos-mix result); max_item_level clamped 15->11; dmg +20%/abs 10%, +2%/level (wing_damage_first); its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys dmg) are S6-only option data and NOT backported -- only luck referenced, matching the 2nd-wing option gap in options_sets",
-    "14/22": "0.97d-era jewel (Version097d dataset is the oldest pre-S3 source; tagged s6 because source_version has no 097d value); backported as the fruits chaos-mix ingredient",
-    "wing_damage_second": "backported with 2nd wings; S6 table (1%/level) truncated to cap 11"
+    "14/0": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/1": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/2": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/3": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/4": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/5": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/6": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/8": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
+    "14/22": "0.97d-era jewel (Version097d dataset is the oldest pre-S3 source; tagged s6 because source_version has no 097d value); backported as the fruits chaos-mix ingredient"
   },
   "gaps": [
-    "Devil's Eye/Key +1..+4 monster-level drop tables (Version095d EventTicketItems.cs) are global drop groups -> drop_groups.json, not representable as box_drops",
+    "Devil's Eye/Key +1..+4 monster-level drop tables (Version095d EventTicketItems.cs) are global drop groups -> drops domain, not carried on the item record",
     "Weapon of Archangel (13/19, S6 EventTicketItems.cs) is in-event Blood Castle content (saint statue drop); the event/minigame schema is not in this wave -- excluded, unlike the ticket items 13/16-18 which the backported drop groups and mix require",
     "S6-only event items NOT backported: Invisibility Cloak's S6 siblings Armor of Guardsman (13/29, Chaos Castle), Illusion Temple items (13/49-51), Imperial Guardian items (14/101-109) -- events are post-S3 or not in the backport list",
     "Box of Luck higher kinds (+1 Star of the Sacred Birth ... +11 Box of Kundun+4) are named in a 095d source comment but ship no drop data pre-S6; not backported",
     "2nd-wings chaos mix (and its use of Loch's Feather 13/14) -> chaos_mixes.json extractor",
-    "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it) but its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys-dmg options) are S6-only option data and are NOT -- the record references only 'luck'; see the 2nd-wing option gap in options_sets coverage",
+    "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it) but its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys-dmg options) are S6-only option data and are NOT -- jol_options is empty; see the 2nd-wing option gap in options_sets coverage",
     "dark lord scepters not backported in this wave; DL items are Cape of Lord 13/30 (chaos-mix result) and the Adamantine armor pieces (ancient-set dependency), otherwise dark_lord appears only in all-classes qualification lists",
     "summoner class is not in the baseline: the Red Wing pieces (7-11/40, ancient-set dependency) ship with empty classes lists -> unequippable; see their review flags",
     "Wings of Despair (12/42, summoner) and all 3rd wings/capes: post-S3 or excluded classes, skipped"
   ],
   "notes": [
-    "merged baseline: record content mirrors the 095d dataset (excellent options, MG qualification, ammo damage table); source_version = oldest dataset shipping the record (075 armor/weapon data lines verified identical between versions)",
-    "class expansion: value 1 -> base + evolved stage (evolution backport), value 2 -> evolved only per approved decision; OpenMU's DetermineClass helper would also admit the base class for value 2 -- divergence is intentional and flagged on the s6 wing records",
+    "v2 shape: each record is an ItemDefinition -- shared authentic columns + a kind-tagged ItemKind flattened inline. No stat slugs, no PowerUp/Aggregate vocabulary, no bonus-table indirection, no possible_options/possible_set_groups slug lists, no box_drops, no equip-flag pseudo-stats, no slot field: all became Rust rules/services",
+    "item_level_bonus_tables.json is DROPPED (the +level curves are services const tables keyed by the EnhanceLevel enum)",
+    "merged baseline: record content mirrors the 095d dataset (MG qualification, ammo kinds); source_version = oldest dataset shipping the record (075 armor/weapon data lines verified identical between versions)",
+    "class expansion (ClassSet wire = snake_case class list): value 1 -> base + evolved stage (evolution backport), value 2 -> evolved only per approved decision; OpenMU's DetermineClass helper would also admit the base class for value 2 -- divergence flagged on the s6 wing records",
     "'all classes' items (jewelry, transformation ring) expanded to all 8 baseline slugs including dark_lord; 095d dataset itself only had dw/dk/elf/mg",
-    "option slugs referenced (must exist in item_options.json): luck, physical_attack, wizardry_attack, defense, defense_rate, excellent_physical, excellent_wizardry, excellent_defense, health_recover_for_jewelery, jewelery_option_maximum_mana, jewelery_option_maximum_ability, dinorant_options, wings_of_elf_options, wings_of_heaven_options, wings_of_satan_options, 2nd_wing_options, wings_of_spirits_options, wings_of_soul_options, wings_of_dragon_options, wings_of_darkness_options",
-    "set-group slugs referenced (must exist in item_sets.json): <prefix>_defense_rate_bonus, <prefix>_defense_bonus_level_10/11 for the 15 armor set prefixes (bronze..guardian); the s6 armor backports (storm crow/adamantine/red wing) carry no possible_set_groups -- BuildSets families cover numbers 0..14 only, their ancient set groups are referenced from the item_sets.json pieces side",
-    "consume_effect 'alcohol' (Ale) must exist in magic_effects.json",
-    "jewelry_resistance table kept in raw source units (base 1 + level, aggregate maximum); the n/255 fraction convention applies to monster resistances only",
-    "bonus tables are dense 12-entry arrays; staff-rise/armor/shield/wing tables truncated from 16 source entries at cap 11, short source tables (ammunition 3, jewelry 5, transformation skins 6) padded with 0 = 'no bonus' per OpenMU sparse-table semantics",
-    "skill references by number: weapon/shield skills 18-24 granted_while_equipped, orb/scroll skills taught_on_consume, dinorant fire breath 49 granted_while_equipped"
+    "kind is data (set by extraction), never derived from group: group 12 = wings(0-6)+orbs(7-11)+jewel(15); group 13 = pets+jewelry+wings(cape)+tickets+materials+fruit; group 14 = potions+jewels+box+tickets; group 15 = scrolls",
+    "weapon handling: two_handed when the melee weapon occupies 2 inventory columns (width==2, groups 0-3), else one_handed; bows/crossbows/staffs carry no handling",
+    "group 4 split: bow = numbers 0-6, crossbow = 8-16 (CreateWeapon), bolts = 4/7, arrows = 4/15 (CreateAmmunition)",
+    "wing jol_options are the BuildOptions normal (Jewel-of-Life) option kinds as NormalOption: Elf health_recovery_pct, Heaven wizardry_damage, Satan physical_damage, Spirits [health_recovery_pct, physical_damage], Soul [health_recovery_pct, wizardry_damage], Dragon [health_recovery_pct, physical_damage], Darkness [wizardry_damage, physical_damage]; Cape of Lord [] (S6 option data not backported)",
+    "pendant excellent is the ExcellentCategory object {set:weapon, damage:physical|wizardry} (Fire/Wind/Ability -> physical, Lighting/Ice/Water -> wizardry); pets serialize CombatBonus inline (absorb -> incoming_damage_pct, attack increase -> damage_pct, health -> max_health); movement-speed power-ups deleted -> Horn of Uniria carries no bonuses (ground_mount) and the mount fact rides PetRide",
+    "requirements split: equipment carries WearRequirements (raw Item.txt columns, scaled at equip by services), orbs/scrolls carry LearnRequirements (absolute consumption minima, no vitality column)",
+    "price is kind-tagged: source value>0 -> {fixed, zen}, 0 -> {formula}; equipment/jewels(Chaos/Life/Creation)/box/tickets/fruit are formula, orbs/scrolls/potions/(Bless/Soul) are fixed",
+    "potion durability=3 is OpenMU stack-size modeling (invented value): the 8 durability-3 consumables (Apple, healing x3, mana x3, Antidote) carry the review flag; Ale/Town Portal (durability 1) do not; stacking itself is a W-ENT inventory rule",
+    "transformation ring skins [2, 7, 14, 8, 9, 41] are MonsterNumbers (Atlas-proven); weapon/shield/pet skills and orb/scroll teaches are SkillNumbers (Atlas-proven)"
   ]
 }

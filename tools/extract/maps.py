@@ -1,110 +1,113 @@
 #!/usr/bin/env python3
-"""Extract maps, spawn areas, gates/warps and terrain (spec sections 10-12).
+"""Extract maps, gates/warps and terrain (v2 maps_gates domain).
 
 Outputs:
-  data/map_definitions.json    spec section 11
-  data/spawn_areas.json        spec section 10
-  data/gates_warps.json        spec section 12 (kind-tagged: exit_gate, enter_gate, warp)
-  data/terrain/*.bin           spec section 11 sidecars (re-encoded from .att)
+  data/map_definitions.json    11 records (maps 0-10; Devil Square collapsed
+                               to one map-9 record)
+  data/gates_warps.json        70 records, kind-tagged:
+                               spawn_gate | target_gate | enter_gate | warp
+  data/terrain/0.bin..10.bin   11 sidecars, keyed by map number (re-encoded
+                               from OpenMU .att; the four byte-identical Devil
+                               Square blobs collapse to terrain/9.bin)
   data/_coverage/maps.json     counts, review list, named gaps
 
-Baseline = the full 0.95d dataset (14 maps). source_version = "075" when the
-record is defined by a Version075 initializer that 0.95d reuses unchanged,
-"095d" otherwise. No s6 backports exist in this category (Blood Castle etc.
-are named gaps).
+Baseline = the 0.95d dataset. source_version = "075" when the shipped v2
+record is defined by a Version075 initializer that 0.95d reuses unchanged in
+every field the v2 record carries, "095d" otherwise.
 
-Terrain: source .att = 3-byte header (00 ff ff) + 65536 cells (index = y*256+x).
-Source flag bits Safezone=1, Character=2 (runtime occupancy, dropped),
-Blocked=4, NoGround=8, Water=16 are re-encoded to our bits
+Provenance is flattened onto each record (source_version + optional review).
+
+Gate.txt's three-valued flag becomes three record kinds: OpenMU's ExitGate
+with isSpawnGate=true is flag 0 -> spawn_gate; ExitGate with the default
+false is flag 2 -> target_gate; EnterGate is flag 1 -> enter_gate. Warps are
+the Move.txt list.
+
+Terrain: source .att = 3-byte header (00 ff ff) + 65536 cells (index =
+y*256+x). Source flag bits Safezone=1, Character=2 (runtime occupancy,
+dropped), Blocked=4, NoGround=8, Water=16 are re-encoded to our bits
 safezone=1, blocked=2, no_ground=4, water=8. Bits above 0x1F (noise in a few
-Icarus cells) are masked off and counted in the coverage report.
+Icarus cells) are masked off and counted in the coverage report. Core never
+reads a filesystem: no record carries a terrain path; the host loads
+terrain/<mapnumber>.bin by convention.
 """
 
+import glob
 import os
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, load_stat_map, map_ref, slugify, write_datafile, DATA_DIR
+from common import coverage, write_datafile, DATA_DIR
 
 INIT = "/tmp/openmu-ref/src/Persistence/Initialization"
 RESOURCES = os.path.join(INIT, "Resources")
 
-# Direction enum: 0 = undefined (emitted as null). Gate direction bytes are the
-# same raw values (source comment: "0 means 'Undefined' ... without adding 1").
+# Gate direction byte: 0 = undefined (field omitted); 1-8 are the 8 compass
+# points. Source comment: "0 means 'Undefined' ... without adding 1".
 DIRECTIONS = {
     1: "west", 2: "south_west", 3: "south", 4: "south_east",
     5: "east", 6: "north_east", 7: "north", 8: "north_west",
 }
 
-# Wave numbers from Version095d/Events/DevilSquareInitializer.cs constants.
-WAVE_CONSTS = {
-    "DevilSquareInitializer.FirstWaveNumber": 1,
-    "DevilSquareInitializer.SecondWaveNumber": 2,
-    "DevilSquareInitializer.ThirdWaveNumber": 3,
-    "DevilSquareInitializer.BossWaveNumber": 10,
-}
-
-TRIGGER_KINDS = {  # SpawnTrigger enum -> spec kind; wave kinds carry "wave"
-    "Automatic": "automatic",
-    "Wandering": "wandering",
-    "OnceAtEventStart": "once_at_event_start",
-    "ManuallyForEvent": "manually_for_event",
-    "AutomaticDuringWave": "automatic_during_wave",
-    "OnceAtWaveStart": "once_at_wave_start",
-}
-WAVE_TRIGGERS = {"automatic_during_wave", "once_at_wave_start"}
-
-# All maps get the default drop groups registered in
-# GameConfigurationInitializerBase.AddItemDropGroups (registration order).
-# default_excellent exists because the 0.95d baseline has excellent options.
-DEFAULT_DROP_GROUPS = ["default_money", "default_random_item",
-                       "default_excellent", "default_jewels"]
-
-# The 14 maps of the 0.95d dataset (Version095d/GameMapsInitializer.cs).
-# files = (source path, source_version of the spawns it contributes), in
-# base -> derived order. att = the terrain resource the 0.95d dataset resolves
-# (per TerrainVersionPrefix: Version075.Maps.BaseMapInitializer = "075_";
-# Exile/Arena extend Initialization.BaseMapInitializer directly = no prefix;
+# The 11 client maps of the 0.95d dataset, one entry per Devil Square square
+# so each square's terrain resolves; the four map-9 squares collapse to a
+# single record and a single terrain sidecar (their blobs are byte-identical).
+# att = the terrain resource the 0.95d dataset resolves (per
+# TerrainVersionPrefix: Version075.Maps.BaseMapInitializer = "075_"; Exile and
+# Arena extend Initialization.BaseMapInitializer directly = no prefix;
 # Version095d.Maps.Devias overrides the prefix away; 095d Lorencia/Noria
-# inherit "075_" and therefore keep the 0.75 terrain).
+# inherit "075_" and keep the 0.75 terrain).
 MAPS = [
-    {"number": 0, "disc": 0, "version": "075", "att": "075_Terrain1.att",
+    {"number": 0, "version": "075", "att": "075_Terrain1.att",
      "files": [("Version075/Maps/Lorencia.cs", "075"),
                ("Version095d/Maps/Lorencia.cs", "095d")]},
-    {"number": 1, "disc": 0, "version": "075", "att": "075_Terrain2.att",
+    {"number": 1, "version": "075", "att": "075_Terrain2.att",
      "files": [("Version075/Maps/Dungeon.cs", "075")]},
-    {"number": 2, "disc": 0, "version": "095d", "att": "Terrain3.att",
-     "review": "0.75-era map re-derived by the 0.95d dataset with 0.95 terrain "
-               "(only town map whose initializer overrides the 075_ terrain "
-               "prefix); tagged 095d because the shipped record differs from "
-               "0.75 by terrain only",
+    {"number": 2, "version": "095d", "att": "Terrain3.att",
+     "review": "0.75-era town re-derived by the 0.95d dataset with 0.95 "
+               "terrain (only town map whose initializer overrides the 075_ "
+               "terrain prefix); tagged 095d because the shipped map carries "
+               "the 0.95d terrain sidecar (terrain/2.bin = Terrain3.att) — the "
+               "record fields (number, name, environment) are the 0.75 map",
      "files": [("Version075/Maps/Devias.cs", "075"),
                ("Version095d/Maps/Devias.cs", "095d")]},
-    {"number": 3, "disc": 0, "version": "075", "att": "075_Terrain4.att",
+    {"number": 3, "version": "075", "att": "075_Terrain4.att",
      "files": [("Version075/Maps/Noria.cs", "075"),
                ("Version095d/Maps/Noria.cs", "095d")]},
-    {"number": 4, "disc": 0, "version": "075", "att": "075_Terrain5.att",
+    {"number": 4, "version": "075", "att": "075_Terrain5.att",
      "files": [("Version075/Maps/LostTower.cs", "075")]},
-    {"number": 5, "disc": 0, "version": "075", "att": "Terrain6.att",
+    {"number": 5, "version": "075", "att": "Terrain6.att",
      "files": [("Version075/Maps/Exile.cs", "075")]},
-    {"number": 6, "disc": 0, "version": "075", "att": "Terrain7.att",
+    {"number": 6, "version": "075", "att": "Terrain7.att",
+     "review": "pitch coordinates are measurable from the Arena terrain; "
+               "placing battle soccer in the 0.75 era follows OpenMU's dataset "
+               "— the feature historically appears ~0.97+",
      "files": [("Version075/Maps/Arena.cs", "075")]},
-    {"number": 7, "disc": 0, "version": "075", "att": "075_Terrain8.att",
+    {"number": 7, "version": "075", "att": "075_Terrain8.att",
      "files": [("Version075/Maps/Atlans.cs", "075")]},
-    {"number": 8, "disc": 0, "version": "095d", "att": "Terrain9.att",
+    {"number": 8, "version": "095d", "att": "Terrain9.att",
      "files": [("Version095d/Maps/Tarkan.cs", "095d")]},
-    {"number": 10, "disc": 0, "version": "095d", "att": "Terrain11.att",
+    {"number": 10, "version": "095d", "att": "Terrain11.att",
      "files": [("Version095d/Maps/Icarus.cs", "095d")]},
-    {"number": 9, "disc": 1, "version": "095d", "att": "Terrain10_1.att",
-     "files": [("Version095d/Maps/DevilSquare1.cs", "095d")]},
-    {"number": 9, "disc": 2, "version": "095d", "att": "Terrain10_2.att",
-     "files": [("Version095d/Maps/DevilSquare2.cs", "095d")]},
-    {"number": 9, "disc": 3, "version": "095d", "att": "Terrain10_3.att",
-     "files": [("Version095d/Maps/DevilSquare3.cs", "095d")]},
-    {"number": 9, "disc": 4, "version": "095d", "att": "Terrain10_4.att",
-     "files": [("Version095d/Maps/DevilSquare4.cs", "095d")]},
+    {"number": 9, "version": "095d", "att": "Terrain10_1.att",
+     "name": "Devil Square",
+     "review": "collapsed from OpenMU's four discriminator records (one client "
+               "map; the four squares are event brackets, owned by W-EVT); the "
+               "four OpenMU terrain blobs were verified byte-identical before "
+               "collapsing",
+     "files": [("Version095d/Maps/DevilSquare1.cs", "095d"),
+               ("Version095d/Maps/DevilSquare2.cs", "095d"),
+               ("Version095d/Maps/DevilSquare3.cs", "095d"),
+               ("Version095d/Maps/DevilSquare4.cs", "095d")]},
 ]
+
+# OpenMU reuses the 0.75 warp fee/level table verbatim as the 0.95d list (its
+# initializer carries a todo to update it); no authentic 0.95 table is sourced.
+WARP_REVIEW = (
+    "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its "
+    "initializer carries a todo to update it); no authentic 0.95 fee/level "
+    "table has been sourced — W-SRC re-sourcing family in "
+    "docs/debt/openmu-default-values.md")
 
 
 def read(rel_path):
@@ -120,28 +123,12 @@ def rect(x1, y1, x2, y2):
 # ---------------------------------------------------------------- map metadata
 
 NAME_RE = re.compile(r'const string Name = "([^"]+)"|MapName => "([^"]+)"')
-NUMBER_RE = re.compile(r"const byte Number = (\d+);|MapNumber => (\d+);")
-SAFEZONE_RE = re.compile(r"SafezoneMapNumber => ([\w.]+)\.Number;")
-REQUIREMENT_RE = re.compile(r"this\.CreateRequirement\(Stats\.(\w+), (\d+)\)")
-POWERUP_RE = re.compile(r"this\.AddCharacterPowerUp\(Stats\.(\w+), ([\d.]+)")
-
-
-def class_name_numbers():
-    """Bare map class name -> map number, for resolving `X.Number` references."""
-    numbers = {}
-    for entry in MAPS:
-        for rel, _version in entry["files"]:
-            match = NUMBER_RE.search(read(rel))
-            if match is None:  # 095d town subclasses inherit the 0.75 number
-                numbers.setdefault(os.path.basename(rel)[:-3], entry["number"])
-                continue
-            value = int(match.group(1) or match.group(2))
-            numbers[os.path.basename(rel)[:-3]] = value
-            assert value == entry["number"], (rel, value, entry["number"])
-    return numbers
+CANFLY_RE = re.compile(r"CreateRequirement\(Stats\.CanFly")
 
 
 def parse_map_name(entry):
+    if "name" in entry:  # collapsed client name (Devil Square 1..4 -> one map)
+        return entry["name"]
     for rel, _version in entry["files"]:
         match = NAME_RE.search(read(rel))
         if match:
@@ -149,10 +136,24 @@ def parse_map_name(entry):
     raise AssertionError("no map name in " + str(entry["files"]))
 
 
-def parse_battle_zone(text):
+def parse_environment(combined):
+    """Traversal medium, derived from the OpenMU map initializer.
+
+    Atlans registers an underwater-movement power-up; Icarus carries a CanFly
+    entry requirement (a sky map); every other map is ordinary ground.
+    """
+    if "AddUnderwaterMovementPowerUp()" in combined:
+        return "underwater"
+    if CANFLY_RE.search(combined):
+        return "sky"
+    return "ground"
+
+
+def parse_soccer_pitch(text):
+    """Arena battle-soccer pitch; None on every other map. BattleType is
+    dropped (a pitch is soccer by construction)."""
     if "BattleZoneDefinition" not in text:
         return None
-    battle_type = re.search(r"battleZone\.Type = BattleType\.(\w+);", text).group(1)
     points = {}
     for side in ("Left", "Right"):
         x = re.search(rf"battleZone\.{side}TeamSpawnPointX = (\d+);", text).group(1)
@@ -166,89 +167,12 @@ def parse_battle_zone(text):
         x1, y1, x2, y2 = (int(g) for g in m.groups())
         rects[field] = rect(x1, y1, x2, y2)
     return {
-        "battle_type": battle_type.lower(),
         "ground": rects["Ground"],
         "left_goal": rects["LeftGoal"],
         "right_goal": rects["RightGoal"],
         "left_spawn": points["Left"],
         "right_spawn": points["Right"],
     }
-
-
-# ---------------------------------------------------------------- spawn areas
-
-SPAWN_RE = re.compile(r"this\.CreateMonsterSpawn\(([^;]*?)\)\s*;", re.S)
-NPC_REF_RE = re.compile(r"this\.NpcDictionary\[(\d+)\]")
-CONST_RE = re.compile(r"const (?:byte|short|int) (\w+) = (\d+);")
-# DevilSquare3/4 spawn an S6 monster when available, else a 0.95d-era one:
-# `if (this.NpcDictionary.TryGetValue(180|294, ...)) { ... } else { ... }`.
-# Monsters 180 (Shriker, Kalima) and 294 (Axe Warrior) are not in the 0.95d
-# monster set, so the baseline always takes the else branch.
-TRY_GET_RE = re.compile(
-    r"if \(this\.NpcDictionary\.TryGetValue\((\d+), [^)]*\)\)\s*"
-    r"\{(?:[^{}]*)\}\s*else\s*\{([^{}]*)\}", re.S)
-
-
-def parse_spawns(rel_path, version, map_reference):
-    text = read(rel_path)
-    for monster_number in TRY_GET_RE.findall(text):
-        assert monster_number[0] in ("180", "294"), (rel_path, monster_number)
-    text = TRY_GET_RE.sub(lambda m: m.group(2), text)
-    text = re.sub(r"//[^\n]*", "", text)  # strip comments (incl. a commented-out
-    # Atlans spawn and the trailing `// <monster name>` annotations)
-    consts = {name: int(value) for name, value in CONST_RE.findall(text)}
-    spawns = []
-    for call in SPAWN_RE.findall(text):
-        parts = [p.strip() for p in call.split(",")]
-        monster = int(NPC_REF_RE.fullmatch(parts[1]).group(1))
-        nums, direction, trigger, wave = [], None, "Automatic", None
-        for token in parts[2:]:
-            if token.startswith("Direction."):
-                direction = token[len("Direction."):]
-            elif token.startswith("SpawnTrigger."):
-                trigger = token[len("SpawnTrigger."):]
-            elif token in WAVE_CONSTS:
-                wave = WAVE_CONSTS[token]
-            elif token.isdigit() or token in consts:
-                value = int(token) if token.isdigit() else consts[token]
-                if trigger != "Automatic" and len(nums) >= 4:
-                    wave = value  # waveNumber comes positionally after the trigger
-                else:
-                    nums.append(value)
-            else:
-                raise AssertionError(f"unresolved token {token!r} in {rel_path}")
-        if len(nums) == 2:  # point overload: (x, y)
-            x, y = nums
-            area, quantity = rect(x, y, x, y), 1
-        elif len(nums) in (4, 5):  # area overload: (x1, x2, y1, y2[, quantity])
-            x1, x2, y1, y2 = nums[:4]
-            area = rect(x1, y1, x2, y2)
-            quantity = nums[4] if len(nums) == 5 else 1
-        else:
-            raise AssertionError(f"odd spawn arity {nums} in {rel_path}")
-        kind = TRIGGER_KINDS[trigger]
-        trigger_obj = {"kind": kind}
-        if kind in WAVE_TRIGGERS:
-            assert wave is not None, (rel_path, call)
-            trigger_obj["wave"] = wave
-        else:
-            assert wave is None, (rel_path, call)
-        spawns.append({
-            "map": map_reference,
-            "monster": monster,
-            "area": area,
-            "quantity": quantity,
-            "direction": DIRECTIONS.get(direction_value(direction)),
-            "trigger": trigger_obj,
-            "source_version": version,
-        })
-    return spawns
-
-
-def direction_value(name):
-    if name is None or name == "Undefined":
-        return 0
-    return {v: k for k, v in DIRECTIONS.items()}[slugify(name)]
 
 
 # ---------------------------------------------------------------- gates/warps
@@ -264,27 +188,32 @@ WARP_RE = re.compile(
 
 
 def parse_gates(rel_path):
-    """Returns (exit_gates, enter_gates, warps) without source_version tags."""
+    """Parse one Gates.cs into v1-shaped gate dicts (used for version tagging;
+    reshaped to the v2 kinds after tagging).
+
+    Returns (exits, enters, warps). map is the bare client map number (the
+    OpenMU discriminator is discarded — Devil Square gates 58-61 all resolve to
+    map 9). is_spawn_gate distinguishes Gate.txt flag 0 (spawn) from flag 2
+    (target).
+    """
     text = read(rel_path)
     exits, enters, warps = [], [], []
     for m in EXIT_RE.finditer(text):
-        number, dn, dd, plain, x1, y1, x2, y2, direction, spawn_flag = m.groups()
-        map_number, disc = (int(dn), int(dd)) if plain is None else (int(plain), 0)
+        number, dn, _dd, plain, x1, y1, x2, y2, direction, spawn_flag = m.groups()
+        map_number = int(dn) if plain is None else int(plain)
         exits.append({
-            "kind": "exit_gate",
             "number": int(number),
-            "map": map_ref(map_number, disc),
+            "map": map_number,
             "area": rect(int(x1), int(y1), int(x2), int(y2)),
             "direction": DIRECTIONS.get(int(direction)),
             "is_spawn_gate": spawn_flag is not None,
         })
     for m in ENTER_RE.finditer(text):
-        dn, dd, plain, number, target, x1, y1, x2, y2, min_level = m.groups()
-        map_number, disc = (int(dn), int(dd)) if plain is None else (int(plain), 0)
+        dn, _dd, plain, number, target, x1, y1, x2, y2, min_level = m.groups()
+        map_number = int(dn) if plain is None else int(plain)
         enters.append({
-            "kind": "enter_gate",
             "number": int(number),
-            "map": map_ref(map_number, disc),
+            "map": map_number,
             "area": rect(int(x1), int(y1), int(x2), int(y2)),
             "target_gate": int(target),
             "min_level": int(min_level),
@@ -292,7 +221,6 @@ def parse_gates(rel_path):
     for m in WARP_RE.finditer(text):
         index, name, cost, min_level, gate = m.groups()
         warps.append({
-            "kind": "warp",
             "index": int(index),
             "name": name,
             "cost_zen": int(cost),
@@ -313,14 +241,56 @@ def tag_gate_versions(records_095d, records_075, key_field):
     return records_095d
 
 
+def emit_exit(gate):
+    kind = "spawn_gate" if gate["is_spawn_gate"] else "target_gate"
+    record = {
+        "kind": kind,
+        "number": gate["number"],
+        "map": gate["map"],
+        "area": gate["area"],
+    }
+    if gate["direction"] is not None:  # byte 0 -> unspecified, field omitted
+        record["direction"] = gate["direction"]
+    record["source_version"] = gate["source_version"]
+    return record
+
+
+def emit_enter(gate):
+    record = {
+        "kind": "enter_gate",
+        "number": gate["number"],
+        "map": gate["map"],
+        "area": gate["area"],
+        "target_gate": gate["target_gate"],
+    }
+    if gate["min_level"] != 0:  # Gate.txt level-0 sentinel -> typed absence
+        record["min_level"] = gate["min_level"]
+    record["source_version"] = gate["source_version"]
+    return record
+
+
+def emit_warp(warp):
+    return {
+        "kind": "warp",
+        "index": warp["index"],
+        "name": warp["name"],
+        "cost_zen": warp["cost_zen"],
+        "min_level": warp["min_level"],
+        "target_gate": warp["target_gate"],
+        "source_version": warp["source_version"],
+        "review": WARP_REVIEW,
+    }
+
+
 # ------------------------------------------------------------------- terrain
 
 ATT_HEADER = b"\x00\xff\xff"
 CELLS = 256 * 256
 
 
-def reencode_terrain(att_name, out_name):
-    """Returns (out_path_rel_to_data, count_of_cells_with_unknown_bits)."""
+def reencode_terrain(att_name, map_number):
+    """Re-encode one .att into terrain/<map_number>.bin. Returns the count of
+    cells carrying undefined high bits (masked off)."""
     with open(os.path.join(RESOURCES, att_name), "rb") as f:
         blob = f.read()
     assert len(blob) == 3 + CELLS and blob[:3] == ATT_HEADER, att_name
@@ -332,20 +302,24 @@ def reencode_terrain(att_name, out_name):
         # safezone=1 stays bit 0; blocked 4->2, no_ground 8->4, water 16->8;
         # character (2, runtime occupancy) and unknown high bits are dropped.
         out[i] = (value & 0x01) | ((value & 0x1C) >> 1)
-    out_path = os.path.join(DATA_DIR, "terrain", out_name)
+    out_path = os.path.join(DATA_DIR, "terrain", f"{map_number}.bin")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "wb") as f:
         f.write(bytes(out))
-    return "terrain/" + out_name, unknown_bits
+    return unknown_bits
+
+
+def clear_terrain():
+    """Drop stale sidecars (v1 named them <version>_<slug>.bin) so the
+    directory holds exactly the 11 number-keyed v2 files."""
+    for path in glob.glob(os.path.join(DATA_DIR, "terrain", "*.bin")):
+        os.remove(path)
 
 
 # ---------------------------------------------------------------------- main
 
 def main():
-    stat_map = load_stat_map()
-    class_numbers = class_name_numbers()
-
-    # Gates first: the safezone default rule needs spawn-gate presence per map.
+    # Gates first, tagged on the v1-shaped dicts, then reshaped to v2 kinds.
     exits_095d, enters_095d, warps_095d = parse_gates("Version095d/Gates.cs")
     exits_075, enters_075, warps_075 = parse_gates("Version075/Gates.cs")
     exits = tag_gate_versions(exits_095d, exits_075, "number")
@@ -354,147 +328,132 @@ def main():
     assert len(warps) == 14, len(warps)
     assert all(w["source_version"] == "075" for w in warps), \
         "0.95d warp list expected to be the verbatim 0.75 copy"
+
     exit_numbers = {g["number"] for g in exits}
     for gate in enters:
-        assert gate["target_gate"] in exit_numbers, gate
+        assert gate["target_gate"] in exit_numbers, gate  # never targets enter
     for warp in warps:
         assert warp["target_gate"] in exit_numbers, warp
-    spawn_gate_maps = {g["map"]["number"] for g in exits if g["is_spawn_gate"]}
 
-    map_records, spawn_records = [], []
+    clear_terrain()
+    map_records = []
     terrain_notes = {}
     for entry in MAPS:
-        name = parse_map_name(entry)
-        map_id = slugify(name)
-        reference = map_ref(entry["number"], entry["disc"])
+        number = entry["number"]
         combined = "".join(read(rel) for rel, _v in entry["files"])
-
-        safezone_override = SAFEZONE_RE.search(combined)
-        if safezone_override:
-            target_class = safezone_override.group(1).split(".")[-1]
-            safezone_number = class_numbers[target_class]
-        elif entry["number"] in spawn_gate_maps:
-            safezone_number = entry["number"]
-        else:
-            safezone_number = 0  # Lorencia, per BaseMapInitializer default
-
-        requirements = [{"stat": stat_map[stat], "value": int(value)}
-                        for stat, value in REQUIREMENT_RE.findall(combined)]
-        power_ups = [{"stat": stat_map[stat], "value": float(value), "aggregate": "add_raw"}
-                     for stat, value in POWERUP_RE.findall(combined)]
-        if "AddUnderwaterMovementPowerUp()" in combined:
-            power_ups.append({"stat": stat_map["IsUnderwater"], "value": 1.0,
-                              "aggregate": "add_raw"})
-
-        terrain_path, unknown = reencode_terrain(
-            entry["att"], f"{entry['version']}_{map_id}.bin")
-        if unknown:
-            terrain_notes[map_id] = unknown
-
         record = {
-            "number": entry["number"],
-            "discriminator": entry["disc"],
-            "id": map_id,
-            "name": name,
-            "source_version": entry["version"],
+            "number": number,
+            "name": parse_map_name(entry),
+            "environment": parse_environment(combined),
         }
+        pitch = parse_soccer_pitch(combined)
+        if pitch is not None:
+            record["soccer_pitch"] = pitch
+        record["source_version"] = entry["version"]
         if "review" in entry:
             record["review"] = entry["review"]
-        record.update({
-            "terrain": terrain_path,
-            "exp_multiplier": 1.0,  # ExpMultiplier = 1 for every shipped map
-            "safezone_map": map_ref(safezone_number, 0),
-            "requirements": requirements,
-            "character_power_ups": power_ups,
-            "drop_groups": list(DEFAULT_DROP_GROUPS),
-            "battle_zone": parse_battle_zone(combined),
-        })
         map_records.append(record)
 
-        for rel, version in entry["files"]:
-            spawn_records.extend(parse_spawns(rel, version, reference))
+        unknown = reencode_terrain(entry["att"], number)
+        if unknown:
+            terrain_notes[number] = unknown
 
-    assert len(map_records) == 14
-    map_keys = {(m["number"], m["discriminator"]) for m in map_records}
-    for spawn in spawn_records:
-        assert (spawn["map"]["number"], spawn["map"]["discriminator"]) in map_keys
-    for gate in exits + enters:
-        assert (gate["map"]["number"], gate["map"]["discriminator"]) in map_keys
-    wave_spawns = [s for s in spawn_records if s["trigger"]["kind"] in WAVE_TRIGGERS]
-    assert {s["trigger"]["wave"] for s in wave_spawns} == {1, 2, 3, 10}
+    assert len(map_records) == 11, len(map_records)
+    map_numbers = {m["number"] for m in map_records}
+    assert len(map_numbers) == 11, "duplicate map number"
 
-    gate_records = exits + enters + warps
+    gate_records = ([emit_exit(g) for g in exits]
+                    + [emit_enter(g) for g in enters]
+                    + [emit_warp(w) for w in warps])
+    for record in gate_records:
+        assert record["map"] in map_numbers if "map" in record else True, record
+    assert len(gate_records) == 70, len(gate_records)
+
     write_datafile("map_definitions.json", map_records)
-    write_datafile("spawn_areas.json", spawn_records)
     write_datafile("gates_warps.json", gate_records)
 
+    # ---- coverage ----
     def by_version(records):
         counts = {}
         for record in records:
-            counts[record["source_version"]] = counts.get(record["source_version"], 0) + 1
+            v = record["source_version"]
+            counts[v] = counts.get(v, 0) + 1
         return counts
 
-    reviews = [{"file": "map_definitions.json", "id": r["id"], "review": r["review"]}
+    spawn_gates = [r for r in gate_records if r["kind"] == "spawn_gate"]
+    target_gates = [r for r in gate_records if r["kind"] == "target_gate"]
+    enter_gates = [r for r in gate_records if r["kind"] == "enter_gate"]
+    warp_records = [r for r in gate_records if r["kind"] == "warp"]
+
+    reviews = [{"file": "map_definitions.json", "number": r["number"],
+                "review": r["review"]}
                for r in map_records if "review" in r]
+    reviews.append({"file": "gates_warps.json", "kind": "warp",
+                    "records": len(warp_records), "review": WARP_REVIEW})
+
     coverage_path = coverage("maps", {
         "files": {
             "map_definitions.json": len(map_records),
-            "spawn_areas.json": len(spawn_records),
             "gates_warps.json": len(gate_records),
-            "terrain_binaries": len(MAPS),
+            "terrain_binaries": len(map_records),
         },
         "counts_by_source_version": {
             "map_definitions.json": by_version(map_records),
-            "spawn_areas.json": by_version(spawn_records),
             "gates_warps.json": {
-                "exit_gate": by_version(exits),
-                "enter_gate": by_version(enters),
-                "warp": by_version(warps),
+                "spawn_gate": by_version(spawn_gates),
+                "target_gate": by_version(target_gates),
+                "enter_gate": by_version(enter_gates),
+                "warp": by_version(warp_records),
             },
         },
         "review": reviews,
         "gaps": [
-            "devil square mini-game event config (enter/game/exit durations, entry "
-            "level ranges per square 1-4, rewards, ticket item 14/19, max 10 players; "
-            "Version095d/Events/DevilSquareInitializer.cs) - no mini-game schema in "
-            "the spec this wave; the wave-tagged spawns, maps and entrance exit "
-            "gates 58-61 ARE extracted",
-            "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 warp "
-            "list verbatim with a 'todo: update for 0.95d'; adopted as-is, all 14 "
-            "entries tagged 075",
-            "1.0-era Blood Castle maps/spawns exist only in the S6 dataset and are "
-            "outside the approved 14-map scope of this wave - no map backports",
-            "invasion mobs (43/44/53/54) have monster definitions but no static "
-            "spawn areas - invasions spawn dynamically at runtime (not spawn data)",
+            "Devil Square mini-game event config (per-square entry level "
+            "brackets, waves, rewards, timers, in-event death, ticket item, "
+            "max 10 players; Version095d/Events/DevilSquareInitializer.cs) is "
+            "W-EVT scope, not maps data; the single collapsed map-9 record and "
+            "its four arrival gates (spawn gates 58-61) ARE extracted",
+            "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 "
+            "warp list verbatim with a 'todo: update for 0.95d'; adopted as-is, "
+            "all 14 warp records tagged 075 with a review note",
+            "S6/1.0-era maps (Blood Castle, Kalima, ...) are outside the "
+            "approved 11-map 0.95d scope of this wave - no map backports",
         ],
         "notes": [
-            "facts file 4_*.md claims Lorencia/Devias/Noria all get 0.95 terrain; "
-            "the source shows only 095d Devias overrides the 075_ terrain prefix - "
-            "Lorencia/Noria keep 0.75 terrain in the 0.95d dataset and stay tagged 075",
-            "facts file counts (32/36 exit, 23 enter gates) differ from source: "
-            f"parsed {len(exits)} exit ({sum(1 for g in exits if g['source_version'] == '075')} "
-            f"already in 0.75) and {len(enters)} enter gates",
-            "0.75 Exile/Arena use the unprefixed Terrain6/7.att resources (no "
-            "075_ variant exists); re-encoded as 075_exile.bin/075_arena.bin",
-            "default_excellent drop group reference on every map reflects the 0.95d "
-            "baseline (excellent options do not exist in the pure 0.75 dataset)",
-            "terrain cells with undefined high bits (masked off): "
-            + (str(terrain_notes) if terrain_notes else "none"),
-            "map records tagged 075 are byte-identical between the 0.75 and 0.95d "
-            "datasets (including terrain); spawn additions by 095d subclasses are "
-            "separate 095d-tagged spawn records",
-            "DevilSquare3/4 conditionally spawn S6 monsters 180 (Shriker) / 294 "
-            "(Axe Warrior) when present; neither exists in 0.95d, so the shipped "
-            "else-branch spawns (34 Cursed Wizard / 69 Alquamos) were extracted "
-            "and the S6-branch calls dropped (2 calls)",
-            "075 spawn count 1563 vs facts-file 1564: the extra call in the facts "
-            "count is a commented-out (and syntactically broken) Atlans line",
+            "Devil Square: OpenMU's four discriminator records (map 9 disc "
+            "1-4, names 'Devil Square 1'..'4') collapse to ONE map-9 record "
+            "named 'Devil Square'; the four Terrain10_{1..4}.att blobs are "
+            "byte-identical (verified md5) and collapse to terrain/9.bin",
+            "Devias (map 2) tagged 095d: its record fields are the 0.75 map, "
+            "but the shipped terrain sidecar (terrain/2.bin) is the 0.95d "
+            "Terrain3.att (only town whose initializer overrides the 075_ "
+            "prefix); the v1 record-level terrain field is gone in v2, so the "
+            "095d tag now reflects the sidecar, not a record-field difference",
+            "environment derived from the initializer: Atlans (7) = underwater "
+            "(AddUnderwaterMovementPowerUp), Icarus (10) = sky (CanFly entry "
+            "requirement), all other maps = ground; OpenMU's IsUnderwater stat "
+            "and CanFly stat-requirement mechanisms are dropped (become W-CMB / "
+            "services rules on the typed environment)",
+            "Arena soccer_pitch present on map 6 only; BattleType.Soccer tag "
+            "dropped (a pitch is soccer by construction); era placement flagged "
+            "as a review note on the record",
+            "gate map references are bare client map numbers (u8); the OpenMU "
+            "MapRef discriminator is gone (Devil Square gates 58-61 -> map 9)",
+            "enter gates 3 and 20 carry Gate.txt's level-0 no-requirement "
+            "sentinel -> min_level omitted (typed absence, never Level(0))",
+            "every spawn-gate direction byte is 0 -> direction omitted; target "
+            "gates carry real facing bytes 1-8",
+            "terrain cells with undefined high bits (masked off), by map "
+            "number: " + (str(terrain_notes) if terrain_notes else "none"),
         ],
     })
+
     print("wrote", coverage_path)
-    print("maps:", by_version(map_records))
-    print("spawns:", by_version(spawn_records))
-    print("gates_warps:", by_version(gate_records))
+    print("map_definitions:", by_version(map_records), "total", len(map_records))
+    print("gates_warps by kind: spawn_gate", len(spawn_gates),
+          "target_gate", len(target_gates), "enter_gate", len(enter_gates),
+          "warp", len(warp_records), "total", len(gate_records))
+    print("gates_warps by source_version:", by_version(gate_records))
 
 
 if __name__ == "__main__":

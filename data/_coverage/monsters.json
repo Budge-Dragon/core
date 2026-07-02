@@ -1,37 +1,306 @@
 {
   "category": "monsters",
-  "file": "data/monster_definitions.json",
-  "counts": {
-    "075": 73,
-    "095d": 27,
-    "s6": 0,
-    "total": 100
+  "files": {
+    "monster_definitions.json": 100,
+    "spawns.json": 1847
+  },
+  "counts_by_source_version": {
+    "monster_definitions.json": {
+      "075": 73,
+      "095d": 27,
+      "s6": 0
+    },
+    "spawns.json": {
+      "075": 1563,
+      "095d": 284,
+      "s6": 0
+    }
+  },
+  "role_counts": {
+    "monster": 75,
+    "trap": 4,
+    "soccer_ball": 1,
+    "npc": 18,
+    "guard": 2
+  },
+  "placement_counts": {
+    "fixed": 244,
+    "area": 24,
+    "spot": 1579
+  },
+  "schedule_counts": {
+    "wandering": 2,
+    "permanent": 1845
   },
   "review": [
     {
+      "number": 9,
+      "name": "Thunder Lich",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 10,
+      "name": "Dark Knight",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 11,
+      "name": "Ghost",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (2/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 18,
+      "name": "Gorgon",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 20,
+      "name": "Elite Yeti",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (1/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 25,
+      "name": "Ice Queen",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (4/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 26,
+      "name": "Goblin",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (0/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 34,
+      "name": "Cursed Wizard",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 35,
+      "name": "Death Gorgon",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 36,
+      "name": "Shadow",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 37,
+      "name": "Devil",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (5/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 38,
+      "name": "Balrog",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (10/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 39,
+      "name": "Poison Shadow",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (4/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 40,
+      "name": "Death Knight",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 41,
+      "name": "Death Cow",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (5/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 43,
+      "name": "Golden Budge Dragon",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (2/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 44,
+      "name": "Red Dragon",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 45,
+      "name": "Bahamut",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (1/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 46,
+      "name": "Vepar",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 47,
+      "name": "Valkyrie",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (2/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 48,
+      "name": "Lizard King",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 49,
+      "name": "Hydra",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 50,
+      "name": "Sea Worm",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 51,
+      "name": "Great Bahamut",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 52,
+      "name": "Silver Valkyrie",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
       "number": 53,
       "name": "Golden Titan",
-      "review": "Golden Titan ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (5/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt. Golden Titan ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
     },
     {
       "number": 54,
       "name": "Golden Soldier",
-      "review": "Golden Soldier ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt. Golden Soldier ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+    },
+    {
+      "number": 57,
+      "name": "Iron Wheel",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 58,
+      "name": "Tantallos",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 59,
+      "name": "Zaikan",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (13/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 60,
+      "name": "Bloody Wolf",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (8/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 61,
+      "name": "Beam Knight",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (10/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 62,
+      "name": "Mutant",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (8/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 63,
+      "name": "Death Beam Knight",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (13/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 64,
+      "name": "Orc Archer",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 65,
+      "name": "Elite Orc",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (8/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 66,
+      "name": "Cursed King",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (17/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 67,
+      "name": "Metal Balrog",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 69,
+      "name": "Alquamos",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (11/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 70,
+      "name": "Queen Rainer",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 71,
+      "name": "Mega Crust",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 72,
+      "name": "Phantom Knight",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (16/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 73,
+      "name": "Drakan",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (13/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 74,
+      "name": "Alpha Crust",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (14/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 75,
+      "name": "Great Drakan",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (17/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 76,
+      "name": "Dark Phoenix Shield",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (35/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 77,
+      "name": "Dark Phoenix",
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (35/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
+    },
+    {
+      "number": 150,
+      "name": "Bali",
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     }
   ],
+  "review_families": {
+    "water_to_lightning_remap": 48,
+    "phantom_skill_150": 14,
+    "golden_invasion_era_doubt": [
+      53,
+      54
+    ]
+  },
   "gaps": [
-    "merchant store contents deferred by decision (merchant_stores.json, follow-up wave); merchant NPCs here carry only role/window",
-    "quests startable at NPCs (Sevina #235) deferred to quests.json (follow-up wave)",
-    "no s6 monster backports this wave: none named in the approved source list; known 1.0-era candidates left out by that decision include Blood Castle monsters + Archangel Messenger NPC and higher golden-invasion tiers beyond what the upstream 095d dataset ships",
-    "Golden Soldier #54 has no drop group in source (unlike #43 box_of_luck and #53 box_of_kundun_2) - faithful to the upstream 095d data, likely upstream omission of Box of Kundun +1"
+    "Devil Square wave spawns (28 rows on map 9) omitted from spawns.json -> W-EVT event configs; residue (four square rectangles, per-wave participant monster numbers, boss) recorded in the monsters_spawns v2 section, flagged as OpenMU 0.95d tuning to re-source under W-SRC",
+    "merchant store contents deferred (merchant_stores.json, follow-up wave); merchant NPCs here carry only role/window",
+    "quests startable at NPCs (Sevina #235, window=quest) deferred to quests.json (follow-up wave)",
+    "MP / MagicDefense Monster.txt columns: OpenMU never modeled them, so no values ship; they enter MonsterCombat when an authentic Monster.txt source is wired in (W-SRC), never as fabricated zeros",
+    "no s6 monster backports this wave: none in the approved source list; known 1.0-era candidates (Blood Castle mobs, Archangel Messenger NPC, higher golden-invasion tiers) left out by that decision",
+    "the wandering-merchant rotation rule (one active at a time; timing unsourced) is W-EVT, not static spawn data; the two wandering rows (#248, #250 on Lorencia) carry schedule=wandering only"
   ],
   "notes": [
-    "resistances are fractions: source stores 0-255 bytes, upstream initializers write n/255; values here are n/255 with divisor 255",
-    "durations converted to integer ms; RespawnDelay is seconds in source (x1000); passive NPCs without delays get 0",
-    "the upstream opaque monster 'attribute' byte (1=npc/guard/trap, 2=monster) dropped per spec; role kind discriminates",
-    "the upstream free-form guard AI name folded into role kind 'guard'; trap AIs kind-tagged; trap AI random_in_range unused pre-S3",
-    "monster-bound drop groups reference the drops extractor's canonical ids: golden_budge_dragon_box_of_luck (#43), red_dragon_jewels (#44), golden_titan_box_of_kundun_2 (#53); source Description text is mapped, not slugified",
-    "attack_skill is the numeric skill number (Poison=1, Meteorite=2, Lightning=3, Ice=7, PowerWave=11, EnergyBall=17, FlameofEvil=50, MonsterSkill=150); skill 150 is defined only by the S6 skills initializer and ships in skills.json as an s6 backport",
-    "Bali #150 defined identically in 075 and 095d SkillsInitializers; deduped to source_version 075"
+    "the v1 stat slug-list is gone: combat columns are typed MonsterCombat (level/hp/min+max_phys_damage/defense/attack_rate/defense_rate) and MobBehavior (move/attack/view ranges + move/attack/respawn delays_ms) on the fighting role variants; no f64 survives",
+    "resistances are raw 0..255 bytes recovered from OpenMU's n/255 fractions as round(f*255) (exact; denominator asserted 255); PerElement carries all 7 keys, earth/wind/water always explicit 0",
+    "48 records take their lightning byte from OpenMU's water_resistance slot (pre-S3 has no water damage type); each carries the per-record water->lightning review with its byte value",
+    "14 records OpenMU points at skill 150 (an S6-only backport) ship as attack{plain} with a phantom-150 review; no phantom skill number ships in any file; real attack skills (1,2,3,7,11,17,50) ship as attack{skill}, Atlas-proven at load",
+    "Golden Titan #53 / Golden Soldier #54 keep their golden-invasion era-doubt review; #53 also carries phantom-150 and water->lightning reasons, joined into one review string (space-separated)",
+    "role split is total: 75 monster + 4 trap + 2 guard fighting records carry combat/resistances/behavior; 18 npc + 1 soccer_ball carry none (no fabricated zero columns); guards carry no attack field (plain by rule, D9); traps carry targeting (single_when_pressed/area_when_pressed/directional)",
+    "durations are integer ms (RespawnDelay is seconds in source, x1000); traps #100-102 omit MoveDelay -> move_delay_ms 0; traps omit DefenseBase -> defense 0 (fixed Monster.txt zeros, not fabrication)",
+    "Bali #150 defined identically in the 075 and 095d SkillsInitializers; deduped to source_version 075",
+    "dropped with their mechanism: NumberOfMaximumItemDrops (drops-service const), monster-bound drop groups (drops domain, keyed by number), poison_damage_multiplier (skills_effects poison-tick rule), the opaque Attribute byte, MapRef.discriminator on spawns",
+    "spawn placement is kind-tagged: 244 fixed (facing-bearing stationary objects, quantity 1), spot (single-tile mobile spawns, incl. the two Devias #20 quantity-10 rows), area (rectangle spawns); the degenerate-rect / point-as-rect convention is gone",
+    "move/attack/respawn delays are treated as authentic Monster.txt content per the v2 section (D11), not OpenMU-invented tuning; they carry no review"
   ]
 }

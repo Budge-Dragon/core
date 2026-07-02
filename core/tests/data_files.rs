@@ -1,130 +1,268 @@
-//! Deserialization contract for the static data files under `/data`.
+//! v2 static-data contract, proven against the real regenerated `/data`.
 //!
-//! Every schema file must exist, parse into its `DataFile<T>` type, carry
-//! `schema_version == 1`, and hold at least one record (`exp_tables` and
-//! `game_constants` hold exactly one).
+//! Every v2 file is read from disk, deserialized into its `DataFile<T>` record
+//! type with its expected record count, the loader
+//! total structures (`ClassTable`, `ExpCurve`, `AncientRoster`, `DropBands`) are
+//! built, and the whole-dataset [`Atlas`] referential-integrity proof runs over
+//! the real cross-references. Reading and parsing are macros so their `unwrap`s
+//! expand inside the `#[test]` functions that call them, where `clippy.toml`
+//! permits them (`allow-unwrap-in-tests`).
 
 use std::path::PathBuf;
 
-use serde::de::DeserializeOwned;
-
+use mu_core::components::class::CharacterClass;
+use mu_core::components::item_quality::ItemRarity;
+use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
+use mu_core::components::units::{ItemLevel, Level};
+use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
+use mu_core::data::atlas::{Atlas, AtlasError, StaticData};
+use mu_core::data::box_drops::BoxDrop;
 use mu_core::data::chaos_mixes::ChaosMix;
-use mu_core::data::character_classes::CharacterClassRecord;
+use mu_core::data::classes::{ClassRecord, ClassTable, ClassTableError};
 use mu_core::data::common::DataFile;
-use mu_core::data::drop_groups::DropGroup;
-use mu_core::data::exp_tables::ExpTable;
-use mu_core::data::game_constants::GameConstants;
+use mu_core::data::drop_config::DropConfig;
+use mu_core::data::exp_tables::{ExpCurve, ExpTable};
+use mu_core::data::game_config::GameConfig;
 use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
-use mu_core::data::item_level_bonus_tables::ItemLevelBonusTable;
-use mu_core::data::item_options::ItemOptionDefinition;
-use mu_core::data::item_sets::ItemSet;
-use mu_core::data::magic_effects::MagicEffect;
 use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::MonsterDefinition;
 use mu_core::data::skills::Skill;
-use mu_core::data::spawn_areas::SpawnArea;
-use mu_core::data::stats::Stat;
+use mu_core::data::spawns::Spawn;
+use mu_core::data::special_drops::{DropBand, DropBands, SpecialDrop, SpecialDropRecord};
 
-fn load<T: DeserializeOwned>(file_name: &str) -> Result<DataFile<T>, String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../data")
-        .join(file_name);
-    let text = std::fs::read_to_string(&path)
-        .map_err(|error| format!("missing data file {}: {error}", path.display()))?;
-    let file: DataFile<T> = serde_json::from_str(&text)
-        .map_err(|error| format!("failed to parse {}: {error}", path.display()))?;
-    assert_eq!(file.schema_version, 1, "{file_name}: schema_version");
-    assert!(!file.records.is_empty(), "{file_name}: no records");
-    Ok(file)
+use mu_core::services::item_rules::{
+    ammunition_damage_percent, armor_defense_bonus, effective_drop_level, max_durability,
+    weapon_damage_bonus,
+};
+
+/// Absolute path of a real `/data/<name>.json`, relative to the crate.
+fn data_path(name: &str) -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("..");
+    path.push("data");
+    path.push(format!("{name}.json"));
+    path
+}
+
+/// Reads and deserializes a real data file into its `DataFile<T>`, asserting the
+/// expected record count. The `unwrap`s expand at the `#[test]` call site, where
+/// `clippy.toml` permits them.
+macro_rules! load {
+    ($ty:ty, $name:expr, $count:expr) => {{
+        let path = data_path($name);
+        let text = std::fs::read_to_string(&path).unwrap();
+        let file: DataFile<$ty> = serde_json::from_str(&text).unwrap();
+        assert_eq!(file.records.len(), $count, "{}.json record count", $name);
+        file
+    }};
+}
+
+/// The full [`StaticData`] loaded from the real files — one `load!` per file, so
+/// every file's parse + schema + record count is proven on the way.
+macro_rules! static_data {
+    () => {
+        StaticData {
+            maps: load!(MapDefinition, "map_definitions", 11),
+            gates_warps: load!(GateWarpRecord, "gates_warps", 70),
+            monsters: load!(MonsterDefinition, "monster_definitions", 100),
+            spawns: load!(Spawn, "spawns", 1847),
+            skills: load!(Skill, "skills", 51),
+            items: load!(ItemDefinition, "item_definitions", 243),
+            box_drops: load!(BoxDrop, "box_drops", 1),
+            special_drops: load!(SpecialDropRecord, "special_drops", 9),
+            ancient_sets: load!(AncientSet, "ancient_sets", 36),
+            chaos_mixes: load!(ChaosMix, "chaos_mixes", 10),
+            classes: load!(ClassRecord, "classes", 8),
+            exp_tables: load!(ExpTable, "exp_tables", 1),
+            game_config: load!(GameConfig, "game_config", 1),
+        }
+    };
 }
 
 #[test]
-fn stats_parse() {
-    load::<Stat>("stats.json").unwrap();
+fn every_v2_file_parses_with_expected_record_count() {
+    // Each `load!` asserts the record count; touching each field proves
+    // all thirteen files deserialize into their record types.
+    let data = static_data!();
+    assert_eq!(data.maps.records.len(), 11);
+    assert_eq!(data.gates_warps.records.len(), 70);
+    assert_eq!(data.monsters.records.len(), 100);
+    assert_eq!(data.spawns.records.len(), 1847);
+    assert_eq!(data.skills.records.len(), 51);
+    assert_eq!(data.items.records.len(), 243);
+    assert_eq!(data.box_drops.records.len(), 1);
+    assert_eq!(data.special_drops.records.len(), 9);
+    assert_eq!(data.ancient_sets.records.len(), 36);
+    assert_eq!(data.chaos_mixes.records.len(), 10);
+    assert_eq!(data.classes.records.len(), 8);
+    assert_eq!(data.exp_tables.records.len(), 1);
+    assert_eq!(data.game_config.records.len(), 1);
 }
 
 #[test]
-fn character_classes_parse() {
-    load::<CharacterClassRecord>("character_classes.json").unwrap();
-}
-
-#[test]
-fn item_definitions_parse() {
-    load::<ItemDefinition>("item_definitions.json").unwrap();
-}
-
-#[test]
-fn item_level_bonus_tables_parse() {
-    load::<ItemLevelBonusTable>("item_level_bonus_tables.json").unwrap();
-}
-
-#[test]
-fn item_options_parse() {
-    load::<ItemOptionDefinition>("item_options.json").unwrap();
-}
-
-#[test]
-fn item_sets_parse() {
-    load::<ItemSet>("item_sets.json").unwrap();
-}
-
-#[test]
-fn skills_parse() {
-    load::<Skill>("skills.json").unwrap();
-}
-
-#[test]
-fn magic_effects_parse() {
-    load::<MagicEffect>("magic_effects.json").unwrap();
-}
-
-#[test]
-fn monster_definitions_parse() {
-    load::<MonsterDefinition>("monster_definitions.json").unwrap();
-}
-
-#[test]
-fn spawn_areas_parse() {
-    load::<SpawnArea>("spawn_areas.json").unwrap();
-}
-
-#[test]
-fn map_definitions_parse() {
-    load::<MapDefinition>("map_definitions.json").unwrap();
-}
-
-#[test]
-fn gates_warps_parse() {
-    load::<GateWarpRecord>("gates_warps.json").unwrap();
-}
-
-#[test]
-fn drop_groups_parse() {
-    load::<DropGroup>("drop_groups.json").unwrap();
-}
-
-#[test]
-fn chaos_mixes_parse() {
-    load::<ChaosMix>("chaos_mixes.json").unwrap();
-}
-
-#[test]
-fn exp_tables_parse() {
-    let file = load::<ExpTable>("exp_tables.json").unwrap();
+fn class_table_builds_from_real_data() {
+    let classes = load!(ClassRecord, "classes", 8);
+    let table = ClassTable::try_from(classes.records).unwrap();
+    // Dark Lord is the sole command class and carries client code 16.
+    let dark_lord = table.record(CharacterClass::DarkLord);
+    assert_eq!(dark_lord.number.0, 16);
     assert_eq!(
-        file.records.len(),
-        1,
-        "exp_tables.json: expected exactly one record"
+        table.class_by_number(dark_lord.number),
+        Some(CharacterClass::DarkLord)
     );
 }
 
 #[test]
-fn game_constants_parse() {
-    let file = load::<GameConstants>("game_constants.json").unwrap();
+fn exp_curve_builds_from_real_data() {
+    let exp = load!(ExpTable, "exp_tables", 1);
+    let record = exp.records.into_iter().next().unwrap();
+    let curve = ExpCurve::parse(record).unwrap();
+    assert_eq!(curve.max_level().get(), 400);
+    assert_eq!(curve.level(1).unwrap().total_to_hold().0, 0);
+    let top = curve.level(400).unwrap().total_to_hold().0;
+    assert!(top > 0);
+    assert!(curve.level(0).is_err());
+    assert!(curve.level(401).is_err());
+}
+
+#[test]
+fn ancient_roster_builds_from_real_data() {
+    let sets = load!(AncientSet, "ancient_sets", 36);
+    let roster = AncientRoster::build(sets.records);
+    assert_eq!(roster.sets().len(), 36);
+}
+
+#[test]
+fn game_config_and_special_drops_build_from_real_data() {
+    let config = load!(GameConfig, "game_config", 1);
+    let record = config.records.into_iter().next().unwrap();
+    // The category numerators must fit under the 10000 ceiling for the residual
+    // "nothing" weight to be well-formed.
+    assert!(record.drops.nothing_weight() <= 10_000);
+
+    // Every level-banded special drop parses into a total, ascending band table.
+    let special = load!(SpecialDropRecord, "special_drops", 9);
+    for record in &special.records {
+        if let SpecialDrop::LevelBanded { bands, .. } = &record.drop {
+            assert!(!bands.bands().is_empty());
+        }
+    }
+}
+
+#[test]
+fn atlas_resolves_the_whole_real_dataset() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    assert_eq!(atlas.maps().count(), 11);
+    // 70 gate/warp records include exactly 14 warp entries.
+    assert_eq!(atlas.warps().count(), 14);
+    // Lorencia's spawn gate is proven present by construction.
+    let fallback = atlas.fallback_spawn_gate();
+    assert_eq!(fallback.map.0, 0);
+}
+
+// --- Negative tests: type invariants that valid on-disk data cannot exercise.
+
+#[test]
+fn class_table_rejects_duplicate_records() {
+    let classes = load!(ClassRecord, "classes", 8);
+    let mut duped = classes.records.clone();
+    duped.push(classes.records[0].clone());
+    let err = ClassTable::try_from(duped).unwrap_err();
+    assert!(matches!(
+        err,
+        ClassTableError::DuplicateClass(_) | ClassTableError::DuplicateNumber(_)
+    ));
+}
+
+#[test]
+fn atlas_rejects_a_dangling_monster_reference() {
+    let mut data = static_data!();
+    let dangling = r#"{"records":[
+     {"map":0,"monster":9999,"placement":{"kind":"spot","position":{"x":10,"y":10},"quantity":1},"schedule":{"kind":"permanent"},"source_version":"075"}
+    ]}"#;
+    data.spawns = serde_json::from_str(dangling).unwrap();
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(err, AtlasError::UnknownMonsterRef { .. }));
+}
+
+#[test]
+fn drop_bands_reject_non_ascending_and_resolve_levels() {
+    let band = |min: u16, lvl: u8| DropBand {
+        min_monster_level: Level::new(min).unwrap(),
+        item_level: ItemLevel::new(lvl).unwrap(),
+    };
+    let bands = DropBands::try_from(vec![band(2, 1), band(36, 2)]).unwrap();
+    assert_eq!(bands.item_level_for(Level::new(1).unwrap()), None);
     assert_eq!(
-        file.records.len(),
-        1,
-        "game_constants.json: expected exactly one record"
+        bands.item_level_for(Level::new(2).unwrap()).unwrap().get(),
+        1
+    );
+    assert_eq!(
+        bands.item_level_for(Level::new(50).unwrap()).unwrap().get(),
+        2
+    );
+    assert!(DropBands::try_from(vec![band(36, 2), band(2, 1)]).is_err());
+}
+
+#[test]
+fn drop_config_rejects_category_sum_above_ceiling() {
+    let json = r#"{"money_roll_per_10000":6000,"item_roll_per_10000":6000,"jewel_roll_per_10000":0,"excellent_roll_per_10000":0,"skill_roll_per_10000":5000,"jewel_drops":[{"group":14,"number":13}]}"#;
+    assert!(serde_json::from_str::<DropConfig>(json).is_err());
+}
+
+#[test]
+fn item_rules_curve_accessors_are_total_over_enhance_level() {
+    let levels = [
+        EnhanceLevel::L0,
+        EnhanceLevel::L1,
+        EnhanceLevel::L2,
+        EnhanceLevel::L3,
+        EnhanceLevel::L4,
+        EnhanceLevel::L5,
+        EnhanceLevel::L6,
+        EnhanceLevel::L7,
+        EnhanceLevel::L8,
+        EnhanceLevel::L9,
+        EnhanceLevel::L10,
+        EnhanceLevel::L11,
+    ];
+    for level in levels {
+        let _ = weapon_damage_bonus(level);
+        let _ = armor_defense_bonus(level);
+    }
+    assert_eq!(weapon_damage_bonus(EnhanceLevel::L0), 0);
+    assert_eq!(weapon_damage_bonus(EnhanceLevel::L11), 36);
+    assert_eq!(armor_defense_bonus(EnhanceLevel::L10), 31);
+}
+
+#[test]
+fn effective_drop_level_applies_surcharges() {
+    assert_eq!(
+        effective_drop_level(6, EnhanceLevel::L0, ItemRarity::Normal),
+        6
+    );
+    assert_eq!(
+        effective_drop_level(6, EnhanceLevel::L1, ItemRarity::Normal),
+        9
+    );
+    assert_eq!(
+        effective_drop_level(6, EnhanceLevel::L0, ItemRarity::Excellent),
+        31
+    );
+    assert_eq!(
+        effective_drop_level(6, EnhanceLevel::L0, ItemRarity::Ancient),
+        36
+    );
+}
+
+#[test]
+fn ammunition_and_durability_accessors() {
+    assert_eq!(ammunition_damage_percent(AmmoLevel::L0), 0);
+    assert_eq!(ammunition_damage_percent(AmmoLevel::L2), 5);
+    assert_eq!(max_durability(20, EnhanceLevel::L0, ItemRarity::Normal), 20);
+    assert_eq!(
+        max_durability(20, EnhanceLevel::L11, ItemRarity::Excellent),
+        20 + 21 + 15
     );
 }

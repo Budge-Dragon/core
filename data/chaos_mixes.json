@@ -1,1057 +1,322 @@
 {
-  "schema_version": 1,
   "records": [
     {
-      "number": 1,
-      "id": "chaos_weapon",
       "name": "Chaos Weapon",
       "source_version": "075",
-      "behavior": "chaos_weapon_and_first_wings",
-      "cost": {
-        "flat_zen": 0,
-        "zen_per_success_percent": 10000
-      },
-      "success": {
-        "base_percent": 0,
-        "max_percent": 100,
-        "npc_price_divisor": 20000,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "any_item",
-            "min_level": 4,
-            "max_level": 11,
-            "required_option_types": [
-              "option"
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "downgrade_chaos_weapon",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
+      "recipe": {
+        "kind": "chaos_weapon",
+        "sacrifice_levels": {
+          "min": 4,
+          "max": 11
         },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 13
-              }
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 14
-              }
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "create",
-          "item": {
+        "weapons": [
+          {
             "group": 2,
             "number": 6
           },
-          "level_range": [
-            0,
-            4
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
+          {
             "group": 4,
             "number": 6
           },
-          "level_range": [
-            0,
-            4
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
+          {
             "group": 5,
             "number": 7
-          },
-          "level_range": [
-            0,
-            4
-          ],
-          "durability": null
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
+          }
+        ]
       }
     },
     {
-      "number": 2,
-      "id": "devil_square_ticket",
-      "name": "Devil's Square Ticket",
-      "source_version": "095d",
-      "behavior": "ticket_devil_square",
-      "cost": {
-        "flat_zen": 0,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 0,
-        "max_percent": 100,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [],
-      "results": [],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
-      }
-    },
-    {
-      "number": 3,
-      "id": "item_upgrade_10",
-      "name": "+10 Item Combination",
-      "source_version": "095d",
-      "behavior": "simple",
-      "cost": {
-        "flat_zen": 2000000,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 50,
-        "max_percent": 100,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 25
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "any_item",
-            "min_level": 9,
-            "max_level": 9,
-            "required_option_types": []
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "stays",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": 1
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 13
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 14
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "modify",
-          "ref": 1,
-          "add_level": 1
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
-      }
-    },
-    {
-      "number": 4,
-      "id": "item_upgrade_11",
-      "name": "+11 Item Combination",
-      "source_version": "095d",
-      "behavior": "simple",
-      "cost": {
-        "flat_zen": 4000000,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 45,
-        "max_percent": 100,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 25
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "any_item",
-            "min_level": 10,
-            "max_level": 10,
-            "required_option_types": []
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "stays",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": 1
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 13
-              }
-            ]
-          },
-          "amount": {
-            "min": 2,
-            "max": 2
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 14
-              }
-            ]
-          },
-          "amount": {
-            "min": 2,
-            "max": 2
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "modify",
-          "ref": 1,
-          "add_level": 1
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
-      }
-    },
-    {
-      "number": 5,
-      "id": "dinorant",
-      "name": "Dinorant",
-      "source_version": "095d",
-      "behavior": "dinorant",
-      "cost": {
-        "flat_zen": 250000,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 70,
-        "max_percent": 100,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 13,
-                "number": 2
-              }
-            ]
-          },
-          "amount": {
-            "min": 3,
-            "max": 3
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "create",
-          "item": {
-            "group": 13,
-            "number": 3
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 100,
-        "excellent_percent": 0
-      }
-    },
-    {
-      "number": 6,
-      "id": "fruits",
-      "name": "Fruits",
-      "source_version": "s6",
-      "review": "stat fruits are 1.0-era, data only in S6; created fruit level (stat kind) is weighted-random 0-4 in the crafting rule, not data",
-      "behavior": "simple",
-      "cost": {
-        "flat_zen": 3000000,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 90,
-        "max_percent": 100,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 22
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "create",
-          "item": {
-            "group": 13,
-            "number": 15
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
-      }
-    },
-    {
-      "number": 7,
-      "id": "second_wings",
-      "name": "2nd Level Wings",
-      "source_version": "s6",
-      "review": "2nd wings are 1.0-era, data only in S6: Summoner wings removed (Wing of Misery 12/41 input, Wings of Despair 12/42 result), level caps clamped 15->11; luck/exc result chances (20/20, max 1 exc) are S6 values",
-      "behavior": "second_wings",
-      "cost": {
-        "flat_zen": 5000000,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 0,
-        "max_percent": 90,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 0
-              },
-              {
-                "group": 12,
-                "number": 1
-              },
-              {
-                "group": 12,
-                "number": 2
-              }
-            ],
-            "min_level": 0,
-            "max_level": 11
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": 4000000,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "any_item",
-            "min_level": 4,
-            "max_level": 11,
-            "required_option_types": [
-              "excellent"
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": 40000,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 13,
-                "number": 14
-              }
-            ],
-            "min_level": 0,
-            "max_level": 0
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "create",
-          "item": {
-            "group": 12,
-            "number": 3
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
-            "group": 12,
-            "number": 4
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
-            "group": 12,
-            "number": 5
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
-            "group": 12,
-            "number": 6
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 20,
-        "skill_percent": 0,
-        "excellent_percent": 20
-      }
-    },
-    {
-      "number": 8,
-      "id": "blood_castle_ticket",
-      "name": "Blood Castle Ticket",
-      "source_version": "s6",
-      "review": "Blood Castle is 0.97/1.0-era; recipe, prices and success rates live in the ticket rule (S6 handler values, see coverage rules)",
-      "behavior": "ticket_blood_castle",
-      "cost": {
-        "flat_zen": 0,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 0,
-        "max_percent": 100,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [],
-      "results": [],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
-      }
-    },
-    {
-      "number": 11,
-      "id": "first_wings",
       "name": "1st Level Wings",
       "source_version": "095d",
-      "behavior": "chaos_weapon_and_first_wings",
-      "cost": {
-        "flat_zen": 0,
-        "zen_per_success_percent": 10000
-      },
-      "success": {
-        "base_percent": 0,
-        "max_percent": 100,
-        "npc_price_divisor": 20000,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 2,
-                "number": 6
-              },
-              {
-                "group": 4,
-                "number": 6
-              },
-              {
-                "group": 5,
-                "number": 7
-              }
-            ],
-            "min_level": 4,
-            "max_level": 11,
-            "required_option_types": [
-              "option"
-            ]
+      "recipe": {
+        "kind": "first_wings",
+        "chaos_weapons": [
+          {
+            "group": 2,
+            "number": 6
           },
-          "amount": {
-            "min": 1,
-            "max": 1
+          {
+            "group": 4,
+            "number": 6
           },
-          "on_success": "disappear",
-          "on_fail": "downgrade_chaos_weapon",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
+          {
+            "group": 5,
+            "number": 7
+          }
+        ],
+        "chaos_weapon_levels": {
+          "min": 4,
+          "max": 11
         },
-        {
-          "match": {
-            "kind": "any_item",
-            "min_level": 4,
-            "max_level": 11,
-            "required_option_types": [
-              "option"
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
+        "extra_sacrifice_levels": {
+          "min": 4,
+          "max": 11
         },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 13
-              }
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 14,
-                "number": 14
-              }
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "create",
-          "item": {
+        "wings": [
+          {
             "group": 12,
             "number": 0
           },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
+          {
             "group": 12,
             "number": 1
           },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        },
-        {
-          "kind": "create",
-          "item": {
+          {
             "group": 12,
             "number": 2
-          },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
-        }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 0,
-        "skill_percent": 0,
-        "excellent_percent": 0
+          }
+        ]
       }
     },
     {
-      "number": 24,
-      "id": "cape_of_lord",
-      "name": "Cape of Lord",
+      "name": "2nd Level Wings",
       "source_version": "s6",
-      "review": "era-check: Cape of Lord is the 1.0-era Dark Lord wing, but this crafting (#24, Monarch's Crest = Loch's Feather+1 recipe) may postdate 1.0; Cape of Fighter (12/49, Rage Fighter) result and Wing of Misery (12/41) input removed, level caps clamped 15->11",
-      "behavior": "second_wings",
-      "cost": {
-        "flat_zen": 5000000,
-        "zen_per_success_percent": 0
-      },
-      "success": {
-        "base_percent": 0,
-        "max_percent": 90,
-        "npc_price_divisor": null,
-        "luck_bonus_percent": 0
-      },
-      "inputs": [
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 0
-              },
-              {
-                "group": 12,
-                "number": 1
-              },
-              {
-                "group": 12,
-                "number": 2
-              }
-            ],
-            "min_level": 0,
-            "max_level": 11
+      "review": "2nd wings are 1.0-era, data only in S6 (Summoner input/result removed, level caps clamped 15->11); wing_value_zen_per_percent 4,000,000 and excellent_value_zen_per_percent 40,000 exist only as OpenMU divisor encodings, and luck/excellent 20/20 only in OpenMU's S6 initializer — all four are OpenMU defaults pending classic sourcing",
+      "recipe": {
+        "kind": "second_wings",
+        "first_wings": [
+          {
+            "group": 12,
+            "number": 0
           },
-          "amount": {
-            "min": 1,
-            "max": 1
+          {
+            "group": 12,
+            "number": 1
           },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": 4000000,
-          "add_percent_per_extra": 0,
-          "ref": null
+          {
+            "group": 12,
+            "number": 2
+          }
+        ],
+        "wing_levels": {
+          "min": 0,
+          "max": 11
         },
-        {
-          "match": {
-            "kind": "any_item",
-            "min_level": 4,
-            "max_level": 11,
-            "required_option_types": [
-              "excellent"
-            ]
-          },
-          "amount": {
-            "min": 0,
-            "max": null
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": 40000,
-          "add_percent_per_extra": 0,
-          "ref": null
+        "excellent_levels": {
+          "min": 4,
+          "max": 11
         },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 12,
-                "number": 15
-              }
-            ]
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        },
-        {
-          "match": {
-            "kind": "specific_items",
-            "items": [
-              {
-                "group": 13,
-                "number": 14
-              }
-            ],
-            "min_level": 1,
-            "max_level": 1
-          },
-          "amount": {
-            "min": 1,
-            "max": 1
-          },
-          "on_success": "disappear",
-          "on_fail": "disappear",
-          "npc_price_divisor": null,
-          "add_percent_per_extra": 0,
-          "ref": null
-        }
-      ],
-      "results": [
-        {
-          "kind": "create",
+        "feather": {
           "item": {
             "group": 13,
-            "number": 30
+            "number": 14
           },
-          "level_range": [
-            0,
-            0
-          ],
-          "durability": null
+          "level": 0
+        },
+        "economics": {
+          "fee_zen": 5000000,
+          "max_success_percent": 90,
+          "wing_value_zen_per_percent": 4000000,
+          "excellent_value_zen_per_percent": 40000,
+          "luck_chance_percent": 20,
+          "excellent_chance_percent": 20
+        },
+        "wings": [
+          {
+            "group": 12,
+            "number": 3
+          },
+          {
+            "group": 12,
+            "number": 4
+          },
+          {
+            "group": 12,
+            "number": 5
+          },
+          {
+            "group": 12,
+            "number": 6
+          }
+        ]
+      }
+    },
+    {
+      "name": "Cape of Lord",
+      "source_version": "s6",
+      "review": "Cape of Lord is the 1.0-era Dark Lord wing but this crafting (Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are OpenMU defaults pending classic sourcing",
+      "recipe": {
+        "kind": "cape_of_lord",
+        "first_wings": [
+          {
+            "group": 12,
+            "number": 0
+          },
+          {
+            "group": 12,
+            "number": 1
+          },
+          {
+            "group": 12,
+            "number": 2
+          }
+        ],
+        "wing_levels": {
+          "min": 0,
+          "max": 11
+        },
+        "excellent_levels": {
+          "min": 4,
+          "max": 11
+        },
+        "crest": {
+          "item": {
+            "group": 13,
+            "number": 14
+          },
+          "level": 1
+        },
+        "economics": {
+          "fee_zen": 5000000,
+          "max_success_percent": 90,
+          "wing_value_zen_per_percent": 4000000,
+          "excellent_value_zen_per_percent": 40000,
+          "luck_chance_percent": 20,
+          "excellent_chance_percent": 20
+        },
+        "cape": {
+          "group": 13,
+          "number": 30
         }
-      ],
-      "result_selection": "any",
-      "multiple_allowed": false,
-      "result_chances": {
-        "luck_percent": 20,
-        "skill_percent": 0,
-        "excellent_percent": 20
+      }
+    },
+    {
+      "name": "+10 Item Combination",
+      "source_version": "095d",
+      "recipe": {
+        "kind": "item_upgrade",
+        "target": "plus_ten",
+        "bless": 1,
+        "soul": 1,
+        "base_success_percent": 50,
+        "fee_zen": 2000000
+      }
+    },
+    {
+      "name": "+11 Item Combination",
+      "source_version": "095d",
+      "recipe": {
+        "kind": "item_upgrade",
+        "target": "plus_eleven",
+        "bless": 2,
+        "soul": 2,
+        "base_success_percent": 45,
+        "fee_zen": 4000000
+      }
+    },
+    {
+      "name": "Dinorant",
+      "source_version": "095d",
+      "review": "horn_count 3 and fee 250,000 exist only in OpenMU's 095d dataset; every classic source (and OpenMU's own S6 data) documents 10 full-durability Horns of Uniria for 500,000 zen — OpenMU defaults pending catalog decision; 70% and the full-durability horn rule are authentic",
+      "recipe": {
+        "kind": "dinorant",
+        "horn": {
+          "group": 13,
+          "number": 2
+        },
+        "horn_count": 3,
+        "success_percent": 70,
+        "fee_zen": 250000,
+        "dinorant": {
+          "group": 13,
+          "number": 3
+        }
+      }
+    },
+    {
+      "name": "Fruits",
+      "source_version": "s6",
+      "review": "stat fruits are 1.0-era, data only in S6; the created fruit's stat kind is a weighted services roll (weights are OpenMU defaults, see FRUIT_STAT_WEIGHTS), not data",
+      "recipe": {
+        "kind": "fruits",
+        "catalyst": {
+          "group": 14,
+          "number": 22
+        },
+        "success_percent": 90,
+        "fee_zen": 3000000,
+        "fruit": {
+          "group": 13,
+          "number": 15
+        }
+      }
+    },
+    {
+      "name": "Devil's Square Ticket",
+      "source_version": "095d",
+      "review": "fee band and 7-level breadth come from OpenMU's version-shared handler table (classic-documented fees; pre-S3 Devil's Square level count pending era verification); the 80/70 success split at level 5 is an OpenMU handler constant pending classic sourcing",
+      "recipe": {
+        "kind": "devil_square_ticket",
+        "eye": {
+          "group": 14,
+          "number": 17
+        },
+        "key": {
+          "group": 14,
+          "number": 18
+        },
+        "invitation": {
+          "group": 14,
+          "number": 19
+        },
+        "fee_zen_by_level": [
+          100000,
+          200000,
+          400000,
+          700000,
+          1100000,
+          1600000,
+          2000000
+        ],
+        "success_percent_by_level": [
+          80,
+          80,
+          80,
+          80,
+          70,
+          70,
+          70
+        ]
+      }
+    },
+    {
+      "name": "Blood Castle Ticket",
+      "source_version": "s6",
+      "review": "Blood Castle is 0.97/1.0-era; fee band is the documented classic recipe, 8-level breadth pending era verification; flat 80% success is an OpenMU handler constant pending classic sourcing",
+      "recipe": {
+        "kind": "blood_castle_ticket",
+        "scroll": {
+          "group": 13,
+          "number": 16
+        },
+        "bone": {
+          "group": 13,
+          "number": 17
+        },
+        "cloak": {
+          "group": 13,
+          "number": 18
+        },
+        "fee_zen_by_level": [
+          50000,
+          80000,
+          150000,
+          250000,
+          400000,
+          600000,
+          850000,
+          1050000
+        ],
+        "success_percent_by_level": [
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80
+        ]
       }
     }
   ]

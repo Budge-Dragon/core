@@ -1,46 +1,43 @@
-//! Record shape of `map_definitions.json` — game maps and their terrain
-//! sidecars.
+//! Record shape of `map_definitions.json` — one record per game map.
 
 use serde::{Deserialize, Serialize};
 
-use super::common::{DropGroupId, MapRef, Point, PowerUp, Rect, SourceVersion, StatRequirement};
+use crate::components::geometry::{Point, Rect};
 
-/// One map definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+use super::common::{MapNumber, Provenance};
+
+/// One game map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MapDefinition {
-    /// Map number as the client knows it.
-    pub number: i16,
-    /// Distinguishes variants sharing a map number; `0` for the plain map.
-    pub discriminator: u32,
-    /// The map's slug.
-    pub id: String,
-    /// Display name.
+    /// Client map number — the game's own map identity.
+    pub number: MapNumber,
+    /// Display name as the client knows it.
     pub name: String,
-    /// Dataset era the record was extracted from.
-    pub source_version: SourceVersion,
-    /// Path of the terrain sidecar, relative to the data directory.
-    pub terrain: String,
-    /// Experience multiplier applied to kills on this map.
-    pub exp_multiplier: f64,
-    /// Map whose safezone the dead respawn in.
-    pub safezone_map: MapRef,
-    /// Minimum stats required to enter.
-    pub requirements: Vec<StatRequirement>,
-    /// Stat modifications applied to every character on the map.
-    pub character_power_ups: Vec<PowerUp>,
-    /// Map-wide drop groups.
-    pub drop_groups: Vec<DropGroupId>,
-    /// Arena battle zone; absent = no battle zone.
-    pub battle_zone: Option<BattleZone>,
-    /// Era-doubt note for curated backports; absent = uncontested.
-    pub review: Option<String>,
+    /// Traversal medium; entry and movement rules in services match on it.
+    pub environment: MapEnvironment,
+    /// Battle-soccer pitch; present only on Arena.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soccer_pitch: Option<SoccerPitch>,
+    /// Extraction provenance: dataset era plus optional curation note.
+    #[serde(flatten)]
+    pub provenance: Provenance,
 }
 
-/// The Arena battle zone layout.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BattleZone {
-    /// Battle mode played in the zone.
-    pub battle_type: BattleType,
+/// Traversal medium of a map. Closed pre-S3 set; a map is exactly one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MapEnvironment {
+    /// Ordinary ground map.
+    Ground,
+    /// Underwater map (Atlans); underwater movement/combat rules apply.
+    Underwater,
+    /// Sky map (Icarus); entry requires the ability to fly.
+    Sky,
+}
+
+/// The Arena battle-soccer pitch: a ground field, two goals, two team spawns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SoccerPitch {
     /// Playing field.
     pub ground: Rect,
     /// Left goal area.
@@ -51,14 +48,4 @@ pub struct BattleZone {
     pub left_spawn: Point,
     /// Right team spawn point.
     pub right_spawn: Point,
-}
-
-/// Battle mode of a battle zone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BattleType {
-    /// Plain team battle.
-    Normal,
-    /// Battle soccer.
-    Soccer,
 }

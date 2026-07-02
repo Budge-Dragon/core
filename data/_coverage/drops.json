@@ -1,120 +1,96 @@
 {
-  "file": "data/drop_groups.json",
-  "records": 33,
-  "by_source_version": {
-    "075": 3,
-    "095d": 12,
-    "s6": 18
-  },
-  "review_flagged": [
-    "scroll_of_archangel_plus_1",
-    "scroll_of_archangel_plus_2",
-    "scroll_of_archangel_plus_3",
-    "scroll_of_archangel_plus_4",
-    "scroll_of_archangel_plus_5",
-    "scroll_of_archangel_plus_6",
-    "scroll_of_archangel_plus_7",
-    "scroll_of_archangel_plus_8",
-    "blood_bone_plus_1",
-    "blood_bone_plus_2",
-    "blood_bone_plus_3",
-    "blood_bone_plus_4",
-    "blood_bone_plus_5",
-    "blood_bone_plus_6",
-    "blood_bone_plus_7",
-    "blood_bone_plus_8",
-    "icarus_lochs_feather",
-    "icarus_crest_of_monarch"
+  "files": [
+    "data/special_drops.json",
+    "data/box_drops.json"
   ],
-  "binding_notes": {
-    "default_on_every_map": [
-      "default_money",
-      "default_random_item",
-      "default_excellent",
-      "default_jewels",
-      "devils_eye_plus_1",
-      "devils_eye_plus_2",
-      "devils_eye_plus_3",
-      "devils_eye_plus_4",
-      "devils_key_plus_1",
-      "devils_key_plus_2",
-      "devils_key_plus_3",
-      "devils_key_plus_4",
-      "scroll_of_archangel_plus_1",
-      "scroll_of_archangel_plus_2",
-      "scroll_of_archangel_plus_3",
-      "scroll_of_archangel_plus_4",
-      "scroll_of_archangel_plus_5",
-      "scroll_of_archangel_plus_6",
-      "scroll_of_archangel_plus_7",
-      "scroll_of_archangel_plus_8",
-      "blood_bone_plus_1",
-      "blood_bone_plus_2",
-      "blood_bone_plus_3",
-      "blood_bone_plus_4",
-      "blood_bone_plus_5",
-      "blood_bone_plus_6",
-      "blood_bone_plus_7",
-      "blood_bone_plus_8"
-    ],
-    "icarus_map_only": [
-      "icarus_lochs_feather",
-      "icarus_crest_of_monarch"
+  "records": 10,
+  "by_source_version": {
+    "095d": 6,
+    "s6": 4
+  },
+  "special_drops": {
+    "file": "data/special_drops.json",
+    "records": 9,
+    "by_source_version": {
+      "095d": 5,
+      "s6": 4
+    },
+    "review_flagged": [
+      "level_banded 14/17",
+      "level_banded 14/18",
+      "level_banded 13/16",
+      "level_banded 13/17",
+      "monster_bound 53",
+      "map_bound map 10 13/14+0",
+      "map_bound map 10 13/14+1"
     ],
     "monster_bound": {
-      "golden_budge_dragon_box_of_luck": 43,
-      "golden_titan_box_of_kundun_2": 53,
-      "red_dragon_jewels": 44
+      "monster_bound 43": 43,
+      "monster_bound 53": 53,
+      "monster_bound 44": 44
+    },
+    "map_bound_map": {
+      "map_bound map 10 13/14+0": 10,
+      "map_bound map 10 13/14+1": 10
     }
   },
+  "box_drops": {
+    "file": "data/box_drops.json",
+    "records": 1,
+    "by_source_version": {
+      "095d": 1
+    },
+    "review_flagged": [
+      "box 14/11+0"
+    ],
+    "content_item_refs": 67
+  },
+  "notes": [
+    {
+      "name": "default_drop_policy_moved",
+      "why": "the per-kill defaults (money 0.5, item 0.3, jewel 0.001, excellent 0.0001, skill 0.5) and the option-roll policy are the DropConfig/OptionRollPolicy sections of game_config.json, emitted by the constants-exp extractor - not a drops file"
+    },
+    {
+      "name": "box_content_refs_atlas_checked",
+      "why": "all 67 Box of Luck content ItemRefs (17 weapons/jewels + 10 armor sets x 5 pieces) must resolve in item_definitions.json at Atlas load; every referenced 095d armor set has all five pieces so the source TryAddDropItem filter admits them all"
+    }
+  ],
   "gaps": [
     {
-      "name": "box_item_drop_tables",
-      "why": "box contents (Box of Luck etc.) are item-attached drop tables; owned by the items extractor's box_drops by design"
+      "name": "box_kundun_tiers_and_seasonal_boxes",
+      "why": "s6 BoxOfLuck.cs defines Box of Kundun +1..+5 (14/11 box levels 8-12) and a seasonal box zoo (Pink/Red/Blue Chocolate, Ribbon, Christmas, Pumpkin, Cherry Blossom, GM Present). The Kundun tiers are ItemType=Excellent - the v2 BoxDrop shape (item-roll-else-money over a normal-item pool) cannot encode an excellent-only box without relabeling excellent as normal, so they are excluded; seasonal boxes are post-S3 event content outside the 095d baseline. Golden Titan's 14/11 +9 drop (special_drops) therefore has no box-level-9 contents record in this baseline - an authentic 095d gap (095d BoxOfLuck defines only box level 0). INTEGRATE decision if a resolved box tier is required."
     },
     {
       "name": "legacy_quest_item_drop_groups",
-      "why": "quest-bound drop groups (broken sword, scroll of emperor, ...) ship with quest definitions; quests.json is deferred to a follow-up wave per spec section 9"
+      "why": "chance-based monster-bound quest items (Broken Sword, Scroll of Emperor, ...) ship with quest definitions; quests are a named v2 scope boundary (no quests.json), and SpecialDrop extends with what quests need when that extraction lands"
     },
     {
-      "name": "blood_castle_event_reward_groups",
-      "why": "in-event reward groups (jewel of chaos per gate) and the destructible saint statue's archangel-weapon drop need an event/minigame schema not in this wave; statue role is an excluded s6 event object"
-    },
-    {
-      "name": "chaos_castle_reward_groups",
-      "why": "winner jewel/ancient reward groups need the missing event/minigame schema; s6-era doubt on the event itself"
+      "name": "blood_castle_and_chaos_castle_event_rewards",
+      "why": "in-event reward groups (per-gate jewels, saint-statue archangel-weapon drop, winner ancient/jewel rewards) need an event/minigame schema not in this wave"
     },
     {
       "name": "s6_golden_army_boxes",
-      "why": "s6 golden invasion monsters 78-83 drop Box of Kundun +1/+3/+4/+5; golden army is S3-era and the monsters are not in the baseline — Golden Dragon (79) is arguably 1.0-era, left to the monsters-wave curation"
+      "why": "s6 golden invasion monsters 78-83 drop Box of Kundun +1/+3/+4/+5; golden army is S3-era and the monsters are not in the baseline monster set"
     },
     {
-      "name": "devil_square_5_to_7_ticket_bands",
-      "why": "s6 Devil's Eye/Key bands +5..+7 belong to Devil Square arenas beyond the 095d baseline (4 arenas)"
+      "name": "devil_square_5_to_7_and_extended_ticket_bands",
+      "why": "s6 Devil's Eye/Key bands +5..+7 (drop levels 70/80/90) and the s6 Blood Castle Old Scroll / Illusion Sorcerer Covenant banded tickets belong to arenas/events beyond the 095d baseline"
     },
     {
-      "name": "dark_horse_raven_spirit_drops",
-      "why": "trainable pets are excluded wholesale by the spec"
+      "name": "symbol_of_kundun_kalima_drops",
+      "why": "seven level-banded groups for Kalima entry; Kalima maps and items are in neither the baseline nor the backport list"
     },
     {
-      "name": "symbol_of_kundun_drops",
-      "why": "seven level-banded groups for Kalima entry; Kalima maps/items are in neither the baseline nor the backport list"
+      "name": "land_of_trials_barracks_illusion_temple_drops",
+      "why": "Jewel of Guardian (castle-siege), Flame of Condor (3rd-wings, post-S3), and Illusion Temple tickets (post-S3) are excluded wholesale by the spec"
     },
     {
-      "name": "land_of_trials_jewel_of_guardian",
-      "why": "castle siege content, excluded wholesale by the spec"
-    },
-    {
-      "name": "barracks_of_balgass_flame_of_condor",
-      "why": "3rd-wings ingredient, post-S3"
-    },
-    {
-      "name": "illusion_temple_ticket_drops",
-      "why": "Illusion Temple is post-S3"
+      "name": "trainable_pet_drops",
+      "why": "Dark Horse / Dark Raven / Spirit drops - trainable pets are excluded wholesale by the spec"
     },
     {
       "name": "golden_soldier_no_drop_group",
-      "why": "observation: the 095d source binds no drop group to Golden Soldier (54); only 43/53/44 carry one"
+      "why": "observation: 095d InvasionMobsInitialization binds no drop group to Golden Soldier (54); only 43/53/44 carry one"
     }
   ]
 }

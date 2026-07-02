@@ -1,4283 +1,2807 @@
 {
-  "schema_version": 1,
   "records": [
     {
       "number": 0,
       "name": "Bull Fighter",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 6.0
+        "kind": "monster",
+        "combat": {
+          "level": 6,
+          "hp": 100,
+          "min_phys_damage": 16,
+          "max_phys_damage": 20,
+          "defense": 6,
+          "attack_rate": 28,
+          "defense_rate": 6
         },
-        {
-          "stat": "maximum_health",
-          "value": 100.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 16.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 20.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 6.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 28.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 6.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 1,
       "name": "Hound",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 9.0
+        "kind": "monster",
+        "combat": {
+          "level": 9,
+          "hp": 140,
+          "min_phys_damage": 22,
+          "max_phys_damage": 27,
+          "defense": 9,
+          "attack_rate": 39,
+          "defense_rate": 9
         },
-        {
-          "stat": "maximum_health",
-          "value": 140.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 22.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 27.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 9.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 39.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 9.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 2,
       "name": "Budge Dragon",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 4.0
+        "kind": "monster",
+        "combat": {
+          "level": 4,
+          "hp": 60,
+          "min_phys_damage": 10,
+          "max_phys_damage": 13,
+          "defense": 3,
+          "attack_rate": 18,
+          "defense_rate": 3
         },
-        {
-          "stat": "maximum_health",
-          "value": 60.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 10.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 13.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 3.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 18.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 3.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 3,
       "name": "Spider",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 2.0
+        "kind": "monster",
+        "combat": {
+          "level": 2,
+          "hp": 30,
+          "min_phys_damage": 4,
+          "max_phys_damage": 7,
+          "defense": 1,
+          "attack_rate": 8,
+          "defense_rate": 1
         },
-        {
-          "stat": "maximum_health",
-          "value": 30.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 4.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 7.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 1.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 8.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 1.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 4,
       "name": "Elite Bull Fighter",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 12.0
+        "kind": "monster",
+        "combat": {
+          "level": 12,
+          "hp": 190,
+          "min_phys_damage": 31,
+          "max_phys_damage": 36,
+          "defense": 12,
+          "attack_rate": 50,
+          "defense_rate": 12
         },
-        {
-          "stat": "maximum_health",
-          "value": 190.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 31.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 36.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 12.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 50.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 12.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 5,
       "name": "Hell Hound",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1200,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 38.0
+        "kind": "monster",
+        "combat": {
+          "level": 38,
+          "hp": 1400,
+          "min_phys_damage": 125,
+          "max_phys_damage": 130,
+          "defense": 55,
+          "attack_rate": 190,
+          "defense_rate": 45
         },
-        {
-          "stat": "maximum_health",
-          "value": 1400.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 3,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 125.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1200,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 130.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 55.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 190.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 45.0
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 6,
       "name": "Lich",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 2,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 14.0
+        "kind": "monster",
+        "combat": {
+          "level": 14,
+          "hp": 255,
+          "min_phys_damage": 41,
+          "max_phys_damage": 46,
+          "defense": 14,
+          "attack_rate": 62,
+          "defense_rate": 14
         },
-        {
-          "stat": "maximum_health",
-          "value": 255.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 1,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 41.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 46.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 14.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 62.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 14.0
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00392156862745098
+        "attack": {
+          "kind": "skill",
+          "skill": 2
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 7,
       "name": "Giant",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 2,
-      "view_range": 3,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2200,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 17.0
+        "kind": "monster",
+        "combat": {
+          "level": 17,
+          "hp": 400,
+          "min_phys_damage": 57,
+          "max_phys_damage": 62,
+          "defense": 18,
+          "attack_rate": 80,
+          "defense_rate": 18
         },
-        {
-          "stat": "maximum_health",
-          "value": 400.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 57.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 2,
+          "view_range": 3,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2200,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 62.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 18.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 80.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 18.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 8,
       "name": "Poison Bull",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 1,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 46.0
+        "kind": "monster",
+        "combat": {
+          "level": 46,
+          "hp": 2500,
+          "min_phys_damage": 145,
+          "max_phys_damage": 150,
+          "defense": 75,
+          "attack_rate": 230,
+          "defense_rate": 61
         },
-        {
-          "stat": "maximum_health",
-          "value": 2500.0
+        "resistances": {
+          "ice": 0,
+          "poison": 6,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 145.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 150.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 75.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 230.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 61.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "poison_damage_multiplier",
-          "value": 0.03
+        "attack": {
+          "kind": "skill",
+          "skill": 1
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 9,
       "name": "Thunder Lich",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2200,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 3,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 44.0
+        "kind": "monster",
+        "combat": {
+          "level": 44,
+          "hp": 2000,
+          "min_phys_damage": 140,
+          "max_phys_damage": 145,
+          "defense": 70,
+          "attack_rate": 220,
+          "defense_rate": 55
         },
-        {
-          "stat": "maximum_health",
-          "value": 2000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 3,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 140.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2200,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 145.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 70.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 220.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 55.0
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "skill",
+          "skill": 3
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 10,
       "name": "Dark Knight",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 48.0
+        "kind": "monster",
+        "combat": {
+          "level": 48,
+          "hp": 3000,
+          "min_phys_damage": 150,
+          "max_phys_damage": 155,
+          "defense": 80,
+          "attack_rate": 240,
+          "defense_rate": 70
         },
-        {
-          "stat": "maximum_health",
-          "value": 3000.0
+        "resistances": {
+          "ice": 3,
+          "poison": 3,
+          "lightning": 3,
+          "fire": 3,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 150.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 155.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 80.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 240.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 70.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 11,
       "name": "Ghost",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 32.0
+        "kind": "monster",
+        "combat": {
+          "level": 32,
+          "hp": 1000,
+          "min_phys_damage": 110,
+          "max_phys_damage": 115,
+          "defense": 40,
+          "attack_rate": 160,
+          "defense_rate": 39
         },
-        {
-          "stat": "maximum_health",
-          "value": 1000.0
+        "resistances": {
+          "ice": 2,
+          "poison": 2,
+          "lightning": 2,
+          "fire": 2,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 110.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 115.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 40.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 160.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 39.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00784313725490196
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (2/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 12,
       "name": "Larva",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 1,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 25.0
+        "kind": "monster",
+        "combat": {
+          "level": 25,
+          "hp": 750,
+          "min_phys_damage": 90,
+          "max_phys_damage": 95,
+          "defense": 31,
+          "attack_rate": 125,
+          "defense_rate": 31
         },
-        {
-          "stat": "maximum_health",
-          "value": 750.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 90.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 95.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 31.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 125.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 31.0
-        },
-        {
-          "stat": "poison_damage_multiplier",
-          "value": 0.03
+        "attack": {
+          "kind": "skill",
+          "skill": 1
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 13,
       "name": "Hell Spider",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 11,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 40.0
+        "kind": "monster",
+        "combat": {
+          "level": 40,
+          "hp": 1600,
+          "min_phys_damage": 130,
+          "max_phys_damage": 135,
+          "defense": 60,
+          "attack_rate": 200,
+          "defense_rate": 47
         },
-        {
-          "stat": "maximum_health",
-          "value": 1600.0
+        "resistances": {
+          "ice": 0,
+          "poison": 3,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 130.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 135.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 60.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 200.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 47.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "skill",
+          "skill": 11
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 14,
       "name": "Skeleton Warrior",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 19.0
+        "kind": "monster",
+        "combat": {
+          "level": 19,
+          "hp": 525,
+          "min_phys_damage": 68,
+          "max_phys_damage": 74,
+          "defense": 22,
+          "attack_rate": 93,
+          "defense_rate": 22
         },
-        {
-          "stat": "maximum_health",
-          "value": 525.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 68.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 74.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 22.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 93.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 22.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 15,
       "name": "Skeleton Archer",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 5,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 34.0
+        "kind": "monster",
+        "combat": {
+          "level": 34,
+          "hp": 1100,
+          "min_phys_damage": 115,
+          "max_phys_damage": 120,
+          "defense": 45,
+          "attack_rate": 170,
+          "defense_rate": 41
         },
-        {
-          "stat": "maximum_health",
-          "value": 1100.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 115.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 5,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 120.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 45.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 170.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 41.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 16,
       "name": "Elite Skeleton",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 42.0
+        "kind": "monster",
+        "combat": {
+          "level": 42,
+          "hp": 1800,
+          "min_phys_damage": 135,
+          "max_phys_damage": 140,
+          "defense": 65,
+          "attack_rate": 210,
+          "defense_rate": 49
         },
-        {
-          "stat": "maximum_health",
-          "value": 1800.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 135.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 140.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 65.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 210.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 49.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 17,
       "name": "Cyclops",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 28.0
+        "kind": "monster",
+        "combat": {
+          "level": 28,
+          "hp": 850,
+          "min_phys_damage": 100,
+          "max_phys_damage": 105,
+          "defense": 35,
+          "attack_rate": 140,
+          "defense_rate": 35
         },
-        {
-          "stat": "maximum_health",
-          "value": 850.0
+        "resistances": {
+          "ice": 0,
+          "poison": 2,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 100.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 105.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 35.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 140.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 35.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.00784313725490196
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 18,
       "name": "Gorgon",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 55.0
+        "kind": "monster",
+        "combat": {
+          "level": 55,
+          "hp": 6000,
+          "min_phys_damage": 165,
+          "max_phys_damage": 175,
+          "defense": 100,
+          "attack_rate": 275,
+          "defense_rate": 82
         },
-        {
-          "stat": "maximum_health",
-          "value": 6000.0
+        "resistances": {
+          "ice": 6,
+          "poison": 6,
+          "lightning": 6,
+          "fire": 6,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 165.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 175.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 100.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 275.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 82.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.023529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 19,
       "name": "Yeti",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 4,
-      "view_range": 6,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": 17,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 30.0
+        "kind": "monster",
+        "combat": {
+          "level": 30,
+          "hp": 900,
+          "min_phys_damage": 105,
+          "max_phys_damage": 110,
+          "defense": 37,
+          "attack_rate": 150,
+          "defense_rate": 37
         },
-        {
-          "stat": "maximum_health",
-          "value": 900.0
+        "resistances": {
+          "ice": 3,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 105.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 4,
+          "view_range": 6,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 110.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 37.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 150.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 37.0
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "skill",
+          "skill": 17
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 20,
       "name": "Elite Yeti",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 6,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 36.0
+        "kind": "monster",
+        "combat": {
+          "level": 36,
+          "hp": 1200,
+          "min_phys_damage": 120,
+          "max_phys_damage": 125,
+          "defense": 50,
+          "attack_rate": 180,
+          "defense_rate": 43
         },
-        {
-          "stat": "maximum_health",
-          "value": 1200.0
+        "resistances": {
+          "ice": 4,
+          "poison": 1,
+          "lightning": 1,
+          "fire": 1,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 120.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 6,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 125.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 50.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 180.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 43.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.00392156862745098
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.01568627450980392
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.00392156862745098
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00392156862745098
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (1/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 21,
       "name": "Assassin",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 26.0
+        "kind": "monster",
+        "combat": {
+          "level": 26,
+          "hp": 800,
+          "min_phys_damage": 95,
+          "max_phys_damage": 100,
+          "defense": 33,
+          "attack_rate": 130,
+          "defense_rate": 33
         },
-        {
-          "stat": "maximum_health",
-          "value": 800.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 95.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 100.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 33.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 130.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 33.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 22,
       "name": "Ice Monster",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 7,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 22.0
+        "kind": "monster",
+        "combat": {
+          "level": 22,
+          "hp": 650,
+          "min_phys_damage": 80,
+          "max_phys_damage": 85,
+          "defense": 27,
+          "attack_rate": 110,
+          "defense_rate": 27
         },
-        {
-          "stat": "maximum_health",
-          "value": 650.0
+        "resistances": {
+          "ice": 3,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 80.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 85.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 27.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 110.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 27.0
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "skill",
+          "skill": 7
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 23,
       "name": "Hommerd",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 24.0
+        "kind": "monster",
+        "combat": {
+          "level": 24,
+          "hp": 700,
+          "min_phys_damage": 85,
+          "max_phys_damage": 90,
+          "defense": 29,
+          "attack_rate": 120,
+          "defense_rate": 29
         },
-        {
-          "stat": "maximum_health",
-          "value": 700.0
+        "resistances": {
+          "ice": 3,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 85.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 90.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 29.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 120.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 29.0
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 24,
       "name": "Worm",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 20.0
+        "kind": "monster",
+        "combat": {
+          "level": 20,
+          "hp": 600,
+          "min_phys_damage": 75,
+          "max_phys_damage": 80,
+          "defense": 25,
+          "attack_rate": 100,
+          "defense_rate": 25
         },
-        {
-          "stat": "maximum_health",
-          "value": 600.0
+        "resistances": {
+          "ice": 2,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 75.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 80.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 25.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 100.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 25.0
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.00784313725490196
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 25,
       "name": "Ice Queen",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 50000,
-      "max_item_drops": 1,
-      "attack_skill": 11,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 52.0
+        "kind": "monster",
+        "combat": {
+          "level": 52,
+          "hp": 4000,
+          "min_phys_damage": 155,
+          "max_phys_damage": 165,
+          "defense": 90,
+          "attack_rate": 260,
+          "defense_rate": 76
         },
-        {
-          "stat": "maximum_health",
-          "value": 4000.0
+        "resistances": {
+          "ice": 5,
+          "poison": 4,
+          "lightning": 4,
+          "fire": 4,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 155.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 50000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 165.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 90.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 260.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 76.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.01568627450980392
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.01568627450980392
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.01568627450980392
+        "attack": {
+          "kind": "skill",
+          "skill": 11
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (4/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 26,
       "name": "Goblin",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 3.0
+        "kind": "monster",
+        "combat": {
+          "level": 3,
+          "hp": 45,
+          "min_phys_damage": 7,
+          "max_phys_damage": 10,
+          "defense": 2,
+          "attack_rate": 13,
+          "defense_rate": 2
         },
-        {
-          "stat": "maximum_health",
-          "value": 45.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 7.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 10.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 2.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 13.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 2.0
-        },
-        {
-          "stat": "wind_resistance",
-          "value": 0.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.0
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (0/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 27,
       "name": "Chain Scorpion",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 5.0
+        "kind": "monster",
+        "combat": {
+          "level": 5,
+          "hp": 80,
+          "min_phys_damage": 13,
+          "max_phys_damage": 17,
+          "defense": 4,
+          "attack_rate": 23,
+          "defense_rate": 4
         },
-        {
-          "stat": "maximum_health",
-          "value": 80.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 13.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 17.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 4.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 23.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 4.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 28,
       "name": "Beetle Monster",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 10.0
+        "kind": "monster",
+        "combat": {
+          "level": 10,
+          "hp": 165,
+          "min_phys_damage": 26,
+          "max_phys_damage": 31,
+          "defense": 10,
+          "attack_rate": 44,
+          "defense_rate": 10
         },
-        {
-          "stat": "maximum_health",
-          "value": 165.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 26.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 31.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 10.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 44.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 10.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 29,
       "name": "Hunter",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 13.0
+        "kind": "monster",
+        "combat": {
+          "level": 13,
+          "hp": 220,
+          "min_phys_damage": 36,
+          "max_phys_damage": 41,
+          "defense": 13,
+          "attack_rate": 56,
+          "defense_rate": 13
         },
-        {
-          "stat": "maximum_health",
-          "value": 220.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 36.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 41.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 13.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 56.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 13.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 30,
       "name": "Forest Monster",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 15.0
+        "kind": "monster",
+        "combat": {
+          "level": 15,
+          "hp": 295,
+          "min_phys_damage": 46,
+          "max_phys_damage": 51,
+          "defense": 15,
+          "attack_rate": 68,
+          "defense_rate": 15
         },
-        {
-          "stat": "maximum_health",
-          "value": 295.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 46.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 51.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 15.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 68.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 15.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 31,
       "name": "Agon",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 16.0
+        "kind": "monster",
+        "combat": {
+          "level": 16,
+          "hp": 340,
+          "min_phys_damage": 51,
+          "max_phys_damage": 57,
+          "defense": 16,
+          "attack_rate": 74,
+          "defense_rate": 16
         },
-        {
-          "stat": "maximum_health",
-          "value": 340.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 51.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 57.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 16.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 74.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 16.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 32,
       "name": "Stone Golem",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 2,
-      "view_range": 3,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2200,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 18.0
+        "kind": "monster",
+        "combat": {
+          "level": 18,
+          "hp": 465,
+          "min_phys_damage": 62,
+          "max_phys_damage": 68,
+          "defense": 20,
+          "attack_rate": 86,
+          "defense_rate": 20
         },
-        {
-          "stat": "maximum_health",
-          "value": 465.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 62.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 2,
+          "view_range": 3,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2200,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 68.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 20.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 86.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 20.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 33,
       "name": "Elite Goblin",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 8.0
+        "kind": "monster",
+        "combat": {
+          "level": 8,
+          "hp": 120,
+          "min_phys_damage": 19,
+          "max_phys_damage": 23,
+          "defense": 8,
+          "attack_rate": 33,
+          "defense_rate": 8
         },
-        {
-          "stat": "maximum_health",
-          "value": 120.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 19.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 23.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 8.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 33.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 8.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 34,
       "name": "Cursed Wizard",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 2,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 54.0
+        "kind": "monster",
+        "combat": {
+          "level": 54,
+          "hp": 4000,
+          "min_phys_damage": 160,
+          "max_phys_damage": 170,
+          "defense": 95,
+          "attack_rate": 270,
+          "defense_rate": 80
         },
-        {
-          "stat": "maximum_health",
-          "value": 4000.0
+        "resistances": {
+          "ice": 5,
+          "poison": 5,
+          "lightning": 7,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 160.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 170.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 95.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 270.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 80.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "skill",
+          "skill": 2
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 35,
       "name": "Death Gorgon",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 64.0
+        "kind": "monster",
+        "combat": {
+          "level": 64,
+          "hp": 6000,
+          "min_phys_damage": 200,
+          "max_phys_damage": 210,
+          "defense": 130,
+          "attack_rate": 320,
+          "defense_rate": 94
         },
-        {
-          "stat": "maximum_health",
-          "value": 6000.0
+        "resistances": {
+          "ice": 6,
+          "poison": 6,
+          "lightning": 6,
+          "fire": 8,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 200.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 210.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 130.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 320.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 94.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03137254901960784
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 36,
       "name": "Shadow",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 47.0
+        "kind": "monster",
+        "combat": {
+          "level": 47,
+          "hp": 2800,
+          "min_phys_damage": 148,
+          "max_phys_damage": 153,
+          "defense": 78,
+          "attack_rate": 235,
+          "defense_rate": 67
         },
-        {
-          "stat": "maximum_health",
-          "value": 2800.0
+        "resistances": {
+          "ice": 3,
+          "poison": 3,
+          "lightning": 3,
+          "fire": 5,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 148.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 153.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 78.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 235.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 67.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.0196078431372549
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 37,
       "name": "Devil",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 3,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 60.0
+        "kind": "monster",
+        "combat": {
+          "level": 60,
+          "hp": 5000,
+          "min_phys_damage": 180,
+          "max_phys_damage": 195,
+          "defense": 115,
+          "attack_rate": 300,
+          "defense_rate": 88
         },
-        {
-          "stat": "maximum_health",
-          "value": 5000.0
+        "resistances": {
+          "ice": 5,
+          "poison": 5,
+          "lightning": 5,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 180.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 195.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 115.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 300.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 88.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "skill",
+          "skill": 3
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (5/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 38,
       "name": "Balrog",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 150000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 66.0
+        "kind": "monster",
+        "combat": {
+          "level": 66,
+          "hp": 9000,
+          "min_phys_damage": 220,
+          "max_phys_damage": 240,
+          "defense": 160,
+          "attack_rate": 330,
+          "defense_rate": 99
         },
-        {
-          "stat": "maximum_health",
-          "value": 9000.0
+        "resistances": {
+          "ice": 10,
+          "poison": 10,
+          "lightning": 10,
+          "fire": 15,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 220.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 150000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 240.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 160.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 330.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 99.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0392156862745098
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0392156862745098
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.0392156862745098
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.058823529411764705
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (10/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 39,
       "name": "Poison Shadow",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 1,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 50.0
+        "kind": "monster",
+        "combat": {
+          "level": 50,
+          "hp": 3500,
+          "min_phys_damage": 155,
+          "max_phys_damage": 160,
+          "defense": 85,
+          "attack_rate": 250,
+          "defense_rate": 73
         },
-        {
-          "stat": "maximum_health",
-          "value": 3500.0
+        "resistances": {
+          "ice": 4,
+          "poison": 6,
+          "lightning": 4,
+          "fire": 6,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 155.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 160.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 85.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 250.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 73.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.01568627450980392
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.01568627450980392
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "poison_damage_multiplier",
-          "value": 0.03
+        "attack": {
+          "kind": "skill",
+          "skill": 1
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (4/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 40,
       "name": "Death Knight",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 62.0
+        "kind": "monster",
+        "combat": {
+          "level": 62,
+          "hp": 5500,
+          "min_phys_damage": 190,
+          "max_phys_damage": 200,
+          "defense": 120,
+          "attack_rate": 310,
+          "defense_rate": 91
         },
-        {
-          "stat": "maximum_health",
-          "value": 5500.0
+        "resistances": {
+          "ice": 6,
+          "poison": 6,
+          "lightning": 6,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 190.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 200.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 120.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 310.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 91.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 41,
       "name": "Death Cow",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 57.0
+        "kind": "monster",
+        "combat": {
+          "level": 57,
+          "hp": 4500,
+          "min_phys_damage": 170,
+          "max_phys_damage": 180,
+          "defense": 110,
+          "attack_rate": 285,
+          "defense_rate": 85
         },
-        {
-          "stat": "maximum_health",
-          "value": 4500.0
+        "resistances": {
+          "ice": 5,
+          "poison": 5,
+          "lightning": 5,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 170.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 180.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 110.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 285.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 85.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (5/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 43,
       "name": "Golden Budge Dragon",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 600000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 15.0
+        "kind": "monster",
+        "combat": {
+          "level": 15,
+          "hp": 2500,
+          "min_phys_damage": 120,
+          "max_phys_damage": 125,
+          "defense": 45,
+          "attack_rate": 75,
+          "defense_rate": 30
         },
-        {
-          "stat": "maximum_health",
-          "value": 2500.0
+        "resistances": {
+          "ice": 2,
+          "poison": 2,
+          "lightning": 2,
+          "fire": 2,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 120.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 600000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 125.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 45.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 75.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 30.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00784313725490196
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": [
-        "golden_budge_dragon_box_of_luck"
-      ]
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (2/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 44,
       "name": "Red Dragon",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 100000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 47.0
+        "kind": "monster",
+        "combat": {
+          "level": 47,
+          "hp": 15000,
+          "min_phys_damage": 190,
+          "max_phys_damage": 210,
+          "defense": 120,
+          "attack_rate": 400,
+          "defense_rate": 88
         },
-        {
-          "stat": "maximum_health",
-          "value": 15000.0
+        "resistances": {
+          "ice": 7,
+          "poison": 9,
+          "lightning": 9,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 190.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 100000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 210.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 120.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 400.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 88.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": [
-        "red_dragon_jewels"
-      ]
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 45,
       "name": "Bahamut",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 2,
-      "attack_range": 1,
-      "view_range": 4,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 8000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 43.0
+        "kind": "monster",
+        "combat": {
+          "level": 43,
+          "hp": 2400,
+          "min_phys_damage": 130,
+          "max_phys_damage": 140,
+          "defense": 65,
+          "attack_rate": 215,
+          "defense_rate": 52
         },
-        {
-          "stat": "maximum_health",
-          "value": 2400.0
+        "resistances": {
+          "ice": 1,
+          "poison": 1,
+          "lightning": 1,
+          "fire": 1,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 130.0
+        "behavior": {
+          "move_range": 2,
+          "attack_range": 1,
+          "view_range": 4,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 8000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 140.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 65.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 215.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 52.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.00392156862745098
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.00392156862745098
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.00392156862745098
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00392156862745098
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (1/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 46,
       "name": "Vepar",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 8000,
-      "max_item_drops": 1,
-      "attack_skill": 17,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 45.0
+        "kind": "monster",
+        "combat": {
+          "level": 45,
+          "hp": 2800,
+          "min_phys_damage": 135,
+          "max_phys_damage": 145,
+          "defense": 70,
+          "attack_rate": 225,
+          "defense_rate": 58
         },
-        {
-          "stat": "maximum_health",
-          "value": 2800.0
+        "resistances": {
+          "ice": 2,
+          "poison": 2,
+          "lightning": 3,
+          "fire": 2,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 135.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 8000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 145.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 70.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 225.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 58.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00784313725490196
+        "attack": {
+          "kind": "skill",
+          "skill": 17
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 47,
       "name": "Valkyrie",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 8000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 46.0
+        "kind": "monster",
+        "combat": {
+          "level": 46,
+          "hp": 3200,
+          "min_phys_damage": 140,
+          "max_phys_damage": 150,
+          "defense": 75,
+          "attack_rate": 230,
+          "defense_rate": 64
         },
-        {
-          "stat": "maximum_health",
-          "value": 3200.0
+        "resistances": {
+          "ice": 2,
+          "poison": 6,
+          "lightning": 2,
+          "fire": 2,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 140.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 8000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 150.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 75.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 230.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 64.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.00784313725490196
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.00784313725490196
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (2/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 48,
       "name": "Lizard King",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 3,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 15000,
-      "max_item_drops": 1,
-      "attack_skill": 3,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 70.0
+        "kind": "monster",
+        "combat": {
+          "level": 70,
+          "hp": 9000,
+          "min_phys_damage": 240,
+          "max_phys_damage": 270,
+          "defense": 180,
+          "attack_rate": 350,
+          "defense_rate": 115
         },
-        {
-          "stat": "maximum_health",
-          "value": 9000.0
+        "resistances": {
+          "ice": 7,
+          "poison": 7,
+          "lightning": 7,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 240.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 3,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 15000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 270.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 180.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 350.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 115.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "skill",
+          "skill": 3
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 49,
       "name": "Hydra",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 150000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 74.0
+        "kind": "monster",
+        "combat": {
+          "level": 74,
+          "hp": 19000,
+          "min_phys_damage": 250,
+          "max_phys_damage": 310,
+          "defense": 200,
+          "attack_rate": 430,
+          "defense_rate": 125
         },
-        {
-          "stat": "maximum_health",
-          "value": 19000.0
+        "resistances": {
+          "ice": 12,
+          "poison": 12,
+          "lightning": 12,
+          "fire": 12,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 250.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 150000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 310.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 200.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 430.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 125.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.047058823529411764
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 50,
       "name": "Sea Worm",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 150000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 74.0
+        "kind": "monster",
+        "combat": {
+          "level": 74,
+          "hp": 19000,
+          "min_phys_damage": 250,
+          "max_phys_damage": 310,
+          "defense": 200,
+          "attack_rate": 430,
+          "defense_rate": 125
         },
-        {
-          "stat": "maximum_health",
-          "value": 19000.0
+        "resistances": {
+          "ice": 12,
+          "poison": 12,
+          "lightning": 12,
+          "fire": 12,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 250.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 150000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 310.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 200.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 430.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 125.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.047058823529411764
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 51,
       "name": "Great Bahamut",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 15000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 66.0
+        "kind": "monster",
+        "combat": {
+          "level": 66,
+          "hp": 7000,
+          "min_phys_damage": 210,
+          "max_phys_damage": 230,
+          "defense": 150,
+          "attack_rate": 330,
+          "defense_rate": 98
         },
-        {
-          "stat": "maximum_health",
-          "value": 7000.0
+        "resistances": {
+          "ice": 6,
+          "poison": 6,
+          "lightning": 6,
+          "fire": 6,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 210.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 15000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 230.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 150.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 330.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 98.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.023529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 52,
       "name": "Silver Valkyrie",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 15000,
-      "max_item_drops": 1,
-      "attack_skill": 7,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 68.0
+        "kind": "monster",
+        "combat": {
+          "level": 68,
+          "hp": 8000,
+          "min_phys_damage": 230,
+          "max_phys_damage": 260,
+          "defense": 170,
+          "attack_rate": 340,
+          "defense_rate": 110
         },
-        {
-          "stat": "maximum_health",
-          "value": 8000.0
+        "resistances": {
+          "ice": 7,
+          "poison": 7,
+          "lightning": 7,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 230.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 15000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 260.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 170.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 340.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 110.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "skill",
+          "skill": 7
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 53,
       "name": "Golden Titan",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 3,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 600000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 53.0
+        "kind": "monster",
+        "combat": {
+          "level": 53,
+          "hp": 6500,
+          "min_phys_damage": 170,
+          "max_phys_damage": 180,
+          "defense": 105,
+          "attack_rate": 265,
+          "defense_rate": 77
         },
-        {
-          "stat": "maximum_health",
-          "value": 6500.0
+        "resistances": {
+          "ice": 5,
+          "poison": 5,
+          "lightning": 5,
+          "fire": 5,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 170.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 3,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 600000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 180.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 105.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 265.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 77.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.0196078431372549
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.0196078431372549
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": [
-        "golden_titan_box_of_kundun_2"
-      ],
-      "review": "Golden Titan ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (5/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt. Golden Titan ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
     },
     {
       "number": 54,
       "name": "Golden Soldier",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1800,
-      "respawn_ms": 600000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 46.0
+        "kind": "monster",
+        "combat": {
+          "level": 46,
+          "hp": 5000,
+          "min_phys_damage": 140,
+          "max_phys_damage": 150,
+          "defense": 75,
+          "attack_rate": 230,
+          "defense_rate": 64
         },
-        {
-          "stat": "maximum_health",
-          "value": 5000.0
+        "resistances": {
+          "ice": 3,
+          "poison": 3,
+          "lightning": 3,
+          "fire": 3,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 140.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1800,
+          "respawn_ms": 600000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 150.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 75.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 230.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 64.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.011764705882352941
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.011764705882352941
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": [],
-      "review": "Golden Soldier ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (3/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt. Golden Soldier ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
     },
     {
       "number": 57,
       "name": "Iron Wheel",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 80.0
+        "kind": "monster",
+        "combat": {
+          "level": 80,
+          "hp": 17000,
+          "min_phys_damage": 280,
+          "max_phys_damage": 330,
+          "defense": 215,
+          "attack_rate": 446,
+          "defense_rate": 150
         },
-        {
-          "stat": "maximum_health",
-          "value": 17000.0
+        "resistances": {
+          "ice": 9,
+          "poison": 9,
+          "lightning": 9,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 280.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 330.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 215.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 446.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 150.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 58,
       "name": "Tantallos",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 20000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 83.0
+        "kind": "monster",
+        "combat": {
+          "level": 83,
+          "hp": 22000,
+          "min_phys_damage": 335,
+          "max_phys_damage": 385,
+          "defense": 250,
+          "attack_rate": 500,
+          "defense_rate": 175
         },
-        {
-          "stat": "maximum_health",
-          "value": 22000.0
+        "resistances": {
+          "ice": 9,
+          "poison": 9,
+          "lightning": 9,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 335.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 20000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 385.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 250.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 500.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 175.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 59,
       "name": "Zaikan",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 150000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 90.0
+        "kind": "monster",
+        "combat": {
+          "level": 90,
+          "hp": 34000,
+          "min_phys_damage": 510,
+          "max_phys_damage": 590,
+          "defense": 400,
+          "attack_rate": 550,
+          "defense_rate": 185
         },
-        {
-          "stat": "maximum_health",
-          "value": 34000.0
+        "resistances": {
+          "ice": 13,
+          "poison": 13,
+          "lightning": 13,
+          "fire": 15,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 510.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 150000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 590.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 400.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 550.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 185.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.058823529411764705
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (13/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 60,
       "name": "Bloody Wolf",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 76.0
+        "kind": "monster",
+        "combat": {
+          "level": 76,
+          "hp": 13500,
+          "min_phys_damage": 260,
+          "max_phys_damage": 300,
+          "defense": 200,
+          "attack_rate": 410,
+          "defense_rate": 130
         },
-        {
-          "stat": "maximum_health",
-          "value": 13500.0
+        "resistances": {
+          "ice": 8,
+          "poison": 8,
+          "lightning": 8,
+          "fire": 8,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 260.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 300.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 200.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 410.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 130.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03137254901960784
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (8/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 61,
       "name": "Beam Knight",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 20000,
-      "max_item_drops": 1,
-      "attack_skill": 17,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 84.0
+        "kind": "monster",
+        "combat": {
+          "level": 84,
+          "hp": 25000,
+          "min_phys_damage": 375,
+          "max_phys_damage": 425,
+          "defense": 275,
+          "attack_rate": 530,
+          "defense_rate": 190
         },
-        {
-          "stat": "maximum_health",
-          "value": 25000.0
+        "resistances": {
+          "ice": 10,
+          "poison": 10,
+          "lightning": 10,
+          "fire": 10,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 375.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 20000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 425.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 275.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 530.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 190.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.0392156862745098
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.0392156862745098
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.0392156862745098
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.0392156862745098
+        "attack": {
+          "kind": "skill",
+          "skill": 17
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (10/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 62,
       "name": "Mutant",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 72.0
+        "kind": "monster",
+        "combat": {
+          "level": 72,
+          "hp": 10000,
+          "min_phys_damage": 250,
+          "max_phys_damage": 280,
+          "defense": 190,
+          "attack_rate": 365,
+          "defense_rate": 120
         },
-        {
-          "stat": "maximum_health",
-          "value": 10000.0
+        "resistances": {
+          "ice": 8,
+          "poison": 8,
+          "lightning": 8,
+          "fire": 8,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 250.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 280.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 190.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 365.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 120.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03137254901960784
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (8/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 63,
       "name": "Death Beam Knight",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 150000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 93.0
+        "kind": "monster",
+        "combat": {
+          "level": 93,
+          "hp": 40000,
+          "min_phys_damage": 590,
+          "max_phys_damage": 650,
+          "defense": 420,
+          "attack_rate": 575,
+          "defense_rate": 220
         },
-        {
-          "stat": "maximum_health",
-          "value": 40000.0
+        "resistances": {
+          "ice": 13,
+          "poison": 13,
+          "lightning": 13,
+          "fire": 17,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 590.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 150000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 650.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 420.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 575.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 220.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.06666666666666667
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (13/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 64,
       "name": "Orc Archer",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 70.0
+        "kind": "monster",
+        "combat": {
+          "level": 70,
+          "hp": 10000,
+          "min_phys_damage": 220,
+          "max_phys_damage": 250,
+          "defense": 170,
+          "attack_rate": 350,
+          "defense_rate": 115
         },
-        {
-          "stat": "maximum_health",
-          "value": 10000.0
+        "resistances": {
+          "ice": 7,
+          "poison": 7,
+          "lightning": 7,
+          "fire": 7,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 220.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 250.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 170.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 350.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 115.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.027450980392156862
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.027450980392156862
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (7/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 65,
       "name": "Elite Orc",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 2000,
-      "respawn_ms": 100000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 74.0
+        "kind": "monster",
+        "combat": {
+          "level": 74,
+          "hp": 14000,
+          "min_phys_damage": 260,
+          "max_phys_damage": 290,
+          "defense": 190,
+          "attack_rate": 400,
+          "defense_rate": 125
         },
-        {
-          "stat": "maximum_health",
-          "value": 14000.0
+        "resistances": {
+          "ice": 8,
+          "poison": 8,
+          "lightning": 8,
+          "fire": 8,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 260.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 2000,
+          "respawn_ms": 100000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 290.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 190.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 400.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 125.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03137254901960784
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03137254901960784
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (8/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 66,
       "name": "Cursed King",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 4,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 70000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 86.0
+        "kind": "monster",
+        "combat": {
+          "level": 86,
+          "hp": 38000,
+          "min_phys_damage": 500,
+          "max_phys_damage": 570,
+          "defense": 350,
+          "attack_rate": 525,
+          "defense_rate": 200
         },
-        {
-          "stat": "maximum_health",
-          "value": 38000.0
+        "resistances": {
+          "ice": 17,
+          "poison": 17,
+          "lightning": 17,
+          "fire": 17,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 500.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 4,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 70000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 570.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 350.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 525.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 200.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.06666666666666667
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.06666666666666667
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.06666666666666667
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.06666666666666667
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (17/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 67,
       "name": "Metal Balrog",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 200000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 77.0
+        "kind": "monster",
+        "combat": {
+          "level": 77,
+          "hp": 26000,
+          "min_phys_damage": 300,
+          "max_phys_damage": 360,
+          "defense": 220,
+          "attack_rate": 385,
+          "defense_rate": 150
         },
-        {
-          "stat": "maximum_health",
-          "value": 26000.0
+        "resistances": {
+          "ice": 9,
+          "poison": 9,
+          "lightning": 9,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 300.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 200000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 360.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 220.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 385.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 150.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (9/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 69,
       "name": "Alquamos",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 17,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 75.0
+        "kind": "monster",
+        "combat": {
+          "level": 75,
+          "hp": 11500,
+          "min_phys_damage": 255,
+          "max_phys_damage": 290,
+          "defense": 195,
+          "attack_rate": 385,
+          "defense_rate": 125
         },
-        {
-          "stat": "maximum_health",
-          "value": 11500.0
+        "resistances": {
+          "ice": 9,
+          "poison": 9,
+          "lightning": 11,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 255.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 290.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 195.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 385.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 125.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.043137254901960784
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "skill",
+          "skill": 17
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (11/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 70,
       "name": "Queen Rainer",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 3,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 17,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 82.0
+        "kind": "monster",
+        "combat": {
+          "level": 82,
+          "hp": 19000,
+          "min_phys_damage": 305,
+          "max_phys_damage": 350,
+          "defense": 230,
+          "attack_rate": 475,
+          "defense_rate": 160
         },
-        {
-          "stat": "maximum_health",
-          "value": 19000.0
+        "resistances": {
+          "ice": 11,
+          "poison": 9,
+          "lightning": 12,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 305.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 3,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 350.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 230.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 475.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 160.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.043137254901960784
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "skill",
+          "skill": 17
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 71,
       "name": "Mega Crust",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 78.0
+        "kind": "monster",
+        "combat": {
+          "level": 78,
+          "hp": 15000,
+          "min_phys_damage": 270,
+          "max_phys_damage": 320,
+          "defense": 210,
+          "attack_rate": 430,
+          "defense_rate": 140
         },
-        {
-          "stat": "maximum_health",
-          "value": 15000.0
+        "resistances": {
+          "ice": 9,
+          "poison": 9,
+          "lightning": 12,
+          "fire": 9,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 270.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 320.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 210.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 430.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 140.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.03529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.03529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (12/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 72,
       "name": "Phantom Knight",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 96.0
+        "kind": "monster",
+        "combat": {
+          "level": 96,
+          "hp": 41000,
+          "min_phys_damage": 560,
+          "max_phys_damage": 610,
+          "defense": 425,
+          "attack_rate": 690,
+          "defense_rate": 270
         },
-        {
-          "stat": "maximum_health",
-          "value": 41000.0
+        "resistances": {
+          "ice": 14,
+          "poison": 14,
+          "lightning": 16,
+          "fire": 14,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 560.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 610.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 425.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 690.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 270.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.054901960784313725
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.054901960784313725
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.06274509803921569
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.054901960784313725
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (16/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 73,
       "name": "Drakan",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 20000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 86.0
+        "kind": "monster",
+        "combat": {
+          "level": 86,
+          "hp": 29000,
+          "min_phys_damage": 425,
+          "max_phys_damage": 480,
+          "defense": 305,
+          "attack_rate": 570,
+          "defense_rate": 210
         },
-        {
-          "stat": "maximum_health",
-          "value": 29000.0
+        "resistances": {
+          "ice": 12,
+          "poison": 12,
+          "lightning": 13,
+          "fire": 12,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 425.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 20000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 480.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 305.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 570.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 210.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.047058823529411764
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.047058823529411764
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (13/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 74,
       "name": "Alpha Crust",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 92.0
+        "kind": "monster",
+        "combat": {
+          "level": 92,
+          "hp": 34500,
+          "min_phys_damage": 489,
+          "max_phys_damage": 540,
+          "defense": 360,
+          "attack_rate": 620,
+          "defense_rate": 240
         },
-        {
-          "stat": "maximum_health",
-          "value": 34500.0
+        "resistances": {
+          "ice": 13,
+          "poison": 13,
+          "lightning": 14,
+          "fire": 13,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 489.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 540.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 360.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 620.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 240.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.050980392156862744
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.054901960784313725
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.050980392156862744
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (14/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 75,
       "name": "Great Drakan",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 3000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 100.0
+        "kind": "monster",
+        "combat": {
+          "level": 100,
+          "hp": 50000,
+          "min_phys_damage": 650,
+          "max_phys_damage": 700,
+          "defense": 495,
+          "attack_rate": 800,
+          "defense_rate": 305
         },
-        {
-          "stat": "maximum_health",
-          "value": 50000.0
+        "resistances": {
+          "ice": 15,
+          "poison": 15,
+          "lightning": 17,
+          "fire": 18,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 650.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 700.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 495.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 800.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 305.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.058823529411764705
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.058823529411764705
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.06666666666666667
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.07058823529411765
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (17/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 76,
       "name": "Dark Phoenix Shield",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 3,
-      "view_range": 5,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1400,
-      "respawn_ms": 10000,
-      "max_item_drops": 1,
-      "attack_skill": 3,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 106.0
+        "kind": "monster",
+        "combat": {
+          "level": 106,
+          "hp": 73000,
+          "min_phys_damage": 850,
+          "max_phys_damage": 960,
+          "defense": 580,
+          "attack_rate": 840,
+          "defense_rate": 305
         },
-        {
-          "stat": "maximum_health",
-          "value": 73000.0
+        "resistances": {
+          "ice": 30,
+          "poison": 30,
+          "lightning": 35,
+          "fire": 30,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 850.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 3,
+          "view_range": 5,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1400,
+          "respawn_ms": 10000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 960.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 580.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 840.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 305.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.11764705882352941
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.11764705882352941
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.13725490196078433
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.11764705882352941
+        "attack": {
+          "kind": "skill",
+          "skill": 3
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (35/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 77,
       "name": "Dark Phoenix",
       "source_version": "095d",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 1,
-      "attack_range": 6,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1500,
-      "respawn_ms": 15000,
-      "max_item_drops": 1,
-      "attack_skill": 150,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 108.0
+        "kind": "monster",
+        "combat": {
+          "level": 108,
+          "hp": 95000,
+          "min_phys_damage": 950,
+          "max_phys_damage": 1000,
+          "defense": 600,
+          "attack_rate": 900,
+          "defense_rate": 350
         },
-        {
-          "stat": "maximum_health",
-          "value": 95000.0
+        "resistances": {
+          "ice": 30,
+          "poison": 30,
+          "lightning": 35,
+          "fire": 30,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 950.0
+        "behavior": {
+          "move_range": 1,
+          "attack_range": 6,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1500,
+          "respawn_ms": 15000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 1000.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 600.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 900.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 350.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.11764705882352941
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.11764705882352941
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.13725490196078433
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.11764705882352941
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "OpenMU maps this attack to skill 150, which resolves only via an S6 skill backport — a phantom pre-S3; modeled as plain, verify attack-type against an authentic Monster.txt. lightning byte extracted from OpenMU's water_resistance slot (35/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 100,
@@ -4285,43 +2809,37 @@
       "source_version": "075",
       "role": {
         "kind": "trap",
-        "ai": "attack_single_pressed"
-      },
-      "move_range": 0,
-      "attack_range": 4,
-      "view_range": 4,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 1000,
-      "respawn_ms": 3000,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 80.0
+        "targeting": "single_when_pressed",
+        "combat": {
+          "level": 80,
+          "hp": 1000,
+          "min_phys_damage": 100,
+          "max_phys_damage": 110,
+          "defense": 0,
+          "attack_rate": 400,
+          "defense_rate": 500
         },
-        {
-          "stat": "maximum_health",
-          "value": 1000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 100.0
+        "behavior": {
+          "move_range": 0,
+          "attack_range": 4,
+          "view_range": 4,
+          "move_delay_ms": 0,
+          "attack_delay_ms": 1000,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 110.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 400.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 500.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 101,
@@ -4329,43 +2847,37 @@
       "source_version": "075",
       "role": {
         "kind": "trap",
-        "ai": "attack_single_pressed"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 1,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 1000,
-      "respawn_ms": 3000,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 80.0
+        "targeting": "single_when_pressed",
+        "combat": {
+          "level": 80,
+          "hp": 1000,
+          "min_phys_damage": 110,
+          "max_phys_damage": 130,
+          "defense": 0,
+          "attack_rate": 400,
+          "defense_rate": 500
         },
-        {
-          "stat": "maximum_health",
-          "value": 1000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 110.0
+        "behavior": {
+          "move_range": 0,
+          "attack_range": 0,
+          "view_range": 1,
+          "move_delay_ms": 0,
+          "attack_delay_ms": 1000,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 130.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 400.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 500.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 102,
@@ -4373,43 +2885,37 @@
       "source_version": "075",
       "role": {
         "kind": "trap",
-        "ai": "area_target_in_direction"
-      },
-      "move_range": 0,
-      "attack_range": 2,
-      "view_range": 1,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 1000,
-      "respawn_ms": 3000,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 80.0
+        "targeting": "directional",
+        "combat": {
+          "level": 80,
+          "hp": 1000,
+          "min_phys_damage": 130,
+          "max_phys_damage": 150,
+          "defense": 0,
+          "attack_rate": 400,
+          "defense_rate": 500
         },
-        {
-          "stat": "maximum_health",
-          "value": 1000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 130.0
+        "behavior": {
+          "move_range": 0,
+          "attack_range": 2,
+          "view_range": 1,
+          "move_delay_ms": 0,
+          "attack_delay_ms": 1000,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 150.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 400.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 500.0
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 103,
@@ -4417,106 +2923,76 @@
       "source_version": "075",
       "role": {
         "kind": "trap",
-        "ai": "attack_area_pressed"
-      },
-      "move_range": 0,
-      "attack_range": 3,
-      "view_range": 1,
-      "move_delay_ms": 500,
-      "attack_delay_ms": 1000,
-      "respawn_ms": 3000,
-      "max_item_drops": 0,
-      "attack_skill": 50,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 90.0
+        "targeting": "area_when_pressed",
+        "combat": {
+          "level": 90,
+          "hp": 1000,
+          "min_phys_damage": 160,
+          "max_phys_damage": 190,
+          "defense": 0,
+          "attack_rate": 450,
+          "defense_rate": 500
         },
-        {
-          "stat": "maximum_health",
-          "value": 1000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 160.0
+        "behavior": {
+          "move_range": 0,
+          "attack_range": 3,
+          "view_range": 1,
+          "move_delay_ms": 500,
+          "attack_delay_ms": 1000,
+          "respawn_ms": 3000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 190.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 450.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 500.0
+        "attack": {
+          "kind": "skill",
+          "skill": 50
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 150,
       "name": "Bali",
       "source_version": "075",
       "role": {
-        "kind": "monster"
-      },
-      "move_range": 3,
-      "attack_range": 1,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1600,
-      "respawn_ms": 100000,
-      "max_item_drops": 1,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 52.0
+        "kind": "monster",
+        "combat": {
+          "level": 52,
+          "hp": 5000,
+          "min_phys_damage": 165,
+          "max_phys_damage": 170,
+          "defense": 100,
+          "attack_rate": 260,
+          "defense_rate": 75
         },
-        {
-          "stat": "maximum_health",
-          "value": 5000.0
+        "resistances": {
+          "ice": 6,
+          "poison": 6,
+          "lightning": 6,
+          "fire": 6,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 165.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 1,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1600,
+          "respawn_ms": 100000
         },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 170.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 100.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 260.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 75.0
-        },
-        {
-          "stat": "poison_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "ice_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "water_resistance",
-          "value": 0.023529411764705882
-        },
-        {
-          "stat": "fire_resistance",
-          "value": 0.023529411764705882
+        "attack": {
+          "kind": "plain"
         }
-      ],
-      "drop_groups": []
+      },
+      "review": "lightning byte extracted from OpenMU's water_resistance slot (6/255); OpenMU models no lightning column pre-S3 — verify against classic Monster.txt."
     },
     {
       "number": 200,
@@ -4524,17 +3000,7 @@
       "source_version": "075",
       "role": {
         "kind": "soccer_ball"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 235,
@@ -4542,37 +3008,16 @@
       "source_version": "095d",
       "role": {
         "kind": "npc",
-        "window": "legacy_quest"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+        "window": "quest"
+      }
     },
     {
       "number": 236,
       "name": "Golden Archer",
       "source_version": "095d",
       "role": {
-        "kind": "npc",
-        "window": null
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+        "kind": "npc"
+      }
     },
     {
       "number": 237,
@@ -4581,17 +3026,7 @@
       "role": {
         "kind": "npc",
         "window": "devil_square"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 238,
@@ -4600,36 +3035,15 @@
       "role": {
         "kind": "npc",
         "window": "chaos_machine"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 239,
       "name": "Arena Guard",
       "source_version": "075",
       "role": {
-        "kind": "npc",
-        "window": null
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+        "kind": "npc"
+      }
     },
     {
       "number": 240,
@@ -4638,17 +3052,7 @@
       "role": {
         "kind": "npc",
         "window": "vault"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 241,
@@ -4657,17 +3061,7 @@
       "role": {
         "kind": "npc",
         "window": "guild_master"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 242,
@@ -4676,17 +3070,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 243,
@@ -4695,17 +3079,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 244,
@@ -4714,17 +3088,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 245,
@@ -4733,17 +3097,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 246,
@@ -4752,64 +3106,41 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 247,
       "name": "Crossbow Guard",
       "source_version": "075",
       "role": {
-        "kind": "guard"
-      },
-      "move_range": 3,
-      "attack_range": 5,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1500,
-      "respawn_ms": 3000,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 90.0
+        "kind": "guard",
+        "combat": {
+          "level": 90,
+          "hp": 10000,
+          "min_phys_damage": 180,
+          "max_phys_damage": 195,
+          "defense": 70,
+          "attack_rate": 300,
+          "defense_rate": 100
         },
-        {
-          "stat": "maximum_health",
-          "value": 10000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 180.0
-        },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 195.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 300.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 100.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 70.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 5,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1500,
+          "respawn_ms": 3000
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 248,
@@ -4818,64 +3149,41 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 249,
       "name": "Berdysh Guard",
       "source_version": "075",
       "role": {
-        "kind": "guard"
-      },
-      "move_range": 3,
-      "attack_range": 2,
-      "view_range": 7,
-      "move_delay_ms": 400,
-      "attack_delay_ms": 1500,
-      "respawn_ms": 3000,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [
-        {
-          "stat": "level",
-          "value": 90.0
+        "kind": "guard",
+        "combat": {
+          "level": 90,
+          "hp": 10000,
+          "min_phys_damage": 180,
+          "max_phys_damage": 195,
+          "defense": 70,
+          "attack_rate": 300,
+          "defense_rate": 100
         },
-        {
-          "stat": "maximum_health",
-          "value": 10000.0
+        "resistances": {
+          "ice": 0,
+          "poison": 0,
+          "lightning": 0,
+          "fire": 0,
+          "earth": 0,
+          "wind": 0,
+          "water": 0
         },
-        {
-          "stat": "minimum_phys_base_dmg",
-          "value": 180.0
-        },
-        {
-          "stat": "maximum_phys_base_dmg",
-          "value": 195.0
-        },
-        {
-          "stat": "attack_rate_pvm",
-          "value": 300.0
-        },
-        {
-          "stat": "defense_rate_pvm",
-          "value": 100.0
-        },
-        {
-          "stat": "defense_base",
-          "value": 70.0
+        "behavior": {
+          "move_range": 3,
+          "attack_range": 2,
+          "view_range": 7,
+          "move_delay_ms": 400,
+          "attack_delay_ms": 1500,
+          "respawn_ms": 3000
         }
-      ],
-      "drop_groups": []
+      }
     },
     {
       "number": 250,
@@ -4884,17 +3192,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 251,
@@ -4903,17 +3201,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 253,
@@ -4922,17 +3210,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 254,
@@ -4941,17 +3219,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     },
     {
       "number": 255,
@@ -4960,17 +3228,7 @@
       "role": {
         "kind": "npc",
         "window": "merchant"
-      },
-      "move_range": 0,
-      "attack_range": 0,
-      "view_range": 0,
-      "move_delay_ms": 0,
-      "attack_delay_ms": 0,
-      "respawn_ms": 0,
-      "max_item_drops": 0,
-      "attack_skill": null,
-      "stats": [],
-      "drop_groups": []
+      }
     }
   ]
 }

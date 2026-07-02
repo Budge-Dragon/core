@@ -1,0 +1,2399 @@
+{
+  "records": [
+    {
+      "set_number": 1,
+      "name": "Warrior Leather",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 2,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "strength"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "agility"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "strength",
+          "amount": 10
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 10
+        },
+        {
+          "kind": "max_ability",
+          "amount": 20
+        },
+        {
+          "kind": "ability_recovery",
+          "amount": 5
+        },
+        {
+          "kind": "defense",
+          "amount": 20
+        },
+        {
+          "kind": "agility",
+          "amount": 10
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "strength",
+          "amount": 25
+        }
+      ]
+    },
+    {
+      "set_number": 2,
+      "name": "Anonymous Leather",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 6,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "agility",
+          "amount": 50
+        },
+        {
+          "kind": "defense_with_shield_pct",
+          "percent": 25
+        },
+        {
+          "kind": "damage",
+          "amount": 30
+        }
+      ]
+    },
+    {
+      "set_number": 3,
+      "name": "Hyperion Bronze",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "energy",
+          "amount": 15
+        },
+        {
+          "kind": "agility",
+          "amount": 15
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 20
+        },
+        {
+          "kind": "max_mana",
+          "amount": 30
+        }
+      ]
+    },
+    {
+      "set_number": 4,
+      "name": "Mist Bronze",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "vitality",
+          "amount": 20
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 30
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "agility",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 5,
+      "name": "Eplete Scale",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 6,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "energy"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 15
+        },
+        {
+          "kind": "attack_rate",
+          "amount": 50
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 5
+        },
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "max_ability",
+          "amount": 30
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 10
+        }
+      ]
+    },
+    {
+      "set_number": 6,
+      "name": "Berserker Scale",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "max_physical_damage",
+          "amount": 10
+        },
+        {
+          "kind": "max_physical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "max_physical_damage",
+          "amount": 30
+        },
+        {
+          "kind": "max_physical_damage",
+          "amount": 40
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 50
+        },
+        {
+          "kind": "strength",
+          "amount": 40
+        }
+      ]
+    },
+    {
+      "set_number": 7,
+      "name": "Garuda Brass",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "strength"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "max_ability",
+          "amount": 30
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "energy",
+          "amount": 15
+        },
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 25
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 15
+        }
+      ]
+    },
+    {
+      "set_number": 8,
+      "name": "Cloud Brass",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "critical_chance_pct",
+          "percent": 20
+        },
+        {
+          "kind": "critical_damage",
+          "amount": 50
+        }
+      ]
+    },
+    {
+      "set_number": 9,
+      "name": "Kantata Plate",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file; fixed OpenMU data bug: excellent damage chance 10.0 -> 0.10 (percent 10)",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 23
+          },
+          "discriminator": 1,
+          "bonus_stat": "agility"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "energy",
+          "amount": 15
+        },
+        {
+          "kind": "vitality",
+          "amount": 30
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "strength",
+          "amount": 15
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 25
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 10,
+      "name": "Rave Plate",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 20
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "two_handed_weapon_damage_pct",
+          "percent": 30
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        }
+      ]
+    },
+    {
+      "set_number": 11,
+      "name": "Hyon Dragon",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 0,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "strength"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "defense",
+          "amount": 25
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 20
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "critical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 12,
+      "name": "Vicious Dragon",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 13,
+            "number": 22
+          },
+          "discriminator": 2,
+          "bonus_stat": "strength"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 1
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 1
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 15
+        },
+        {
+          "kind": "damage",
+          "amount": 15
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "min_physical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "max_physical_damage",
+          "amount": 30
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        }
+      ]
+    },
+    {
+      "set_number": 13,
+      "name": "Apollo Pad",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 5,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "energy"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 25
+          },
+          "discriminator": 1,
+          "bonus_stat": "strength"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 24
+          },
+          "discriminator": 1,
+          "bonus_stat": "energy"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "energy",
+          "amount": 10
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 5
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 10
+        },
+        {
+          "kind": "max_mana",
+          "amount": 30
+        },
+        {
+          "kind": "max_health",
+          "amount": 30
+        },
+        {
+          "kind": "max_ability",
+          "amount": 20
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "energy",
+          "amount": 30
+        }
+      ]
+    },
+    {
+      "set_number": 14,
+      "name": "Barnake Pad",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "energy",
+          "amount": 20
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 30
+        },
+        {
+          "kind": "max_mana",
+          "amount": 100
+        }
+      ]
+    },
+    {
+      "set_number": 15,
+      "name": "Evis Bone",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "agility"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 15
+        },
+        {
+          "kind": "vitality",
+          "amount": 20
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "attack_rate",
+          "amount": 50
+        },
+        {
+          "kind": "ability_recovery",
+          "amount": 5
+        }
+      ]
+    },
+    {
+      "set_number": 16,
+      "name": "Sylion Bone",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "defense",
+          "amount": 20
+        },
+        {
+          "kind": "strength",
+          "amount": 50
+        },
+        {
+          "kind": "agility",
+          "amount": 50
+        },
+        {
+          "kind": "vitality",
+          "amount": 50
+        },
+        {
+          "kind": "energy",
+          "amount": 50
+        }
+      ]
+    },
+    {
+      "set_number": 17,
+      "name": "Heras Sphinx",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 6,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "strength",
+          "amount": 15
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "defense_with_shield_pct",
+          "percent": 5
+        },
+        {
+          "kind": "energy",
+          "amount": 15
+        },
+        {
+          "kind": "attack_rate",
+          "amount": 50
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "max_mana",
+          "amount": 50
+        }
+      ]
+    },
+    {
+      "set_number": 18,
+      "name": "Minet Sphinx",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "energy",
+          "amount": 30
+        },
+        {
+          "kind": "defense",
+          "amount": 30
+        },
+        {
+          "kind": "max_mana",
+          "amount": 100
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 15
+        }
+      ]
+    },
+    {
+      "set_number": 19,
+      "name": "Anubis Legendary",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 3
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 21
+          },
+          "discriminator": 1,
+          "bonus_stat": "energy"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "max_mana",
+          "amount": 50
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "critical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 20,
+      "name": "Enis Legendary",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 10
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "energy",
+          "amount": 30
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        }
+      ]
+    },
+    {
+      "set_number": 21,
+      "name": "Ceto Vine",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 0,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "strength"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 22
+          },
+          "discriminator": 1,
+          "bonus_stat": "strength"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "agility",
+          "amount": 10
+        },
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "defense",
+          "amount": 20
+        },
+        {
+          "kind": "defense_with_shield_pct",
+          "percent": 5
+        },
+        {
+          "kind": "energy",
+          "amount": 10
+        },
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "strength",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 22,
+      "name": "Drake Vine",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "agility",
+          "amount": 20
+        },
+        {
+          "kind": "damage",
+          "amount": 25
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 20
+        },
+        {
+          "kind": "defense",
+          "amount": 40
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 10
+        }
+      ]
+    },
+    {
+      "set_number": 23,
+      "name": "Gaia Silk",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 4,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "agility"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 10
+        },
+        {
+          "kind": "max_mana",
+          "amount": 25
+        },
+        {
+          "kind": "strength",
+          "amount": 10
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "agility",
+          "amount": 30
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "set_number": 24,
+      "name": "Fase Silk",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "max_health",
+          "amount": 100
+        },
+        {
+          "kind": "max_mana",
+          "amount": 100
+        },
+        {
+          "kind": "defense",
+          "amount": 100
+        }
+      ]
+    },
+    {
+      "set_number": 25,
+      "name": "Odin Wind",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "energy",
+          "amount": 15
+        },
+        {
+          "kind": "max_health",
+          "amount": 50
+        },
+        {
+          "kind": "attack_rate",
+          "amount": 50
+        },
+        {
+          "kind": "agility",
+          "amount": 30
+        },
+        {
+          "kind": "max_mana",
+          "amount": 50
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "max_ability",
+          "amount": 50
+        }
+      ]
+    },
+    {
+      "set_number": 26,
+      "name": "Elvian Wind",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "agility",
+          "amount": 30
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        }
+      ]
+    },
+    {
+      "set_number": 27,
+      "name": "Argo Spirit",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "max_physical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 25
+        },
+        {
+          "kind": "max_ability",
+          "amount": 50
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 5
+        }
+      ]
+    },
+    {
+      "set_number": 28,
+      "name": "Karis Spirit",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 13
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 13
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 15
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "agility",
+          "amount": 40
+        }
+      ]
+    },
+    {
+      "set_number": 29,
+      "name": "Gywen Guardian",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 4,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "agility"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 28
+          },
+          "discriminator": 1
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "agility",
+          "amount": 30
+        },
+        {
+          "kind": "min_physical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "defense",
+          "amount": 20
+        },
+        {
+          "kind": "max_physical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "critical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 30,
+      "name": "Aruan Guardian",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "damage",
+          "amount": 10
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 20
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        }
+      ]
+    },
+    {
+      "set_number": 31,
+      "name": "Gaion Storm Crow",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 15
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 15
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 15
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 27
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 30
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "strength",
+          "amount": 30
+        }
+      ]
+    },
+    {
+      "set_number": 32,
+      "name": "Muren Storm Crow",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 10,
+            "number": 15
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 15
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 15
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 21
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "skill_damage",
+          "amount": 10
+        },
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 10
+        },
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "defense",
+          "amount": 25
+        },
+        {
+          "kind": "two_handed_weapon_damage_pct",
+          "percent": 20
+        }
+      ]
+    },
+    {
+      "set_number": 33,
+      "name": "Agnis Adamantine",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 9
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 10
+        },
+        {
+          "kind": "defense",
+          "amount": 40
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 20
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "critical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 34,
+      "name": "Broy Adamantine",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 26
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 26
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 26
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 25
+          },
+          "discriminator": 2,
+          "bonus_stat": "strength"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "damage",
+          "amount": 20
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 20
+        },
+        {
+          "kind": "energy",
+          "amount": 30
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        },
+        {
+          "kind": "command",
+          "amount": 30
+        }
+      ]
+    },
+    {
+      "set_number": 35,
+      "name": "Chrono Red Wing",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 40
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 40
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 40
+          },
+          "discriminator": 1,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 24
+          },
+          "discriminator": 2,
+          "bonus_stat": "energy"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "double_damage_chance_pct",
+          "percent": 20
+        },
+        {
+          "kind": "defense",
+          "amount": 60
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 30
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "critical_damage",
+          "amount": 20
+        },
+        {
+          "kind": "excellent_damage",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "set_number": 36,
+      "name": "Semeden Red Wing",
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "kind": "wizardry_damage_pct",
+          "percent": 15
+        },
+        {
+          "kind": "skill_damage",
+          "amount": 25
+        },
+        {
+          "kind": "energy",
+          "amount": 30
+        },
+        {
+          "kind": "critical_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "excellent_chance_pct",
+          "percent": 15
+        },
+        {
+          "kind": "defense_ignore_chance_pct",
+          "percent": 5
+        }
+      ]
+    }
+  ]
+}

@@ -1,81 +1,57 @@
 {
   "category": "classes",
   "files": {
-    "data/character_classes.json": 9
+    "data/classes.json": 8
   },
   "records_by_source_version": {
-    "075": 4,
+    "075": 3,
     "s6": 4,
     "095d": 1
   },
   "review_flagged": [
     {
-      "id": "dark_wizard",
-      "review": "evolution to soul_master at level 150 is a curated 1.0-era backport (075/095d datasets ship no second classes); rest of the record is the shipped shared-initializer data"
+      "class": "dark_wizard",
+      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
-      "id": "soul_master",
-      "review": "1.0-era backport: second class of the dark_wizard line (class change at level 150 predates season 3); defined only in the s6 dataset; rebuilt with classic-pvp rules, shield/master/pet formulas dropped"
+      "class": "soul_master",
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on dark_wizard"
     },
     {
-      "id": "dark_knight",
-      "review": "evolution to blade_knight at level 150 is a curated 1.0-era backport (075/095d datasets ship no second classes); rest of the record is the shipped shared-initializer data"
+      "class": "dark_knight",
+      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
-      "id": "blade_knight",
-      "review": "1.0-era backport: second class of the dark_knight line (class change at level 150 predates season 3); defined only in the s6 dataset; rebuilt with classic-pvp rules, shield/master/pet formulas dropped"
+      "class": "blade_knight",
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on dark_knight"
     },
     {
-      "id": "fairy_elf",
-      "review": "evolution to muse_elf at level 150 is a curated 1.0-era backport (075/095d datasets ship no second classes); rest of the record is the shipped shared-initializer data"
+      "class": "fairy_elf",
+      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
-      "id": "muse_elf",
-      "review": "1.0-era backport: second class of the fairy_elf line (class change at level 150 predates season 3); defined only in the s6 dataset; rebuilt with classic-pvp rules, shield/master/pet formulas dropped"
+      "class": "muse_elf",
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on fairy_elf"
     },
     {
-      "id": "magic_gladiator",
-      "review": "fruit_calculation curated to magic_gladiator per the domain fruit caps (default 127 / mg 100 / dl 115); the shipped initializer never assigns a strategy (all default) and fruits are 1.0-era content"
+      "class": "magic_gladiator",
+      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~100); warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction)"
     },
     {
-      "id": "dark_lord",
-      "review": "1.0-era backport: dark lord shipped around v1.0 but is absent from the 075/095d datasets; rebuilt with classic-pvp rules; raven/horse/pet and master-tree formulas dropped (see gaps); fruit_calculation dark_lord per domain caps"
+      "class": "dark_lord",
+      "review": "1.0-era backport; warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction); fruit divisor encodes OpenMU strategy (cap ~115); starting ability 1 is an OpenMU initializer seed"
     }
   ],
   "gaps": [
-    "bonus_damage_with_scepter_cmd_div: master skill tree bucket (S4+) excluded - dropped dark_lord:stat_formula (targets bonus_damage_with_scepter)",
-    "bonus_defense_rate_with_shield: master skill tree bucket (S4+) excluded - dropped global:stat_formula (targets defense_rate_pvm)",
-    "bonus_defense_with_horse: dark horse trainable pet excluded per spec - dropped dark_lord:stat_formula (targets defense_final)",
-    "bonus_defense_with_shield: master skill tree bucket (S4+) excluded - dropped global:stat_formula (targets defense_final)",
-    "damage_receive_horse_decrement: dark horse trainable pet excluded per spec - dropped dark_lord:stat_formula (targets damage_receive_decrement)",
-    "fenrir_base_dmg: fenrir trainable pet (S2) excluded per spec - dropped blade_knight:stat_formula (targets fenrir_base_dmg); dark_knight:stat_formula (targets fenrir_base_dmg); dark_lord:stat_formula (targets fenrir_base_dmg); dark_wizard:stat_formula (targets fenrir_base_dmg); fairy_elf:stat_formula (targets fenrir_base_dmg); magic_gladiator:stat_formula (targets fenrir_base_dmg); muse_elf:stat_formula (targets fenrir_base_dmg); soul_master:stat_formula (targets fenrir_base_dmg)",
-    "innovation_def_decrement: innovation skill (S3+) excluded - dropped global:stat_formula (targets temp_innovation_defense_decrement)",
-    "is_horse_equipped: dark horse trainable pet excluded per spec - dropped dark_lord:stat_formula (targets defense_final)",
-    "master_level: master system (S4+) excluded; pre-S3 total_level == level - dropped global:stat_formula (targets total_level)",
-    "master_skill_phys_bonus_dmg: master skill tree bucket (S4+) excluded - dropped dark_lord:stat_formula (targets master_skill_phys_bonus_dmg)",
-    "one_handed_staff_bonus_base_damage: master skill tree bucket (S4+) excluded - dropped dark_wizard:stat_formula (targets wizardry_base_dmg); magic_gladiator:stat_formula (targets wizardry_base_dmg); soul_master:stat_formula (targets wizardry_base_dmg)",
-    "pet_duration_increase: MISSING from stat_map.json (possibly pre-S3 relevant) - stats agent should add or confirm exclusion - dropped dark_lord:const_value (value 1.0)",
-    "raven_attack_damage_increase: dark raven trainable pet excluded per spec - dropped dark_lord:stat_formula (targets raven_attack_damage_increase)",
-    "raven_attack_rate: dark raven trainable pet excluded per spec - dropped dark_lord:const_value (value 1000.0); dark_lord:stat_formula (targets raven_attack_rate)",
-    "raven_attack_speed: dark raven trainable pet excluded per spec - dropped dark_lord:const_value (value 20.0); dark_lord:stat_formula (targets raven_attack_speed)",
-    "raven_bonus_damage: dark raven trainable pet excluded per spec - dropped dark_lord:stat_formula (targets raven_bonus_damage)",
-    "raven_critical_damage_chance: dark raven trainable pet excluded per spec - dropped dark_lord:const_value (value 0.3)",
-    "raven_level: dark raven trainable pet excluded per spec - dropped dark_lord:stat_formula (targets raven_attack_rate); dark_lord:stat_formula (targets raven_attack_speed); dark_lord:stat_formula (targets raven_maximum_damage); dark_lord:stat_formula (targets raven_minimum_damage)",
-    "raven_maximum_damage: dark raven trainable pet excluded per spec - dropped dark_lord:const_value (value 200.0); dark_lord:stat_formula (targets raven_maximum_damage)",
-    "raven_minimum_damage: dark raven trainable pet excluded per spec - dropped dark_lord:const_value (value 180.0); dark_lord:stat_formula (targets raven_minimum_damage)",
-    "resets: reset system is a custom server feature, not classic pre-S3 - dropped blade_knight:base_stat (value 0); dark_knight:base_stat (value 0); dark_lord:base_stat (value 0); dark_wizard:base_stat (value 0); fairy_elf:base_stat (value 0); magic_gladiator:base_stat (value 0); muse_elf:base_stat (value 0); soul_master:base_stat (value 0)",
-    "scepter_pet_bonus_damage: master skill tree bucket (S4+) excluded - dropped dark_lord:stat_formula (targets raven_bonus_damage)",
-    "shield_item_defense_increase: water-socket (S3+) shield defense multiplier excluded per facts - dropped global:stat_formula (targets defense_final)",
-    "temp_innovation_defense_decrement: innovation skill (S3+) excluded - dropped global:stat_formula (targets defense_decrement); global:stat_formula (targets temp_innovation_defense_decrement)",
-    "two_handed_staff_bonus_base_damage: master skill tree bucket (S4+) excluded - dropped dark_wizard:stat_formula (targets wizardry_base_dmg); magic_gladiator:stat_formula (targets wizardry_base_dmg); soul_master:stat_formula (targets wizardry_base_dmg)",
-    "weapon_mastery_attack_speed: master skill tree bucket (S4+) excluded - dropped blade_knight:stat_formula (targets attack_speed_any); dark_knight:stat_formula (targets attack_speed_any); dark_wizard:stat_formula (targets attack_speed_any); fairy_elf:stat_formula (targets attack_speed_any); magic_gladiator:stat_formula (targets attack_speed_any); muse_elf:stat_formula (targets attack_speed_any); soul_master:stat_formula (targets attack_speed_any)"
+    "stat_formulas + const_values (v1 per-class attribute-graph relationships and base const values) dropped from data: they became Rust services (per-class derived-stat formulas in stats_replacement; shared relationships in the common combat/vitals services). No number lost - coefficients live in the service sketches.",
+    "master/pet/shield formulas (S2+/S4+): raven/horse/dark-raven and master-tree buckets are excluded pre-S3 and never entered v2 records.",
+    "second-class derived formulas (SM/BK/ME/DL): the s6 dataset ships shield/pvp-rate blocks excluded pre-S3; only creation values are carried, under s6 provenance."
   ],
   "notes": [
-    "combo_bonus formulas (dark_knight line) ship in the shared initializer that 075/095d run, so they are kept under 075 even though the skill combo historically arrived ~1.0",
-    "nova_stage_damage const 0.0 (dark_wizard line) ships in the shared initializer; the nova skill itself is a 1.0-era backport handled by the skills extractor",
-    "can_fly gained from the dinorant-equipped flag ships in the shared initializer (dinorant is ~0.97 content); kept under 075",
-    "total_level == level pre-S3: the master-level contribution to total_level was dropped with the master system",
-    "second-class backports reuse the shared creators under classic-pvp rules; the s6 dataset ships them with shield/pvp-rate blocks which are excluded pre-S3",
-    "the client creation-unlock bitmask (mg=4, dl=2) is a client protocol concern and is not modeled; creation_unlock_level carries the domain rule"
+    "no 'global' pseudo-record: v2 classes.json is a plain 8-record DataFile; shared behaviour is service code, not a data record.",
+    "base stats/vitals/points scraped verbatim from the shared class initializers (CreateStatAttributeDefinition); gating/home-map/warp/fruit verified against source (LevelRequirementByCreation 220/250, HomeMap Lorencia 0 / Noria 3, LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).",
+    "second tiers reuse their base line's creator, so creation values mirror the base tier - honest source fact carried under s6 provenance, not a copy-generation device.",
+    "warp 34% integer reduction re-expressed as the authentic 2/3 fraction (rounding direction re-sourced under W-SRC); starting ability 1, fruit divisor and the level-150 evolution flagged OpenMU defaults on every affected record.",
+    "unlock levels 220/250 and evolution level 150 are authentic; the v1 doc-comment 'account level' error is corrected - it is the level of another character on the account."
   ]
 }

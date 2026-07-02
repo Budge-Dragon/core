@@ -1,0 +1,75 @@
+{
+  "records": [
+    {
+      "source_version": "075",
+      "tick_duration_ms": 100,
+      "item_drop_duration_ms": 60000,
+      "drops": {
+        "money_roll_per_10000": 5000,
+        "item_roll_per_10000": 3000,
+        "jewel_roll_per_10000": 10,
+        "excellent_roll_per_10000": 1,
+        "skill_roll_per_10000": 5000,
+        "jewel_drops": [
+          {
+            "group": 14,
+            "number": 13
+          },
+          {
+            "group": 14,
+            "number": 14
+          },
+          {
+            "group": 12,
+            "number": 15
+          }
+        ],
+        "review": "all rates are OpenMU defaults (categories 0.5/0.3/0.001/0.0001 from GameConfigurationInitializerBase; skill 50% from DefaultDropGenerator) - authentic model is per-monster ItemRate/MoneyRate (Monster.txt) x global ItemDropRate/ZenDropRate (CommonServer.cfg); replace when classic sources land"
+      },
+      "option_roll": {
+        "item_option_roll_per_10000": 2500,
+        "luck_roll_per_10000": 2500,
+        "extra_excellent_option_roll_per_10000": 10,
+        "second_wing_bonus_roll_per_10000": 1000,
+        "dinorant_option_roll_per_10000": 3000,
+        "max_excellent_options_per_drop": 2,
+        "max_dropped_option_level": 3,
+        "review": "chances and the 2-excellent cap are OpenMU initializer defaults pending authentic classic sources; max_dropped_option_level 3 is commonly held classic knowledge stated here as policy"
+      },
+      "progression": {
+        "max_party_size": 5,
+        "exp_jitter_percent": {
+          "min": 80,
+          "max": 120
+        }
+      },
+      "zen_caps": {
+        "inventory": 2000000000,
+        "vault": 2000000000
+      },
+      "inventory": {
+        "main": {
+          "rows": 8,
+          "columns": 8
+        },
+        "vault": {
+          "rows": 15,
+          "columns": 8
+        },
+        "personal_store": {
+          "rows": 4,
+          "columns": 8
+        },
+        "trade": {
+          "rows": 4,
+          "columns": 8
+        },
+        "chaos_machine": {
+          "rows": 4,
+          "columns": 8
+        }
+      },
+      "review": "exp_jitter_percent: OpenMU uniform-jitter mechanism and 0.8-1.2 values, no classic corroboration - pending classic GS verification; personal_store: ~1.0-era feature, curated backport per decision 1"
+    }
+  ]
+}

@@ -1,0 +1,219 @@
+{
+  "records": [
+    {
+      "kind": "level_banded",
+      "item": {
+        "group": 14,
+        "number": 17
+      },
+      "chance_per_10000": 100,
+      "bands": [
+        {
+          "min_monster_level": 2,
+          "item_level": 1
+        },
+        {
+          "min_monster_level": 36,
+          "item_level": 2
+        },
+        {
+          "min_monster_level": 47,
+          "item_level": 3
+        },
+        {
+          "min_monster_level": 60,
+          "item_level": 4
+        }
+      ],
+      "source_version": "095d",
+      "review": "banding concept is classic EventItemBag behavior; the 1% chance and band edges are OpenMU 095d initializer values pending classic verification"
+    },
+    {
+      "kind": "level_banded",
+      "item": {
+        "group": 14,
+        "number": 18
+      },
+      "chance_per_10000": 100,
+      "bands": [
+        {
+          "min_monster_level": 2,
+          "item_level": 1
+        },
+        {
+          "min_monster_level": 36,
+          "item_level": 2
+        },
+        {
+          "min_monster_level": 47,
+          "item_level": 3
+        },
+        {
+          "min_monster_level": 60,
+          "item_level": 4
+        }
+      ],
+      "source_version": "095d",
+      "review": "banding concept is classic EventItemBag behavior; the 1% chance and band edges are OpenMU 095d initializer values pending classic verification"
+    },
+    {
+      "kind": "level_banded",
+      "item": {
+        "group": 13,
+        "number": 16
+      },
+      "chance_per_10000": 100,
+      "bands": [
+        {
+          "min_monster_level": 2,
+          "item_level": 1
+        },
+        {
+          "min_monster_level": 32,
+          "item_level": 2
+        },
+        {
+          "min_monster_level": 45,
+          "item_level": 3
+        },
+        {
+          "min_monster_level": 57,
+          "item_level": 4
+        },
+        {
+          "min_monster_level": 68,
+          "item_level": 5
+        },
+        {
+          "min_monster_level": 76,
+          "item_level": 6
+        },
+        {
+          "min_monster_level": 84,
+          "item_level": 7
+        },
+        {
+          "min_monster_level": 95,
+          "item_level": 8
+        }
+      ],
+      "source_version": "s6",
+      "review": "Blood Castle ticket ingredient, approved 1.0-era backport; chance and band edges are s6 data; gates 7-8 arguably later-era (7: S1+, 8: S3)"
+    },
+    {
+      "kind": "level_banded",
+      "item": {
+        "group": 13,
+        "number": 17
+      },
+      "chance_per_10000": 100,
+      "bands": [
+        {
+          "min_monster_level": 2,
+          "item_level": 1
+        },
+        {
+          "min_monster_level": 32,
+          "item_level": 2
+        },
+        {
+          "min_monster_level": 45,
+          "item_level": 3
+        },
+        {
+          "min_monster_level": 57,
+          "item_level": 4
+        },
+        {
+          "min_monster_level": 68,
+          "item_level": 5
+        },
+        {
+          "min_monster_level": 76,
+          "item_level": 6
+        },
+        {
+          "min_monster_level": 84,
+          "item_level": 7
+        },
+        {
+          "min_monster_level": 95,
+          "item_level": 8
+        }
+      ],
+      "source_version": "s6",
+      "review": "Blood Castle ticket ingredient, approved 1.0-era backport; chance and band edges are s6 data; gates 7-8 arguably later-era (7: S1+, 8: S3)"
+    },
+    {
+      "kind": "monster_bound",
+      "monster": 43,
+      "items": [
+        {
+          "group": 14,
+          "number": 11
+        }
+      ],
+      "item_level": 0,
+      "source_version": "095d"
+    },
+    {
+      "kind": "monster_bound",
+      "monster": 53,
+      "items": [
+        {
+          "group": 14,
+          "number": 11
+        }
+      ],
+      "item_level": 9,
+      "source_version": "095d",
+      "review": "Box of Kundun+2 encoded as Box of Luck at item level 9 - authentic client encoding; Golden Titan era doubt (~0.97+)"
+    },
+    {
+      "kind": "monster_bound",
+      "monster": 44,
+      "items": [
+        {
+          "group": 14,
+          "number": 13
+        },
+        {
+          "group": 14,
+          "number": 14
+        },
+        {
+          "group": 12,
+          "number": 15
+        }
+      ],
+      "item_level": 0,
+      "source_version": "095d"
+    },
+    {
+      "kind": "map_bound",
+      "map": 10,
+      "min_monster_level": 82,
+      "item": {
+        "group": 13,
+        "number": 14
+      },
+      "item_level": 0,
+      "chance_per_10000": 10,
+      "source_version": "s6",
+      "review": "Loch's Feather feeds the approved 2nd-wings mix (1.0-era); the 0.1% chance and level floor 82 are OpenMU S6 Icarus values pending classic sources"
+    },
+    {
+      "kind": "map_bound",
+      "map": 10,
+      "min_monster_level": 82,
+      "item": {
+        "group": 13,
+        "number": 14
+      },
+      "item_level": 1,
+      "chance_per_10000": 10,
+      "source_version": "s6",
+      "review": "Crest of Monarch (Loch's Feather +1) feeds Cape of Lord - Dark Lord-era content, era doubt; the 0.1% chance and level floor 82 are OpenMU S6 Icarus values pending classic sources"
+    }
+  ]
+}

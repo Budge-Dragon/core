@@ -1,97 +1,152 @@
-//! Record shape of `monster_definitions.json` — monsters, NPCs, guards,
-//! and traps.
+//! Record shape of `monster_definitions.json` — the classic Monster.txt
+//! roster: monsters, NPCs, guards, traps, and the soccer ball.
 
 use serde::{Deserialize, Serialize};
 
-use super::common::{DropGroupId, MonsterNumber, SkillNumber, SourceVersion, StatValue};
+use crate::components::element::PerElement;
+use crate::components::units::{DurationMs, Level, Resistance};
+
+use super::common::{MonsterNumber, Provenance, SkillNumber};
 
 /// One monster/NPC definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MonsterDefinition {
-    /// Monster number as the client knows it.
+    /// Monster number as the client knows it (model/NPC id).
     pub number: MonsterNumber,
-    /// Display name.
+    /// Display name (Monster.txt name column); informational, never a key.
     pub name: String,
-    /// Dataset era the record was extracted from.
-    pub source_version: SourceVersion,
-    /// What the entity is and how it behaves, kind-tagged.
+    /// Extraction provenance: dataset era plus optional curation note.
+    #[serde(flatten)]
+    pub provenance: Provenance,
+    /// What the entity is, carrying only the data that kind has.
     pub role: MonsterRole,
-    /// Movement range in tiles.
-    pub move_range: u8,
-    /// Attack range in tiles.
-    pub attack_range: u8,
-    /// Aggro/view range in tiles.
-    pub view_range: u8,
-    /// Delay between movement steps.
-    pub move_delay_ms: u32,
-    /// Delay between attacks.
-    pub attack_delay_ms: u32,
-    /// Delay before respawning after death.
-    pub respawn_ms: u32,
-    /// Maximum items dropped per kill.
-    pub max_item_drops: u8,
-    /// Skill used when attacking; absent = plain attacks.
-    pub attack_skill: Option<SkillNumber>,
-    /// The monster's stat block.
-    pub stats: Vec<StatValue>,
-    /// Monster-specific drop groups.
-    pub drop_groups: Vec<DropGroupId>,
-    /// Era-doubt note for curated backports; absent = uncontested.
-    pub review: Option<String>,
 }
 
-/// What a monster-file entity is, kind-tagged.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// What a monster-file entity is, kind-tagged. Fighting kinds carry the
+/// Monster.txt combat columns; passive kinds carry none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MonsterRole {
-    /// Default aggressive monster AI.
-    Monster,
-    /// Non-fighting NPC.
+    /// Aggressive monster.
+    Monster {
+        /// Monster.txt combat columns.
+        combat: MonsterCombat,
+        /// Elemental resistance bytes, total over `Element`.
+        resistances: PerElement<Resistance>,
+        /// Movement/timing columns shared by every fighting kind.
+        behavior: MobBehavior,
+        /// How it attacks, kind-tagged.
+        attack: MonsterAttack,
+    },
+    /// Passive town NPC.
     Npc {
-        /// Dialog window opened on interaction; absent = none.
+        /// Dialog window opened on talk; absent = opens nothing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         window: Option<NpcWindow>,
     },
-    /// Guard AI.
-    Guard,
-    /// Stationary trap.
-    Trap {
-        /// Trap trigger/attack behavior.
-        ai: TrapAi,
+    /// Town guard; attacks aggressors with plain attacks (a rule, so no
+    /// `attack` field — the absence is structural).
+    Guard {
+        /// Monster.txt combat columns.
+        combat: MonsterCombat,
+        /// Elemental resistance bytes, total over `Element`.
+        resistances: PerElement<Resistance>,
+        /// Movement/timing columns shared by every fighting kind.
+        behavior: MobBehavior,
     },
-    /// The Arena battle soccer ball.
+    /// Trap; sits on its spawn tile, facing per its spawn row.
+    Trap {
+        /// How the trap picks victims when it fires.
+        targeting: TrapTargeting,
+        /// Monster.txt combat columns (trap defense is 0 in the source).
+        combat: MonsterCombat,
+        /// Elemental resistance bytes, total over `Element`.
+        resistances: PerElement<Resistance>,
+        /// Movement/timing columns (trap `move_range` is 0 in the source).
+        behavior: MobBehavior,
+        /// How it fires, kind-tagged.
+        attack: MonsterAttack,
+    },
+    /// The Arena battle-soccer ball.
     SoccerBall,
 }
 
-/// Dialog window an NPC opens.
+/// The Monster.txt combat columns, integer-typed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MonsterCombat {
+    /// Monster level (1-based; the shared guarded newtype).
+    pub level: Level,
+    /// Maximum health.
+    pub hp: u32,
+    /// Minimum physical damage.
+    pub min_phys_damage: u16,
+    /// Maximum physical damage.
+    pub max_phys_damage: u16,
+    /// Defense.
+    pub defense: u16,
+    /// Attack success rate.
+    pub attack_rate: u16,
+    /// Defense success rate.
+    pub defense_rate: u16,
+}
+
+/// The Monster.txt movement/timing columns shared by every fighting kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MobBehavior {
+    /// Random-movement radius in tiles.
+    pub move_range: u8,
+    /// Attack reach in tiles.
+    pub attack_range: u8,
+    /// Target-recognition radius in tiles.
+    pub view_range: u8,
+    /// Delay between movement steps.
+    pub move_delay_ms: DurationMs,
+    /// Delay between attacks.
+    pub attack_delay_ms: DurationMs,
+    /// Delay before a dead instance respawns.
+    pub respawn_ms: DurationMs,
+}
+
+/// How a fighting entity attacks, kind-tagged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MonsterAttack {
+    /// Plain physical attacks.
+    Plain,
+    /// Casts a skill on attack (its magic effect applies, not its damage
+    /// bonus).
+    Skill {
+        /// The skill; the Atlas proves it resolves in `skills.json` at load.
+        skill: SkillNumber,
+    },
+}
+
+/// Dialog window an NPC opens on talk (classic talk-response window byte).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NpcWindow {
     /// Item shop.
     Merchant,
-    /// Extra storage.
-    Storage,
-    /// Money vault.
+    /// The vault (Baz #240).
     Vault,
-    /// Chaos machine crafting.
+    /// Chaos machine crafting (Chaos Goblin #238).
     ChaosMachine,
-    /// Guild creation.
+    /// Guild creation (#241).
     GuildMaster,
-    /// Devil Square entrance.
+    /// Devil Square entrance (Charon #237).
     DevilSquare,
-    /// Legacy quest dialog.
-    LegacyQuest,
+    /// Classic quest dialog (Sevina #235).
+    Quest,
 }
 
-/// Trap trigger/attack behavior.
+/// How a trap picks victims when it fires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TrapAi {
-    /// Attacks the single entity standing on it.
-    AttackSinglePressed,
-    /// Attacks everyone standing on it.
-    AttackAreaPressed,
-    /// Attacks a random entity in range.
-    RandomInRange,
-    /// Attacks targets in a fixed direction.
-    AreaTargetInDirection,
+pub enum TrapTargeting {
+    /// Strikes the single entity that pressed it (Lance #100, Iron Stick #101).
+    SingleWhenPressed,
+    /// Strikes every entity on the trap when pressed (Meteorite #103).
+    AreaWhenPressed,
+    /// Fires along its fixed facing at anything in range (Fire Trap #102).
+    Directional,
 }

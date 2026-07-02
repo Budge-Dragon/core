@@ -1,5 +1,7 @@
 # Data Schemas — MU Online Static Data (pre-Season-3)
 
+> **⚠️ SUPERSEDED — historical record only.** This v1 spec was contaminated by OpenMU's own data model (a stat catalog and stat-slug references, a generic attribute-evaluator vocabulary with aggregate operators, GUID-shaped cross-file slugs, and float probabilities) — none of which are domain facts. It is replaced by [`docs/specs/2026-07-03-data-schemas-v2.md`](./2026-07-03-data-schemas-v2.md), the AS-BUILT v2 spec produced by the OpenMU purge, which documents what is actually implemented (13 `/data` files, 2388 records; the `core/src/data` + `core/src/components` Rust types). Do not build against this file. Its content is retained below unchanged as the historical record of the pre-purge design.
+
 Proposed JSON schemas for `/data/*.json`, extracted from OpenMU initialization code
 (see [`docs/reference/openmu-facts/`](../reference/openmu-facts/) for the domain-fact
 inventories these are designed from). Each schema mirrors a future Rust struct in

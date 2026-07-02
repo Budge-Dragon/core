@@ -1,9 +1,7 @@
 """Shared helpers for mu-core data extractors (throwaway tooling).
 
-Every extractor imports from here. Conventions come from
-docs/specs/2026-07-02-data-schemas.md: file envelope
-{"schema_version": 1, "records": [...]}, snake_case slugs, stat references
-via stat_map.json.
+Every extractor imports from here. The file envelope is {"records": [...]};
+records deserialize into the core's `DataFile<T>` types.
 """
 
 import json
@@ -14,8 +12,6 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 COVERAGE_DIR = os.path.join(DATA_DIR, "_coverage")
 STAT_MAP_PATH = os.path.join(os.path.dirname(__file__), "stat_map.json")
-
-SCHEMA_VERSION = 1
 
 # Boundary between a lowercase/digit and an uppercase letter, or between an
 # acronym and the next word ("PvM" -> "pv_m" is avoided by the second branch).
@@ -35,7 +31,7 @@ def write_datafile(path, records):
     if not os.path.isabs(path):
         path = os.path.join(DATA_DIR, path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    envelope = {"schema_version": SCHEMA_VERSION, "records": records}
+    envelope = {"records": records}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(envelope, f, indent=2, ensure_ascii=False)
         f.write("\n")

@@ -1,155 +1,125 @@
 #!/usr/bin/env python3
-"""Extract pre-S3 skills + magic effects (spec sections 7 and 8).
+"""Extract the pre-S3 skill roster to data/skills.json (v2 schema).
 
-Outputs:
-  data/skills.json               spec section 7 records
-  data/magic_effects.json        spec section 8 records
-  data/_coverage/skills-effects.json
+v2 shape (locked by the R2 Rust serde types): each record is a flat Skill —
+number / name / source_version / attack_damage / damage_type / element? /
+inflicts? / range / shape (kind-tagged) / cost{mana,ability} /
+learn{level,energy,command} / classes (ClassSet list) / review?. Provenance
+(source_version + optional review) rides as top-level keys.
 
-Baseline: Version095d/SkillsInitializer.cs (35 skills; skills already present
-in Version075 are tagged "075", the five 095d additions "095d") plus the five
-095d magic-effect initializers and the on-demand elemental effects (Iced,
-Poisoned). Curated 1.0-era backports come from VersionSeasonSix (tagged "s6",
-each with a review line): SoulBarrier, IceStorm, Nova(+NovaStart), RagefulBlow,
-DeathStab, SwellLife, IceArrow, Penetration, FireSlash, PowerSlash, FireBurst,
-Earthshake, DL Summon, IncreaseCriticalDamage, InfinityArrow and their effects
-(SoulBarrier, SwellLife, CriticalDamageIncrease, InfiniteArrow, Freeze,
-DefenseReduction), plus the Generic Monster Skill (150) that 075/095d monster
-initializers reference but only the S6 skills initializer defines.
+Numbers are the authentic Skill.txt-era values, transcribed from the OpenMU
+initializers named below (identical to v1; only the emit shape changed):
 
-All values below are hand-transcribed from the initializers named above;
-durations are converted seconds -> integer milliseconds. Effect client numbers
-are the canonical MagicEffectNumber values (the 095d 'effect number := skill
-number' rewrite is a client-protocol concern, see coverage notes).
+  Version095d/SkillsInitializer.cs   -> 075 / 095d roster (skills already in
+                                        Version075 tagged "075", the five 095d
+                                        additions tagged "095d")
+  VersionSeasonSix/...SkillsInitializer -> curated 0.97/1.0 backports, tagged
+                                        "s6", each carrying a review line
+
+What v1's sim model is GONE in v2 (became Rust, not data):
+  * AreaSkillSettings (frustum/circle geometry, deferred_hits, per-tile and
+    between-hit delays, hits_per_target, hits_per_attack_range,
+    hit_chance_per_distance, projectile_count, effect_range) -> the closed
+    AreaPattern tag; per-pattern tile math + flagged geometry constants live
+    in services::area (W-SRC re-sources the invented values).
+  * SkillTarget / TargetRestriction / moves_to_target / moves_target ->
+    folded into SkillShape (buff variants carry their own targeting; Lunge
+    is the one variant for the five DK weapon skills' knock-forward fact).
+  * effect (EffectId) + magic_effects.json -> typed inflicts: Ailment on
+    hits and Buff carried inside the buff shape variants. magic_effects.json,
+    its record type, and every PowerUp/Aggregate/Operator/ScaledBy datum are
+    deleted; magnitudes/durations/slots became services constants in Rust.
+  * generic_monster_skill (number 150) -> deleted; a contentless placeholder
+    OpenMU invented to patch its own dangling attack_skill=150 refs. Monster
+    attacks are modeled natively in monsters_spawns (MonsterAttack::plain /
+    skill{skill}); the phantom referencers ship as plain with a review note.
+  * damage_scaling / skip_elemental_modifier / implicit_target_range /
+    hits_per_attack / the id slug -> gone (services rules or dead columns).
+
+Teleport (6) is corrected to damage_type "none" (the 075 initializer's
+wizardry tag was residue). Cometfall (13) resolves to an area skill despite
+095d tagging it a direct hit (it attaches area settings; the S6 dataset
+agrees). Nova is two records: Area{nova} (40) + NovaCharge (58).
 """
 
-import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import DATA_DIR, coverage, load_stat_map, write_datafile
+from common import coverage, write_datafile
 
-STAT_MAP = load_stat_map()
+# ---------------------------------------------------------------- shapes
 
-
-def st(openmu_name):
-    """OpenMU stat property name -> mu-core slug (fails loud on unknowns)."""
-    return STAT_MAP[openmu_name]
+def direct_hit():
+    return {"kind": "direct_hit"}
 
 
-# ---------------------------------------------------------------- power-ups
-
-def rel(stat, operand, operator="multiply"):
-    return {"stat": st(stat), "operator": operator, "operand": operand}
+def lunge():
+    return {"kind": "lunge"}
 
 
-def power_up(stat, value, aggregate="add_raw", scaled_by=None):
-    p = {"stat": st(stat), "value": value, "aggregate": aggregate}
-    if scaled_by:
-        p["scaled_by"] = scaled_by
-    return p
+def area(pattern):
+    return {"kind": "area", "pattern": pattern}
 
 
-def duration(seconds, scaled_by_ms=None, max_seconds=None):
-    """Effect duration; source seconds -> ms (scaling operands also in ms)."""
-    d = {"constant_ms": int(seconds * 1000)}
-    if scaled_by_ms:
-        d["scaled_by"] = scaled_by_ms
-    d["max_ms"] = int(max_seconds * 1000) if max_seconds is not None else None
-    return d
+def buff_self(buff):
+    return {"kind": "buff_self", "buff": buff}
 
 
-# ---------------------------------------------------------------- area shapes
-
-def frustum(start_width, end_width, distance):
-    return {"kind": "frustum", "start_width": start_width,
-            "end_width": end_width, "distance": distance}
+def buff_player(buff):
+    return {"kind": "buff_player", "buff": buff}
 
 
-def circle(diameter):
-    return {"kind": "circle", "diameter": diameter}
+def buff_party_member(buff):
+    return {"kind": "buff_party_member", "buff": buff}
 
 
-NO_GEOMETRY = {"kind": "none"}
+def buff_party(buff):
+    return {"kind": "buff_party", "buff": buff}
 
 
-def area(geometry=NO_GEOMETRY, deferred=False, per_tile_ms=0, between_ms=0,
-         per_target=(1, 1), per_attack=(0, 0), chance=1.0, projectiles=1,
-         effect_range=0):
-    """AreaSkillSettings with the initializer's default values filled in."""
-    return {
-        "geometry": geometry,
-        "deferred_hits": deferred,
-        "delay_per_tile_ms": per_tile_ms,
-        "delay_between_hits_ms": between_ms,
-        "hits_per_target": list(per_target),
-        "hits_per_attack_range": list(per_attack),
-        "hit_chance_per_distance": chance,
-        "projectile_count": projectiles,
-        "effect_range": effect_range,
-    }
-
-
-# ---------------------------------------------------------------- skills
-
-def skill(number, slug, name, source_version, behavior, classes,
-          damage=0, damage_type="none", target="explicit", restriction="none",
-          rng=0, implicit_range=0, hits=1, moves_to_target=False,
-          moves_target=False, element=None, skip_elemental=False, effect=None,
-          damage_scaling=None, level=0, leadership=0, energy=0,
-          mana=0, ability=0, review=None):
-    r = {"number": number, "id": slug, "name": name,
-         "source_version": source_version}
-    if review:
-        r["review"] = review
-    r.update({
-        "attack_damage": damage,
-        "damage_type": damage_type,
-        "behavior": behavior,
-        "target": target,
-        "target_restriction": restriction,
-        "range": rng,
-        "implicit_target_range": implicit_range,
-        "hits_per_attack": hits,
-        "moves_to_target": moves_to_target,
-        "moves_target": moves_target,
-        "element": element,
-        "skip_elemental_modifier": skip_elemental,
-        "effect": effect,
-    })
-    if damage_scaling:
-        r["damage_scaling"] = damage_scaling
-    reqs = []
-    if level:
-        reqs.append({"stat": st("Level"), "value": level})
-    if leadership:
-        reqs.append({"stat": st("TotalLeadership"), "value": leadership})
-    if energy:
-        reqs.append({"stat": st("TotalEnergy"), "value": energy})
-    consume = []
-    if mana:
-        consume.append({"stat": st("CurrentMana"), "value": mana})
-    if ability:
-        consume.append({"stat": st("CurrentAbility"), "value": ability})
-    r["requirements"] = reqs
-    r["consume"] = consume
-    r["classes"] = list(classes)
-    return r
-
-
-DIRECT = {"kind": "direct_hit"}
-BUFF = {"kind": "buff"}
-REGEN = {"kind": "regeneration"}
-OTHER = {"kind": "other"}
-
-
-def area_auto(a):
-    return {"kind": "area_automatic", "area": a}
+def heal():
+    return {"kind": "heal"}
 
 
 def summon(monster):
     return {"kind": "summon", "monster": monster}
+
+
+def teleport():
+    return {"kind": "teleport"}
+
+
+def nova_charge():
+    return {"kind": "nova_charge"}
+
+
+def recall_party():
+    return {"kind": "recall_party"}
+
+
+# ---------------------------------------------------------------- builder
+
+def skill(number, name, source_version, shape, classes,
+          attack_damage=0, damage_type="none", element=None, inflicts=None,
+          rng=0, mana=0, ability=0, level=0, energy=0, command=0, review=None):
+    r = {
+        "number": number,
+        "name": name,
+        "source_version": source_version,
+        "attack_damage": attack_damage,
+        "damage_type": damage_type,
+        "element": element,
+        "inflicts": inflicts,
+        "range": rng,
+        "shape": shape,
+        "cost": {"mana": mana, "ability": ability},
+        "learn": {"level": level, "energy": energy, "command": command},
+        "classes": list(classes),
+    }
+    if review:
+        r["review"] = review
+    return r
 
 
 DW_MG = ("dark_wizard", "magic_gladiator")
@@ -157,369 +127,274 @@ DK_MG = ("dark_knight", "magic_gladiator")
 ELF = ("fairy_elf",)
 
 SKILLS = [
-    # ------------- Version095d baseline (values from 095d/SkillsInitializer)
-    skill(1, "poison", "Poison", "075", DIRECT, DW_MG, damage=12,
-          damage_type="wizardry", rng=6, mana=42, energy=140,
-          element="poison", effect="poisoned"),
-    skill(2, "meteorite", "Meteorite", "075", DIRECT, DW_MG, damage=21,
-          damage_type="wizardry", rng=6, mana=12, energy=104, element="earth"),
-    skill(3, "lightning", "Lightning", "075", DIRECT, DW_MG, damage=17,
-          damage_type="wizardry", rng=6, mana=15, energy=72,
-          element="lightning"),
-    skill(4, "fire_ball", "Fire Ball", "075", DIRECT, DW_MG, damage=8,
-          damage_type="wizardry", rng=6, mana=3, energy=40, element="fire"),
-    skill(5, "flame", "Flame", "075",
-          area_auto(area(circle(2.0), deferred=True, between_ms=500,
-                         per_target=(0, 2), chance=0.5)),
-          DW_MG, damage=25, damage_type="wizardry", rng=6, mana=50,
-          energy=160, element="fire"),
-    skill(6, "teleport", "Teleport", "075", OTHER, ("dark_wizard",),
-          damage_type="wizardry", rng=6, mana=30, energy=88),
-    skill(7, "ice", "Ice", "075", DIRECT, DW_MG, damage=10,
-          damage_type="wizardry", rng=6, mana=38, energy=120,
-          element="ice", effect="iced"),
-    skill(8, "twister", "Twister", "075",
-          area_auto(area(frustum(1.5, 1.5, 4.0), deferred=True,
-                         per_tile_ms=300, between_ms=1000, per_target=(0, 2),
-                         chance=0.7)),
-          DW_MG, damage=35, damage_type="wizardry", rng=6, mana=60,
-          energy=180, element="wind"),
-    skill(9, "evil_spirit", "Evil Spirit", "075",
-          area_auto(area(deferred=True, per_tile_ms=100, between_ms=1000,
-                         per_target=(0, 2), chance=0.7)),
-          DW_MG, damage=45, damage_type="wizardry", rng=6, mana=90,
+    # ---------- Version095d baseline (075 / 095d values) ----------
+    skill(1, "Poison", "075", direct_hit(), DW_MG, attack_damage=12,
+          damage_type="wizardry", element="poison", inflicts="poisoned",
+          rng=6, mana=42, energy=140),
+    skill(2, "Meteorite", "075", direct_hit(), DW_MG, attack_damage=21,
+          damage_type="wizardry", element="earth", rng=6, mana=12,
+          energy=104),
+    skill(3, "Lightning", "075", direct_hit(), DW_MG, attack_damage=17,
+          damage_type="wizardry", element="lightning", rng=6, mana=15,
+          energy=72),
+    skill(4, "Fire Ball", "075", direct_hit(), DW_MG, attack_damage=8,
+          damage_type="wizardry", element="fire", rng=6, mana=3, energy=40),
+    skill(5, "Flame", "075", area("flame"), DW_MG, attack_damage=25,
+          damage_type="wizardry", element="fire", rng=6, mana=50,
+          energy=160),
+    skill(6, "Teleport", "075", teleport(), ("dark_wizard",),
+          rng=6, mana=30, energy=88),
+    skill(7, "Ice", "075", direct_hit(), DW_MG, attack_damage=10,
+          damage_type="wizardry", element="ice", inflicts="iced",
+          rng=6, mana=38, energy=120),
+    skill(8, "Twister", "075", area("twister"), DW_MG, attack_damage=35,
+          damage_type="wizardry", element="wind", rng=6, mana=60,
+          energy=180),
+    skill(9, "Evil Spirit", "075", area("evil_spirit"), DW_MG,
+          attack_damage=45, damage_type="wizardry", rng=6, mana=90,
           energy=220),
-    skill(10, "hellfire", "Hellfire", "075", area_auto(area()), DW_MG,
-          damage=120, damage_type="wizardry", mana=160, energy=260,
-          element="fire"),
-    skill(11, "power_wave", "Power Wave", "075", DIRECT, DW_MG, damage=14,
+    skill(10, "Hellfire", "075", area("hellfire"), DW_MG, attack_damage=120,
+          damage_type="wizardry", element="fire", mana=160, energy=260),
+    skill(11, "Power Wave", "075", direct_hit(), DW_MG, attack_damage=14,
           damage_type="wizardry", rng=6, mana=5, energy=56),
-    skill(12, "aqua_beam", "Aqua Beam", "075",
-          area_auto(area(frustum(1.5, 1.5, 8.0))), DW_MG, damage=80,
-          damage_type="wizardry", rng=6, mana=140, energy=345,
-          element="water"),
-    skill(13, "cometfall", "Cometfall", "095d",
-          area_auto(area(circle(2.0))), DW_MG, damage=70,
-          damage_type="wizardry", rng=3, mana=150, energy=436,
-          element="lightning",
+    skill(12, "Aqua Beam", "075", area("aqua_beam"), DW_MG, attack_damage=80,
+          damage_type="wizardry", element="water", rng=6, mana=140,
+          energy=345),
+    skill(13, "Cometfall", "095d", area("cometfall"), DW_MG,
+          attack_damage=70, damage_type="wizardry", element="lightning",
+          rng=3, mana=150, energy=436,
           review="095d source marks it a plain direct hit yet attaches "
-                 "target-area settings; encoded as area_automatic (AoE "
-                 "intent; the S6 dataset marks it an automatic-hits area "
-                 "skill)"),
-    skill(14, "inferno", "Inferno", "095d", area_auto(area()), DW_MG,
-          damage=100, damage_type="wizardry", mana=200, energy=578,
-          element="fire"),
-    skill(17, "energy_ball", "Energy Ball", "075", DIRECT, DW_MG, damage=3,
+                 "area-of-effect settings; encoded as an area skill (AoE "
+                 "intent; the S6 dataset also treats it as an area skill)"),
+    skill(14, "Inferno", "095d", area("inferno"), DW_MG, attack_damage=100,
+          damage_type="wizardry", element="fire", mana=200, energy=578),
+    skill(17, "Energy Ball", "075", direct_hit(), DW_MG, attack_damage=3,
           damage_type="wizardry", rng=6, mana=1),
-    skill(18, "defense", "Defense", "075", BUFF, DK_MG, restriction="self",
-          mana=30, effect="shield_defense"),
-    skill(19, "falling_slash", "Falling Slash", "075", DIRECT, DK_MG,
-          damage_type="physical", rng=3, mana=9, moves_to_target=True,
-          moves_target=True),
-    skill(20, "lunge", "Lunge", "075", DIRECT, DK_MG, damage_type="physical",
-          rng=2, mana=9, moves_to_target=True, moves_target=True),
-    skill(21, "uppercut", "Uppercut", "075", DIRECT, DK_MG,
-          damage_type="physical", rng=2, mana=8, moves_to_target=True,
-          moves_target=True),
-    skill(22, "cyclone", "Cyclone", "075", DIRECT, DK_MG,
-          damage_type="physical", rng=2, mana=9, moves_to_target=True,
-          moves_target=True),
-    skill(23, "slash", "Slash", "075", DIRECT, DK_MG, damage_type="physical",
-          rng=2, mana=10, moves_to_target=True, moves_target=True),
-    skill(24, "triple_shot", "Triple Shot", "075",
-          area_auto(area(frustum(1.0, 4.5, 7.0), deferred=True,
-                         per_tile_ms=50, per_target=(1, 3), per_attack=(0, 3),
-                         projectiles=3)),
-          ELF, damage_type="physical", rng=6, mana=5),
-    skill(26, "heal", "Heal", "075", REGEN, ELF, restriction="player", rng=6,
-          mana=20, energy=52, effect="heal"),
-    skill(27, "greater_defense", "Greater Defense", "075", BUFF, ELF,
-          restriction="player", rng=6, mana=30, energy=72,
-          effect="greater_defense"),
-    skill(28, "greater_damage", "Greater Damage", "075", BUFF, ELF,
-          restriction="player", rng=6, mana=40, energy=92,
-          effect="greater_damage"),
-    skill(30, "summon_goblin", "Summon Goblin", "075", summon(26), ELF,
-          mana=40, energy=90),
-    skill(31, "summon_stone_golem", "Summon Stone Golem", "075", summon(32),
-          ELF, mana=70, energy=170),
-    skill(32, "summon_assassin", "Summon Assassin", "075", summon(21), ELF,
-          mana=110, energy=190),
-    skill(33, "summon_elite_yeti", "Summon Elite Yeti", "075", summon(20),
-          ELF, mana=160, energy=230),
-    skill(34, "summon_dark_knight", "Summon Dark Knight", "075", summon(10),
-          ELF, mana=200, energy=250),
-    skill(35, "summon_bali", "Summon Bali", "075", summon(150), ELF,
-          mana=250, energy=260),
-    skill(41, "twisting_slash", "Twisting Slash", "095d", area_auto(area()),
-          DK_MG, damage_type="physical", rng=2, mana=10, element="wind"),
-    skill(47, "impale", "Impale", "095d", DIRECT, DK_MG, damage=15,
+    skill(18, "Defense", "075", buff_self("defense"), DK_MG, mana=30),
+    skill(19, "Falling Slash", "075", lunge(), DK_MG,
+          damage_type="physical", rng=3, mana=9),
+    skill(20, "Lunge", "075", lunge(), DK_MG,
+          damage_type="physical", rng=2, mana=9),
+    skill(21, "Uppercut", "075", lunge(), DK_MG,
+          damage_type="physical", rng=2, mana=8),
+    skill(22, "Cyclone", "075", lunge(), DK_MG,
+          damage_type="physical", rng=2, mana=9),
+    skill(23, "Slash", "075", lunge(), DK_MG,
+          damage_type="physical", rng=2, mana=10),
+    skill(24, "Triple Shot", "075", area("triple_shot"), ELF,
+          damage_type="physical", rng=6, mana=5),
+    skill(26, "Heal", "075", heal(), ELF, rng=6, mana=20, energy=52),
+    skill(27, "Greater Defense", "075", buff_player("greater_defense"), ELF,
+          rng=6, mana=30, energy=72),
+    skill(28, "Greater Damage", "075", buff_player("greater_damage"), ELF,
+          rng=6, mana=40, energy=92),
+    skill(30, "Summon Goblin", "075", summon(26), ELF, mana=40, energy=90),
+    skill(31, "Summon Stone Golem", "075", summon(32), ELF, mana=70,
+          energy=170),
+    skill(32, "Summon Assassin", "075", summon(21), ELF, mana=110,
+          energy=190),
+    skill(33, "Summon Elite Yeti", "075", summon(20), ELF, mana=160,
+          energy=230),
+    skill(34, "Summon Dark Knight", "075", summon(10), ELF, mana=200,
+          energy=250),
+    skill(35, "Summon Bali", "075", summon(150), ELF, mana=250, energy=260),
+    skill(41, "Twisting Slash", "095d", area("twisting_slash"), DK_MG,
+          damage_type="physical", element="wind", rng=2, mana=10),
+    skill(47, "Impale", "095d", direct_hit(), DK_MG, attack_damage=15,
           damage_type="physical", rng=3, mana=8, level=28),
-    skill(49, "fire_breath", "Fire Breath", "095d", DIRECT, DK_MG, damage=30,
+    skill(49, "Fire Breath", "095d", direct_hit(), DK_MG, attack_damage=30,
           damage_type="physical", rng=3, mana=9, level=110),
-    skill(50, "flame_of_evil_monster", "Flame of Evil (Monster)", "075",
-          DIRECT, (), damage=120, mana=160, level=60, energy=100),
+    skill(50, "Flame of Evil (Monster)", "075", direct_hit(), (),
+          attack_damage=120, mana=160, level=60, energy=100),
 
-    # ------------- curated 1.0-era backports (VersionSeasonSix values)
-    skill(16, "soul_barrier", "Soul Barrier", "s6", BUFF, ("soul_master",),
-          restriction="party", rng=6, mana=70, ability=22, energy=408,
-          effect="soul_barrier",
-          review="retail 0.97/1.0 Soul Master skill; absent from OpenMU "
-                 "075/095d datasets, values from the S6 initializer"),
-    skill(39, "ice_storm", "Ice Storm", "s6",
-          area_auto(area(circle(3.0), deferred=True)), ("soul_master",),
-          damage=80, damage_type="wizardry", rng=6, mana=100, ability=5,
-          energy=849, element="ice", effect="iced",
+    # ---------- curated 1.0-era backports (VersionSeasonSix values) --------
+    skill(16, "Soul Barrier", "s6", buff_party_member("soul_barrier"),
+          ("soul_master",), rng=6, mana=70, ability=22, energy=408,
+          review="retail 0.97/1.0 Soul Master skill; values from the S6 "
+                 "initializer; S6 allows casting on party members - retail "
+                 "may be self-only"),
+    skill(39, "Ice Storm", "s6", area("ice_storm"), ("soul_master",),
+          attack_damage=80, damage_type="wizardry", element="ice",
+          inflicts="iced", rng=6, mana=100, ability=5, energy=849,
           review="retail 1.0-era Soul Master AoE; absent from 075/095d, "
                  "values from S6"),
-    skill(40, "nova", "Nova", "s6", DIRECT, ("soul_master",),
-          damage_type="wizardry", rng=6, mana=15, level=100, energy=1052,
-          element="fire",
-          damage_scaling=[rel("TotalStrength", 0.5),
-                          rel("NovaStageDamage", 1.0)],
+    skill(40, "Nova", "s6", area("nova"), ("soul_master",),
+          damage_type="wizardry", element="fire", rng=6, mana=15, level=100,
+          energy=1052,
           review="retail 1.0 Soul Master skill; mana 15 = 180 per full "
-                 "12-stage charge; stage damage feeds nova_stage_damage"),
-    skill(58, "nova_start", "Nova (Start)", "s6", OTHER, ("soul_master",),
+                 "12-stage charge; per-stage bonus damage resolves in the "
+                 "Nova area routine"),
+    skill(58, "Nova (Start)", "s6", nova_charge(), ("soul_master",),
           ability=45, level=100, energy=1052,
           review="charge-phase companion of the Nova backport (skill 40); "
                  "not on the curated list but Nova is unusable without it"),
-    skill(42, "rageful_blow", "Rageful Blow", "s6", area_auto(area()),
-          ("blade_knight",), damage=60, damage_type="physical", rng=3,
-          mana=25, ability=20, level=170, element="earth",
+    skill(42, "Rageful Blow", "s6", area("rageful_blow"), ("blade_knight",),
+          attack_damage=60, damage_type="physical", element="earth",
+          rng=3, mana=25, ability=20, level=170,
           review="retail 0.97/1.0 Blade Knight skill; absent from 075/095d, "
                  "values from S6"),
-    skill(43, "death_stab", "Death Stab", "s6", DIRECT, ("blade_knight",),
-          damage=70, damage_type="physical",
-          target="explicit_with_implicit_in_range", implicit_range=1, rng=2,
-          mana=15, ability=12, level=160, element="wind",
+    skill(43, "Death Stab", "s6", area("death_stab"), ("blade_knight",),
+          attack_damage=70, damage_type="physical", element="wind",
+          rng=2, mana=15, ability=12, level=160,
           review="retail 0.97/1.0 Blade Knight skill; absent from 075/095d, "
                  "values from S6"),
-    skill(48, "swell_life", "Swell Life", "s6", BUFF,
-          ("dark_knight", "blade_knight"), target="implicit_party", mana=22,
-          ability=24, level=120, effect="swell_life",
+    skill(48, "Swell Life", "s6", buff_party("swell_life"),
+          ("dark_knight", "blade_knight"), mana=22, ability=24, level=120,
           review="retail 0.97/1.0 knight party buff (Greater Fortitude); "
                  "absent from 075/095d, values from S6"),
-    skill(51, "ice_arrow", "Ice Arrow", "s6", DIRECT, ("muse_elf",),
-          damage=105, damage_type="physical", rng=8, mana=10, ability=12,
-          element="ice", effect="freeze",
+    skill(51, "Ice Arrow", "s6", direct_hit(), ("muse_elf",),
+          attack_damage=105, damage_type="physical", element="ice",
+          inflicts="frozen", rng=8, mana=10, ability=12,
           review="retail 1.0 Muse Elf skill; absent from 075/095d, values "
                  "from S6; S6 skill_multiplier rebalance relationship not "
                  "extracted (see gaps)"),
-    skill(52, "penetration", "Penetration", "s6",
-          area_auto(area(frustum(1.1, 1.2, 8.0), deferred=True,
-                         per_tile_ms=50)),
-          ("fairy_elf", "muse_elf"), damage=70, damage_type="physical",
-          rng=6, mana=7, ability=9, level=130, element="wind",
+    skill(52, "Penetration", "s6", area("penetration"),
+          ("fairy_elf", "muse_elf"), attack_damage=70,
+          damage_type="physical", element="wind", rng=6, mana=7, ability=9,
+          level=130,
           review="retail 1.0 elf skill; absent from 075/095d, values from "
                  "S6; S6 skill_multiplier rebalance relationship not "
                  "extracted (see gaps)"),
-    skill(55, "fire_slash", "Fire Slash", "s6",
-          area_auto(area(frustum(1.5, 2.0, 2.0))), ("magic_gladiator",),
-          damage=80, damage_type="physical", rng=2, mana=15, ability=20,
-          element="fire", effect="defense_reduction",
+    skill(55, "Fire Slash", "s6", area("fire_slash"), ("magic_gladiator",),
+          attack_damage=80, damage_type="physical", element="fire",
+          inflicts="defense_reduction", rng=2, mana=15, ability=20,
           review="retail 1.0-era Magic Gladiator skill; absent from "
                  "075/095d, values from S6"),
-    skill(56, "power_slash", "Power Slash", "s6",
-          area_auto(area(frustum(1.0, 6.0, 6.0))), ("magic_gladiator",),
+    skill(56, "Power Slash", "s6", area("power_slash"), ("magic_gladiator",),
           damage_type="physical", rng=5, mana=15,
           review="retail 1.0-era Magic Gladiator skill; absent from "
                  "075/095d, values from S6"),
-    skill(61, "fire_burst", "Fire Burst", "s6", DIRECT, ("dark_lord",),
-          damage=100, damage_type="physical",
-          target="explicit_with_implicit_in_range", implicit_range=1, rng=6,
-          mana=25, energy=79,
+    skill(61, "Fire Burst", "s6", area("fire_burst"), ("dark_lord",),
+          attack_damage=100, damage_type="physical", rng=6, mana=25,
+          energy=79,
           review="Dark Lord backport (DL is 0.97/1.0 content, only in the "
                  "S6 dataset)"),
-    skill(62, "earthshake", "Earthshake", "s6",
-          area_auto(area(circle(10.0), per_attack=(9, 15))), ("dark_lord",),
-          damage=150, damage_type="physical", rng=10, ability=50,
-          element="lightning", skip_elemental=True,
-          damage_scaling=[rel("TotalStrength", 0.1),
-                          rel("TotalLeadership", 0.2)],
+    skill(62, "Earthshake", "s6", area("earthshake"), ("dark_lord",),
+          attack_damage=150, damage_type="physical", element="lightning",
+          rng=10, ability=50,
           review="Dark Lord backport; S6 horse_level*10 damage term dropped "
                  "(dark horse pet excluded pre-S3, see gaps)"),
-    skill(63, "summon", "Summon", "s6", OTHER, ("dark_lord",), mana=70,
-          ability=30, energy=153, leadership=400,
+    skill(63, "Summon", "s6", recall_party(), ("dark_lord",),
+          mana=70, ability=30, energy=153, command=400,
           review="Dark Lord backport; summons party members (not a monster "
                  "summon), party-summon behavior is a rules concern"),
-    skill(64, "increase_critical_damage", "Increase Critical Damage", "s6",
-          BUFF, ("dark_lord",), target="implicit_party", mana=50, ability=50,
-          energy=102, leadership=300, effect="critical_damage_increase",
+    skill(64, "Increase Critical Damage", "s6",
+          buff_party("critical_damage_increase"), ("dark_lord",),
+          mana=50, ability=50, energy=102, command=300,
           review="Dark Lord backport (DL is 0.97/1.0 content, only in the "
                  "S6 dataset)"),
-    skill(77, "infinity_arrow", "Infinity Arrow", "s6", BUFF, ("muse_elf",),
-          restriction="self", rng=6, mana=50, ability=10, level=220,
-          effect="infinite_arrow",
+    skill(77, "Infinity Arrow", "s6", buff_self("infinite_arrow"),
+          ("muse_elf",), rng=6, mana=50, ability=10, level=220,
           review="retail 1.0 Muse Elf buff; absent from 075/095d, values "
                  "from S6"),
-    skill(150, "generic_monster_skill", "Generic Monster Skill", "s6", OTHER,
-          (), rng=5,
-          review="monster-only attack skill: 075/095d monster initializers "
-                 "(Death Gorgon/Balrog/Hydra and 095d bosses) set "
-                 "attack_skill 150, but only the S6 skills initializer "
-                 "defines it - upstream 075/095d lookup silently resolves "
-                 "to null (latent omission); backported so those "
-                 "attack_skill references resolve"),
-]
-
-# ---------------------------------------------------------------- effects
-
-def effect(slug, number, source_version, sub_type, stop_by_death, power_ups,
-           dur=None, review=None):
-    r = {"id": slug, "number": number, "source_version": source_version}
-    if review:
-        r["review"] = review
-    r["sub_type"] = sub_type
-    r["stop_by_death"] = stop_by_death
-    if dur:
-        r["duration"] = dur
-    r["power_ups"] = power_ups
-    return r
-
-
-ENERGY_MS = lambda seconds_per_point: [  # noqa: E731 - tiny local shorthand
-    rel("TotalEnergy", seconds_per_point * 1000.0)]
-
-MAGIC_EFFECTS = [
-    # ------------- 075/095d initializers
-    effect("heal", -2, "075", 0, False,
-           [power_up("CurrentHealth", 5.0,
-                     scaled_by=[rel("TotalEnergy", 1 / 5)])]),
-    effect("greater_damage", 1, "075", 0, True,
-           [power_up("GreaterDamageBonus", 3.0,
-                     scaled_by=[rel("TotalEnergy", 1 / 7)])],
-           dur=duration(60)),
-    effect("greater_defense", 2, "075", 0, True,
-           [power_up("DefenseFinal", 2.0, aggregate="add_final",
-                     scaled_by=[rel("TotalEnergy", 1 / 8)])],
-           dur=duration(60)),
-    effect("poisoned", 55, "075", 253, True,
-           [power_up("IsPoisoned", 1.0)], dur=duration(20)),
-    effect("iced", 56, "075", 254, True,
-           [power_up("IsIced", 1.0),
-            power_up("MovementSpeedFactor", 0.5, aggregate="multiplicate")],
-           dur=duration(10)),
-    effect("shield_defense", 200, "075", 0, True,
-           [power_up("DamageReceiveDecrement", 0.5,
-                     aggregate="multiplicate")],
-           dur=duration(4)),
-    effect("alcohol", 201, "075", 54, False,
-           [power_up("AttackSpeedAny", 20.0)], dur=duration(80)),
-
-    # ------------- 1.0-era backports (S6 initializers)
-    effect("soul_barrier", 4, "s6", 0, True,
-           [power_up("SoulBarrierReceiveDecrement", 0.1,
-                     scaled_by=[rel("TotalEnergy", 1 / 20000),
-                                rel("TotalAgility", 1 / 5000)]),
-            power_up("SoulBarrierManaTollPerHit", 0.0,
-                     scaled_by=[rel("MaximumMana", 0.02)])],
-           dur=duration(60, scaled_by_ms=ENERGY_MS(1 / 40)),
-           review="effect of the soul_barrier skill backport (retail "
-                  "0.97/1.0); S6 initializer values"),
-    effect("critical_damage_increase", 5, "s6", 17, True,
-           [power_up("CriticalDamageBonus", 0.0,
-                     scaled_by=[rel("TotalEnergy", 1 / 30),
-                                rel("TotalLeadership", 1 / 25)])],
-           dur=duration(60, scaled_by_ms=ENERGY_MS(1 / 10), max_seconds=180),
-           review="effect of the Dark Lord increase_critical_damage "
-                  "backport; S6 initializer values"),
-    effect("infinite_arrow", 6, "s6", 0, True,
-           [power_up("AmmunitionConsumptionRate", 0.0,
-                     aggregate="multiplicate")],
-           dur=duration(600),
-           review="effect of the infinity_arrow backport (retail 1.0); S6 "
-                  "zero-value master-skill placeholder power-up dropped "
-                  "(see gaps)"),
-    effect("swell_life", 8, "s6", 0, True,
-           [power_up("MaximumHealth", 1.12, aggregate="multiplicate",
-                     scaled_by=[rel("TotalEnergy", 1.0005,
-                                    operator="exponentiate_by_attribute"),
-                                rel("TotalVitality", 1.0001,
-                                    operator="exponentiate_by_attribute")])],
-           dur=duration(60, scaled_by_ms=ENERGY_MS(1 / 5)),
-           review="effect of the swell_life backport (retail 0.97/1.0 "
-                  "Greater Fortitude); S6 initializer values"),
-    effect("freeze", 57, "s6", 254, True,
-           [power_up("IsFrozen", 1.0)], dur=duration(5),
-           review="created on demand by the ice_arrow backport (retail "
-                  "1.0); shares sub_type 254 with iced, so freeze replaces "
-                  "iced (source behavior)"),
-    effect("defense_reduction", 58, "s6", 0, True,
-           [power_up("DefenseDecrement", 0.9, aggregate="multiplicate")],
-           dur=duration(10),
-           review="effect of the fire_slash backport (retail 1.0-era); S6 "
-                  "initializer values"),
 ]
 
 GAPS = [
-    "blade_knight skill combo: the combo definition (3000 ms completion "
-    "window; step 1 slash/cyclone/lunge/falling_slash/uppercut, step 2 "
-    "twisting_slash/rageful_blow/death_stab/+S2 strike_of_destruction, "
-    "final twisting_slash/rageful_blow/death_stab) is attached to the "
-    "character class in the source and has no slot in spec sections 7/8 - "
-    "class concern, not extracted",
-    "earthshake damage_scaling: the S6 horse_level*10 term is dropped - "
-    "dark horse trainable pet is excluded pre-S3 and horse_level is not in "
-    "stats.json",
-    "infinite_arrow: S6 zero-value placeholder power-up on "
-    "attack_damage_increase (reserved for the S4 master skill) dropped",
-    "ice_arrow/penetration: S6 per-skill final-damage relationships (2.0 x "
-    "skill_multiplier) not extracted - S6 damage-rebalance data, not pre-S3",
-    "dl summon (skill 63): summons party members; encoded as behavior kind "
-    "'other', the party-summon behavior itself is a rules concern",
+    "blade_knight skill combo: the combo definition (completion window; step "
+    "1 slash/cyclone/lunge/falling_slash/uppercut, step 2 twisting_slash/"
+    "rageful_blow/death_stab, final twisting_slash/rageful_blow/death_stab) "
+    "is attached to the character class in the source and is a class/rules "
+    "concern, not a skill record - not extracted",
+    "earthshake bonus damage: the S6 horse_level*10 term is dropped - the "
+    "dark-horse trainable pet is excluded pre-S3; the strength/10 + "
+    "command/5 terms live in services::skill_damage",
+    "ice_arrow / penetration: the S6 per-skill final-damage rebalance "
+    "(2.0 x skill_multiplier) is S6 damage-tuning, not a pre-S3 fact - not "
+    "extracted",
+    "dl summon (skill 63): summons party members; encoded as shape "
+    "recall_party, the party-recall execution itself is a services/rules "
+    "concern (W-CMB)",
     "evolved-class qualification: 075/095d records keep the literal 095d "
-    "class masks (base classes); whether soul_master/blade_knight/muse_elf "
-    "inherit base-class skills is a class/rules concern. s6 backports carry "
-    "second-class slugs from the S6 masks filtered to pre-S3 classes",
-    "the 095d dataset rewrites buff-effect client numbers to the owning "
-    "skill number (client-protocol convention); canonical effect numbers "
-    "kept per spec section 8 example",
+    "base-class masks; whether soul_master/blade_knight/muse_elf inherit "
+    "base-class skills is a class/rules concern. s6 backports carry the S6 "
+    "masks filtered to pre-S3 classes",
+    "nova per-stage damage, and the Hellfire/Inferno/Nova caster-centered "
+    "radii, are OpenMU engine-default resolved values with no authentic "
+    "source - named open review items in services::area/skill_damage "
+    "(W-SRC), no number invented into the data",
 ]
 
 NOTES = [
-    "records tagged 075 carry 095d values per the approved 095d baseline; "
-    "differing 075 values: evil_spirit range 7 (095d: 6), triple_shot was "
-    "area-explicit-hits without settings (095d: 3-projectile frustum), "
-    "summon energy requirements were 30/60/90/130/170/210 (095d: "
-    "90/170/190/230/250/260), MG absent from all class masks",
-    "summon skills 30-35 reference monster numbers 26/32/21/20/10/150; "
-    "Bali #150 is created by the 095d skills initializer but the monster "
-    "record is owned by the monsters extractor (dependency)",
-    "effect durations and delays converted seconds -> integer milliseconds; "
-    "duration scaled_by operands are ms per stat point",
-    "no cooldown field (approved decision 8); no AG costs exist in the "
-    "095d baseline - ability consumption appears only on s6 backports",
-    "generic_monster_skill (150) is a monster-only skill with no classes; "
-    "referenced by monster attack_skill in 075/095d map initializers but "
-    "defined only by the S6 skills initializer, hence source_version s6",
+    "records tagged 075 carry the approved 095d baseline values; 075/095d "
+    "deltas (evil_spirit range, triple_shot projectile fan, summon energy "
+    "requirements, MG class masks) are the same facts v1 recorded, now "
+    "emitted only as range/element/damage/cost/learn columns",
+    "magic_effects.json is deleted - the closed pre-S3 effect roster became "
+    "the Buff and Ailment Rust enums; every effect magnitude, duration, "
+    "stacking slot, and tick rule became a bespoke services constant/function",
+    "buff skills carry their Buff inside the shape variant (buff_self / "
+    "buff_player / buff_party_member / buff_party); ailment-inflicting hits "
+    "carry inflicts: Ailment (1->poisoned, 7->iced, 39->iced, 51->frozen, "
+    "55->defense_reduction). heal is instantaneous - no effect identity",
+    "generic_monster_skill (150) is dropped: it was OpenMU's placeholder for "
+    "its own dangling monster attack_skill=150 refs; monsters_spawns models "
+    "monster attacks natively and the phantom referencers ship as plain",
+    "AreaSkillSettings sim-knobs (geometry, deferred_hits, per-tile / "
+    "between-hit delays, hit_chance_per_distance, projectile_count, "
+    "effect_range, hits_per_* budgets) are dropped from the data: the closed "
+    "AreaPattern tag carries the authentic 'this is an area skill of family "
+    "X' fact, and per-pattern tile math + flagged geometry constants live in "
+    "services::area (invented values re-sourced under W-SRC)",
+    "teleport (6) damage_type corrected to none (075 wizardry tag was "
+    "residue); cometfall (13) resolves to area despite the 095d direct-hit "
+    "tag; nova is two records - area{nova} (40) plus nova_charge (58)",
+    "classes serialize as the ClassSet list; skill 50 (Flame of Evil) has an "
+    "all-false / empty class set - authentic monster-learnable-by-none fact",
+    "s6 leadership learn requirements are renamed to the authentic Command "
+    "stat: skill 63 command 400, skill 64 command 300 (v1 'leadership' dead)",
 ]
 
+# ---------------------------------------------------------------- validation
 
-def check(skills, effects):
-    """Cross-checks before writing; throwaway but loud."""
-    stat_ids = {r["id"] for r in json.load(
-        open(os.path.join(DATA_DIR, "stats.json")))["records"]}
-    effect_ids = {e["id"] for e in effects}
-    assert len({s["number"] for s in skills}) == len(skills), "dup skill number"
-    assert len({s["id"] for s in skills}) == len(skills), "dup skill id"
-    assert len({e["id"] for e in effects}) == len(effects), "dup effect id"
+CLASSES = {"dark_wizard", "dark_knight", "fairy_elf", "magic_gladiator",
+           "dark_lord", "soul_master", "blade_knight", "muse_elf"}
+ELEMENTS = {"ice", "poison", "lightning", "fire", "earth", "wind", "water"}
+AILMENTS = {"poisoned", "iced", "frozen", "defense_reduction"}
+BUFFS = {"defense", "greater_damage", "greater_defense", "soul_barrier",
+         "swell_life", "critical_damage_increase", "infinite_arrow",
+         "alcohol"}
+DAMAGE_TYPES = {"none", "physical", "wizardry"}
+AREA_PATTERNS = {"flame", "twister", "evil_spirit", "hellfire", "aqua_beam",
+                 "cometfall", "inferno", "triple_shot", "ice_storm", "nova",
+                 "twisting_slash", "rageful_blow", "death_stab",
+                 "penetration", "fire_slash", "power_slash", "fire_burst",
+                 "earthshake"}
+BUFF_KINDS = {"buff_self", "buff_player", "buff_party_member", "buff_party"}
+SHAPE_KINDS = ({"direct_hit", "lunge", "area", "heal", "summon", "teleport",
+                "nova_charge", "recall_party"} | BUFF_KINDS)
+U16 = 0xFFFF
+
+
+def check(skills):
+    """Loud cross-checks before writing; throwaway."""
+    numbers = [s["number"] for s in skills]
+    assert len(set(numbers)) == len(numbers), "duplicate skill number"
+    assert 150 not in numbers, "generic_monster_skill (150) must be dropped"
     for s in skills:
-        assert s["source_version"] in ("075", "095d", "s6"), s["id"]
-        assert s["source_version"] != "s6" or s.get("review"), s["id"]
-        if s["effect"] is not None:
-            assert s["effect"] in effect_ids, (s["id"], s["effect"])
-        for req in s["requirements"] + s["consume"]:
-            assert req["stat"] in stat_ids, (s["id"], req["stat"])
-        for ds in s.get("damage_scaling", ()):
-            assert ds["stat"] in stat_ids, (s["id"], ds["stat"])
-    for e in effects:
-        assert e["source_version"] != "s6" or e.get("review"), e["id"]
-        for p in e["power_ups"]:
-            assert p["stat"] in stat_ids, (e["id"], p["stat"])
-            for sb in p.get("scaled_by", ()):
-                assert sb["stat"] in stat_ids, (e["id"], sb["stat"])
-        for sb in e.get("duration", {}).get("scaled_by", ()):
-            assert sb["stat"] in stat_ids, (e["id"], sb["stat"])
+        sid = s["number"]
+        assert s["source_version"] in ("075", "095d", "s6"), sid
+        assert s["source_version"] != "s6" or s.get("review"), sid
+        assert s["damage_type"] in DAMAGE_TYPES, sid
+        assert s["element"] is None or s["element"] in ELEMENTS, sid
+        assert s["inflicts"] is None or s["inflicts"] in AILMENTS, sid
+        assert 0 <= s["attack_damage"] <= U16, sid
+        assert 0 <= s["range"] <= 255, sid
+        for field in ("mana", "ability"):
+            assert 0 <= s["cost"][field] <= U16, (sid, field)
+        for field in ("level", "energy", "command"):
+            assert 0 <= s["learn"][field] <= U16, (sid, field)
+        for cls in s["classes"]:
+            assert cls in CLASSES, (sid, cls)
+        assert len(set(s["classes"])) == len(s["classes"]), sid
+        shape = s["shape"]
+        kind = shape["kind"]
+        assert kind in SHAPE_KINDS, (sid, kind)
+        if kind == "area":
+            assert shape["pattern"] in AREA_PATTERNS, (sid, shape["pattern"])
+        elif kind in BUFF_KINDS:
+            assert shape["buff"] in BUFFS, (sid, shape["buff"])
+        elif kind == "summon":
+            assert isinstance(shape["monster"], int) and shape["monster"] > 0, sid
 
 
 def by_version(records):
@@ -531,27 +406,21 @@ def by_version(records):
 
 def main():
     skills = sorted(SKILLS, key=lambda s: s["number"])
-    effects = sorted(MAGIC_EFFECTS, key=lambda e: e["number"])
-    check(skills, effects)
+    check(skills)
 
     write_datafile("skills.json", skills)
-    write_datafile("magic_effects.json", effects)
 
-    reviews = {f"skills/{r['id']}": r["review"]
+    reviews = {f"skills/{r['number']}": r["review"]
                for r in skills if "review" in r}
-    reviews.update({f"magic_effects/{r['id']}": r["review"]
-                    for r in effects if "review" in r})
     coverage("skills-effects", {
         "skills": {"records": len(skills),
                    "by_source_version": by_version(skills)},
-        "magic_effects": {"records": len(effects),
-                          "by_source_version": by_version(effects)},
         "review_count": len(reviews),
         "reviews": reviews,
         "gaps": GAPS,
         "notes": NOTES,
     })
-    print(f"skills: {len(skills)}  magic_effects: {len(effects)}  "
+    print(f"skills: {len(skills)}  by_source_version: {by_version(skills)}  "
           f"reviews: {len(reviews)}")
 
 

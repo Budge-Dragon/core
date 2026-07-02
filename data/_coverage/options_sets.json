@@ -1,61 +1,209 @@
 {
-  "files": {
-    "item_options.json": {
-      "records": 24,
-      "by_source_version": {
-        "075": 9,
-        "s6": 11,
-        "095d": 4
-      },
-      "ids": [
-        "luck",
-        "defense",
-        "physical_attack",
-        "wizardry_attack",
-        "defense_rate",
-        "health_recover_for_jewelery",
-        "jewelery_option_maximum_mana",
-        "jewelery_option_maximum_ability",
-        "wings_of_elf_options",
-        "wings_of_heaven_options",
-        "wings_of_satan_options",
-        "2nd_wing_options",
-        "wings_of_spirits_options",
-        "wings_of_soul_options",
-        "wings_of_dragon_options",
-        "wings_of_darkness_options",
-        "excellent_defense",
-        "excellent_physical",
-        "excellent_wizardry",
-        "dinorant_options",
-        "ancient_bonus_total_vitality",
-        "ancient_bonus_total_strength",
-        "ancient_bonus_total_agility",
-        "ancient_bonus_total_energy"
-      ]
-    },
-    "item_sets.json": {
-      "records": 81,
-      "by_source_version": {
-        "075": 45,
-        "s6": 36
-      }
-    }
+  "category": "options_sets",
+  "file": "data/ancient_sets.json",
+  "counts": {
+    "075": 0,
+    "095d": 0,
+    "s6": 36,
+    "total": 36
   },
-  "review_flagged": 47,
-  "notes": [
-    "BuildSets contradiction resolved: Version075/Items/Armors.cs:137 AND Version095d/Items/Armors.cs:137 both call BuildSets(); generic armor sets (15 families x [defense-rate + set-level 10/11 defense]) are 075 data. The fact-file claim that 075 has only a TODO is stale.",
-    "Kantata data bug fixed (10.0 -> 0.10 excellent_damage_chance): kantata_plate option 6",
-    "ancient piece existence checked against: item_definitions.json",
-    "normal/wing/dinorant option entries keep source option numbers (0 for first wings, 4 for dinorant, bit codes 0/2 for 2nd-wing jewel-of-life groups); excellent, ancient and shared 2nd-wing options are numbered 1..n.",
-    "generic armor sets carry set number 0 (source has no client-facing number for them; 1..36 are the ancient sets); non-random option definitions carry add_chance 0.0, matching source AddChance = 0."
+  "review": [
+    {
+      "set_number": 1,
+      "name": "Warrior Leather",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 2,
+      "name": "Anonymous Leather",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 3,
+      "name": "Hyperion Bronze",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 4,
+      "name": "Mist Bronze",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 5,
+      "name": "Eplete Scale",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 6,
+      "name": "Berserker Scale",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 7,
+      "name": "Garuda Brass",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 8,
+      "name": "Cloud Brass",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 9,
+      "name": "Kantata Plate",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file; fixed OpenMU data bug: excellent damage chance 10.0 -> 0.10 (percent 10)"
+    },
+    {
+      "set_number": 10,
+      "name": "Rave Plate",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 11,
+      "name": "Hyon Dragon",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 12,
+      "name": "Vicious Dragon",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 13,
+      "name": "Apollo Pad",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 14,
+      "name": "Barnake Pad",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 15,
+      "name": "Evis Bone",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 16,
+      "name": "Sylion Bone",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 17,
+      "name": "Heras Sphinx",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 18,
+      "name": "Minet Sphinx",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 19,
+      "name": "Anubis Legendary",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 20,
+      "name": "Enis Legendary",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 21,
+      "name": "Ceto Vine",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 22,
+      "name": "Drake Vine",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 23,
+      "name": "Gaia Silk",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 24,
+      "name": "Fase Silk",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 25,
+      "name": "Odin Wind",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 26,
+      "name": "Elvian Wind",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 27,
+      "name": "Argo Spirit",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 28,
+      "name": "Karis Spirit",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 29,
+      "name": "Gywen Guardian",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 30,
+      "name": "Aruan Guardian",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 31,
+      "name": "Gaion Storm Crow",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 32,
+      "name": "Muren Storm Crow",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 33,
+      "name": "Agnis Adamantine",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 34,
+      "name": "Broy Adamantine",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 35,
+      "name": "Chrono Red Wing",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    },
+    {
+      "set_number": 36,
+      "name": "Semeden Red Wing",
+      "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file"
+    }
   ],
   "gaps": [
-    "wing option groups for excluded wing items stay unextracted: Wings of Curse 12/41 + Wings of Despair 12/42 (summoner), Cape of Fighter 12/49 (rage fighter), Cape of Lord 13/30 options incl. leadership entry (dark-lord item wave), all 3rd-wing options (post-S3)",
-    "S6-only normal options phys+wiz combined (0x07, MG magic swords) and curse attack (0x05, Summoner): excluded, no pre-S3 items reference them",
-    "excellent curse options: disabled in OpenMU until S14, excluded per spec",
-    "harmony/guardian/socket option groups: post-S3, excluded per spec",
-    "Fenrir/Dark Horse option types + combination bonuses: S6 dataset only, excluded (Dinorant options extracted from 095d)",
-    "ancient-set pieces that were post-095d items (storm crow/adamantine/red wing armor 15/26/40, jewelry 13/21-28) are backported into item_definitions.json (s6, items.py) so the piece references resolve; any piece still missing from the baseline gets named in its set's review flag rather than dropped"
+    "item_options.json deleted: every option family (normal/luck/excellent/dinorant/2nd-wing/jewelry-accessory/ancient-per-piece) is a closed Rust enum in core/src/components/item_options.rs with magnitudes as services constants; no option data file remains",
+    "45 generic armor-set records deleted: the OpenMU-invented x1.1/x1.05 BuildSets values become the FULL_ARMOR_SET_* rule constants in core/src/services/item_sets.rs (review-flagged there)",
+    "option roll policy (luck/option 0.25, extra-excellent 0.001, dinorant 0.3, 2nd-wing 0.1, max 2 excellent, max option level 3) moves to game_config's option_roll section (constants-exp extractor)",
+    "per-piece +5/+10 ancient bonus tier + roll live in Rust (AncientBonusLevel + ancient_piece_bonus + roll_ancient_bonus_level); the piece here carries only its bonus_stat"
+  ],
+  "notes": [
+    "each set option resolves to the stats-owned CombatBonus inline (kind-tagged snake_case); no stat slug, PowerUp, Aggregate, or Operator vocabulary is emitted",
+    "percent encodings: AddRaw chance fractions x100 (0.05->5, 0.15->15, 0.20->20, 0.25->25, 0.30->30); Multiplicate wizardry factors as 1+pct/100 (1.05->5, 1.10->10, 1.15->15); both land in Percent 0..=100",
+    "amount encodings: bare integers, preserved verbatim (defense uses AddFinal in source but is still a flat amount)",
+    "DefenseIncreaseWithEquippedShield -> ConditionalSetBonus defense_with_shield_pct (Anonymous 25, Heras/Ceto 5); its kind namespace is disjoint from CombatBonus so the untagged split parses",
+    "TotalLeadership (Broy set 34) -> CombatBonus command amount 30",
+    "Kantata (set 9) data bug fixed: ExcellentDamageChance 10.0 -> 0.10 (excellent_chance_pct percent 10); review note carried on the record",
+    "name = OpenMU set name + armor-family comment (\"Warrior\" + \"Leather\" = \"Warrior Leather\"); display/debug only, never a key",
+    "discriminator is the client's 1|2 ancient-set selector (AncientDiscriminator); Gywen's Pendant of Ability (28, Misc1) is the one piece with no per-piece bonus (bonus_stat omitted)",
+    "piece ItemRefs are the sets' only cross-file references; Atlas proves each resolves to an item_definitions.json record at load"
   ]
 }

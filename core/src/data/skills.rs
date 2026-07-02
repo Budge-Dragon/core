@@ -1,62 +1,49 @@
-//! Record shape of `skills.json` — active, passive, and buff skills.
+//! Record shape of `skills.json` — the pre-S3 skill roster.
 
 use serde::{Deserialize, Serialize};
 
-use super::common::{
-    ClassId, EffectId, MonsterNumber, ScaledBy, SkillNumber, SourceVersion, StatRequirement,
-};
+use crate::components::class::ClassSet;
+use crate::components::element::Element;
+
+use super::common::{MonsterNumber, Provenance, SkillNumber};
+use super::effects::{Ailment, Buff};
 
 /// One skill definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Skill {
-    /// Skill number as the client knows it.
+    /// Skill number as the client knows it (Skill.txt index).
     pub number: SkillNumber,
-    /// The skill's slug.
-    pub id: String,
     /// Display name.
     pub name: String,
-    /// Dataset era the record was extracted from.
-    pub source_version: SourceVersion,
-    /// Flat damage added by the skill.
+    /// Extraction provenance: dataset era plus optional curation note.
+    #[serde(flatten)]
+    pub provenance: Provenance,
+    /// Base skill damage (Skill.txt Damage column); 0 for weapon-carried and
+    /// non-damage skills.
     pub attack_damage: u16,
     /// Which damage calculation the skill uses.
     pub damage_type: DamageType,
-    /// How the skill executes, kind-tagged.
-    pub behavior: SkillBehavior,
-    /// How targets are selected.
-    pub target: SkillTarget,
-    /// Who may be targeted.
-    pub target_restriction: TargetRestriction,
-    /// Maximum cast distance in tiles.
-    pub range: u8,
-    /// Radius around the target for implicit target selection.
-    pub implicit_target_range: u8,
-    /// Hits dealt per attack.
-    pub hits_per_attack: u8,
-    /// Whether the attacker walks into range first.
-    pub moves_to_target: bool,
-    /// Whether the target is knocked back.
-    pub moves_target: bool,
     /// Elemental affinity; absent = non-elemental.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub element: Option<Element>,
-    /// Whether the elemental damage modifier is skipped.
-    pub skip_elemental_modifier: bool,
-    /// Magic effect the skill applies; absent = none.
-    pub effect: Option<EffectId>,
-    /// Minimum stats required to learn/cast.
-    pub requirements: Vec<StatRequirement>,
+    /// Status ailment a successful hit may inflict, gated by the target's
+    /// elemental resistance; absent = the hit inflicts nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inflicts: Option<Ailment>,
+    /// Maximum cast distance in tiles; 0 = caster-centered / self.
+    pub range: u8,
+    /// What the skill does, kind-tagged.
+    pub shape: SkillShape,
     /// Resources consumed per cast.
-    pub consume: Vec<StatRequirement>,
-    /// Classes able to learn the skill.
-    pub classes: Vec<ClassId>,
-    /// Per-skill damage scaling terms; empty = none.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub damage_scaling: Vec<ScaledBy>,
-    /// Era-doubt note for curated backports; absent = uncontested.
-    pub review: Option<String>,
+    pub cost: CastCost,
+    /// Minimum stats required to learn the skill.
+    pub learn: LearnRequirement,
+    /// Classes able to learn the skill — total per-class set, serialized as a
+    /// list of class names; all-false = monster-only.
+    pub classes: ClassSet,
 }
 
-/// Which damage calculation a skill uses.
+/// Which damage calculation a skill uses (Skill.txt damage-type fact).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DamageType {
@@ -68,139 +55,117 @@ pub enum DamageType {
     Wizardry,
 }
 
-/// How a skill executes, kind-tagged.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Resources consumed per cast (Skill.txt Mana and BP/AG columns).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CastCost {
+    /// Mana consumed; 0 = none.
+    pub mana: u16,
+    /// Ability (AG) consumed; 0 = none.
+    pub ability: u16,
+}
+
+/// Minimum stats required to learn a skill (Skill.txt `ReqLevel` /
+/// `ReqEnergy` / `ReqCharisma` columns; `ReqCharisma` is the Command stat).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LearnRequirement {
+    /// Minimum character level; 0 = none.
+    pub level: u16,
+    /// Minimum energy; 0 = none.
+    pub energy: u16,
+    /// Minimum command; 0 = none.
+    pub command: u16,
+}
+
+/// What a skill does, kind-tagged. One variant per behavior family the game
+/// exhibits; per-variant execution lives in `services`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum SkillBehavior {
-    /// Single direct hit on the target.
+pub enum SkillShape {
+    /// Single hit on the chosen target.
     DirectHit,
-    /// Area attack resolved automatically around the caster.
-    AreaAutomatic {
-        /// Area resolution parameters.
-        area: SkillArea,
+    /// Direct hit where the attacker lunges to the target and the victim is
+    /// knocked to a nearby tile (DK weapon skills).
+    Lunge,
+    /// Multi-target attack resolved by a named per-skill routine.
+    Area {
+        /// Which bespoke area routine in `services` resolves the hits.
+        pattern: AreaPattern,
     },
-    /// Area attack aimed at an explicit location.
-    AreaExplicit {
-        /// Area resolution parameters.
-        area: SkillArea,
+    /// Buff the caster applies to themself.
+    BuffSelf {
+        /// The applied buff.
+        buff: Buff,
     },
-    /// Area attack aimed at an explicit target.
-    AreaExplicitTarget {
-        /// Area resolution parameters.
-        area: SkillArea,
+    /// Buff cast on any player, including the caster.
+    BuffPlayer {
+        /// The applied buff.
+        buff: Buff,
     },
-    /// Applies a buff effect.
-    Buff,
-    /// Restores a resource.
-    Regeneration,
-    /// Always-on passive.
-    Passive,
-    /// Summons a monster.
+    /// Buff cast on one party member.
+    BuffPartyMember {
+        /// The applied buff.
+        buff: Buff,
+    },
+    /// Buff applied to every party member in view range.
+    BuffParty {
+        /// The applied buff.
+        buff: Buff,
+    },
+    /// Restores a player target's health.
+    Heal,
+    /// Summons a monster that fights for the caster.
     Summon {
         /// The summoned monster.
         monster: MonsterNumber,
     },
-    /// Special-cased behavior (e.g. Teleport).
-    Other,
+    /// Relocates the caster to a chosen walkable tile.
+    Teleport,
+    /// Begins charging Nova; the release is the Nova skill record.
+    NovaCharge,
+    /// Teleports the caster's party members to the caster (Dark Lord Summon).
+    RecallParty,
 }
 
-/// Area-attack resolution parameters.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SkillArea {
-    /// Shape of the affected area, kind-tagged.
-    pub geometry: AreaGeometry,
-    /// Whether hits land later instead of instantly.
-    pub deferred_hits: bool,
-    /// Hit delay per tile of distance.
-    pub delay_per_tile_ms: u32,
-    /// Delay between consecutive hits.
-    pub delay_between_hits_ms: u32,
-    /// Inclusive `[min, max]` hits each target receives.
-    pub hits_per_target: [u8; 2],
-    /// Inclusive `[min, max]` total hits per attack.
-    pub hits_per_attack_range: [u8; 2],
-    /// Hit probability per tile of distance, `0.0..=1.0`.
-    pub hit_chance_per_distance: f64,
-    /// Projectiles spawned per attack.
-    pub projectile_count: u8,
-    /// Radius around each hit location.
-    pub effect_range: u8,
-}
-
-/// Shape of an area attack, kind-tagged.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum AreaGeometry {
-    /// A widening corridor in the aimed direction.
-    Frustum {
-        /// Width at the caster, in tiles.
-        start_width: f64,
-        /// Width at the far end, in tiles.
-        end_width: f64,
-        /// Length, in tiles.
-        distance: f64,
-    },
-    /// A circle around the target location.
-    Circle {
-        /// Diameter, in tiles.
-        diameter: f64,
-    },
-    /// No geometric filter.
-    None,
-}
-
-/// How a skill selects its targets.
+/// The closed set of bespoke area-attack routines. `services` resolves each
+/// with an exhaustive match; a new area skill adds a variant and breaks the
+/// build until its routine exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SkillTarget {
-    /// The explicitly chosen target.
-    Explicit,
-    /// All party members.
-    ImplicitParty,
-    /// All players in range.
-    ImplicitPlayersInRange,
-    /// All NPCs/monsters in range.
-    ImplicitNpcsInRange,
-    /// Everyone in range.
-    ImplicitAllInRange,
-    /// The chosen target plus everyone in range around it.
-    ExplicitWithImplicitInRange,
-    /// The caster.
-    #[serde(rename = "self")]
-    SelfTarget,
-}
-
-/// Who a skill may target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TargetRestriction {
-    /// Anyone.
-    None,
-    /// Only the caster.
-    #[serde(rename = "self")]
-    SelfOnly,
-    /// Only party members.
-    Party,
-    /// Only players.
-    Player,
-}
-
-/// Elemental affinity of a skill.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Element {
-    /// Ice.
-    Ice,
-    /// Poison.
-    Poison,
-    /// Lightning.
-    Lightning,
-    /// Fire.
-    Fire,
-    /// Earth.
-    Earth,
-    /// Wind.
-    Wind,
-    /// Water.
-    Water,
+pub enum AreaPattern {
+    /// Point-blank fire burst around the target tile.
+    Flame,
+    /// Directional wind beam.
+    Twister,
+    /// Random strikes around the caster.
+    EvilSpirit,
+    /// Eruption around the caster.
+    Hellfire,
+    /// Directional water beam.
+    AquaBeam,
+    /// Impact circle at the target tile.
+    Cometfall,
+    /// Eruption around the caster.
+    Inferno,
+    /// Three-arrow fan in the aimed direction.
+    TripleShot,
+    /// Blizzard circle at the target tile.
+    IceStorm,
+    /// Charged blast around the caster.
+    Nova,
+    /// Spin hitting everything adjacent to the caster.
+    TwistingSlash,
+    /// Ground slam around the caster.
+    RagefulBlow,
+    /// Stab hitting the target plus enemies beside it.
+    DeathStab,
+    /// Piercing arrow along a line.
+    Penetration,
+    /// Short flame fan in front of the caster.
+    FireSlash,
+    /// Wide slash fan in front of the caster.
+    PowerSlash,
+    /// Explosion hitting the target plus enemies beside it.
+    FireBurst,
+    /// Quake circle around the caster's mount.
+    Earthshake,
 }
