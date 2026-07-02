@@ -1,0 +1,61 @@
+{
+  "files": {
+    "item_options.json": {
+      "records": 24,
+      "by_source_version": {
+        "075": 9,
+        "s6": 11,
+        "095d": 4
+      },
+      "ids": [
+        "luck",
+        "defense",
+        "physical_attack",
+        "wizardry_attack",
+        "defense_rate",
+        "health_recover_for_jewelery",
+        "jewelery_option_maximum_mana",
+        "jewelery_option_maximum_ability",
+        "wings_of_elf_options",
+        "wings_of_heaven_options",
+        "wings_of_satan_options",
+        "2nd_wing_options",
+        "wings_of_spirits_options",
+        "wings_of_soul_options",
+        "wings_of_dragon_options",
+        "wings_of_darkness_options",
+        "excellent_defense",
+        "excellent_physical",
+        "excellent_wizardry",
+        "dinorant_options",
+        "ancient_bonus_total_vitality",
+        "ancient_bonus_total_strength",
+        "ancient_bonus_total_agility",
+        "ancient_bonus_total_energy"
+      ]
+    },
+    "item_sets.json": {
+      "records": 81,
+      "by_source_version": {
+        "075": 45,
+        "s6": 36
+      }
+    }
+  },
+  "review_flagged": 47,
+  "notes": [
+    "BuildSets contradiction resolved: Version075/Items/Armors.cs:137 AND Version095d/Items/Armors.cs:137 both call BuildSets(); generic armor sets (15 families x [defense-rate + set-level 10/11 defense]) are 075 data. The fact-file claim that 075 has only a TODO is stale.",
+    "Kantata data bug fixed (10.0 -> 0.10 excellent_damage_chance): kantata_plate option 6",
+    "ancient piece existence checked against: item_definitions.json",
+    "normal/wing/dinorant option entries keep source option numbers (0 for first wings, 4 for dinorant, bit codes 0/2 for 2nd-wing jewel-of-life groups); excellent, ancient and shared 2nd-wing options are numbered 1..n.",
+    "generic armor sets carry set number 0 (source has no client-facing number for them; 1..36 are the ancient sets); non-random option definitions carry add_chance 0.0, matching source AddChance = 0."
+  ],
+  "gaps": [
+    "wing option groups for excluded wing items stay unextracted: Wings of Curse 12/41 + Wings of Despair 12/42 (summoner), Cape of Fighter 12/49 (rage fighter), Cape of Lord 13/30 options incl. leadership entry (dark-lord item wave), all 3rd-wing options (post-S3)",
+    "S6-only normal options phys+wiz combined (0x07, MG magic swords) and curse attack (0x05, Summoner): excluded, no pre-S3 items reference them",
+    "excellent curse options: disabled in OpenMU until S14, excluded per spec",
+    "harmony/guardian/socket option groups: post-S3, excluded per spec",
+    "Fenrir/Dark Horse option types + combination bonuses: S6 dataset only, excluded (Dinorant options extracted from 095d)",
+    "ancient-set pieces that were post-095d items (storm crow/adamantine/red wing armor 15/26/40, jewelry 13/21-28) are backported into item_definitions.json (s6, items.py) so the piece references resolve; any piece still missing from the baseline gets named in its set's review flag rather than dropped"
+  ]
+}

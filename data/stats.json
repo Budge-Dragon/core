@@ -1,0 +1,794 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "base_strength",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "total_strength",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "total_strength_requirement",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "base_agility",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "total_agility",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "total_agility_requirement",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "base_vitality",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "total_vitality",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "total_vitality_requirement",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "base_energy",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "total_energy",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "total_energy_requirement",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "base_leadership",
+      "scope": "base",
+      "source_version": "s6",
+      "review": "dark lord backport (~1.0): leadership base stat"
+    },
+    {
+      "id": "total_leadership",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "dark lord backport (~1.0): leadership total"
+    },
+    {
+      "id": "total_leadership_requirement",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "dark lord backport: leadership item requirement"
+    },
+    {
+      "id": "total_strength_and_agility",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "level",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "points_per_level_up",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "experience_rate",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "random_experience_min_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "random_experience_max_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "total_level",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "money_amount_rate",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "current_health",
+      "scope": "resource",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_health",
+      "scope": "resource",
+      "source_version": "075"
+    },
+    {
+      "id": "current_mana",
+      "scope": "resource",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_mana",
+      "scope": "resource",
+      "source_version": "075"
+    },
+    {
+      "id": "current_ability",
+      "scope": "resource",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_ability",
+      "scope": "resource",
+      "source_version": "075"
+    },
+    {
+      "id": "attack_rate_pvm",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "attack_rate_pvp",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "minimum_phys_base_dmg_by_weapon",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_phys_base_dmg_by_weapon",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "min_phys_base_dmg_by_right_weapon",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "max_phys_base_dmg_by_right_weapon",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "minimum_phys_base_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_phys_base_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "physical_base_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "minimum_wiz_base_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_wiz_base_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "wizardry_base_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "staff_rise",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "scepter_rise",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "dark lord backport: scepter rise item stat"
+    },
+    {
+      "id": "base_damage_bonus",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "base_min_damage_bonus",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "base_max_damage_bonus",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "final_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient set option target (ancient sets pending decision 5)"
+    },
+    {
+      "id": "skill_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "skill_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient set option target (pending decision 5); other sources are post-S3"
+    },
+    {
+      "id": "critical_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "fed by DL critical-damage-increase skill backport and ancient sets"
+    },
+    {
+      "id": "excellent_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient set option target (pending decision 5)"
+    },
+    {
+      "id": "attack_speed_any",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "attack_speed",
+      "max_value": 200.0,
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "attack_speed_by_weapon",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "are_two_weapons_equipped",
+      "max_value": 1.0,
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "equipped_weapon_count",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "has_double_wield",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "double_wield_weapon_count",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "magic_speed",
+      "max_value": 200.0,
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "wizardry_base_dmg_increase",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "physical_base_dmg_increase",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "walk_speed",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "movement_speed",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "movement_speed_underwater",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "movement_speed_factor",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "attack_damage_increase",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "wizardry_attack_damage_increase",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "two_handed_weapon_damage_increase",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient option target (pending decision 5)"
+    },
+    {
+      "id": "is_two_handed_weapon_equipped",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_bow_equipped",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_cross_bow_equipped",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "melee_attack_mode",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "melee_min_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "melee_max_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "archery_attack_mode",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "archery_min_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "archery_max_dmg",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "greater_damage_bonus",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "is_one_handed_sword_equipped",
+      "max_value": 1.0,
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_one_handed_staff_equipped",
+      "max_value": 1.0,
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_two_handed_staff_equipped",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_scepter_equipped",
+      "scope": "flag",
+      "source_version": "s6",
+      "review": "dark lord backport: scepter equip flag"
+    },
+    {
+      "id": "combo_bonus",
+      "scope": "derived",
+      "source_version": "075",
+      "review": "OpenMU ships the DK combo formula in its 075 dataset; historically combo arrived ~0.98-1.0"
+    },
+    {
+      "id": "is_skill_combo_available",
+      "scope": "flag",
+      "source_version": "s6",
+      "review": "dk combo backport (~0.98-1.0); unlocked by the hero-status quest"
+    },
+    {
+      "id": "gain_hero_status_quest_completed",
+      "scope": "flag",
+      "source_version": "s6",
+      "review": "1.0-era hero-status quest reward flag; legacy quests deferred"
+    },
+    {
+      "id": "defense_base",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "defense_final",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "defense_pvm",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "defense_pvp",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "defense_shield",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "defense_rate_pvm",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "defense_rate_pvp",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "damage_receive_decrement",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "armor_damage_decrease",
+      "scope": "derived",
+      "source_version": "095d"
+    },
+    {
+      "id": "defense_increase_with_equipped_shield",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "soul_barrier_receive_decrement",
+      "max_value": 0.7,
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "soul barrier backport (1.0-era soul master skill)"
+    },
+    {
+      "id": "soul_barrier_mana_toll_per_hit",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "soul barrier backport (1.0-era soul master skill)"
+    },
+    {
+      "id": "bonus_damage_with_scepter",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "dark lord backport: scepter damage bonus (non-MST part)"
+    },
+    {
+      "id": "defense_decrement",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "is_shield_equipped",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_iced",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_frozen",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_poisoned",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_stunned",
+      "scope": "flag",
+      "source_version": "s6",
+      "review": "stun state; pre-S3 source is the earthshake backport, OpenMU wires stun only in S6"
+    },
+    {
+      "id": "ice_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "fire_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "water_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "earth_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "wind_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "poison_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "lightning_resistance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "ice_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "fire_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "water_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "earth_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "wind_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "poison_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "lightning_damage_bonus",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient jewelry damage bonus (S1-era jewelry, pending decision 5)"
+    },
+    {
+      "id": "damage_reflection",
+      "scope": "derived",
+      "source_version": "095d"
+    },
+    {
+      "id": "mana_recovery_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "health_recovery_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "ability_recovery_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "poison_damage_multiplier",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "mana_recovery_absolute",
+      "scope": "derived",
+      "source_version": "075",
+      "review": "engine regeneration term (current += mult*max + absolute); no pre-S3 data feeds it"
+    },
+    {
+      "id": "health_recovery_absolute",
+      "scope": "derived",
+      "source_version": "075",
+      "review": "engine regeneration term (current += mult*max + absolute); no pre-S3 data feeds it"
+    },
+    {
+      "id": "ability_recovery_absolute",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "critical_damage_chance",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "excellent_damage_chance",
+      "scope": "derived",
+      "source_version": "095d"
+    },
+    {
+      "id": "defense_ignore_chance",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient set option target (pending decision 5); also fed by the backported 2nd-wing option"
+    },
+    {
+      "id": "double_damage_chance",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "ancient set option target (pending decision 5); other source is sockets"
+    },
+    {
+      "id": "stun_chance",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "stun chance; pre-S3 source is the earthshake backport, OpenMU wires stun only in S6"
+    },
+    {
+      "id": "mana_after_monster_kill_multiplier",
+      "scope": "derived",
+      "source_version": "095d"
+    },
+    {
+      "id": "health_after_monster_kill_multiplier",
+      "scope": "derived",
+      "source_version": "095d"
+    },
+    {
+      "id": "item_duration_increase",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "maximum_guild_size",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "can_fly",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_dinorant_equipped",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "ammunition_consumption_rate",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "ammunition_amount",
+      "scope": "base",
+      "source_version": "075"
+    },
+    {
+      "id": "ammunition_damage_bonus",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "is_in_safezone",
+      "scope": "flag",
+      "source_version": "075"
+    },
+    {
+      "id": "is_underwater",
+      "scope": "flag",
+      "source_version": "075",
+      "review": "spec section 11 atlans power-up; OpenMU applies underwater state at runtime only"
+    },
+    {
+      "id": "transformation_skin",
+      "scope": "derived",
+      "source_version": "075"
+    },
+    {
+      "id": "is_invisible",
+      "scope": "flag",
+      "source_version": "075",
+      "review": "engine-state flag (GM hide); not wired by pre-S3 data"
+    },
+    {
+      "id": "nova_stage_damage",
+      "scope": "derived",
+      "source_version": "s6",
+      "review": "nova backport (0.97/1.0-era skill)"
+    },
+    {
+      "id": "temp_half_weapon_attack_speed",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "temp_defense_bonus_multiplier_with_shield",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "temp_double_wield_multiplier",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "ammunition_damage_increase",
+      "scope": "intermediate",
+      "source_version": "075"
+    },
+    {
+      "id": "total_energy_minus_15",
+      "scope": "intermediate",
+      "source_version": "s6",
+      "review": "dark lord backport (~1.0): mana formula intermediate"
+    }
+  ]
+}

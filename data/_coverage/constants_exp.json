@@ -1,0 +1,36 @@
+{
+  "files": [
+    "/Users/golan/Documents/repos/mu-core/data/game_constants.json",
+    "/Users/golan/Documents/repos/mu-core/data/exp_tables.json"
+  ],
+  "records": 2,
+  "by_source_version": {
+    "075": 2
+  },
+  "review_count": 0,
+  "reviews": {},
+  "gaps": {
+    "max_letters": "letters/inbox are host-owned social features (50); excluded per spec section 16",
+    "letter_send_price": "letters/inbox are host-owned social features (1000 zen); excluded per spec section 16",
+    "max_password_length": "account/password constants excluded wholesale (spec exclusions)",
+    "experience_rate": "global exp multiplier (1.0) is modeled as the stats.json stat 'experience_rate', not a constant; spec section 16 shape omits it",
+    "movement_speed_factor": "global base value (1.0) is modeled as the stats.json stat 'movement_speed_factor'; spec section 16 shape omits it",
+    "basic_mount_speed": "Uniria/Dinorant mount speed (15.0) rides in item_definitions power-ups, not in the constants shape",
+    "cold_speed_factor": "ColdMovementSpeedFactor (0.33) is wired only by S6 cold-effect initializers; skills agent owns it if the ice-arrow backport needs it",
+    "horse_fenrir_speeds": "17/19 belong to trainable pets, excluded wholesale",
+    "master_experience": "master level/exp formula, MaximumMasterLevel 200, MinimumMonsterLevelForMasterExperience 95: post-S3",
+    "maximum_alliance_size": "guild alliances, S6-only global value (5); decision 5 open",
+    "per_kill_exp_formula": "(lvl+25)*lvl/3 with gap scaling, >=65 bonus, x1.25: formula shape -> Rust rule (decision 3)",
+    "min_damage_floor": "max(1, attackerLevel/10): formula shape -> Rust rule (decision 3)",
+    "dinorant_damage_factor": "x1.3 skill-less attack multiplier: formula shape -> Rust rule (decision 3)",
+    "double_wield_factor": "halve-then-double wield rule: formula shape -> Rust rule (decision 3)",
+    "classic_duel_damage_factor": "0.6 duel damage factor: formula shape -> Rust rule (decision 3)",
+    "level_dependent_damage": "dead data even in OpenMU (populated and read nowhere); excluded per spec"
+  },
+  "notes": [
+    "spec section 15 sample shows total_exp_by_level[3] = 396; the formula (and OpenMU's CalculateNeededExperience) gives 440 - the computed table follows the formula, the spec sample value looks like a typo",
+    "facts doc sample 'level 255 = 1697560640' disagrees with the formula (169677080); levels 2 and 10 samples match, formula followed",
+    "max_inventory_money/max_vault_money overridden to 2000000000 (decision 7); OpenMU source has int.MaxValue",
+    "tick_duration_ms 100 is a mu-core decision (4), not extracted from OpenMU"
+  ]
+}

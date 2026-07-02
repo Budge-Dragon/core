@@ -1,0 +1,1083 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "kind": "exit_gate",
+      "number": 17,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 133,
+        "y1": 118,
+        "x2": 151,
+        "y2": 135
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 4,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 121,
+        "y1": 231,
+        "x2": 123,
+        "y2": 231
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 21,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 7,
+        "y1": 38,
+        "x2": 8,
+        "y2": 41
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 26,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 213,
+        "y1": 244,
+        "x2": 217,
+        "y2": 245
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 2,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 107,
+        "y1": 247,
+        "x2": 110,
+        "y2": 247
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 6,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 231,
+        "y1": 126,
+        "x2": 234,
+        "y2": 127
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 8,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 240,
+        "y1": 149,
+        "x2": 241,
+        "y2": 151
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 10,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 3,
+        "y1": 83,
+        "x2": 4,
+        "y2": 86
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 12,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 3,
+        "y1": 16,
+        "x2": 6,
+        "y2": 17
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 14,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 29,
+        "y1": 125,
+        "x2": 30,
+        "y2": 126
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 16,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 5,
+        "y1": 32,
+        "x2": 7,
+        "y2": 33
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 22,
+      "map": {
+        "number": 2,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 197,
+        "y1": 35,
+        "x2": 218,
+        "y2": 50
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 19,
+      "map": {
+        "number": 2,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 242,
+        "y1": 34,
+        "x2": 243,
+        "y2": 37
+      },
+      "direction": "north",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 44,
+      "map": {
+        "number": 2,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 2,
+        "y1": 246,
+        "x2": 3,
+        "y2": 247
+      },
+      "direction": "south_west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 50,
+      "map": {
+        "number": 6,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 101,
+        "y1": 115,
+        "x2": 103,
+        "y2": 117
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 51,
+      "map": {
+        "number": 6,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 107,
+        "y1": 115,
+        "x2": 107,
+        "y2": 115
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 52,
+      "map": {
+        "number": 6,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 107,
+        "y1": 114,
+        "x2": 107,
+        "y2": 114
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 58,
+      "map": {
+        "number": 9,
+        "discriminator": 1
+      },
+      "area": {
+        "x1": 133,
+        "y1": 91,
+        "x2": 141,
+        "y2": 99
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "095d"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 59,
+      "map": {
+        "number": 9,
+        "discriminator": 2
+      },
+      "area": {
+        "x1": 135,
+        "y1": 162,
+        "x2": 142,
+        "y2": 170
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "095d"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 60,
+      "map": {
+        "number": 9,
+        "discriminator": 3
+      },
+      "area": {
+        "x1": 62,
+        "y1": 150,
+        "x2": 70,
+        "y2": 158
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "095d"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 61,
+      "map": {
+        "number": 9,
+        "discriminator": 4
+      },
+      "area": {
+        "x1": 66,
+        "y1": 84,
+        "x2": 74,
+        "y2": 92
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "095d"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 27,
+      "map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 171,
+        "y1": 108,
+        "x2": 177,
+        "y2": 117
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 24,
+      "map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 148,
+        "y1": 5,
+        "x2": 155,
+        "y2": 6
+      },
+      "direction": "east",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 48,
+      "map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 240,
+        "y1": 240,
+        "x2": 241,
+        "y2": 243
+      },
+      "direction": "north",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 42,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 203,
+        "y1": 70,
+        "x2": 213,
+        "y2": 81
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 29,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 162,
+        "y1": 2,
+        "x2": 166,
+        "y2": 3
+      },
+      "direction": "east",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 31,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 241,
+        "y1": 237,
+        "x2": 244,
+        "y2": 238
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 33,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 86,
+        "y1": 166,
+        "x2": 87,
+        "y2": 168
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 35,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 87,
+        "y1": 86,
+        "x2": 88,
+        "y2": 89
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 37,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 128,
+        "y1": 53,
+        "x2": 131,
+        "y2": 54
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 39,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 52,
+        "y1": 53,
+        "x2": 55,
+        "y2": 54
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 41,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 8,
+        "y1": 85,
+        "x2": 9,
+        "y2": 87
+      },
+      "direction": "west",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 49,
+      "map": {
+        "number": 7,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 15,
+        "y1": 11,
+        "x2": 27,
+        "y2": 23
+      },
+      "direction": null,
+      "is_spawn_gate": true,
+      "source_version": "075"
+    },
+    {
+      "kind": "exit_gate",
+      "number": 46,
+      "map": {
+        "number": 7,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 14,
+        "y1": 12,
+        "x2": 15,
+        "y2": 13
+      },
+      "direction": "south",
+      "is_spawn_gate": false,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 1,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 121,
+        "y1": 232,
+        "x2": 123,
+        "y2": 233
+      },
+      "target_gate": 2,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 3,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 108,
+        "y1": 248,
+        "x2": 109,
+        "y2": 248
+      },
+      "target_gate": 4,
+      "min_level": 0,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 5,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 239,
+        "y1": 149,
+        "x2": 239,
+        "y2": 150
+      },
+      "target_gate": 6,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 7,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 232,
+        "y1": 127,
+        "x2": 233,
+        "y2": 128
+      },
+      "target_gate": 8,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 9,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 2,
+        "y1": 17,
+        "x2": 2,
+        "y2": 18
+      },
+      "target_gate": 10,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 11,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 2,
+        "y1": 84,
+        "x2": 2,
+        "y2": 85
+      },
+      "target_gate": 12,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 13,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 5,
+        "y1": 34,
+        "x2": 6,
+        "y2": 34
+      },
+      "target_gate": 14,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 15,
+      "map": {
+        "number": 1,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 29,
+        "y1": 127,
+        "x2": 30,
+        "y2": 127
+      },
+      "target_gate": 16,
+      "min_level": 20,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 18,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 5,
+        "y1": 38,
+        "x2": 6,
+        "y2": 41
+      },
+      "target_gate": 19,
+      "min_level": 15,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 20,
+      "map": {
+        "number": 2,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 244,
+        "y1": 34,
+        "x2": 245,
+        "y2": 37
+      },
+      "target_gate": 21,
+      "min_level": 0,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 23,
+      "map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 213,
+        "y1": 246,
+        "x2": 217,
+        "y2": 247
+      },
+      "target_gate": 24,
+      "min_level": 10,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 25,
+      "map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 148,
+        "y1": 3,
+        "x2": 155,
+        "y2": 4
+      },
+      "target_gate": 26,
+      "min_level": 10,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 28,
+      "map": {
+        "number": 2,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 2,
+        "y1": 248,
+        "x2": 3,
+        "y2": 249
+      },
+      "target_gate": 29,
+      "min_level": 40,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 30,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 190,
+        "y1": 6,
+        "x2": 191,
+        "y2": 8
+      },
+      "target_gate": 31,
+      "min_level": 40,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 32,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 166,
+        "y1": 163,
+        "x2": 167,
+        "y2": 166
+      },
+      "target_gate": 33,
+      "min_level": 40,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 34,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 132,
+        "y1": 245,
+        "x2": 135,
+        "y2": 246
+      },
+      "target_gate": 35,
+      "min_level": 50,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 36,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 132,
+        "y1": 135,
+        "x2": 135,
+        "y2": 136
+      },
+      "target_gate": 37,
+      "min_level": 50,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 38,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 131,
+        "y1": 15,
+        "x2": 132,
+        "y2": 18
+      },
+      "target_gate": 39,
+      "min_level": 50,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 40,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 6,
+        "y1": 5,
+        "x2": 7,
+        "y2": 8
+      },
+      "target_gate": 41,
+      "min_level": 50,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 43,
+      "map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 162,
+        "y1": 0,
+        "x2": 166,
+        "y2": 1
+      },
+      "target_gate": 44,
+      "min_level": 15,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 45,
+      "map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 242,
+        "y1": 240,
+        "x2": 245,
+        "y2": 243
+      },
+      "target_gate": 46,
+      "min_level": 60,
+      "source_version": "075"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 47,
+      "map": {
+        "number": 7,
+        "discriminator": 0
+      },
+      "area": {
+        "x1": 9,
+        "y1": 9,
+        "x2": 11,
+        "y2": 12
+      },
+      "target_gate": 48,
+      "min_level": 60,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 1,
+      "name": "Arena",
+      "cost_zen": 2000,
+      "min_level": 50,
+      "target_gate": 50,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 2,
+      "name": "Lorencia",
+      "cost_zen": 2000,
+      "min_level": 10,
+      "target_gate": 17,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 3,
+      "name": "Noria",
+      "cost_zen": 2000,
+      "min_level": 10,
+      "target_gate": 27,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 4,
+      "name": "Devias",
+      "cost_zen": 2000,
+      "min_level": 20,
+      "target_gate": 22,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 5,
+      "name": "Dungeon",
+      "cost_zen": 3000,
+      "min_level": 30,
+      "target_gate": 2,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 6,
+      "name": "Dungeon2",
+      "cost_zen": 3500,
+      "min_level": 40,
+      "target_gate": 6,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 7,
+      "name": "Dungeon3",
+      "cost_zen": 4000,
+      "min_level": 50,
+      "target_gate": 10,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 8,
+      "name": "LostTower",
+      "cost_zen": 5000,
+      "min_level": 50,
+      "target_gate": 42,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 9,
+      "name": "LostTower2",
+      "cost_zen": 5500,
+      "min_level": 50,
+      "target_gate": 31,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 10,
+      "name": "LostTower3",
+      "cost_zen": 6000,
+      "min_level": 50,
+      "target_gate": 33,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 11,
+      "name": "LostTower4",
+      "cost_zen": 6500,
+      "min_level": 60,
+      "target_gate": 35,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 12,
+      "name": "LostTower5",
+      "cost_zen": 7000,
+      "min_level": 60,
+      "target_gate": 37,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 13,
+      "name": "LostTower6",
+      "cost_zen": 7500,
+      "min_level": 70,
+      "target_gate": 39,
+      "source_version": "075"
+    },
+    {
+      "kind": "warp",
+      "index": 14,
+      "name": "LostTower7",
+      "cost_zen": 8000,
+      "min_level": 70,
+      "target_gate": 41,
+      "source_version": "075"
+    }
+  ]
+}

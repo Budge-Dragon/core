@@ -23,8 +23,13 @@ The same crate must compile and behave identically everywhere it is embedded:
 6. **Static game data is defined as structs here.** The core defines the
    shapes and the rules that read them; hosts load the data.
 
-`clippy.toml` enforces rules 1–3 mechanically (disallowed types, methods, and
-macros).
+Architecture and coding laws live in [`CLAUDE.md`](./CLAUDE.md) — required
+reading before writing any code.
+
+`clippy.toml` mechanically catches the common violations of rules 1–3:
+`SystemTime`/`Instant`, `thread::{spawn, Builder::spawn, scope, sleep}`, and
+the `print!`/`dbg!` macro family. Async and everything else in the rules are
+convention, enforced by code review.
 
 ## Dependencies
 

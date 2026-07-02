@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "number": 0,
+      "discriminator": 0,
+      "id": "lorencia",
+      "name": "Lorencia",
+      "source_version": "075",
+      "terrain": "terrain/075_lorencia.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 1,
+      "discriminator": 0,
+      "id": "dungeon",
+      "name": "Dungeon",
+      "source_version": "075",
+      "terrain": "terrain/075_dungeon.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 2,
+      "discriminator": 0,
+      "id": "devias",
+      "name": "Devias",
+      "source_version": "095d",
+      "review": "0.75-era map re-derived by the 0.95d dataset with 0.95 terrain (only town map whose initializer overrides the 075_ terrain prefix); tagged 095d because the shipped record differs from 0.75 by terrain only",
+      "terrain": "terrain/095d_devias.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 2,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 3,
+      "discriminator": 0,
+      "id": "noria",
+      "name": "Noria",
+      "source_version": "075",
+      "terrain": "terrain/075_noria.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 4,
+      "discriminator": 0,
+      "id": "lost_tower",
+      "name": "Lost Tower",
+      "source_version": "075",
+      "terrain": "terrain/075_lost_tower.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 5,
+      "discriminator": 0,
+      "id": "exile",
+      "name": "Exile",
+      "source_version": "075",
+      "terrain": "terrain/075_exile.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 6,
+      "discriminator": 0,
+      "id": "arena",
+      "name": "Arena",
+      "source_version": "075",
+      "terrain": "terrain/075_arena.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 6,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": {
+        "battle_type": "soccer",
+        "ground": {
+          "x1": 55,
+          "y1": 141,
+          "x2": 69,
+          "y2": 180
+        },
+        "left_goal": {
+          "x1": 61,
+          "y1": 139,
+          "x2": 63,
+          "y2": 140
+        },
+        "right_goal": {
+          "x1": 61,
+          "y1": 181,
+          "x2": 63,
+          "y2": 182
+        },
+        "left_spawn": {
+          "x": 60,
+          "y": 156
+        },
+        "right_spawn": {
+          "x": 60,
+          "y": 164
+        }
+      }
+    },
+    {
+      "number": 7,
+      "discriminator": 0,
+      "id": "atlans",
+      "name": "Atlans",
+      "source_version": "075",
+      "terrain": "terrain/075_atlans.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 7,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [
+        {
+          "stat": "is_underwater",
+          "value": 1.0,
+          "aggregate": "add_raw"
+        }
+      ],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 8,
+      "discriminator": 0,
+      "id": "tarkan",
+      "name": "Tarkan",
+      "source_version": "095d",
+      "terrain": "terrain/095d_tarkan.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 10,
+      "discriminator": 0,
+      "id": "icarus",
+      "name": "Icarus",
+      "source_version": "095d",
+      "terrain": "terrain/095d_icarus.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 4,
+        "discriminator": 0
+      },
+      "requirements": [
+        {
+          "stat": "can_fly",
+          "value": 1
+        }
+      ],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 9,
+      "discriminator": 1,
+      "id": "devil_square_1",
+      "name": "Devil Square 1",
+      "source_version": "095d",
+      "terrain": "terrain/095d_devil_square_1.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 9,
+      "discriminator": 2,
+      "id": "devil_square_2",
+      "name": "Devil Square 2",
+      "source_version": "095d",
+      "terrain": "terrain/095d_devil_square_2.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 9,
+      "discriminator": 3,
+      "id": "devil_square_3",
+      "name": "Devil Square 3",
+      "source_version": "095d",
+      "terrain": "terrain/095d_devil_square_3.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    },
+    {
+      "number": 9,
+      "discriminator": 4,
+      "id": "devil_square_4",
+      "name": "Devil Square 4",
+      "source_version": "095d",
+      "terrain": "terrain/095d_devil_square_4.bin",
+      "exp_multiplier": 1.0,
+      "safezone_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "requirements": [],
+      "character_power_ups": [],
+      "drop_groups": [
+        "default_money",
+        "default_random_item",
+        "default_excellent",
+        "default_jewels"
+      ],
+      "battle_zone": null
+    }
+  ]
+}

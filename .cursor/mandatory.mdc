@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+---
+
+# Coding Principles
+
+Write code that is correct by construction. If it compiles, it should be correct. Every principle below serves this goal.
+
+## Parse, Don't Validate
+
+Parse data at system boundaries (host input, static data loading, FFI payloads). Return typed results — never discard what you learned. A function that checks a condition but returns `()` or `bool` is a code smell; return a narrowed type instead.
+
+- Parse once at the boundary with `TryFrom` / `parse_*` functions returning `Result<Domain, ParseError>`, then trust the parsed type downstream
+- Failure is data: `Result` and domain enums, never panics
+- Core functions take domain types and never re-check them
+
+## Type Design
+
+Flat types only — no deep nesting, no inheritance-style trait hierarchies for data. If a type contains another complex object, extract a named type or reference it by a newtype ID.
+
+- **Enums over optional fields**: a state is `Idle | Casting { remaining: Ticks } | Cooldown { until: Tick }`, not a struct of `Option`s and `bool`s
+- **Every variant is flat and simple** — only the fields that variant needs
+- **Newtypes for semantic units**: `Tick(u64)`, `Level(u16)`, `Zen(u64)`, `MonsterId(u32)` — prevent mixing incompatible values at the type level
+- **Exhaustive matching**: adding a variant must cause a compile error at every dispatch — no `_ =>` arms on domain enums, no `#[non_exhaustive]` domain types
+
+## State Management — Finite State Machines
+
+Model stateful domain entities as explicit FSMs. Each state is an enum variant. Transitions are pure functions that take one state and return the next.
+
+- Never set arbitrary fields — transition the entire state to a new variant
+- Transition functions enforce which states can follow which: `begin_cast(Idle, skill) -> Casting`
+- If a transition is impossible from the current state, it shouldn't compile — or it returns a typed rejection event, never a panic
+
+## Error Handling — Fail Fast, Non-Defensive
+
+Validate at boundaries. After that, trust the data. Never re-check a condition already established by the type system or a prior parse.
+
+- No `unwrap`/`expect`/`panic!`/`unreachable!` in core (lint-enforced); tests are exempt from `unwrap`/`expect`/`panic!` only — `unreachable!` has no test exemption and fails CI everywhere
+- Domain rejections (invalid target, insufficient mana) are returned events or `Result` values — outcomes, not errors
+- Reaching for a runtime check inside core means the type is wrong — split into variants
+
+## Functional Style
+
+- Deterministic functions: `(state, input, &mut impl RngCore) -> (new state, events)` — same inputs + same seed = same outputs on every target
+- All inputs explicit (state, command, tick, injected RNG); all outputs returned (state + events); advancing the RNG is the only sanctioned argument mutation
+- No global or hidden state: no `static mut`, `thread_local!`, lazy statics, `OnceCell` registries, or interior mutability in domain types
+- No I/O, no clock, no logging — events are the only observable output
+
+## Validity by Construction
+
+If you can build a value, it must be valid. Use smart constructors that guarantee invariants at creation time rather than validating after the fact.
+
+- `Level::new(n) -> Result<Level, StatError>` — callers cannot construct an invalid one
+- Host-side parsers convert raw wire/DB values into domain types at parse time; core never sees raw values

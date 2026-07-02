@@ -1,0 +1,47 @@
+{
+  "records": 10,
+  "by_source_version": {
+    "075": 1,
+    "095d": 5,
+    "s6": 4
+  },
+  "review_count": 4,
+  "reviews": {
+    "fruits": "stat fruits are 1.0-era, data only in S6; created fruit level (stat kind) is weighted-random 0-4 in the crafting rule, not data",
+    "second_wings": "2nd wings are 1.0-era, data only in S6: Summoner wings removed (Wing of Misery 12/41 input, Wings of Despair 12/42 result), level caps clamped 15->11; luck/exc result chances (20/20, max 1 exc) are S6 values",
+    "blood_castle_ticket": "Blood Castle is 0.97/1.0-era; recipe, prices and success rates live in the ticket rule (S6 handler values, see coverage rules)",
+    "cape_of_lord": "era-check: Cape of Lord is the 1.0-era Dark Lord wing, but this crafting (#24, Monarch's Crest = Loch's Feather+1 recipe) may postdate 1.0; Cape of Fighter (12/49, Rage Fighter) result and Wing of Misery (12/41) input removed, level caps clamped 15->11"
+  },
+  "rules": {
+    "ticket_devil_square": "handler recipe (not data): 1 Devil's Eye (14,17) + 1 Devil's Key (14,18) of EQUAL item level + 1 Jewel of Chaos -> Devil's Invitation (14,19) at the input level, durability 1; success 80% for level<5 else 70%; zen by level 1-7 = 100k/200k/400k/700k/1.1m/1.6m/2m",
+    "ticket_blood_castle": "handler recipe (not data): 1 Scroll of Archangel (13,16) + 1 Blood Bone (13,17) of EQUAL item level + 1 Jewel of Chaos -> Invisibility Cloak (13,18) at the input level, durability 1; success 80% flat; zen by level 1-8 = 50k/80k/150k/250k/400k/600k/850k/1.05m",
+    "chaos_weapon_and_first_wings_options": "result option/luck/skill are formulas of the final success rate, not result_chances data: roll i in 0..2, item option level 3-i with chance rate/5 + 4*(i+1) percent; luck with rate/5 + 4; skill with rate/5 + 6",
+    "second_wings_option": "wing item-option roll (20%/10%/4% for levels 1/2/3) is in the second_wings rule; luck/excellent come from result_chances",
+    "downgrade_chaos_weapon": "on-fail semantics: level -> random 0..level-1, 50% skill loss (if not excellent), 50% item option -1 level (removed at 1), durability rescaled",
+    "fruits_level": "created Fruits level (= fruit stat kind) is weighted-random 0-4 with weights 30/25/20/20/5",
+    "success_npc_price_divisor": "settings-level divisor REPLACES the additive success path: rate = sum(npc old-buying prices of all inputs) / divisor; per-input divisor ADDS sum(prices)/divisor percent; final zen = flat_zen + zen_per_success_percent * rate",
+    "max_percent_default": "OpenMU MaximumSuccessPercent 0 = uncapped; engine clamps at 100 -> emitted as max_percent 100"
+  },
+  "notes": {
+    "chaos_weapon_amount": "spec section 14 example shows amount max 1 for the chaos-weapon random item; source has no maximum (MaximumAmount 0 = unbounded) -> emitted max null",
+    "specific_items_levels": "specific_items matches carry min_level/max_level when the constraint is real (first wings weapon 4..11, Loch's Feather 0..0 vs Monarch's Crest 1..1); omitted for level-0-only ingredients where 0..0 is vacuous",
+    "second_wings_max_exc_options": "S6 sets max 1 excellent option on 2nd-wings/cape results; result_chances has no such field -> cap lives in the second_wings rule",
+    "item_upgrade_success": "095d +10/+11 use flat 50%/45% + luck 25; the S6 penalty fields (exc/ancient/380/socket) are S6-only data, not backported"
+  },
+  "gaps": {
+    "item_upgrade_12_to_15": "S6 mixes #22/#23/#49/#50: item level cap is 11 (approved decision 2)",
+    "illusion_temple_ticket": "S6 mix #37: Illusion Temple is Season 3",
+    "potion_of_bless_soul": "S6 mixes #15/#16: castle siege potions (S3+)",
+    "shield_potions": "S6 mixes #30/#31/#32: SD stat system is S3+ (classic PvP instead)",
+    "life_stone": "S6 mix #17: castle siege (S3)",
+    "fenrir_craftings": "S6 mixes #25/#26/#27/#28: Fenrir is S2 but trainable pets are excluded wholesale (decision 5)",
+    "dark_horse_dark_raven": "S6 mixes #13/#14 (Pet Trainer): trainable pets excluded (decision 5)",
+    "third_wings": "S6 mixes #38/#39: 3rd wings are Season 3",
+    "level_380_option": "S6 mix #36: guardian/380 options are post-S3",
+    "secromicon": "S6 mix #46: Season 6",
+    "gemstone_refinery_refine_restore": "S6 mixes #33/#34/#35 (Elphis/Osbourne/Jerridon): Jewel of Harmony ecosystem (S4)",
+    "cherry_blossom_mix": "S6 mix #41: seasonal event (S4+)",
+    "first_wings_misery_result": "S6 adds Wings of Misery (12,41) to the 1st-wings results; Summoner (S3) - 095d result list used",
+    "jewel_mixes_lahap": "Lahap jewel packing (10 S6 JewelMix records): pending decision 5, era-questionable packed-item ids"
+  }
+}

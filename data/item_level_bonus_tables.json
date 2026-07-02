@@ -1,0 +1,276 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "weapon_damage",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        3,
+        6,
+        9,
+        12,
+        15,
+        18,
+        21,
+        24,
+        27,
+        31,
+        36
+      ]
+    },
+    {
+      "id": "staff_rise_even",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        3,
+        7,
+        10,
+        14,
+        17,
+        21,
+        24,
+        28,
+        31,
+        35,
+        40
+      ]
+    },
+    {
+      "id": "staff_rise_odd",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        4,
+        7,
+        11,
+        14,
+        18,
+        21,
+        25,
+        28,
+        32,
+        36,
+        40
+      ]
+    },
+    {
+      "id": "ammunition_damage",
+      "source_version": "095d",
+      "values_by_level": [
+        0,
+        0.03,
+        0.05,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "armor_defense",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        3,
+        6,
+        9,
+        12,
+        15,
+        18,
+        21,
+        24,
+        27,
+        31,
+        36
+      ]
+    },
+    {
+      "id": "shield_defense",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ]
+    },
+    {
+      "id": "shield_defense_rate",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        3,
+        6,
+        9,
+        12,
+        15,
+        18,
+        21,
+        24,
+        27,
+        31,
+        36
+      ]
+    },
+    {
+      "id": "running_movement_speed",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15
+      ]
+    },
+    {
+      "id": "wing_absorb",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        -0.02,
+        -0.04,
+        -0.06,
+        -0.08,
+        -0.1,
+        -0.12,
+        -0.14,
+        -0.16,
+        -0.18,
+        -0.2,
+        -0.22
+      ]
+    },
+    {
+      "id": "wing_damage_first",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        0.02,
+        0.04,
+        0.06,
+        0.08,
+        0.1,
+        0.12,
+        0.14,
+        0.16,
+        0.18,
+        0.2,
+        0.22
+      ]
+    },
+    {
+      "id": "wing_damage_second",
+      "source_version": "s6",
+      "review": "backported with 2nd wings; S6 table (1%/level) truncated to cap 11",
+      "values_by_level": [
+        0,
+        0.01,
+        0.02,
+        0.03,
+        0.04,
+        0.05,
+        0.06,
+        0.07,
+        0.08,
+        0.09,
+        0.1,
+        0.11
+      ]
+    },
+    {
+      "id": "wing_defense",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        3,
+        6,
+        9,
+        12,
+        15,
+        18,
+        21,
+        24,
+        27,
+        31,
+        36
+      ]
+    },
+    {
+      "id": "jewelry_resistance",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "transformation_ring_skins",
+      "source_version": "075",
+      "values_by_level": [
+        2,
+        7,
+        14,
+        8,
+        9,
+        41,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "durability_per_level",
+      "source_version": "075",
+      "values_by_level": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        17,
+        21
+      ]
+    }
+  ]
+}

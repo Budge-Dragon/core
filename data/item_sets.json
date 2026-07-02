@@ -1,0 +1,6134 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "bronze_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bronze_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bronze_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "dragon_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "dragon_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "dragon_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 1
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pad_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pad_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pad_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 2
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "legendary_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "legendary_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "legendary_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 3
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bone_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bone_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bone_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "leather_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "leather_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "leather_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "scale_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "scale_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "scale_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sphinx_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sphinx_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sphinx_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "brass_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "brass_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "brass_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "plate_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "plate_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "plate_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vine_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vine_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vine_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "silk_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "silk_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "silk_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 11
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "wind_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "wind_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "wind_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "spirit_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "spirit_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "spirit_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 13
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "guardian_defense_rate_bonus",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 0,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "guardian_defense_bonus_level_10",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 10,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "guardian_defense_bonus_level_11",
+      "number": 0,
+      "source_version": "075",
+      "min_item_count": 5,
+      "count_distinct": false,
+      "set_level": 11,
+      "always_applies": true,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 0,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 0,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "warrior_leather",
+      "number": 1,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 2,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_strength"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_agility"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "ability_recovery_absolute",
+            "value": 5.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 20.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 8,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 9,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anonymous_leather",
+      "number": 2,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 6,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "defense_increase_with_equipped_shield",
+            "value": 0.25,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "final_damage_bonus",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hyperion_bronze",
+      "number": 3,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mist_bronze",
+      "number": 4,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_vitality",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "eplete_scale",
+      "number": 5,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 6,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_energy"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "attack_rate_pvm",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "berserker_scale",
+      "number": 6,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 40.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 40.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "garuda_brass",
+      "number": 7,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_strength"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.15,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cloud_brass",
+      "number": 8,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.2,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "critical_damage_bonus",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "kantata_plate",
+      "number": 9,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset; fixed OpenMU data bug: excellent_damage_chance 10.0 -> 0.10",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 23
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_agility"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "total_vitality",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rave_plate",
+      "number": 10,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "two_handed_weapon_damage_increase",
+            "value": 0.3,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hyon_dragon",
+      "number": 11,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 0,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_strength"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 1
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 25.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "critical_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vicious_dragon",
+      "number": 12,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 13,
+            "number": 22
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_strength"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 1
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 1
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "final_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "minimum_phys_base_dmg",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "apollo_pad",
+      "number": 13,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 5,
+            "number": 0
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_energy"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 25
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_strength"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 24
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_energy"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.05,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 8,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 9,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "barnake_pad",
+      "number": 14,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 100.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "evis_bone",
+      "number": 15,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_agility"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "total_vitality",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "attack_rate_pvm",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "ability_recovery_absolute",
+            "value": 5.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sylion_bone",
+      "number": 16,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 4
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 20.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "total_vitality",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "heras_sphinx",
+      "number": 17,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 6,
+            "number": 6
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "defense_increase_with_equipped_shield",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "attack_rate_pvm",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 8,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 9,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "minet_sphinx",
+      "number": 18,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 30.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 100.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anubis_legendary",
+      "number": 19,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 3
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 21
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_energy"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "critical_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "enis_legendary",
+      "number": 20,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 3
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ceto_vine",
+      "number": 21,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 0,
+            "number": 2
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_strength"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 22
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_strength"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 20.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "defense_increase_with_equipped_shield",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "drake_vine",
+      "number": 22,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 10
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "final_damage_bonus",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.2,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 40.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "gaia_silk",
+      "number": 23,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 4,
+            "number": 9
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_agility"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fase_silk",
+      "number": 24,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 11
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 100.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 100.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 100.0,
+            "aggregate": "add_final"
+          }
+        }
+      ]
+    },
+    {
+      "id": "odin_wind",
+      "number": 25,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "attack_rate_pvm",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "elvian_wind",
+      "number": 26,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "argo_spirit",
+      "number": 27,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 50.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "karis_spirit",
+      "number": 28,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 13
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 13
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 40.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "gywen_guardian",
+      "number": 29,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 4,
+            "number": 5
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_agility"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 28
+          },
+          "discriminator": 1,
+          "bonus_stat": null
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "total_agility",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "minimum_phys_base_dmg",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 20.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "maximum_phys_base_dmg",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "critical_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 8,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "aruan_guardian",
+      "number": 30,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 14
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "final_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "gaion_storm_crow",
+      "number": 31,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 15
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 15
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 15
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 27
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 15.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "total_strength",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "muren_storm_crow",
+      "number": 32,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 10,
+            "number": 15
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 15
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 15
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 21
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 10.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 25.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "two_handed_weapon_damage_increase",
+            "value": 0.2,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "agnis_adamantine",
+      "number": 33,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 8,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 26
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 9
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 40.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "critical_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "broy_adamantine",
+      "number": 34,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 9,
+            "number": 26
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 26
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 11,
+            "number": 26
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 25
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_strength"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "final_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "total_leadership",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "chrono_red_wing",
+      "number": 35,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 7,
+            "number": 40
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 9,
+            "number": 40
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 40
+          },
+          "discriminator": 1,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 13,
+            "number": 24
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_energy"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "double_damage_chance",
+            "value": 0.2,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "defense_base",
+            "value": 60.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "critical_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 7,
+          "power_up": {
+            "stat": "excellent_damage_bonus",
+            "value": 20.0,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "semeden_red_wing",
+      "number": 36,
+      "source_version": "s6",
+      "review": "s1-era ancient set backported from the s6 dataset",
+      "min_item_count": 2,
+      "count_distinct": true,
+      "set_level": 0,
+      "always_applies": false,
+      "pieces": [
+        {
+          "item": {
+            "group": 11,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 10,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 8,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        },
+        {
+          "item": {
+            "group": 7,
+            "number": 40
+          },
+          "discriminator": 2,
+          "bonus_stat": "total_vitality"
+        }
+      ],
+      "set_options": [
+        {
+          "number": 1,
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.15,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 2,
+          "power_up": {
+            "stat": "skill_damage_bonus",
+            "value": 25.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "power_up": {
+            "stat": "total_energy",
+            "value": 30.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.15,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 6,
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    }
+  ]
+}

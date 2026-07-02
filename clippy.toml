@@ -1,5 +1,21 @@
 # Mechanical enforcement of mu-core portability rules (see README).
 
+# Proper nouns clippy::doc_markdown should not demand backticks for.
+# ".." keeps clippy's built-in defaults.
+doc-valid-idents = ["SpacetimeDB", "NPCs", ".."]
+
+# data::game_constants::GameConstants mirrors four independent toggles of
+# the approved data schema spec; they are source-data scalars, not a state
+# machine.
+max-struct-bools = 4
+
+# Iron Law 3 lints (unwrap_used, expect_used, panic) apply to core code;
+# tests assert freely.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+
 disallowed-types = [
     { path = "std::time::SystemTime", reason = "no wall-clock time in core; timing is tick-based" },
     { path = "std::time::Instant", reason = "no wall-clock time in core; timing is tick-based" },
@@ -7,6 +23,8 @@ disallowed-types = [
 
 disallowed-methods = [
     { path = "std::thread::spawn", reason = "no threading in core" },
+    { path = "std::thread::Builder::spawn", reason = "no threading in core" },
+    { path = "std::thread::scope", reason = "no threading in core" },
     { path = "std::thread::sleep", reason = "no blocking or timing in core" },
 ]
 

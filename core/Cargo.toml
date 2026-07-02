@@ -12,5 +12,11 @@ publish.workspace = true
 serde = { version = "1", features = ["derive"] }
 rand_core = "0.9"
 
+# Test-only. Dev-dependencies never reach the lib target, so they sit
+# outside the portability contract — the library still depends only on
+# serde + rand_core.
+[dev-dependencies]
+serde_json = "1"
+
 [lints]
 workspace = true

@@ -1,0 +1,60 @@
+{
+  "skills": {
+    "records": 52,
+    "by_source_version": {
+      "075": 30,
+      "095d": 5,
+      "s6": 17
+    }
+  },
+  "magic_effects": {
+    "records": 13,
+    "by_source_version": {
+      "075": 7,
+      "s6": 6
+    }
+  },
+  "review_count": 24,
+  "reviews": {
+    "skills/cometfall": "095d source marks it a plain direct hit yet attaches target-area settings; encoded as area_automatic (AoE intent; the S6 dataset marks it an automatic-hits area skill)",
+    "skills/soul_barrier": "retail 0.97/1.0 Soul Master skill; absent from OpenMU 075/095d datasets, values from the S6 initializer",
+    "skills/ice_storm": "retail 1.0-era Soul Master AoE; absent from 075/095d, values from S6",
+    "skills/nova": "retail 1.0 Soul Master skill; mana 15 = 180 per full 12-stage charge; stage damage feeds nova_stage_damage",
+    "skills/rageful_blow": "retail 0.97/1.0 Blade Knight skill; absent from 075/095d, values from S6",
+    "skills/death_stab": "retail 0.97/1.0 Blade Knight skill; absent from 075/095d, values from S6",
+    "skills/swell_life": "retail 0.97/1.0 knight party buff (Greater Fortitude); absent from 075/095d, values from S6",
+    "skills/ice_arrow": "retail 1.0 Muse Elf skill; absent from 075/095d, values from S6; S6 skill_multiplier rebalance relationship not extracted (see gaps)",
+    "skills/penetration": "retail 1.0 elf skill; absent from 075/095d, values from S6; S6 skill_multiplier rebalance relationship not extracted (see gaps)",
+    "skills/fire_slash": "retail 1.0-era Magic Gladiator skill; absent from 075/095d, values from S6",
+    "skills/power_slash": "retail 1.0-era Magic Gladiator skill; absent from 075/095d, values from S6",
+    "skills/nova_start": "charge-phase companion of the Nova backport (skill 40); not on the curated list but Nova is unusable without it",
+    "skills/fire_burst": "Dark Lord backport (DL is 0.97/1.0 content, only in the S6 dataset)",
+    "skills/earthshake": "Dark Lord backport; S6 horse_level*10 damage term dropped (dark horse pet excluded pre-S3, see gaps)",
+    "skills/summon": "Dark Lord backport; summons party members (not a monster summon), party-summon behavior is a rules concern",
+    "skills/increase_critical_damage": "Dark Lord backport (DL is 0.97/1.0 content, only in the S6 dataset)",
+    "skills/infinity_arrow": "retail 1.0 Muse Elf buff; absent from 075/095d, values from S6",
+    "skills/generic_monster_skill": "monster-only attack skill: 075/095d monster initializers (Death Gorgon/Balrog/Hydra and 095d bosses) set attack_skill 150, but only the S6 skills initializer defines it - upstream 075/095d lookup silently resolves to null (latent omission); backported so those attack_skill references resolve",
+    "magic_effects/soul_barrier": "effect of the soul_barrier skill backport (retail 0.97/1.0); S6 initializer values",
+    "magic_effects/critical_damage_increase": "effect of the Dark Lord increase_critical_damage backport; S6 initializer values",
+    "magic_effects/infinite_arrow": "effect of the infinity_arrow backport (retail 1.0); S6 zero-value master-skill placeholder power-up dropped (see gaps)",
+    "magic_effects/swell_life": "effect of the swell_life backport (retail 0.97/1.0 Greater Fortitude); S6 initializer values",
+    "magic_effects/freeze": "created on demand by the ice_arrow backport (retail 1.0); shares sub_type 254 with iced, so freeze replaces iced (source behavior)",
+    "magic_effects/defense_reduction": "effect of the fire_slash backport (retail 1.0-era); S6 initializer values"
+  },
+  "gaps": [
+    "blade_knight skill combo: the combo definition (3000 ms completion window; step 1 slash/cyclone/lunge/falling_slash/uppercut, step 2 twisting_slash/rageful_blow/death_stab/+S2 strike_of_destruction, final twisting_slash/rageful_blow/death_stab) is attached to the character class in the source and has no slot in spec sections 7/8 - class concern, not extracted",
+    "earthshake damage_scaling: the S6 horse_level*10 term is dropped - dark horse trainable pet is excluded pre-S3 and horse_level is not in stats.json",
+    "infinite_arrow: S6 zero-value placeholder power-up on attack_damage_increase (reserved for the S4 master skill) dropped",
+    "ice_arrow/penetration: S6 per-skill final-damage relationships (2.0 x skill_multiplier) not extracted - S6 damage-rebalance data, not pre-S3",
+    "dl summon (skill 63): summons party members; encoded as behavior kind 'other', the party-summon behavior itself is a rules concern",
+    "evolved-class qualification: 075/095d records keep the literal 095d class masks (base classes); whether soul_master/blade_knight/muse_elf inherit base-class skills is a class/rules concern. s6 backports carry second-class slugs from the S6 masks filtered to pre-S3 classes",
+    "the 095d dataset rewrites buff-effect client numbers to the owning skill number (client-protocol convention); canonical effect numbers kept per spec section 8 example"
+  ],
+  "notes": [
+    "records tagged 075 carry 095d values per the approved 095d baseline; differing 075 values: evil_spirit range 7 (095d: 6), triple_shot was area-explicit-hits without settings (095d: 3-projectile frustum), summon energy requirements were 30/60/90/130/170/210 (095d: 90/170/190/230/250/260), MG absent from all class masks",
+    "summon skills 30-35 reference monster numbers 26/32/21/20/10/150; Bali #150 is created by the 095d skills initializer but the monster record is owned by the monsters extractor (dependency)",
+    "effect durations and delays converted seconds -> integer milliseconds; duration scaled_by operands are ms per stat point",
+    "no cooldown field (approved decision 8); no AG costs exist in the 095d baseline - ability consumption appears only on s6 backports",
+    "generic_monster_skill (150) is a monster-only skill with no classes; referenced by monster attack_skill in 075/095d map initializers but defined only by the S6 skills initializer, hence source_version s6"
+  ]
+}

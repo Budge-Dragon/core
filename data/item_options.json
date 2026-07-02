@@ -1,0 +1,1097 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "luck",
+      "option_type": "luck",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "critical_damage_chance",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "defense",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "defense_base",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "physical_attack",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "physical_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wizardry_attack",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "wizardry_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "defense_rate",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "defense_rate_pvm",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 5.0
+            },
+            {
+              "level": 2,
+              "value": 10.0
+            },
+            {
+              "level": 3,
+              "value": 15.0
+            },
+            {
+              "level": 4,
+              "value": 20.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health_recover_for_jewelery",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "health_recovery_multiplier",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 0.01
+            },
+            {
+              "level": 2,
+              "value": 0.02
+            },
+            {
+              "level": 3,
+              "value": 0.03
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jewelery_option_maximum_mana",
+      "option_type": "option",
+      "source_version": "s6",
+      "review": "S6-only jewelry option backported with the 1.0-era ring_of_magic/pendant_of_ability items (ancient-set pieces)",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "maximum_mana",
+          "aggregate": "multiplicate",
+          "levels": [
+            {
+              "level": 1,
+              "value": 1.01
+            },
+            {
+              "level": 2,
+              "value": 1.02
+            },
+            {
+              "level": 3,
+              "value": 1.03
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jewelery_option_maximum_ability",
+      "option_type": "option",
+      "source_version": "s6",
+      "review": "S6-only jewelry option backported with the 1.0-era ring_of_magic/pendant_of_ability items (ancient-set pieces)",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "maximum_ability",
+          "aggregate": "multiplicate",
+          "levels": [
+            {
+              "level": 1,
+              "value": 1.01
+            },
+            {
+              "level": 2,
+              "value": 1.02
+            },
+            {
+              "level": 3,
+              "value": 1.03
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wings_of_elf_options",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "health_recovery_multiplier",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 0.01
+            },
+            {
+              "level": 2,
+              "value": 0.02
+            },
+            {
+              "level": 3,
+              "value": 0.03
+            },
+            {
+              "level": 4,
+              "value": 0.04
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wings_of_heaven_options",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "wizardry_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wings_of_satan_options",
+      "option_type": "option",
+      "source_version": "075",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "physical_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2nd_wing_options",
+      "option_type": "wing",
+      "source_version": "s6",
+      "review": "1.0-era 2nd-wing options backported with the s6 wing items; hp/mana item-level values truncated from source cap 15 to 11",
+      "adds_randomly": true,
+      "add_chance": 0.1,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 1,
+          "kind": "per_level",
+          "level_type": "item_level",
+          "stat": "maximum_health",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 0,
+              "value": 50.0
+            },
+            {
+              "level": 1,
+              "value": 55.0
+            },
+            {
+              "level": 2,
+              "value": 60.0
+            },
+            {
+              "level": 3,
+              "value": 65.0
+            },
+            {
+              "level": 4,
+              "value": 70.0
+            },
+            {
+              "level": 5,
+              "value": 75.0
+            },
+            {
+              "level": 6,
+              "value": 80.0
+            },
+            {
+              "level": 7,
+              "value": 85.0
+            },
+            {
+              "level": 8,
+              "value": 90.0
+            },
+            {
+              "level": 9,
+              "value": 95.0
+            },
+            {
+              "level": 10,
+              "value": 100.0
+            },
+            {
+              "level": 11,
+              "value": 105.0
+            }
+          ]
+        },
+        {
+          "number": 2,
+          "kind": "per_level",
+          "level_type": "item_level",
+          "stat": "maximum_mana",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 0,
+              "value": 50.0
+            },
+            {
+              "level": 1,
+              "value": 55.0
+            },
+            {
+              "level": 2,
+              "value": 60.0
+            },
+            {
+              "level": 3,
+              "value": 65.0
+            },
+            {
+              "level": 4,
+              "value": 70.0
+            },
+            {
+              "level": 5,
+              "value": 75.0
+            },
+            {
+              "level": 6,
+              "value": 80.0
+            },
+            {
+              "level": 7,
+              "value": 85.0
+            },
+            {
+              "level": 8,
+              "value": 90.0
+            },
+            {
+              "level": 9,
+              "value": 95.0
+            },
+            {
+              "level": 10,
+              "value": 100.0
+            },
+            {
+              "level": 11,
+              "value": 105.0
+            }
+          ]
+        },
+        {
+          "number": 3,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "defense_ignore_chance",
+            "value": 0.03,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "wings_of_spirits_options",
+      "option_type": "option",
+      "source_version": "s6",
+      "review": "1.0-era jewel-of-life options of a backported s6 2nd wing; same value shape as the 075 first-wing options",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 2,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "health_recovery_multiplier",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 0.01
+            },
+            {
+              "level": 2,
+              "value": 0.02
+            },
+            {
+              "level": 3,
+              "value": 0.03
+            },
+            {
+              "level": 4,
+              "value": 0.04
+            }
+          ]
+        },
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "physical_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wings_of_soul_options",
+      "option_type": "option",
+      "source_version": "s6",
+      "review": "1.0-era jewel-of-life options of a backported s6 2nd wing; same value shape as the 075 first-wing options",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "health_recovery_multiplier",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 0.01
+            },
+            {
+              "level": 2,
+              "value": 0.02
+            },
+            {
+              "level": 3,
+              "value": 0.03
+            },
+            {
+              "level": 4,
+              "value": 0.04
+            }
+          ]
+        },
+        {
+          "number": 2,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "wizardry_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wings_of_dragon_options",
+      "option_type": "option",
+      "source_version": "s6",
+      "review": "1.0-era jewel-of-life options of a backported s6 2nd wing; same value shape as the 075 first-wing options",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "health_recovery_multiplier",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 0.01
+            },
+            {
+              "level": 2,
+              "value": 0.02
+            },
+            {
+              "level": 3,
+              "value": 0.03
+            },
+            {
+              "level": 4,
+              "value": 0.04
+            }
+          ]
+        },
+        {
+          "number": 2,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "physical_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wings_of_darkness_options",
+      "option_type": "option",
+      "source_version": "s6",
+      "review": "1.0-era jewel-of-life options of a backported s6 2nd wing; same value shape as the 075 first-wing options",
+      "adds_randomly": true,
+      "add_chance": 0.25,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "wizardry_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        },
+        {
+          "number": 2,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "physical_base_dmg",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 4.0
+            },
+            {
+              "level": 2,
+              "value": 8.0
+            },
+            {
+              "level": 3,
+              "value": 12.0
+            },
+            {
+              "level": 4,
+              "value": 16.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "excellent_defense",
+      "option_type": "excellent",
+      "source_version": "095d",
+      "adds_randomly": true,
+      "add_chance": 0.001,
+      "max_per_item": 2,
+      "options": [
+        {
+          "number": 1,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "money_amount_rate",
+            "value": 1.4,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 2,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "defense_rate_pvm",
+            "value": 1.1,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 3,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "damage_reflection",
+            "value": 0.05,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "armor_damage_decrease",
+            "value": 0.04,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 5,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "maximum_mana",
+            "value": 1.04,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 6,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "maximum_health",
+            "value": 1.04,
+            "aggregate": "multiplicate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "excellent_physical",
+      "option_type": "excellent",
+      "source_version": "095d",
+      "adds_randomly": true,
+      "add_chance": 0.001,
+      "max_per_item": 2,
+      "options": [
+        {
+          "number": 1,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "mana_after_monster_kill_multiplier",
+            "value": 0.125,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "health_after_monster_kill_multiplier",
+            "value": 0.125,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "attack_speed_any",
+            "value": 7.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "physical_base_dmg_increase",
+            "value": 1.02,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 5,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "physical_base_dmg",
+            "value": 0.0,
+            "aggregate": "add_raw",
+            "scaled_by": [
+              {
+                "stat": "total_level",
+                "operator": "multiply",
+                "operand": 0.05
+              }
+            ]
+          }
+        },
+        {
+          "number": 6,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "excellent_wizardry",
+      "option_type": "excellent",
+      "source_version": "095d",
+      "adds_randomly": true,
+      "add_chance": 0.001,
+      "max_per_item": 2,
+      "options": [
+        {
+          "number": 1,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "mana_after_monster_kill_multiplier",
+            "value": 0.125,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 2,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "health_after_monster_kill_multiplier",
+            "value": 0.125,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 3,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "attack_speed_any",
+            "value": 7.0,
+            "aggregate": "add_raw"
+          }
+        },
+        {
+          "number": 4,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "wizardry_base_dmg_increase",
+            "value": 1.02,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 5,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "wizardry_base_dmg",
+            "value": 0.0,
+            "aggregate": "add_raw",
+            "scaled_by": [
+              {
+                "stat": "total_level",
+                "operator": "multiply",
+                "operand": 0.05
+              }
+            ]
+          }
+        },
+        {
+          "number": 6,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "excellent_damage_chance",
+            "value": 0.1,
+            "aggregate": "add_raw"
+          }
+        }
+      ]
+    },
+    {
+      "id": "dinorant_options",
+      "option_type": "option",
+      "source_version": "095d",
+      "adds_randomly": true,
+      "add_chance": 0.3,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 4,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "damage_receive_decrement",
+            "value": 0.95,
+            "aggregate": "multiplicate"
+          }
+        },
+        {
+          "number": 4,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "maximum_ability",
+            "value": 50.0,
+            "aggregate": "add_final"
+          }
+        },
+        {
+          "number": 4,
+          "kind": "fixed",
+          "power_up": {
+            "stat": "attack_speed_any",
+            "value": 5.0,
+            "aggregate": "add_final"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ancient_bonus_total_vitality",
+      "option_type": "ancient_bonus",
+      "source_version": "s6",
+      "review": "s1-era ancient piece bonus (+5/+10, level rolled at drop); OpenMU ships it only in the s6 dataset",
+      "adds_randomly": false,
+      "add_chance": 0.0,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "total_vitality",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 5.0
+            },
+            {
+              "level": 2,
+              "value": 10.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ancient_bonus_total_strength",
+      "option_type": "ancient_bonus",
+      "source_version": "s6",
+      "review": "s1-era ancient piece bonus (+5/+10, level rolled at drop); OpenMU ships it only in the s6 dataset",
+      "adds_randomly": false,
+      "add_chance": 0.0,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "total_strength",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 5.0
+            },
+            {
+              "level": 2,
+              "value": 10.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ancient_bonus_total_agility",
+      "option_type": "ancient_bonus",
+      "source_version": "s6",
+      "review": "s1-era ancient piece bonus (+5/+10, level rolled at drop); OpenMU ships it only in the s6 dataset",
+      "adds_randomly": false,
+      "add_chance": 0.0,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "total_agility",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 5.0
+            },
+            {
+              "level": 2,
+              "value": 10.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ancient_bonus_total_energy",
+      "option_type": "ancient_bonus",
+      "source_version": "s6",
+      "review": "s1-era ancient piece bonus (+5/+10, level rolled at drop); OpenMU ships it only in the s6 dataset",
+      "adds_randomly": false,
+      "add_chance": 0.0,
+      "max_per_item": 1,
+      "options": [
+        {
+          "number": 0,
+          "kind": "per_level",
+          "level_type": "option_level",
+          "stat": "total_energy",
+          "aggregate": "add_raw",
+          "levels": [
+            {
+              "level": 1,
+              "value": 5.0
+            },
+            {
+              "level": 2,
+              "value": 10.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

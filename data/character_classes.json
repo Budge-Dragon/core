@@ -1,0 +1,3379 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "global",
+      "source_version": "075",
+      "const_values": [
+        {
+          "stat": "mana_recovery_multiplier",
+          "value": 0.0363636364
+        },
+        {
+          "stat": "damage_receive_decrement",
+          "value": 1.0
+        },
+        {
+          "stat": "attack_damage_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "experience_rate",
+          "value": 1.0
+        },
+        {
+          "stat": "poison_damage_multiplier",
+          "value": 0.03
+        },
+        {
+          "stat": "item_duration_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "ability_recovery_absolute",
+          "value": 2.0
+        },
+        {
+          "stat": "physical_base_dmg_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "are_two_weapons_equipped",
+          "value": -1.0
+        },
+        {
+          "stat": "has_double_wield",
+          "value": -1.0
+        },
+        {
+          "stat": "defense_decrement",
+          "value": 1.0
+        },
+        {
+          "stat": "money_amount_rate",
+          "value": 1.0
+        },
+        {
+          "stat": "random_experience_min_multiplier",
+          "value": 0.8
+        },
+        {
+          "stat": "random_experience_max_multiplier",
+          "value": 1.2
+        },
+        {
+          "stat": "movement_speed_factor",
+          "value": 1.0
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "total_level",
+          "input": "level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "total_strength",
+          "input": "base_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "total_agility",
+          "input": "base_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "total_vitality",
+          "input": "base_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "total_energy",
+          "input": "base_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_base",
+          "input": "defense_shield",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_final",
+          "input": "defense_base",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_pvm",
+          "input": "defense_final",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_pvp",
+          "input": "defense_final",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed_any",
+          "input": "attack_speed_by_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "attack_speed_any",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "attack_speed_any",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "minimum_phys_base_dmg_by_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "maximum_phys_base_dmg_by_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "base_min_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "base_max_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "physical_base_dmg",
+          "input": "base_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "physical_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "physical_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "physical_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "physical_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "are_two_weapons_equipped",
+          "input": "equipped_weapon_count",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "temp_half_weapon_attack_speed",
+          "input": "attack_speed_by_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": -0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed_any",
+          "input": "temp_half_weapon_attack_speed",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "are_two_weapons_equipped"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "temp_defense_bonus_multiplier_with_shield",
+          "input": "defense_increase_with_equipped_shield",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "is_shield_equipped"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_final",
+          "input": "temp_defense_bonus_multiplier_with_shield",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "health_recovery_multiplier",
+          "input": "is_in_safezone",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.01
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvp",
+          "input": "defense_rate_pvm",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvp",
+          "input": "attack_rate_pvm",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_guild_size",
+          "input": "level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "can_fly",
+          "input": "is_dinorant_equipped",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "dark_wizard",
+      "number": 0,
+      "source_version": "075",
+      "review": "evolution to soul_master at level 150 is a curated 1.0-era backport (075/095d datasets ship no second classes); rest of the record is the shipped shared-initializer data",
+      "created_by_player": true,
+      "creation_unlock_level": 0,
+      "home_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "points_per_level": 5,
+      "fruit_calculation": "default",
+      "warp_level_reduction_percent": 0,
+      "evolution": {
+        "class": "soul_master",
+        "at_level": 150
+      },
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 18,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 18,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 15,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 30,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 60,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 60,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_health",
+          "value": 30.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 1.0
+        },
+        {
+          "stat": "wizardry_attack_damage_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.0303030303
+        },
+        {
+          "stat": "wizardry_base_dmg_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "nova_stage_damage",
+          "value": 0.0
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.05
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.4
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.125
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1111111111
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "base_min_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "base_max_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "wizardry_base_dmg",
+          "input": "base_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "wizardry_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "wizardry_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "wizardry_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "wizardry_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "wizardry_attack_damage_increase",
+          "input": "staff_rise",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.01
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "soul_master",
+      "number": 2,
+      "source_version": "s6",
+      "review": "1.0-era backport: second class of the dark_wizard line (class change at level 150 predates season 3); defined only in the s6 dataset; rebuilt with classic-pvp rules, shield/master/pet formulas dropped",
+      "created_by_player": false,
+      "creation_unlock_level": 0,
+      "home_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "points_per_level": 5,
+      "fruit_calculation": "default",
+      "warp_level_reduction_percent": 0,
+      "evolution": null,
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 18,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 18,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 15,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 30,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 60,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 60,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_health",
+          "value": 30.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 1.0
+        },
+        {
+          "stat": "wizardry_attack_damage_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.0303030303
+        },
+        {
+          "stat": "wizardry_base_dmg_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "nova_stage_damage",
+          "value": 0.0
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.05
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.4
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.125
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1111111111
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "base_min_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "base_max_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "wizardry_base_dmg",
+          "input": "base_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "wizardry_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "wizardry_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "wizardry_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "wizardry_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "wizardry_attack_damage_increase",
+          "input": "staff_rise",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.01
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "dark_knight",
+      "number": 4,
+      "source_version": "075",
+      "review": "evolution to blade_knight at level 150 is a curated 1.0-era backport (075/095d datasets ship no second classes); rest of the record is the shipped shared-initializer data",
+      "created_by_player": true,
+      "creation_unlock_level": 0,
+      "home_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "points_per_level": 5,
+      "fruit_calculation": "default",
+      "warp_level_reduction_percent": 0,
+      "evolution": {
+        "class": "blade_knight",
+        "at_level": 150
+      },
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 28,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 20,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 25,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 10,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 110,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 20,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_mana",
+          "value": 10.0
+        },
+        {
+          "stat": "maximum_health",
+          "value": 35.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 2.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.05
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.05
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.15
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 3.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "skill_multiplier",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.001
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "combo_bonus",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "combo_bonus",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "combo_bonus",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "has_double_wield",
+          "input": "double_wield_weapon_count",
+          "operator": "maximum",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "temp_double_wield_multiplier",
+          "input": "has_double_wield",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": -0.45
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "physical_base_dmg_increase",
+          "input": "temp_double_wield_multiplier",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "minimum_phys_base_dmg_by_weapon",
+          "input": "min_phys_base_dmg_by_right_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "has_double_wield"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg_by_weapon",
+          "input": "max_phys_base_dmg_by_right_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "has_double_wield"
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "blade_knight",
+      "number": 6,
+      "source_version": "s6",
+      "review": "1.0-era backport: second class of the dark_knight line (class change at level 150 predates season 3); defined only in the s6 dataset; rebuilt with classic-pvp rules, shield/master/pet formulas dropped",
+      "created_by_player": false,
+      "creation_unlock_level": 0,
+      "home_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "points_per_level": 5,
+      "fruit_calculation": "default",
+      "warp_level_reduction_percent": 0,
+      "evolution": null,
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 28,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 20,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 25,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 10,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 110,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 20,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_mana",
+          "value": 10.0
+        },
+        {
+          "stat": "maximum_health",
+          "value": 35.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 2.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.05
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.05
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.15
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 3.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "skill_multiplier",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.001
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "combo_bonus",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "combo_bonus",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "combo_bonus",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "has_double_wield",
+          "input": "double_wield_weapon_count",
+          "operator": "maximum",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "temp_double_wield_multiplier",
+          "input": "has_double_wield",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": -0.45
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "physical_base_dmg_increase",
+          "input": "temp_double_wield_multiplier",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "minimum_phys_base_dmg_by_weapon",
+          "input": "min_phys_base_dmg_by_right_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "has_double_wield"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg_by_weapon",
+          "input": "max_phys_base_dmg_by_right_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "has_double_wield"
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "fairy_elf",
+      "number": 8,
+      "source_version": "075",
+      "review": "evolution to muse_elf at level 150 is a curated 1.0-era backport (075/095d datasets ship no second classes); rest of the record is the shipped shared-initializer data",
+      "created_by_player": true,
+      "creation_unlock_level": 0,
+      "home_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "points_per_level": 5,
+      "fruit_calculation": "default",
+      "warp_level_reduction_percent": 0,
+      "evolution": {
+        "class": "muse_elf",
+        "at_level": 150
+      },
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 22,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 25,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 20,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 15,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 80,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 30,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "ammunition_amount",
+          "value": 0,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_health",
+          "value": 39.0
+        },
+        {
+          "stat": "maximum_mana",
+          "value": 6.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 1.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.0303030303
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "total_strength_and_agility",
+          "input": "total_strength",
+          "operator": "add",
+          "operand": {
+            "kind": "stat",
+            "stat": "total_agility"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.02
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.02
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_min_dmg",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_max_dmg",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_min_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0714285714
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_max_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.125
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "melee_min_dmg",
+          "input": "total_strength_and_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "melee_max_dmg",
+          "input": "total_strength_and_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "physical_base_dmg_increase",
+          "input": "ammunition_damage_increase",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "archery_attack_mode",
+          "input": "is_bow_equipped",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_attack_mode",
+          "input": "is_cross_bow_equipped",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "melee_attack_mode",
+          "input": "archery_attack_mode",
+          "operator": "exponentiate_by_attribute",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "archery_min_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "archery_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "archery_max_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "archery_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "ammunition_damage_increase",
+          "input": "ammunition_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "archery_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "melee_min_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "melee_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "melee_max_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "melee_attack_mode"
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "muse_elf",
+      "number": 10,
+      "source_version": "s6",
+      "review": "1.0-era backport: second class of the fairy_elf line (class change at level 150 predates season 3); defined only in the s6 dataset; rebuilt with classic-pvp rules, shield/master/pet formulas dropped",
+      "created_by_player": false,
+      "creation_unlock_level": 0,
+      "home_map": {
+        "number": 3,
+        "discriminator": 0
+      },
+      "points_per_level": 5,
+      "fruit_calculation": "default",
+      "warp_level_reduction_percent": 0,
+      "evolution": null,
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 22,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 25,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 20,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 15,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 80,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 30,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "ammunition_amount",
+          "value": 0,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_health",
+          "value": 39.0
+        },
+        {
+          "stat": "maximum_mana",
+          "value": 6.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 1.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.0303030303
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "total_strength_and_agility",
+          "input": "total_strength",
+          "operator": "add",
+          "operand": {
+            "kind": "stat",
+            "stat": "total_agility"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.02
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.02
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_min_dmg",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_max_dmg",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_min_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0714285714
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_max_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.125
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "melee_min_dmg",
+          "input": "total_strength_and_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "melee_max_dmg",
+          "input": "total_strength_and_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "physical_base_dmg_increase",
+          "input": "ammunition_damage_increase",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "archery_attack_mode",
+          "input": "is_bow_equipped",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "archery_attack_mode",
+          "input": "is_cross_bow_equipped",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "melee_attack_mode",
+          "input": "archery_attack_mode",
+          "operator": "exponentiate_by_attribute",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "archery_min_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "archery_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "archery_max_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "archery_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "ammunition_damage_increase",
+          "input": "ammunition_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "archery_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "melee_min_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "melee_attack_mode"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "melee_max_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "melee_attack_mode"
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "magic_gladiator",
+      "number": 12,
+      "source_version": "095d",
+      "review": "fruit_calculation curated to magic_gladiator per the domain fruit caps (default 127 / mg 100 / dl 115); the shipped initializer never assigns a strategy (all default) and fruits are 1.0-era content",
+      "created_by_player": true,
+      "creation_unlock_level": 220,
+      "home_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "points_per_level": 7,
+      "fruit_calculation": "magic_gladiator",
+      "warp_level_reduction_percent": 34,
+      "evolution": null,
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 26,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 26,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 26,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 26,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 110,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 60,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_health",
+          "value": 57.0
+        },
+        {
+          "stat": "maximum_mana",
+          "value": 7.0
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 2.0
+        },
+        {
+          "stat": "wizardry_attack_damage_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.0303030303
+        },
+        {
+          "stat": "wizardry_base_dmg_increase",
+          "value": 1.0
+        },
+        {
+          "stat": "is_one_handed_sword_equipped",
+          "value": 0.0
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3333333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.05
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.15
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0833333333
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.125
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1111111111
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.25
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "base_min_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "base_max_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "wizardry_base_dmg",
+          "input": "base_damage_bonus",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "wizardry_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "wizardry_base_dmg",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_wiz_base_dmg",
+          "input": "wizardry_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "maximum_wiz_base_dmg",
+          "input": "wizardry_base_dmg_increase",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "wizardry_attack_damage_increase",
+          "input": "staff_rise",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.01
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "is_one_handed_sword_equipped",
+          "input": "is_one_handed_staff_equipped",
+          "operator": "exponentiate_by_attribute",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "has_double_wield",
+          "input": "double_wield_weapon_count",
+          "operator": "maximum",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "temp_double_wield_multiplier",
+          "input": "has_double_wield",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": -0.45
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "physical_base_dmg_increase",
+          "input": "temp_double_wield_multiplier",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "multiplicate"
+        },
+        {
+          "target": "minimum_phys_base_dmg_by_weapon",
+          "input": "min_phys_base_dmg_by_right_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "has_double_wield"
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg_by_weapon",
+          "input": "max_phys_base_dmg_by_right_weapon",
+          "operator": "multiply",
+          "operand": {
+            "kind": "stat",
+            "stat": "has_double_wield"
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    },
+    {
+      "id": "dark_lord",
+      "number": 16,
+      "source_version": "s6",
+      "review": "1.0-era backport: dark lord shipped around v1.0 but is absent from the 075/095d datasets; rebuilt with classic-pvp rules; raven/horse/pet and master-tree formulas dropped (see gaps); fruit_calculation dark_lord per domain caps",
+      "created_by_player": true,
+      "creation_unlock_level": 250,
+      "home_map": {
+        "number": 0,
+        "discriminator": 0
+      },
+      "points_per_level": 7,
+      "fruit_calculation": "dark_lord",
+      "warp_level_reduction_percent": 34,
+      "evolution": null,
+      "base_stats": [
+        {
+          "stat": "level",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "base_strength",
+          "value": 26,
+          "increasable": true
+        },
+        {
+          "stat": "base_agility",
+          "value": 20,
+          "increasable": true
+        },
+        {
+          "stat": "base_vitality",
+          "value": 20,
+          "increasable": true
+        },
+        {
+          "stat": "base_energy",
+          "value": 15,
+          "increasable": true
+        },
+        {
+          "stat": "base_leadership",
+          "value": 25,
+          "increasable": true
+        },
+        {
+          "stat": "current_health",
+          "value": 90,
+          "increasable": false
+        },
+        {
+          "stat": "current_mana",
+          "value": 40,
+          "increasable": false
+        },
+        {
+          "stat": "current_ability",
+          "value": 1,
+          "increasable": false
+        },
+        {
+          "stat": "is_in_safezone",
+          "value": 1,
+          "increasable": false
+        }
+      ],
+      "const_values": [
+        {
+          "stat": "maximum_mana",
+          "value": 38.0
+        },
+        {
+          "stat": "maximum_health",
+          "value": 48.5
+        },
+        {
+          "stat": "skill_multiplier",
+          "value": 2.0
+        },
+        {
+          "stat": "ability_recovery_multiplier",
+          "value": 0.0303030303
+        }
+      ],
+      "stat_formulas": [
+        {
+          "target": "total_leadership",
+          "input": "base_leadership",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_base",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "defense_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 5.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1666666667
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_rate_pvm",
+          "input": "total_leadership",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "attack_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "magic_speed",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.15
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_agility",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_ability",
+          "input": "total_leadership",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.3
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "total_energy_minus_15",
+          "input": "total_energy",
+          "operator": "add",
+          "operand": {
+            "kind": "constant",
+            "value": -15.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_energy_minus_15",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_mana",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_level",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 1.5
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_health",
+          "input": "total_vitality",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 2.0
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1428571429
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_strength",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.2
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "minimum_phys_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0714285714
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_phys_base_dmg",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "skill_multiplier",
+          "input": "total_energy",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.0005
+          },
+          "aggregate": "add_raw"
+        },
+        {
+          "target": "maximum_guild_size",
+          "input": "total_leadership",
+          "operator": "multiply",
+          "operand": {
+            "kind": "constant",
+            "value": 0.1
+          },
+          "aggregate": "add_raw"
+        }
+      ]
+    }
+  ]
+}

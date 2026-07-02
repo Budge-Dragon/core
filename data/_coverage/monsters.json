@@ -1,0 +1,37 @@
+{
+  "category": "monsters",
+  "file": "data/monster_definitions.json",
+  "counts": {
+    "075": 73,
+    "095d": 27,
+    "s6": 0,
+    "total": 100
+  },
+  "review": [
+    {
+      "number": 53,
+      "name": "Golden Titan",
+      "review": "Golden Titan ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+    },
+    {
+      "number": 54,
+      "name": "Golden Soldier",
+      "review": "Golden Soldier ships in the upstream 095d dataset, but this golden-invasion tier is commonly dated ~0.97+; kept as 095d per dataset policy."
+    }
+  ],
+  "gaps": [
+    "merchant store contents deferred by decision (merchant_stores.json, follow-up wave); merchant NPCs here carry only role/window",
+    "quests startable at NPCs (Sevina #235) deferred to quests.json (follow-up wave)",
+    "no s6 monster backports this wave: none named in the approved source list; known 1.0-era candidates left out by that decision include Blood Castle monsters + Archangel Messenger NPC and higher golden-invasion tiers beyond what the upstream 095d dataset ships",
+    "Golden Soldier #54 has no drop group in source (unlike #43 box_of_luck and #53 box_of_kundun_2) - faithful to the upstream 095d data, likely upstream omission of Box of Kundun +1"
+  ],
+  "notes": [
+    "resistances are fractions: source stores 0-255 bytes, upstream initializers write n/255; values here are n/255 with divisor 255",
+    "durations converted to integer ms; RespawnDelay is seconds in source (x1000); passive NPCs without delays get 0",
+    "the upstream opaque monster 'attribute' byte (1=npc/guard/trap, 2=monster) dropped per spec; role kind discriminates",
+    "the upstream free-form guard AI name folded into role kind 'guard'; trap AIs kind-tagged; trap AI random_in_range unused pre-S3",
+    "monster-bound drop groups reference the drops extractor's canonical ids: golden_budge_dragon_box_of_luck (#43), red_dragon_jewels (#44), golden_titan_box_of_kundun_2 (#53); source Description text is mapped, not slugified",
+    "attack_skill is the numeric skill number (Poison=1, Meteorite=2, Lightning=3, Ice=7, PowerWave=11, EnergyBall=17, FlameofEvil=50, MonsterSkill=150); skill 150 is defined only by the S6 skills initializer and ships in skills.json as an s6 backport",
+    "Bali #150 defined identically in 075 and 095d SkillsInitializers; deduped to source_version 075"
+  ]
+}
