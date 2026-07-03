@@ -23,10 +23,12 @@ use crate::events::movement::StepOutcome;
 use crate::services::chance::draw_cardinal;
 use crate::services::movement::{resolve_drift, resolve_step};
 
-/// A monster's per-action step distance: one whole tile. Authentic MU mobs
-/// advance about one tile per movement action; `move_range` in the data is the
-/// territory radius, not a speed, and no data file carries a step distance — so
-/// this is an invented movement grain, held here as the single source of truth.
+/// A monster's per-action step distance: one whole tile. Authentic: classic MU
+/// is tile-grid, so a mob advances exactly one tile per move action — one tile
+/// is the grid granularity, not an invented magnitude. Per-monster *speed* is
+/// the `move_delay_ms` cadence (the classic Monster.txt move-interval, sourced
+/// per monster); `move_range` is the territory radius. Classic carries no
+/// separate per-step-distance column, so there is nothing further to source.
 const MOB_STEP_SPEED: Fixed = Fixed::from_raw(UNITS_PER_TILE);
 
 /// The leash radius a roaming mob tethers within: its view range. With leash

@@ -1,7 +1,7 @@
 # Debt record: invented monster per-step distance (`MOB_STEP_SPEED`)
 
 - **ID:** MOB-SPD (data provenance — in-code constant)
-- **Status:** OPEN
+- **Status:** CLOSED (2026-07-04, confirm-and-keep)
 - **Owner wave:** W-SRC (source-verification pass)
 - **Created:** 2026-07-03, during the movement / flight wave (W-MOV).
 - **Category:** code (provenance)
@@ -60,3 +60,27 @@ Debt is discharged when the value is either confirmed against an authentic
 classic source (kept, with the confirmation recorded here) or corrected at the
 extractor-equivalent site (`services/monster_ai.rs`). Remove MOB-SPD from
 `DEBT-INDEX.md` at that point.
+
+## Resolution (2026-07-04) — CONFIRMED, kept
+
+Discharged as **confirm-and-keep**, exactly the path the plan anticipated.
+Classic MU movement is **tile-grid**: an entity occupies grid cells, so a
+monster advances **one tile per move action** by the nature of the grid — the
+one-tile step is the grid granularity, an independently well-established fact
+about classic MU, not an OpenMU-specific default. Per-monster movement *speed*
+is not a step distance at all: it is the **`move_delay_ms` cadence** (the classic
+Monster.txt move-interval, ~400 ms typical), which is already sourced **per
+monster** and drives the AI readiness check — so a slow mob and a fast mob differ
+by their delay, not their step size. Classic Monster.txt carries **no separate
+per-step-distance column** (its columns are the territory range and the
+move/attack intervals; facts doc 4), so there is nothing further to source. The
+`MOB_STEP_SPEED` doc comment was updated to state this confirmed provenance
+(replacing the "invented movement grain" language). Row removed from
+`DEBT-INDEX.md`.
+
+Note (design, not provenance): the continuous world means "one tile per action"
+is a continuous displacement, but the AI still applies it as a discrete hop each
+`move_delay`. If a smoother modern glide is wanted, that is a movement-feel
+refinement (act more often with a proportionally smaller step, or host-side
+interpolation) — a design choice for a later movement/AI pass, **not** a
+provenance question, and it does not reopen MOB-SPD.
