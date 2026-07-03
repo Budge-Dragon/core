@@ -1,8 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["core"]
+members = ["core", "xtask"]
 # Future host crates live under hosts/ (see hosts/README.md) and are added
 # here when created. Hosts embed mu-core; mu-core never depends on a host.
+#
+# `xtask` is the repo's dev-tooling binary (the `cargo xtask` pattern). It is
+# NOT part of mu-core and never enters its dependency graph: it omits
+# `[lints] workspace = true`, so it does not inherit core's Iron-Law lints, and
+# its `syn`/`walkdir` deps stay out of the pure library.
 
 [workspace.package]
 version = "0.1.0"

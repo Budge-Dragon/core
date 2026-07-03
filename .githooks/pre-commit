@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-commit gate: run the review-enforced ban scanner (Q3) before every commit.
+# It flags the four bans no clippy lint covers — lookup-shaped unwrap_or, inline
+# #[expect], #[non_exhaustive] enums, and fabricated Default — with file:line,
+# exiting non-zero so the commit is blocked until the root is fixed.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# CI runs the same `cargo xtask scan` step, so this hook is a fast local
+# pre-flight, not the sole gate.
+set -e
+
+exec cargo xtask scan

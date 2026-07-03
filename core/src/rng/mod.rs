@@ -121,3 +121,94 @@ fn narrow_index(value: u64) -> usize {
     }
     usize::from_le_bytes(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// The same deterministic `SplitMix64` the chance-service tests drive, so
+    /// the seam is exercised with a replayable generator, not `thread_rng`.
+    struct TestRng {
+        state: u64,
+    }
+
+    impl TestRng {
+        fn new(seed: u64) -> Self {
+            Self { state: seed }
+        }
+    }
+
+    impl RngCore for TestRng {
+        fn next_u64(&mut self) -> u64 {
+            self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = self.state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+
+        fn next_u32(&mut self) -> u32 {
+            let [b0, b1, b2, b3, _, _, _, _] = self.next_u64().to_le_bytes();
+            u32::from_le_bytes([b0, b1, b2, b3])
+        }
+
+        fn fill_bytes(&mut self, dst: &mut [u8]) {
+            for chunk in dst.chunks_mut(8) {
+                let bytes = self.next_u64().to_le_bytes();
+                for (slot, byte) in chunk.iter_mut().zip(bytes.iter()) {
+                    *slot = *byte;
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn uniform_below_output_is_always_below_bound(bound in 1u32..=u32::MAX, seed in any::<u64>()) {
+            let nz = NonZeroU32::new(bound).unwrap();
+            let mut rng = TestRng::new(seed);
+            for _ in 0..256 {
+                prop_assert!(uniform_below(nz, &mut rng) < bound);
+            }
+        }
+
+        #[test]
+        fn uniform_below_usize_output_is_always_below_bound(
+            bound in 1usize..=1_000_000,
+            seed in any::<u64>(),
+        ) {
+            let nz = NonZeroUsize::new(bound).unwrap();
+            let mut rng = TestRng::new(seed);
+            for _ in 0..256 {
+                prop_assert!(uniform_below_usize(nz, &mut rng) < bound);
+            }
+        }
+    }
+
+    #[test]
+    fn uniform_below_is_equidistributed_within_a_deterministic_bound() {
+        // 60,000 draws over six buckets: each lands within 10% of the 10,000
+        // expected, pinning the draw's equidistribution (output uniformity).
+        // Deterministic (fixed seed), so the band is a hard bound, not a flaky
+        // sample. This does NOT demonstrate the absence of modulo bias: for a
+        // small bound over a 32-bit word that bias is far below this band's
+        // resolution (a plain `% bound` would pass here too). The no-modulo-bias
+        // guarantee is STRUCTURAL — the Lemire rejection loop in `uniform_below`
+        // above — not something this sample proves.
+        let bound = NonZeroU32::new(6).unwrap();
+        let mut rng = TestRng::new(0x00C0_FFEE);
+        let mut counts = [0u32; 6];
+        for _ in 0..60_000 {
+            let draw = uniform_below(bound, &mut rng);
+            let index = usize::try_from(draw).unwrap();
+            counts[index] += 1;
+        }
+        for count in counts {
+            assert!(
+                (9_000..=11_000).contains(&count),
+                "bucket count {count} outside the equidistribution band"
+            );
+        }
+    }
+}

@@ -17,6 +17,15 @@ rand_core = "0.9"
 # serde + rand_core.
 [dev-dependencies]
 serde_json = "1"
+
+# proptest is native-only: it transitively pulls `wait-timeout`, which does not
+# build for `wasm32-wasip1`. Gating it out of the wasm test graph lets the
+# dedicated cross-target determinism test (`tests/wasm_determinism.rs`, plain
+# `#[test]`, no proptest) build and RUN under wasmtime — proving native and wasm
+# produce bit-identical results — while the property tests run on the native
+# legs. (Dev-deps never reach the lib target, so the portability contract is
+# untouched either way.)
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 proptest = "1"
 
 [lints]

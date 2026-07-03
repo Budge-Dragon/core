@@ -59,11 +59,9 @@ impl TileCoord {
     /// `[0, 255]`.
     #[must_use]
     pub fn from_world(pos: WorldPos) -> Self {
-        let tx = (pos.x().raw() >> TILE_SHIFT).clamp(0, 255);
-        let ty = (pos.y().raw() >> TILE_SHIFT).clamp(0, 255);
         Self {
-            x: narrow_u8(tx),
-            y: narrow_u8(ty),
+            x: tile_index(pos.x().raw()),
+            y: tile_index(pos.y().raw()),
         }
     }
 }
@@ -322,17 +320,16 @@ impl WalkGrid {
     }
 }
 
-fn narrow_u8(value: i64) -> u8 {
-    match u8::try_from(value) {
-        Ok(v) => v,
-        Err(_) => {
-            if value < 0 {
-                u8::MIN
-            } else {
-                u8::MAX
-            }
-        }
-    }
+/// The classic tile index a world component falls in: floor to whole tiles,
+/// capped at the last tile (255). Total by construction — the shifted value is
+/// clamped into `0..=255`, then its low byte is read cast-free (the higher
+/// bytes are proven zero by the clamp, mirroring the byte-decomposition narrows
+/// in [`crate::components::spatial`]). No fallible narrowing, so no dead
+/// saturation arm exists to model an impossible failure.
+fn tile_index(raw: i64) -> u8 {
+    let capped = (raw >> TILE_SHIFT).clamp(0, i64::from(u8::MAX));
+    let [index, ..] = capped.to_le_bytes();
+    index
 }
 
 #[cfg(test)]

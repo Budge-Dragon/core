@@ -9,21 +9,64 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # fmt + clippy + the full native test suite, on every supported OS. Running
+  # the suite on linux, macOS, and windows proves the pure-integer/fixed-point
+  # logic behaves identically across hosts, not just on one.
   check:
-    runs-on: ubuntu-latest
+    name: fmt + clippy + test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          targets: wasm32-unknown-unknown, wasm32-unknown-emscripten, aarch64-apple-ios, aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --workspace
-      # Portability gate: the pure core must compile for every deployment
-      # target. A failure here means a host/OS dependency leaked into core.
+      # Q3: the review-enforced ban scanner (the four bans no clippy lint
+      # covers — lookup-shaped unwrap_or, inline #[expect], #[non_exhaustive]
+      # enums, fabricated Default). Non-zero exit with file:line on any hit.
+      - run: cargo xtask scan
+
+  # Portability compile gate: the pure core must COMPILE for every deployment
+  # target (browser wasm, Unity WebGL/iOS/Android). A failure here means a
+  # host/OS dependency leaked into core. Compile-only — execution of the wasm
+  # path is the separate determinism leg below.
+  portability:
+    name: portability compile gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-unknown-emscripten, aarch64-apple-ios, aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
       - run: cargo check -p mu-core --target wasm32-unknown-unknown      # browser
       - run: cargo check -p mu-core --target wasm32-unknown-emscripten   # Unity WebGL
       - run: cargo check -p mu-core --target aarch64-apple-ios           # Unity iOS
       - run: cargo check -p mu-core --target aarch64-linux-android       # Unity Android
+
+  # Q4: cross-target determinism EXECUTED under wasm, not just compiled. A fixed
+  # RNG seed must drive the core sampling seam to the same output under wasm as
+  # native, proving bit-for-bit determinism across targets. The full
+  # `cargo test -p mu-core --target wasm32-wasip1` cannot build (proptest pulls
+  # `wait-timeout`, which is not wasi-buildable — see core/Cargo.toml), so the
+  # dedicated proptest-free determinism test is the leg wasmtime runs here.
+  wasm-determinism:
+    name: wasm determinism (run under wasmtime)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p mu-core --test wasm_determinism --target wasm32-wasip1

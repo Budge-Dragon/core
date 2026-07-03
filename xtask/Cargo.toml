@@ -1,0 +1,22 @@
+# xtask — the repo's dev-tooling binary (Cargo's canonical `cargo xtask` pattern).
+#
+# This crate is a DEVELOPER TOOL, not part of mu-core. It deliberately does NOT
+# carry `[lints] workspace = true`: it never enters mu-core's dependency graph
+# (the library still depends only on serde + rand_core), so it is free to use
+# `unwrap`/`expect` and pull in `syn`/`walkdir` — none of which may ever touch
+# the pure core.
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+# AST parsing for the review-enforced ban scanner (`cargo xtask scan`).
+syn = { version = "2", features = ["full", "visit"] }
+# `span-locations` makes `Span::start().line` report real line numbers when
+# parsing files outside a proc-macro context.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+# Recursive walk of core/src.
+walkdir = "2"

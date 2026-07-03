@@ -1,0 +1,4 @@
+# `cargo xtask <cmd>` runs the repo's dev-tooling binary (the canonical Cargo
+# xtask pattern). `cargo xtask scan` runs the review-enforced ban scanner.
+[alias]
+xtask = "run --package xtask --"

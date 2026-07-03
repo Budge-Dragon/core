@@ -429,6 +429,40 @@ impl core::error::Error for UnitError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn level_wire_round_trips_across_its_valid_range(value in 1u16..=u16::MAX) {
+            let level = Level::new(value).unwrap();
+            let json = serde_json::to_string(&level).unwrap();
+            prop_assert_eq!(serde_json::from_str::<Level>(&json).unwrap(), level);
+            prop_assert_eq!(level.get(), value);
+        }
+
+        #[test]
+        fn zen_wire_round_trips_across_the_full_range(value in any::<u64>()) {
+            let zen = Zen(value);
+            let json = serde_json::to_string(&zen).unwrap();
+            prop_assert_eq!(serde_json::from_str::<Zen>(&json).unwrap(), zen);
+        }
+
+        #[test]
+        fn exp_wire_round_trips_across_the_full_range(value in any::<u64>()) {
+            let exp = Exp(value);
+            let json = serde_json::to_string(&exp).unwrap();
+            prop_assert_eq!(serde_json::from_str::<Exp>(&json).unwrap(), exp);
+        }
+    }
+
+    #[test]
+    fn level_rejects_out_of_range_on_the_wire() {
+        // Zero is the only out-of-range wire value (the domain is `1..=u16::MAX`);
+        // a value above `u16::MAX` cannot deserialize into the `u16` mirror.
+        assert!(Level::new(0).is_err());
+        assert!(serde_json::from_str::<Level>("0").is_err());
+        assert!(serde_json::from_str::<Level>("70000").is_err());
+    }
 
     #[test]
     fn level_rejects_zero_and_accepts_one() {

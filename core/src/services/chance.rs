@@ -200,6 +200,7 @@ pub fn pick_one<'a, T>(list: &'a OneOrMore<T>, rng: &mut impl RngCore) -> &'a T 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     /// Deterministic `SplitMix64` for replayable tests; cast-free extraction of
     /// the low 32 bits keeps clippy's cast lints quiet in test code too.
@@ -363,5 +364,100 @@ mod tests {
         }
         // Around 2000 of 8000; a wide band proves the curve without flaking.
         assert!((1500..2500).contains(&applied), "applied {applied}");
+    }
+
+    #[test]
+    fn pick_one_covers_every_index() {
+        // Over many draws every position of a small list is reached, so the
+        // uniform index draw is not stuck on one element.
+        let list = OneOrMore::new(vec![10u8, 20, 30, 40]).unwrap();
+        let mut rng = TestRng::new(7);
+        let mut seen = [false; 4];
+        for _ in 0..1000 {
+            match *pick_one(&list, &mut rng) {
+                10 => seen[0] = true,
+                20 => seen[1] = true,
+                30 => seen[2] = true,
+                40 => seen[3] = true,
+                other => panic!("unexpected element {other}"),
+            }
+        }
+        assert!(seen.iter().all(|&hit| hit), "not every index was reached");
+    }
+
+    proptest! {
+        #[test]
+        fn weighted_table_total_is_the_exact_weight_sum(
+            weights in prop::collection::vec(1u32..=1_000_000, 1..12),
+        ) {
+            let sum: u64 = weights.iter().map(|&weight| u64::from(weight)).sum();
+            let entries: Vec<(NonZeroU32, usize)> = weights
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(index, weight)| (nz(weight), index))
+                .collect();
+            let table = WeightedTable::new(entries).unwrap();
+            prop_assert_eq!(u64::from(table.total().get()), sum);
+        }
+
+        #[test]
+        fn weighted_pick_always_lands_in_a_real_bucket(
+            weights in prop::collection::vec(1u32..=50, 1..8),
+            seed in any::<u64>(),
+        ) {
+            let bucket_count = weights.len();
+            let entries: Vec<(NonZeroU32, usize)> = weights
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(index, weight)| (nz(weight), index))
+                .collect();
+            let table = WeightedTable::new(entries).unwrap();
+            let mut rng = TestRng::new(seed);
+            for _ in 0..256 {
+                prop_assert!(*weighted_pick(&table, &mut rng) < bucket_count);
+            }
+        }
+
+        #[test]
+        fn heavier_bucket_is_picked_more_over_a_large_sample(
+            light in 1u32..=100,
+            multiple in 2u32..=5,
+            seed in any::<u64>(),
+        ) {
+            // The heavy bucket weighs at least twice the light one, so over a
+            // large sample it must win outright — monotonicity, not exact ratio.
+            let heavy = light.saturating_mul(multiple);
+            let table = WeightedTable::new(vec![(nz(light), 0u8), (nz(heavy), 1u8)]).unwrap();
+            let mut rng = TestRng::new(seed);
+            let mut light_count = 0u32;
+            let mut heavy_count = 0u32;
+            for _ in 0..4000 {
+                match *weighted_pick(&table, &mut rng) {
+                    0 => light_count += 1,
+                    1 => heavy_count += 1,
+                    other => prop_assert!(false, "unexpected bucket {}", other),
+                }
+            }
+            prop_assert!(
+                heavy_count > light_count,
+                "heavy {} did not exceed light {}",
+                heavy_count,
+                light_count
+            );
+        }
+
+        #[test]
+        fn pick_one_result_is_always_a_list_element(
+            items in prop::collection::vec(any::<u16>(), 1..16),
+            seed in any::<u64>(),
+        ) {
+            let list = OneOrMore::new(items.clone()).unwrap();
+            let mut rng = TestRng::new(seed);
+            for _ in 0..256 {
+                prop_assert!(items.contains(pick_one(&list, &mut rng)));
+            }
+        }
     }
 }

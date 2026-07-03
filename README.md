@@ -82,3 +82,36 @@ cargo check -p mu-core --target wasm32-unknown-emscripten   # Unity WebGL
 cargo check -p mu-core --target aarch64-apple-ios           # Unity iOS
 cargo check -p mu-core --target aarch64-linux-android       # Unity Android
 ```
+
+### Review-enforced ban scanner
+
+Some Iron-Law bans have no clippy lint (`CLAUDE.md`, Iron Law 3): lookup-shaped
+`unwrap_or`, inline `#[expect(..)]`, `#[non_exhaustive]` on an enum, and a
+fabricated `Default`. The `xtask` dev tool scans `core/src` for them and exits
+non-zero with `file:line` on any hit:
+
+```sh
+cargo xtask scan
+```
+
+Install it as a pre-commit gate once per clone (CI runs the same step, so the
+hook is a fast local pre-flight, not the sole gate):
+
+```sh
+git config core.hooksPath .githooks
+```
+
+### Cross-target determinism (executed, not just compiled)
+
+Determinism is exercised under wasm, so identical results on native and wasm are
+proven by execution. Requires a wasm runner (e.g. [wasmtime](https://wasmtime.dev)):
+
+```sh
+# One-time: rustup target add wasm32-wasip1
+CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime \
+  cargo test -p mu-core --test wasm_determinism --target wasm32-wasip1
+```
+
+(The full test suite is not wasi-buildable — `proptest` pulls `wait-timeout` —
+so the property tests run on the native legs and this dedicated proptest-free
+test is the one wasmtime runs.)
