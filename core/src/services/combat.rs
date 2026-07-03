@@ -111,6 +111,11 @@ fn damage_dealt(
 ) -> u32 {
     let max_physical = u32::from(attacker.physical().max());
     let base = match quality {
+        // W-SRC: 1.2× max — CONFIRMED on-era against MuEmu 0.97k C++ source
+        // (independent of OpenMU): `damage = (DamageMax * 120) / 100`, and
+        // OpenMU S6; every era 0.75→S6 uses 1.2×. The 1.1× in some fan guides is
+        // a rate-vs-magnitude confusion (the +10% Excellent Damage RATE option is
+        // a proc chance, not the hit magnitude).
         HitQuality::Excellent => scale_ratio(max_physical, 6, nonzero(5)),
         HitQuality::Critical => max_physical,
         HitQuality::Normal => u32::from(span),

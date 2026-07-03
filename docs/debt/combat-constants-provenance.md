@@ -98,3 +98,34 @@ tracked separately.
 Debt is discharged when every listed constant is either confirmed against an
 authentic classic source (kept, with the confirmation recorded here) or corrected
 at its service site. Remove `CMB-CONST` from `DEBT-INDEX.md` at that point.
+
+## Verification (2026-07-04, independent web sources)
+
+A web-verification pass cross-checked the combat/experience/drop constants against
+classic-MU sources independent of OpenMU (community formula docs, WEBZEN forum
+posts, muonlinefanz, and other era references). Each constant is classified below.
+This section is additive; the debt row and `DEBT-INDEX` are unchanged pending full
+W-SRC discharge.
+
+| Constant | Classification | Notes |
+|---|---|---|
+| 3% hit-chance floor (`HIT_CHANCE_FLOOR_PER_10000 = 300`) | CONFIRMED independent — keep | Independently attested outside OpenMU. |
+| Critical = max damage | CONFIRMED independent — keep | Independently attested outside OpenMU. |
+| Total-exp curve `10*(level+8)*(level-1)^2` | CONFIRMED independent — keep | Independently attested outside OpenMU. |
+| Max character level 400 | CONFIRMED independent — keep | Independently attested outside OpenMU. |
+| Excellent multiplier (1.2× max) | CONFIRMED independent — keep | Excellent = 1.2× max, CONFIRMED on-era via MuEmu 0.97k C++ source (`damage = (DamageMax*120)/100`, independent of OpenMU) and OpenMU S6; unchanged across every era 0.75→S6. The 1.1× fan-guide figure was a rate-vs-magnitude confusion (the +10% Excellent Damage RATE option is a proc chance, not the hit magnitude) and is NOT used. |
+| Min-damage floor (`max(1, level/10)`) | ACCEPTED as OpenMU | Searched; no independent source found and no independent contradiction — accepted-default. |
+| Hit-chance formula `1 − defenseRate/attackRate` | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Elemental application `1/(resistance+1)` | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Per-kill base exp `(targetLevel+25)*targetLevel/3` | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| ×1.25 exp factor (`EXP_FACTOR 5/4`) | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Killer-over-level penalty (`OVER_LEVEL_GAP`) | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| ≥65 high-level bonus (`HIGH_LEVEL_VICTIM`) | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Exp jitter `[0.8, 1.2]` | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Money = exp + 7 (`BASE_MONEY_DROP = 7`) | ACCEPTED as OpenMU (partial) | The exp-basis IS independently confirmed; the `+7` offset is OpenMU — accepted-default. |
+| Drop-level window gap 11 (`DROP_LEVEL_WINDOW_GAP = 11`) | ACCEPTED as OpenMU (partial) | The plus-level `= (mobLevel − dropLevel)/3` rule IS independently confirmed; the gap `11` is OpenMU — accepted-default. |
+| Excellent-drop delta 25 (`EXCELLENT_DROP_LEVEL_BONUS`) | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Overrate penalty (`OVERRATE 3/10` = 0.3) | FLAGGED for user decision | Our 0.3 (keep 30%) vs a community-cited ~0.2; the ~0.2 is anecdotal and era-ambiguous. |
+| Fixed global drop-group partition (money .5 / item .3 / jewel .001 / exc .0001) | FLAGGED for user decision | Classic MU had NO fixed global partition; this is an OpenMU/modernized model. |
+| Monster movement grain (uniform 1-tile step) | FLAGGED for user decision | Classic `Monster.txt` carries a PER-MONSTER move speed; we use a uniform 1-tile step. Ties to the `MOB-SPD` debt. |
+| Lightning → knockback attribution | FLAGGED for user decision | Independent community evidence disputes tying a knockback specifically to the Lightning element; kept per explicit product decision. |
