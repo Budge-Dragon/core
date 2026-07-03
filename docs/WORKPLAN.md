@@ -37,7 +37,12 @@ anything:
 4. **`docs/debt/DEBT-INDEX.md`** — the 14 open backlog items (W-SRC, D1–D5,
    T1–T4, Q1–Q4) and which wave owns each. Read the specific debt records the
    chosen wave names.
-5. **The wave's own "Read first" list** — the exact source files and specs that
+5. **`docs/adr/`** — the accepted architecture decisions that bind every wave.
+   Currently [`0001-event-driven-core-shape.md`](adr/0001-event-driven-core-shape.md):
+   the core is event-driven as events-as-**output**, *not* event sourcing — no
+   `decide`/`evolve` fold, no event store in core. Do not re-litigate an accepted
+   ADR; build to it.
+6. **The wave's own "Read first" list** — the exact source files and specs that
    ground that wave in what already exists.
 
 ### The non-negotiables (one paragraph, always in force)
@@ -59,7 +64,10 @@ the type, never a runtime check. **Determinism** — every service is
 `(state, input, &mut impl RngCore) -> (new state, events)`; same inputs + same
 seed = identical outputs on native, wasm, and FFI; advancing the injected RNG is
 the only sanctioned argument mutation. **Events, not effects** — every observable
-outcome is a value in the returned events; core has no I/O.
+outcome is a value in the returned events; core has no I/O. "Event-driven" for
+this project means events-as-**output** from pure transitions, *not* event
+sourcing (no `decide`/`evolve` fold, no event log in core) — see
+[`docs/adr/0001-event-driven-core-shape.md`](adr/0001-event-driven-core-shape.md).
 
 **The four green gates** every wave must pass before it is done:
 
