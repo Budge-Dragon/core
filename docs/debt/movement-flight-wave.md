@@ -1,7 +1,9 @@
 # Debt record: movement / flight wave (W-MOV) deferrals
 
 - **ID:** W-MOV (covers D1, D2, D3, D5)
-- **Status:** OPEN
+- **Status:** CLOSED (2026-07-03, W-MOV) — all four deferrals discharged; see
+  the per-item closure notes and the [Discharge](#discharge) section. D1, D2,
+  D3, D5 removed from `DEBT-INDEX.md`.
 - **Owner wave:** W-MOV (movement / flight wave)
 - **Created:** 2026-07-03, during the spatial-foundation work (Waves A + B,
   commits `61f1e37` and `5ed218e` on branch `spatial-foundation`).
@@ -31,6 +33,20 @@ decisions land with the entity state that gives them a caller.
 
 ### D1 — Flight state machine + movement service (`services/movement.rs`)
 
+- **CLOSED (2026-07-03, W-MOV).** `services/movement.rs` ships the flight FSM as
+  the pure 2×2 transition `apply_flight_change` (lines 38-58) returning
+  `Vec<FlightOutcome>` (`events/movement.rs`); redundant changes are idempotent
+  no-ops emitting nothing. The eligibility gate `flight_gate` (lines 81-99) +
+  `enable_off_sky` (lines 63-75) decides over `MapEnvironment`
+  (`data/map_definitions.rs` — Sky forces flight) and the host-supplied
+  `Wings` / `CombatLock` facts (`components/movement.rs`), capability before
+  transient lock. `change_flight` (lines 105-116) is the gate-then-transition
+  public service. **Blocked-by resolved:** the W-ENT dependency was discharged
+  by modeling eligibility inputs as *injected* two-state domain facts (`Wings`,
+  `CombatLock`) rather than reaching into a character entity — so the gate has a
+  real consumer today and never leaks entity internals. Proof:
+  `apply_flight_change_covers_all_four_tuples`, `flight_gate_truth_table`,
+  `change_flight_denied_leaves_mode_and_reports_reason`.
 - **Symptom:** there is no movement service. `Movement`
   (`core/src/components/movement.rs`) is a two-variant `Grounded | Flying`
   classifier whose only behaviour is `checks_walkability()`; no transition
@@ -52,6 +68,25 @@ decisions land with the entity state that gives them a caller.
 
 ### D2 — Fixed-point narrowing surface
 
+- **CLOSED (2026-07-03, W-MOV).** The §2.1 narrowing surface landed in
+  `components/spatial.rs` **with its consumer**, so Iron Law 4 (no consumer-less
+  surface) is discharged: `NonZeroFixed::new` rejects zero into
+  `SpatialError::ZeroFixed` (lines 149-155, variant at line 77), making
+  div-by-zero unrepresentable; `Fixed` `Mul` (lines 164-174) and
+  `Div<NonZeroFixed>` (lines 176-185) round nearest with ties away from zero via
+  the magnitude/sign helpers `round_shift` (line 861) / `round_div` (line 869)
+  and saturate-narrow through `saturate_i64` (line 881) — no `as`, no `unwrap`,
+  no `panic`; `DistanceSq::isqrt` (line 523) takes the integer floor via the
+  cast-free `u64_from_u128_low` (line 905). **Consumer:** `WorldVec::normalized_to`
+  (lines 330-338) folds the zero vector to `Displacement::NoDirection` and scales
+  any other via `isqrt` + `NonZeroFixed` + `/` + `*`; the live chain is
+  `normalized_to` ← `seek` (`services/movement.rs:147`) ←
+  `resolve_step`/`resolve_drift` ← `decide_monster_action`. Proof:
+  `mul_by_one_tile_is_identity`, `mul`/`div_rounds_ties_away_from_zero_both_signs`,
+  `mul_saturates_on_overflow`, `non_zero_fixed_rejects_zero`,
+  `isqrt_floors_perfect_and_non_square_and_zero`,
+  `normalized_to_reaches_speed_and_is_scale_invariant` + the isqrt/normalize
+  proptests.
 - **Symptom:** `Fixed` (`core/src/components/spatial.rs`) exposes only
   `from_raw`, `raw`, `from_tile_parts`, `scale` (integer factor), and
   saturating `Add`/`Sub`. There is no `Fixed::mul`, no `Fixed::div`, no
@@ -73,6 +108,19 @@ decisions land with the entity state that gives them a caller.
 
 ### D3 — Walk-grid consumer (grounded-step validation)
 
+- **CLOSED (2026-07-03, W-MOV).** The walk grid now has a live *service*
+  consumer: `commit` (`services/movement.rs:124-141`) blocks a grounded step onto
+  a non-walkable destination —
+  `if placement.movement.checks_walkability() && !grid.walkable(destination) {
+  return StepOutcome::Blocked }` — while a `Flying` entity skips the check,
+  keyed off `Movement::checks_walkability`. The public services `resolve_step`
+  (line 162) and `resolve_drift` (line 178) route through `commit`, and
+  `decide_monster_action` (`services/monster_ai.rs:98,115,127`) feeds them the
+  grid. Cross-file proof against the **real Atlas walk grids**:
+  `grounded_steps_respect_real_terrain_walls` (`core/tests/data_files.rs`), plus
+  unit tests `grounded_step_blocks_on_non_walkable_destination`,
+  `grounded_step_resolves_onto_walkable_destination`,
+  `flying_step_crosses_a_non_walkable_cell`.
 - **Symptom:** `WalkGrid` loads per map at `Atlas::parse`
   (`core/src/data/atlas.rs` `index_terrain`, proven bijective with the map set)
   and is queryable in world space via `Atlas::walk_grid` and
@@ -88,6 +136,16 @@ decisions land with the entity state that gives them a caller.
 
 ### D5 — `Landing.facing` unspecified-arrival policy (design note)
 
+- **CLOSED (2026-07-03, W-MOV).** `resolve_arrival`
+  (`services/movement.rs:209-212`) picks the arrival facing with an explicit
+  `match landing.facing { Some(facing) => facing, None => traveler_facing }` —
+  the documented service policy is "keep the traveler's prior facing when the
+  landing authored none." No `unwrap_or`, no fabricated `Facing`, no default in
+  core; `Landing.facing` stays `Option<Facing>` genuine optionality
+  (`data/atlas/views.rs:24`). Proof: `arrival_none_facing_keeps_traveler_facing`,
+  `arrival_lands_walkable_and_inside` (the `Some` path), and the real-dataset
+  `unspecified_landing_facing_keeps_the_traveler_facing`
+  (`core/tests/data_files.rs`).
 - **Symptom:** `Landing.facing: Option<Facing>` (`core/src/data/atlas.rs`),
   populated from `gate.direction.map(TileFacing::to_facing)`; `None` means the
   gate/target authored no arrival direction.
@@ -112,3 +170,12 @@ the `Fixed` narrowing surface lands with normalize-to-speed, grounded steps
 range against the walk grid, and the arrival-facing policy is an explicit
 service `match` on `Landing.facing`. At that point D1, D2, D3, and D5 are
 removed from `DEBT-INDEX.md` and this record is closed.
+
+**DISCHARGED (2026-07-03, W-MOV).** All four conditions met — `services/movement.rs`
+ships `apply_flight_change` / `flight_gate` / `change_flight` (D1),
+`components/spatial.rs` ships the `Fixed` `mul`/`div`/`NonZeroFixed`/`isqrt`
+narrowing surface consumed by `WorldVec::normalized_to` (D2), `commit` validates
+grounded steps against the `WalkGrid` with real-Atlas cross-file tests (D3), and
+`resolve_arrival` resolves `Landing.facing` with an explicit `Some`/`None` match
+(D5). 209 tests pass (181 lib + 27 `data_files` + 1 smoke). D1, D2, D3, D5
+removed from `DEBT-INDEX.md`; this record is CLOSED.

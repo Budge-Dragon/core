@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::components::units::MapNumber;
+
 /// Envelope of every `/data/*.json` file: the file's records.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DataFile<T> {
@@ -66,11 +68,4 @@ pub struct SkillNumber(
 pub struct GateNumber(
     /// The gate number.
     pub u16,
-);
-
-/// Map number as the client knows it — a single byte pre-S3.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct MapNumber(
-    /// The client map number.
-    pub u8,
 );

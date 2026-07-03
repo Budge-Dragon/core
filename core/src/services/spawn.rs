@@ -10,8 +10,6 @@
 //! random words; a `Spot` spawn draws one facing per instance; an `Area` spawn
 //! draws, per instance, a position then a facing — in that order.
 
-use core::num::NonZeroUsize;
-
 use rand_core::RngCore;
 
 use crate::components::collections::{EmptyCollection, OneOrMore};
@@ -20,14 +18,14 @@ use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::{Facing, WorldPos, WorldRect};
 use crate::components::tile::WalkGrid;
+use crate::components::units::{MapNumber, Tick};
 use crate::data::atlas::MapHandle;
 use crate::data::monster_definitions::{MonsterDefinition, MonsterRole};
 use crate::data::spawns::{SpawnPlacement, SpawnSchedule};
 use crate::entities::monster_instance::MonsterInstance;
 use crate::entities::spawned::Spawned;
 use crate::events::spawn::SpawnEvent;
-use crate::rng::uniform_below_usize;
-use crate::services::chance::pick_one;
+use crate::services::chance::{draw_cardinal, pick_one};
 
 /// The entities and events produced by resolving one spawn record.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,50 +65,24 @@ pub struct MapPopulation {
     pub soccer_pitch: Option<ResolvedSoccerPitch>,
 }
 
-/// The eight cardinal facings a drawn heading resolves to, in a fixed order so
-/// a drawn index maps to the same facing bit-for-bit on every target.
-const CARDINALS: [Facing; 8] = [
-    Facing::POS_X,
-    Facing::POS_X_POS_Y,
-    Facing::POS_Y,
-    Facing::NEG_X_POS_Y,
-    Facing::NEG_X,
-    Facing::NEG_X_NEG_Y,
-    Facing::NEG_Y,
-    Facing::POS_X_NEG_Y,
-];
-
-/// Draws a cardinal facing uniformly through the RNG seam. Spot and Area spawns
-/// carry no authored facing, so a heading is drawn — authentic MU, where such
-/// spawns face a random cardinal. Consumes exactly one random word.
-fn draw_facing(rng: &mut impl RngCore) -> Facing {
-    let bound = NonZeroUsize::MIN.saturating_add(CARDINALS.len() - 1);
-    let target = uniform_below_usize(bound, rng);
-    let mut position = 0usize;
-    for facing in CARDINALS {
-        if position == target {
-            return facing;
-        }
-        position = position.saturating_add(1);
-    }
-    Facing::POS_X
-}
-
 /// Classifies a monster definition at a resolved position into the entity it
 /// spawns and the event that announces it. Exhaustive over the five monster
 /// roles: the three combat-carrying roles become a live [`Spawned::Mob`] with
 /// health seeded full; the two passive roles become a [`Spawned::Placed`] with
 /// no health. `Grounded` is the real traversal mode — a placed entity sits on
-/// the ground — not a fabricated default.
+/// the ground — not a fabricated default. A mob anchors to its spawn position
+/// and is ready to act at [`Tick(0)`](Tick).
 fn spawn_at(
     monster: &MonsterDefinition,
     position: WorldPos,
     facing: Facing,
+    map: MapNumber,
 ) -> (Spawned, SpawnEvent) {
     let placement = Placement {
         position,
         facing,
         movement: Movement::Grounded,
+        map,
     };
     match &monster.role {
         MonsterRole::Monster { combat, .. }
@@ -120,6 +92,8 @@ fn spawn_at(
                 number: monster.number,
                 placement,
                 health: Pool::full(combat.hp),
+                anchor: position,
+                next_action: Tick(0),
             };
             let event = SpawnEvent::MobSpawned {
                 number: monster.number,
@@ -159,11 +133,12 @@ pub fn place_spawn(
     monster: &MonsterDefinition,
     placement: &SpawnPlacement,
     grid: &WalkGrid,
+    map: MapNumber,
     rng: &mut impl RngCore,
 ) -> SpawnResult {
     match placement {
         SpawnPlacement::Fixed { position, facing } => {
-            let (spawned, event) = spawn_at(monster, position.to_world(), facing.to_facing());
+            let (spawned, event) = spawn_at(monster, position.to_world(), facing.to_facing(), map);
             SpawnResult {
                 spawned: vec![spawned],
                 events: vec![event],
@@ -176,8 +151,8 @@ pub fn place_spawn(
                 events: Vec::new(),
             };
             for _ in 0..*quantity {
-                let facing = draw_facing(rng);
-                let (spawned, event) = spawn_at(monster, centre, facing);
+                let facing = draw_cardinal(rng);
+                let (spawned, event) = spawn_at(monster, centre, facing, map);
                 result.spawned.push(spawned);
                 result.events.push(event);
             }
@@ -197,8 +172,8 @@ pub fn place_spawn(
                     };
                     for _ in 0..*quantity {
                         let position = *pick_one(&cells, rng);
-                        let facing = draw_facing(rng);
-                        let (spawned, event) = spawn_at(monster, position, facing);
+                        let facing = draw_cardinal(rng);
+                        let (spawned, event) = spawn_at(monster, position, facing, map);
                         result.spawned.push(spawned);
                         result.events.push(event);
                     }
@@ -223,6 +198,7 @@ pub fn populate_map(handle: &MapHandle<'_>, rng: &mut impl RngCore) -> MapPopula
                     entry.monster,
                     &entry.spawn.placement,
                     handle.walk_grid(),
+                    handle.definition().number,
                     rng,
                 );
                 spawned.append(&mut result.spawned);
@@ -384,6 +360,19 @@ mod tests {
         }
     }
 
+    /// The eight cardinal facings `draw_cardinal` can return — mirrored here so
+    /// the test needs no access to the private const in `chance`.
+    const CARDINALS: [Facing; 8] = [
+        Facing::POS_X,
+        Facing::POS_X_POS_Y,
+        Facing::POS_Y,
+        Facing::NEG_X_POS_Y,
+        Facing::NEG_X,
+        Facing::NEG_X_NEG_Y,
+        Facing::NEG_Y,
+        Facing::POS_X_NEG_Y,
+    ];
+
     fn is_cardinal(facing: Facing) -> bool {
         CARDINALS.contains(&facing)
     }
@@ -398,6 +387,7 @@ mod tests {
                 facing: TileFacing::SouthEast,
             },
             &grid_with(&[]),
+            MapNumber(0),
             &mut rng,
         );
         assert_eq!(result.spawned.len(), 1);
@@ -431,6 +421,7 @@ mod tests {
                 facing: TileFacing::South,
             },
             &grid_with(&[]),
+            MapNumber(0),
             &mut ran,
         );
         let mut fresh = TestRng::new(9);
@@ -447,6 +438,7 @@ mod tests {
                 quantity: 3,
             },
             &grid_with(&[]),
+            MapNumber(0),
             &mut rng,
         );
         assert_eq!(result.spawned.len(), 3);
@@ -470,6 +462,7 @@ mod tests {
             &monster(7, 60),
             &SpawnPlacement::Area { area, quantity: 45 },
             &grid,
+            MapNumber(0),
             &mut rng,
         );
         assert_eq!(result.spawned.len(), 45);
@@ -490,6 +483,7 @@ mod tests {
             &monster(7, 60),
             &SpawnPlacement::Area { area, quantity: 30 },
             &grid_with(&[]),
+            MapNumber(0),
             &mut rng,
         );
         assert!(result.spawned.is_empty());
@@ -506,6 +500,7 @@ mod tests {
             &monster(7, 60),
             &SpawnPlacement::Area { area, quantity: 10 },
             &grid,
+            MapNumber(0),
             &mut rng,
         );
         assert_eq!(result.spawned.len(), 10);
@@ -522,6 +517,7 @@ mod tests {
             &monster(7, 60),
             &SpawnPlacement::Area { area, quantity: 12 },
             &all_walkable(),
+            MapNumber(0),
             &mut rng,
         );
         assert_eq!(result.spawned.len(), result.events.len());
@@ -566,7 +562,7 @@ mod tests {
         let ball = definition(145, MonsterRole::SoccerBall);
 
         let mut mob_hp = |def: &MonsterDefinition, hp: u32| {
-            let result = place_spawn(def, &fixed(TileFacing::East), &grid, &mut rng);
+            let result = place_spawn(def, &fixed(TileFacing::East), &grid, MapNumber(0), &mut rng);
             match &result.spawned[0] {
                 Spawned::Mob { instance } => assert_eq!(instance.health, Pool::full(hp)),
                 Spawned::Placed { .. } => panic!("expected a mob"),
@@ -577,7 +573,13 @@ mod tests {
         mob_hp(&trap, 200);
 
         for placed in [&npc, &ball] {
-            let result = place_spawn(placed, &fixed(TileFacing::East), &grid, &mut rng);
+            let result = place_spawn(
+                placed,
+                &fixed(TileFacing::East),
+                &grid,
+                MapNumber(0),
+                &mut rng,
+            );
             match &result.spawned[0] {
                 Spawned::Placed { number, .. } => assert_eq!(*number, placed.number),
                 Spawned::Mob { .. } => panic!("expected a placed object"),
@@ -591,8 +593,20 @@ mod tests {
         let placement = SpawnPlacement::Area { area, quantity: 25 };
         let mut a = TestRng::new(7);
         let mut b = TestRng::new(7);
-        let ra = place_spawn(&monster(7, 60), &placement, &all_walkable(), &mut a);
-        let rb = place_spawn(&monster(7, 60), &placement, &all_walkable(), &mut b);
+        let ra = place_spawn(
+            &monster(7, 60),
+            &placement,
+            &all_walkable(),
+            MapNumber(0),
+            &mut a,
+        );
+        let rb = place_spawn(
+            &monster(7, 60),
+            &placement,
+            &all_walkable(),
+            MapNumber(0),
+            &mut b,
+        );
         assert_eq!(ra.spawned, rb.spawned);
         assert_eq!(ra.events, rb.events);
         // Identical RNG-word consumption: the next draw agrees.
@@ -605,8 +619,20 @@ mod tests {
         let placement = SpawnPlacement::Area { area, quantity: 20 };
         let mut a = TestRng::new(7);
         let mut b = TestRng::new(42);
-        let ra = place_spawn(&monster(7, 60), &placement, &all_walkable(), &mut a);
-        let rb = place_spawn(&monster(7, 60), &placement, &all_walkable(), &mut b);
+        let ra = place_spawn(
+            &monster(7, 60),
+            &placement,
+            &all_walkable(),
+            MapNumber(0),
+            &mut a,
+        );
+        let rb = place_spawn(
+            &monster(7, 60),
+            &placement,
+            &all_walkable(),
+            MapNumber(0),
+            &mut b,
+        );
         let pa: Vec<WorldPos> = ra.spawned.iter().map(position_of).collect();
         let pb: Vec<WorldPos> = rb.spawned.iter().map(position_of).collect();
         assert_ne!(pa, pb);
@@ -624,6 +650,7 @@ mod tests {
                 &monster(7, 60),
                 &SpawnPlacement::Area { area, quantity: 30 },
                 &grid,
+                MapNumber(0),
                 &mut rng,
             );
             assert_eq!(result.spawned.len(), 30);

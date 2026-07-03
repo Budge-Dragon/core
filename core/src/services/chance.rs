@@ -4,13 +4,44 @@
 //! ([`ChancePer10000::DENOMINATOR`], [`Percent::DENOMINATOR`],
 //! [`Resistance::DENOMINATOR`]) — the unit and its scale are one concern.
 
-use core::num::NonZeroU32;
+use core::num::{NonZeroU32, NonZeroUsize};
 
 use rand_core::RngCore;
 
 use crate::components::collections::OneOrMore;
+use crate::components::spatial::Facing;
 use crate::components::units::{ChancePer10000, Percent, Resistance};
 use crate::rng::{uniform_below, uniform_below_usize};
+
+/// The eight cardinal facings a drawn heading resolves to, in a fixed order so
+/// a drawn index maps to the same facing bit-for-bit on every target.
+const CARDINALS: [Facing; 8] = [
+    Facing::POS_X,
+    Facing::POS_X_POS_Y,
+    Facing::POS_Y,
+    Facing::NEG_X_POS_Y,
+    Facing::NEG_X,
+    Facing::NEG_X_NEG_Y,
+    Facing::NEG_Y,
+    Facing::POS_X_NEG_Y,
+];
+
+/// Draws a cardinal facing uniformly through the RNG seam — the shared heading
+/// draw for spawns without an authored facing and for wander drift. Consumes
+/// exactly one random word.
+#[must_use]
+pub fn draw_cardinal(rng: &mut impl RngCore) -> Facing {
+    let bound = NonZeroUsize::MIN.saturating_add(CARDINALS.len() - 1);
+    let target = uniform_below_usize(bound, rng);
+    let mut position = 0usize;
+    for facing in CARDINALS {
+        if position == target {
+            return facing;
+        }
+        position = position.saturating_add(1);
+    }
+    Facing::POS_X
+}
 
 /// Rolls a per-10,000 chance: `true` iff `uniform_below(10_000) < numerator`.
 #[must_use]

@@ -16,11 +16,13 @@ use mu_core::components::class::CharacterClass;
 use mu_core::components::interval::Interval;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
-use mu_core::components::spatial::WorldPos;
+use mu_core::components::movement::Movement;
+use mu_core::components::placement::Placement;
+use mu_core::components::spatial::{Facing, Fixed, WorldPos};
 use mu_core::components::tile::{TileArea, TileCoord, WalkGrid};
 use mu_core::components::units::{ItemLevel, Level};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
-use mu_core::data::atlas::{Atlas, AtlasError, StaticData};
+use mu_core::data::atlas::{Atlas, AtlasError, Landing, StaticData};
 use mu_core::data::box_drops::BoxDrop;
 use mu_core::data::chaos_mixes::ChaosMix;
 use mu_core::data::classes::{ClassRecord, ClassTable, ClassTableError};
@@ -30,7 +32,7 @@ use mu_core::data::exp_tables::{ExpCurve, ExpTable};
 use mu_core::data::game_config::GameConfig;
 use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
-use mu_core::data::map_definitions::MapDefinition;
+use mu_core::data::map_definitions::{MapDefinition, MapEnvironment};
 use mu_core::data::monster_definitions::MonsterDefinition;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
@@ -38,6 +40,8 @@ use mu_core::data::spawns::{SpawnPlacement, SpawnSchedule};
 use mu_core::data::special_drops::{DropBand, DropBands, SpecialDrop, SpecialDropRecord};
 use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 use mu_core::entities::spawned::Spawned;
+use mu_core::events::movement::{StepOutcome, WarpOutcome};
+use mu_core::services::movement::{resolve_arrival, resolve_step};
 use mu_core::services::spawn::{place_spawn, populate_map};
 
 use mu_core::services::item_rules::{
@@ -474,7 +478,13 @@ fn every_area_placed_instance_sits_on_a_walkable_tile() {
                 continue;
             }
             if let SpawnPlacement::Area { .. } = entry.spawn.placement {
-                let result = place_spawn(entry.monster, &entry.spawn.placement, grid, &mut rng);
+                let result = place_spawn(
+                    entry.monster,
+                    &entry.spawn.placement,
+                    grid,
+                    handle.definition().number,
+                    &mut rng,
+                );
                 for spawned in &result.spawned {
                     assert!(grid.walkable(position_of(spawned)));
                 }
@@ -550,4 +560,176 @@ fn map_handles_enumerate_every_map_and_join_spawns() {
 
     // An open key that names no map yields no handle.
     assert!(atlas.map_handle(MapNumber(200)).is_none());
+}
+
+// --- Movement and flight over the real Atlas (W-MOV).
+
+/// A one-tile step in sub-units — the mob movement grain.
+const ONE_TILE: Fixed = Fixed::from_raw(65_536);
+
+fn grounded(tile: (u8, u8), map: MapNumber) -> Placement {
+    Placement {
+        position: TileCoord::new(tile.0, tile.1).to_world(),
+        facing: Facing::POS_X,
+        movement: Movement::Grounded,
+        map,
+    }
+}
+
+/// The first enter gate found scanning maps in order, with its resolved
+/// landing. The only public path to an enter gate is a positional trigger
+/// query, so this walks the grid until one covers a tile. `None` only if the
+/// dataset carries no enter gate at all.
+fn first_enter_gate_landing(atlas: &Atlas) -> Option<Landing> {
+    for map in atlas.maps().map(|m| m.number).collect::<Vec<_>>() {
+        for y in 0u8..=255 {
+            for x in 0u8..=255 {
+                let pos = TileCoord::new(x, y).to_world();
+                if let Some(view) = atlas.enter_gate_at(map, pos) {
+                    return Some(view.landing);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Asserts a landing resolves to a walkable tile inside its own area on every
+/// seed, or reports no-landing only when the area truly holds no walkable tile.
+fn assert_landing_resolves(landing: &Landing, grid: &WalkGrid, env: MapEnvironment) {
+    for seed in 0u64..32 {
+        let mut rng = TestRng::new(seed);
+        match resolve_arrival(Facing::POS_X, landing, grid, env, &mut rng) {
+            WarpOutcome::Arrived { placement } => {
+                assert!(grid.walkable(placement.position), "seed {seed}");
+                assert!(landing.area.contains(placement.position), "seed {seed}");
+                assert_eq!(placement.map, landing.map);
+            }
+            WarpOutcome::NoWalkableLanding => {
+                assert!(
+                    grid.walkable_positions_in(landing.area).next().is_none(),
+                    "seed {seed}: reported no landing but the area has a walkable tile"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn grounded_steps_respect_real_terrain_walls() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let lorencia = atlas.walk_grid(MapNumber(0)).unwrap();
+
+    // (0,0) is a NoMove wall: a grounded step onto it from (1,0) is blocked.
+    let wall = TileCoord::new(0, 0).to_world();
+    assert_eq!(
+        resolve_step(grounded((1, 0), MapNumber(0)), wall, ONE_TILE, lorencia),
+        StepOutcome::Blocked
+    );
+
+    // A flying step crosses the same wall.
+    let flyer = Placement {
+        movement: Movement::Flying,
+        ..grounded((1, 0), MapNumber(0))
+    };
+    match resolve_step(flyer, wall, ONE_TILE, lorencia) {
+        StepOutcome::Resolved { placement } => assert_eq!(placement.position, wall),
+        StepOutcome::Blocked => panic!("flying ignores walkability"),
+    }
+
+    // A grounded step onto an adjacent walkable town tile resolves onto it.
+    let town = TileCoord::new(135, 125).to_world();
+    assert!(lorencia.walkable(town));
+    let neighbor = [
+        TileCoord::new(136, 125).to_world(),
+        TileCoord::new(134, 125).to_world(),
+        TileCoord::new(135, 126).to_world(),
+        TileCoord::new(135, 124).to_world(),
+    ]
+    .into_iter()
+    .find(|&n| lorencia.walkable(n))
+    .expect("a town-centre tile has a walkable neighbour");
+    let on_town = Placement {
+        position: town,
+        facing: Facing::POS_X,
+        movement: Movement::Grounded,
+        map: MapNumber(0),
+    };
+    match resolve_step(on_town, neighbor, ONE_TILE, lorencia) {
+        StepOutcome::Resolved { placement } => assert_eq!(placement.position, neighbor),
+        StepOutcome::Blocked => panic!("a walkable neighbour must resolve"),
+    }
+
+    // Lost Tower (map 8) (0,0) is NoGround: a grounded step there is blocked.
+    let lost_tower = atlas.walk_grid(MapNumber(8)).unwrap();
+    assert_eq!(
+        resolve_step(
+            grounded((1, 0), MapNumber(8)),
+            TileCoord::new(0, 0).to_world(),
+            ONE_TILE,
+            lost_tower
+        ),
+        StepOutcome::Blocked
+    );
+}
+
+#[test]
+fn every_real_warp_and_an_enter_gate_landing_resolve() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let mut warps = 0;
+    for warp in atlas.warps() {
+        warps += 1;
+        let handle = atlas.map_handle(warp.landing.map).unwrap();
+        assert_landing_resolves(
+            &warp.landing,
+            handle.walk_grid(),
+            handle.definition().environment,
+        );
+    }
+    assert_eq!(warps, 14);
+
+    let enter = first_enter_gate_landing(&atlas).expect("the dataset has an enter gate");
+    let handle = atlas.map_handle(enter.map).unwrap();
+    assert_landing_resolves(&enter, handle.walk_grid(), handle.definition().environment);
+}
+
+#[test]
+fn unspecified_landing_facing_keeps_the_traveler_facing() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let landing = atlas
+        .warps()
+        .map(|warp| warp.landing)
+        .find(|landing| landing.facing.is_none())
+        .expect("a real warp landing with unspecified facing");
+    let handle = atlas.map_handle(landing.map).unwrap();
+    let env = handle.definition().environment;
+    let grid = handle.walk_grid();
+    let traveler = Facing::NEG_Y;
+    let mut rng = TestRng::new(4);
+    match resolve_arrival(traveler, &landing, grid, env, &mut rng) {
+        WarpOutcome::Arrived { placement } => assert_eq!(placement.facing, traveler),
+        WarpOutcome::NoWalkableLanding => panic!("this landing has walkable tiles"),
+    }
+}
+
+#[test]
+fn whole_dataset_arrival_is_deterministic() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let run = |seed: u64| {
+        atlas
+            .warps()
+            .map(|warp| {
+                let handle = atlas.map_handle(warp.landing.map).unwrap();
+                let mut rng = TestRng::new(seed);
+                resolve_arrival(
+                    Facing::POS_X,
+                    &warp.landing,
+                    handle.walk_grid(),
+                    handle.definition().environment,
+                    &mut rng,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(run(321), run(321));
 }

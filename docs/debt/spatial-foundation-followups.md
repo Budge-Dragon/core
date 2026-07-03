@@ -38,24 +38,44 @@ consumer or a reshape early just to clear the flag.
   directly), removing the fallible `try_from` and its dead arm entirely.
 - **Owner:** next `tile.rs` touch (opportunistic). **Blocked-by:** none.
 
-### T2 — `TileArea::contains` has no live consumer
+### T2 — `TileArea::contains` has no live consumer — CLOSED (2026-07-03, W-MOV)
 
-- **Location:** `core/src/components/tile.rs` — `TileArea::contains`.
-- **Symptom:** the only callers are its own unit test
+- **Status:** CLOSED by **trim**. W-MOV was the wave that could have earned this
+  method a consumer and did not — the movement service leashes in **world** space
+  (`WorldPos::within_range`) and lands via `WalkGrid::walkable_positions_in` →
+  `WorldRect::contains`; `Landing.area` is a `WorldRect`, so every live
+  containment query runs on `WorldRect`, never `TileArea`. With the "earn a
+  consumer or trim" question answered `trim`, the method and its lone unit test
+  (`tile_area_contains_is_inclusive`) were removed from
+  `core/src/components/tile.rs`. Grep before removal confirmed the only reference
+  was that test (the other `.contains(` calls in the file are `WorldRect::contains`
+  on a `rect` binding). This edit is a minimal, safe deletion of a confirmed-dead
+  method; it does **not** touch `narrow_u8` (T1 stays open). Four gates green
+  after removal (208 tests). T2 removed from `DEBT-INDEX.md`.
+- **Location:** `core/src/components/tile.rs` — `TileArea::contains` (removed).
+- **Symptom:** the only callers were its own unit test
   (`tile_area_contains_is_inclusive`). Every live containment query runs in
   world space through `WorldRect::contains` (e.g. `Atlas::enter_gate_at` tests a
   trigger `WorldRect`).
 - **Root cause:** tile-space containment is authoring-time geometry with no
-  live query — the runtime works in world space. The method exists ahead of any
-  caller.
-- **Resolution plan:** earn a consumer (a spawn/soccer service that genuinely
-  answers a tile-space containment question) or trim the method. Do not keep an
-  unused public API "for symmetry."
-- **Owner:** W-MOV / next `tile.rs` touch. **Blocked-by:** W-MOV (whether a tile
-  consumer materializes).
+  live query — the runtime works in world space. The method existed ahead of any
+  caller that never came.
+- **Resolution:** trimmed (no consumer materialized in W-MOV). An unused public
+  API was not kept "for symmetry."
+- **Owner:** W-MOV. **Blocked-by:** none.
 
-### T3 — `WorldVec::length_sq` has no consumer
+### T3 — `WorldVec::length_sq` has no consumer — CLOSED (2026-07-03, W-MOV)
 
+- **Status:** CLOSED. `WorldVec::length_sq` (`components/spatial.rs:371`) now has
+  two live consumers, both landed by W-MOV: `WorldVec::normalized_to`
+  (`spatial.rs:331`, `self.length_sq().isqrt()` derives the magnitude divisor)
+  and the arrival-clamp `seek` (`services/movement.rs:151-152`, comparing the
+  remaining offset's `length_sq` against a one-step reach so a greedy step never
+  overshoots the target). The foundational vector op is no longer consumer-less.
+  Proof: `normalized_to_lands_within_one_sub_unit_of_speed`,
+  `isqrt_is_the_integer_floor_square_root` (both `components/spatial.rs`),
+  `step_at_target_is_unchanged_no_op` (`services/movement.rs`). T3 removed from
+  `DEBT-INDEX.md`.
 - **Location:** `core/src/components/spatial.rs` — `WorldVec::length_sq`.
 - **Symptom:** defined (`dot(self, self)` → `DistanceSq`) but called nowhere in
   `core/src`. Distance queries go through `WorldPos::distance_sq` /
@@ -106,11 +126,21 @@ consumer or a reshape early just to clear the flag.
 
 ## Discharge
 
-Each sub-item is closed independently as its owning wave touches the file: T1 on
-the next `tile.rs` edit, T2/T3 when W-MOV resolves their consumer question, T4
-if/when W-ENT introduces the proven-present map handle. Remove each ID from
-`DEBT-INDEX.md` as it closes; close this record when all four are resolved.
+Each sub-item is closed independently as its owning wave touches the file: T2 and
+T3 resolved by W-MOV (T2 trimmed, T3 consumer earned), T4 by W-ENT's
+proven-present map handle. T1 remains the sole open item. Remove each ID from
+`DEBT-INDEX.md` as it closes; close this record when T1 resolves.
 
 **T4 CLOSED (2026-07-03, W-ENT)** — Atlas-minted `MapHandle` made the resolved
-walk-grid path total by type. **T1, T2, T3 remain OPEN**; this record stays open
-until they resolve.
+walk-grid path total by type.
+
+**T3 CLOSED (2026-07-03, W-MOV)** — `WorldVec::length_sq` earned two live
+consumers (`normalized_to` and the arrival-clamp `seek`); removed from
+`DEBT-INDEX.md`.
+
+**T2 CLOSED (2026-07-03, W-MOV)** — `TileArea::contains` proved world-space-only
+(the movement service never queries tile-space containment), so it was trimmed
+along with its lone unit test; removed from `DEBT-INDEX.md`.
+
+**T1 remains OPEN** (an opportunistic `narrow_u8` reshape on the next `tile.rs`
+edit); this record stays open until T1 resolves.

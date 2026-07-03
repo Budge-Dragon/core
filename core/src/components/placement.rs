@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::movement::Movement;
 use crate::components::spatial::{Facing, WorldPos};
+use crate::components::units::MapNumber;
 
-/// A mobile entity's world placement: position, facing, and traversal mode.
+/// A mobile entity's world placement: position, facing, traversal mode, and the
+/// map its position is framed in — a [`WorldPos`] never travels without its map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Placement {
     /// Where the entity stands.
@@ -16,6 +18,8 @@ pub struct Placement {
     pub facing: Facing,
     /// How it crosses the ground plane.
     pub movement: Movement,
+    /// Which map the position is framed in.
+    pub map: MapNumber,
 }
 
 #[cfg(test)]
@@ -29,11 +33,12 @@ mod tests {
             position: TileCoord::new(2, 3).to_world(),
             facing: Facing::POS_Y,
             movement: Movement::Grounded,
+            map: MapNumber(0),
         };
         let json = serde_json::to_string(&placement).unwrap();
         assert_eq!(
             json,
-            r#"{"position":{"x":163840,"y":229376},"facing":{"x":0,"y":1},"movement":"grounded"}"#
+            r#"{"position":{"x":163840,"y":229376},"facing":{"x":0,"y":1},"movement":"grounded","map":0}"#
         );
         assert_eq!(serde_json::from_str::<Placement>(&json).unwrap(), placement);
     }

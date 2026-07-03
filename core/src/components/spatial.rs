@@ -9,7 +9,7 @@
 //! reverse.
 
 use core::num::NonZeroU64;
-use core::ops::{Add, Sub};
+use core::ops::{Add, Div, Mul, Sub};
 
 use serde::{Deserialize, Serialize};
 
@@ -73,6 +73,8 @@ pub enum SpatialError {
         /// Denominator.
         den: u64,
     },
+    /// A scalar was zero where a non-zero divisor was required.
+    ZeroFixed,
 }
 
 impl core::fmt::Display for SpatialError {
@@ -92,6 +94,7 @@ impl core::fmt::Display for SpatialError {
             Self::ConeRatioInvalid { num, den } => {
                 write!(f, "cone ratio invalid: {num}/{den}")
             }
+            Self::ZeroFixed => write!(f, "scalar is zero where a non-zero divisor was required"),
         }
     }
 }
@@ -130,6 +133,54 @@ impl Fixed {
     #[must_use]
     pub fn scale(self, k: i64) -> Self {
         Self(self.0.saturating_mul(k))
+    }
+}
+
+/// A fixed-point scalar proven non-zero, so dividing by it is total — division
+/// by zero is unrepresentable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NonZeroFixed(Fixed);
+
+impl NonZeroFixed {
+    /// Builds a non-zero scalar.
+    ///
+    /// # Errors
+    /// Returns [`SpatialError::ZeroFixed`] when `inner` is the zero scalar.
+    pub fn new(inner: Fixed) -> Result<Self, SpatialError> {
+        if inner.raw() == 0 {
+            Err(SpatialError::ZeroFixed)
+        } else {
+            Ok(Self(inner))
+        }
+    }
+
+    /// The underlying scalar.
+    #[must_use]
+    pub const fn get(self) -> Fixed {
+        self.0
+    }
+}
+
+impl Mul for Fixed {
+    type Output = Fixed;
+
+    /// Fixed-point multiply in `Q40.24`: round-nearest with ties away from zero,
+    /// saturating on narrow. The exact product forms in `i128`, is rounded down
+    /// by [`TILE_SHIFT`] fractional bits, then narrows back to sub-units.
+    fn mul(self, other: Fixed) -> Fixed {
+        let product = i128::from(self.0) * i128::from(other.0);
+        Self(saturate_i64(round_shift(product, TILE_SHIFT)))
+    }
+}
+
+impl Div<NonZeroFixed> for Fixed {
+    type Output = Fixed;
+
+    /// Fixed-point divide by a proven non-zero scalar: round-nearest with ties
+    /// away from zero, saturating on narrow. The numerator is shifted up by
+    /// [`TILE_SHIFT`] so the quotient lands back in sub-units.
+    fn div(self, divisor: NonZeroFixed) -> Fixed {
+        fixed_div(self, divisor)
     }
 }
 
@@ -262,10 +313,28 @@ pub struct WorldVec {
 }
 
 impl WorldVec {
+    /// The zero offset — the additive identity and the at-target sentinel.
+    pub const ZERO: WorldVec = WorldVec::new(Fixed::from_raw(0), Fixed::from_raw(0));
+
     /// Builds an offset. Total.
     #[must_use]
     pub const fn new(x: Fixed, y: Fixed) -> Self {
         Self { x, y }
+    }
+
+    /// This direction rescaled to approximately the linear magnitude `speed`.
+    /// The zero vector has no direction and folds to [`Displacement::NoDirection`];
+    /// any other vector scales each component by `speed / |self|`. The magnitude
+    /// error is bounded by the integer-sqrt floor (one sub-unit).
+    #[must_use]
+    pub fn normalized_to(self, speed: Fixed) -> Displacement {
+        let magnitude = Fixed(saturate_i64(i128::from(self.length_sq().isqrt())));
+        match NonZeroFixed::new(magnitude) {
+            Err(_) => Displacement::NoDirection,
+            Ok(divisor) => Displacement::Scaled {
+                vector: WorldVec::new(self.x / divisor * speed, self.y / divisor * speed),
+            },
+        }
     }
 
     /// The x component.
@@ -320,6 +389,21 @@ impl From<WorldVec> for Vec2Wire {
             y: vec.y.0,
         }
     }
+}
+
+/// The outcome of rescaling a direction to a speed: the scaled offset, or no
+/// direction when the input was the zero vector. A named two-variant enum, not
+/// an `Option`, so a caller must match both cases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Displacement {
+    /// The direction rescaled to the requested magnitude.
+    Scaled {
+        /// The scaled offset.
+        vector: WorldVec,
+    },
+    /// The input had no direction (the zero vector); there is nothing to scale.
+    NoDirection,
 }
 
 impl Sub<WorldPos> for WorldPos {
@@ -396,6 +480,14 @@ impl Radius {
     pub fn squared(self) -> DistanceSq {
         DistanceSq(u128::from(self.0).pow(2))
     }
+
+    /// A radius spanning `tiles` whole tiles. Total: the widest `u8` maps to
+    /// `255 * UNITS_PER_TILE` (`16_711_680`), far below [`RADIUS_MAX`], so the
+    /// value is always in range and needs no fallible constructor.
+    #[must_use]
+    pub fn from_tiles(tiles: u8) -> Radius {
+        Radius(u64::from(tiles).saturating_mul(UNITS_PER_TILE.unsigned_abs()))
+    }
 }
 
 impl TryFrom<u64> for Radius {
@@ -422,6 +514,14 @@ impl DistanceSq {
     #[must_use]
     pub const fn get(self) -> u128 {
         self.0
+    }
+
+    /// The integer floor of the square root — the linear magnitude of a squared
+    /// distance. `u128::isqrt` of any value fits in `u64` (`isqrt(u128::MAX)`
+    /// is `u64::MAX`), so the narrow drops only proven-zero high bytes.
+    #[must_use]
+    pub fn isqrt(self) -> u64 {
+        u64_from_u128_low(self.0.isqrt())
     }
 }
 
@@ -743,6 +843,74 @@ fn facing_in_bounds(value: i64) -> bool {
     (-WORLD_EXTENT..=WORLD_EXTENT).contains(&value)
 }
 
+/// The fixed-point quotient `numerator / divisor` in `Q40.24` — round-nearest,
+/// ties away from zero, saturating narrow. A free function so the `TILE_SHIFT`
+/// scale-up does not sit inside the [`Div`] impl (which reads as expecting `/`).
+fn fixed_div(numerator: Fixed, divisor: NonZeroFixed) -> Fixed {
+    let shifted = i128::from(numerator.raw()) << TILE_SHIFT;
+    Fixed(saturate_i64(round_div(
+        shifted,
+        i128::from(divisor.get().raw()),
+    )))
+}
+
+/// Round-nearest with ties away from zero via the magnitude/sign form
+/// `sign(p) * ((|p| + 2^(shift-1)) >> shift)`. The naive `(p + half) >> shift`
+/// rounds toward `+inf` (so `round(-1.5)` would be `-1`, not `-2`); this rounds
+/// the magnitude and re-applies the sign.
+fn round_shift(p: i128, shift: u32) -> i128 {
+    let half = 1u128 << (shift - 1);
+    let magnitude = i128_from_u128_saturating((p.unsigned_abs() + half) >> shift);
+    if p < 0 { -magnitude } else { magnitude }
+}
+
+/// Round-nearest with ties away from zero for a quotient `n / d` (`d != 0`).
+/// The magnitude `(|n| + |d|/2) / |d|` carries the sign of `n XOR d`.
+fn round_div(n: i128, d: i128) -> i128 {
+    let (nu, du) = (n.unsigned_abs(), d.unsigned_abs());
+    let magnitude = i128_from_u128_saturating((nu + du / 2) / du);
+    if (n < 0) ^ (d < 0) {
+        -magnitude
+    } else {
+        magnitude
+    }
+}
+
+/// Saturating narrow of an `i128` into `i64` — the defined fallback for an
+/// out-of-range value, never a truncating `as` cast.
+fn saturate_i64(x: i128) -> i64 {
+    match i64::try_from(x) {
+        Ok(v) => v,
+        Err(_) => {
+            if x < 0 {
+                i64::MIN
+            } else {
+                i64::MAX
+            }
+        }
+    }
+}
+
+/// Saturating narrow of a `u128` magnitude into `i128`. In the rounding paths
+/// the magnitude is provably far below `i128::MAX`; the saturating fallback
+/// keeps the helper total without a truncating `as` cast.
+fn i128_from_u128_saturating(x: u128) -> i128 {
+    i128::try_from(x).unwrap_or(i128::MAX)
+}
+
+/// Keeps the low eight bytes of a `u128`, dropping the high eight. Callers pass
+/// a value whose high bytes are proven zero (`u128::isqrt` never exceeds
+/// `u64::MAX`), so this is lossless, cast-free, and total — mirroring the
+/// byte-decomposition narrows in [`crate::rng`].
+fn u64_from_u128_low(value: u128) -> u64 {
+    let full = value.to_le_bytes();
+    let mut low = [0u8; 8];
+    for (slot, byte) in low.iter_mut().zip(full) {
+        *slot = byte;
+    }
+    u64::from_le_bytes(low)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -959,6 +1127,143 @@ mod tests {
         assert_eq!(first, second);
     }
 
+    fn nzf(raw: i64) -> NonZeroFixed {
+        NonZeroFixed::new(Fixed::from_raw(raw)).unwrap()
+    }
+
+    #[test]
+    fn mul_by_one_tile_is_identity() {
+        let three_tiles = Fixed::from_raw(3 * UNITS_PER_TILE);
+        assert_eq!(three_tiles * Fixed::from_raw(UNITS_PER_TILE), three_tiles);
+        assert_eq!(three_tiles / nzf(UNITS_PER_TILE), three_tiles);
+    }
+
+    #[test]
+    fn mul_rounds_ties_away_from_zero_both_signs() {
+        // 1.5 sub-tiles rounds to 2; -1.5 rounds to -2 (away from zero, not +inf).
+        assert_eq!(
+            Fixed::from_raw(3) * Fixed::from_raw(HALF_TILE),
+            Fixed::from_raw(2)
+        );
+        assert_eq!(
+            Fixed::from_raw(-3) * Fixed::from_raw(HALF_TILE),
+            Fixed::from_raw(-2)
+        );
+        // -0.5 rounds to -1, the negative-tie case the naive shift gets wrong.
+        assert_eq!(
+            Fixed::from_raw(-1) * Fixed::from_raw(HALF_TILE),
+            Fixed::from_raw(-1)
+        );
+        assert_eq!(
+            Fixed::from_raw(1) * Fixed::from_raw(HALF_TILE),
+            Fixed::from_raw(1)
+        );
+    }
+
+    #[test]
+    fn div_rounds_ties_away_from_zero_both_signs() {
+        // -1 / 2 tiles = -0.5 rounds to -1 away from zero.
+        assert_eq!(
+            Fixed::from_raw(-1) / nzf(2 * UNITS_PER_TILE),
+            Fixed::from_raw(-1)
+        );
+        assert_eq!(
+            Fixed::from_raw(1) / nzf(2 * UNITS_PER_TILE),
+            Fixed::from_raw(1)
+        );
+    }
+
+    #[test]
+    fn mul_saturates_on_overflow() {
+        assert_eq!(
+            Fixed::from_raw(i64::MAX) * Fixed::from_raw(i64::MAX),
+            Fixed::from_raw(i64::MAX)
+        );
+        assert_eq!(
+            Fixed::from_raw(i64::MAX) * Fixed::from_raw(i64::MIN),
+            Fixed::from_raw(i64::MIN)
+        );
+    }
+
+    #[test]
+    fn non_zero_fixed_rejects_zero() {
+        assert_eq!(
+            NonZeroFixed::new(Fixed::from_raw(0)),
+            Err(SpatialError::ZeroFixed)
+        );
+        assert_eq!(
+            NonZeroFixed::new(Fixed::from_raw(7)).unwrap().get().raw(),
+            7
+        );
+    }
+
+    #[test]
+    fn isqrt_floors_perfect_and_non_square_and_zero() {
+        assert_eq!(pos(0, 0).distance_sq(pos(3, 4)).isqrt(), 5);
+        assert_eq!(pos(0, 0).distance_sq(pos(2, 2)).isqrt(), 2); // floor(sqrt(8)) = 2
+        assert_eq!(pos(5, 5).distance_sq(pos(5, 5)).isqrt(), 0);
+    }
+
+    #[test]
+    fn radius_from_tiles_is_total() {
+        assert_eq!(Radius::from_tiles(0).get(), 0);
+        assert_eq!(
+            Radius::from_tiles(5).get(),
+            5 * UNITS_PER_TILE.unsigned_abs()
+        );
+        assert_eq!(
+            Radius::from_tiles(255).get(),
+            255 * UNITS_PER_TILE.unsigned_abs()
+        );
+        assert!(Radius::from_tiles(255).get() <= RADIUS_MAX);
+    }
+
+    #[test]
+    fn zero_vector_normalizes_to_no_direction() {
+        assert_eq!(
+            WorldVec::ZERO.normalized_to(Fixed::from_raw(100)),
+            Displacement::NoDirection
+        );
+    }
+
+    #[test]
+    fn normalized_to_reaches_speed_and_is_scale_invariant() {
+        let speed = Fixed::from_raw(10_000);
+        let short = vec(30_000, 40_000); // magnitude 50_000
+        let long = vec(60_000, 80_000); // magnitude 100_000, same direction
+        for v in [short, long] {
+            match v.normalized_to(speed) {
+                Displacement::Scaled { vector } => {
+                    let got = i128::from(vector.length_sq().isqrt());
+                    assert!((got - i128::from(speed.raw())).abs() <= 1);
+                }
+                Displacement::NoDirection => panic!("non-zero vector has a direction"),
+            }
+        }
+    }
+
+    #[test]
+    fn displacement_wire_round_trips() {
+        let scaled = Displacement::Scaled { vector: vec(1, 2) };
+        assert_eq!(
+            serde_json::to_string(&scaled).unwrap(),
+            r#"{"kind":"scaled","vector":{"x":1,"y":2}}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<Displacement>(r#"{"kind":"scaled","vector":{"x":1,"y":2}}"#)
+                .unwrap(),
+            scaled
+        );
+        assert_eq!(
+            serde_json::to_string(&Displacement::NoDirection).unwrap(),
+            r#"{"kind":"no_direction"}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<Displacement>(r#"{"kind":"no_direction"}"#).unwrap(),
+            Displacement::NoDirection
+        );
+    }
+
     proptest! {
         #[test]
         fn within_range_matches_distance_sq(
@@ -1019,6 +1324,33 @@ mod tests {
                 base.frontal_contains(apex, target, ConeHalfWidth::DEG_45),
                 scaled.frontal_contains(apex, target, ConeHalfWidth::DEG_45)
             );
+        }
+
+        #[test]
+        fn isqrt_is_the_integer_floor_square_root(
+            ax in 0i64..=1_000_000, ay in 0i64..=1_000_000,
+        ) {
+            let d = WorldVec::new(Fixed::from_raw(ax), Fixed::from_raw(ay)).length_sq();
+            let r = u128::from(d.isqrt());
+            prop_assert!(r * r <= d.get());
+            prop_assert!(d.get() < (r + 1) * (r + 1));
+        }
+
+        #[test]
+        fn normalized_to_lands_within_one_sub_unit_of_speed(
+            // Components keep the magnitude at least 5_000 so speed <= |v| (the
+            // seek regime); the linear error is then bounded by the isqrt floor.
+            vx in 5_000i64..=100_000, vy in 0i64..=100_000,
+            speed in 1i64..=5_000,
+        ) {
+            let v = WorldVec::new(Fixed::from_raw(vx), Fixed::from_raw(vy));
+            match v.normalized_to(Fixed::from_raw(speed)) {
+                Displacement::Scaled { vector } => {
+                    let got = i128::from(vector.length_sq().isqrt());
+                    prop_assert!((got - i128::from(speed)).abs() <= 1);
+                }
+                Displacement::NoDirection => prop_assert!(false, "non-zero vector"),
+            }
         }
     }
 }

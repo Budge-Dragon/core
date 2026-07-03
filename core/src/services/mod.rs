@@ -7,4 +7,6 @@
 
 pub mod chance;
 pub mod item_rules;
+pub mod monster_ai;
+pub mod movement;
 pub mod spawn;

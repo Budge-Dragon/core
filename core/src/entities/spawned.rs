@@ -37,12 +37,14 @@ mod tests {
     use crate::components::pool::Pool;
     use crate::components::spatial::Facing;
     use crate::components::tile::TileCoord;
+    use crate::components::units::{MapNumber, Tick};
 
     fn placement() -> Placement {
         Placement {
             position: TileCoord::new(2, 3).to_world(),
             facing: Facing::POS_Y,
             movement: Movement::Grounded,
+            map: MapNumber(0),
         }
     }
 
@@ -53,6 +55,8 @@ mod tests {
                 number: MonsterNumber(7),
                 placement: placement(),
                 health: Pool::full(60),
+                anchor: placement().position,
+                next_action: Tick(0),
             },
         };
         let json = serde_json::to_string(&mob).unwrap();

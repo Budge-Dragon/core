@@ -124,12 +124,6 @@ impl TileArea {
         self.y2
     }
 
-    /// Whether a tile lies inside the inclusive bounds.
-    #[must_use]
-    pub fn contains(self, tile: TileCoord) -> bool {
-        self.x1 <= tile.x && tile.x <= self.x2 && self.y1 <= tile.y && tile.y <= self.y2
-    }
-
     /// Projects to the world rectangle covering every whole cell in the area.
     #[must_use]
     pub fn to_world(self) -> WorldRect {
@@ -389,14 +383,6 @@ mod tests {
         assert!(TileArea::new(5, 5, 5, 5).is_ok());
         let bad = r#"{"x1":9,"y1":2,"x2":3,"y2":4}"#;
         assert!(serde_json::from_str::<TileArea>(bad).is_err());
-    }
-
-    #[test]
-    fn tile_area_contains_is_inclusive() {
-        let area = TileArea::new(5, 5, 10, 10).unwrap();
-        assert!(area.contains(TileCoord::new(5, 5)));
-        assert!(area.contains(TileCoord::new(10, 10)));
-        assert!(!area.contains(TileCoord::new(4, 7)));
     }
 
     #[test]

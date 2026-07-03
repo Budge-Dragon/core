@@ -155,12 +155,14 @@ mod tests {
     use crate::components::pool::Pool;
     use crate::components::spatial::Facing;
     use crate::components::tile::TileCoord;
+    use crate::components::units::MapNumber;
 
     fn placement() -> Placement {
         Placement {
             position: TileCoord::new(180, 120).to_world(),
             facing: Facing::POS_Y,
             movement: Movement::Grounded,
+            map: MapNumber(0),
         }
     }
 

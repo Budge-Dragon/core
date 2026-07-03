@@ -3,6 +3,7 @@
 //! `clamped` constructors on the compute path).
 
 use core::num::{NonZeroU16, NonZeroU32};
+use core::ops::Add;
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,16 @@ pub struct Zen(
 pub struct Exp(
     /// Experience points.
     pub u64,
+);
+
+/// Map number as the client knows it — a single byte pre-S3. Lives here, the
+/// lowest vocabulary layer, because a component ([`crate::components::placement::Placement`])
+/// composes it; the other identity newtypes stay in `data::common`, referenced
+/// only by entities and data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct MapNumber(
+    /// The client map number.
+    pub u8,
 );
 
 /// A 1-based character, monster, or requirement level. Zero is rejected at
@@ -82,6 +93,54 @@ pub struct DurationMs(
     /// Milliseconds.
     pub u32,
 );
+
+impl DurationMs {
+    /// This millisecond delay as a whole-tick cadence, rounding up so an action
+    /// never fires faster than its authored delay: `0` ms yields zero ticks,
+    /// any positive delay at least one. Integer division only, so the same
+    /// cadence comes out on every target.
+    #[must_use]
+    pub fn in_ticks(self, tick: TickDuration) -> Ticks {
+        let ms = u64::from(self.0);
+        let per = u64::from(tick.millis().get());
+        Ticks(ms.div_ceil(per))
+    }
+}
+
+/// An absolute simulation tick — a point on the tick timeline. Host-supplied
+/// input; core never reads a clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Tick(
+    /// The tick index on the timeline.
+    pub u64,
+);
+
+impl Tick {
+    /// Whether this tick has been reached at `now` (`now >= self`) — the
+    /// readiness predicate a cadence checks before acting. [`Tick(0)`](Tick) is
+    /// always reached, so a freshly seeded action is ready immediately.
+    #[must_use]
+    pub fn reached(self, now: Tick) -> bool {
+        now.0 >= self.0
+    }
+}
+
+/// A duration measured in whole ticks — the cadence gap between two actions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Ticks(
+    /// The number of whole ticks.
+    pub u64,
+);
+
+impl Add<Ticks> for Tick {
+    type Output = Tick;
+
+    /// This tick advanced by a duration, saturating at the timeline's end — the
+    /// affine `point + duration` operation.
+    fn add(self, delay: Ticks) -> Tick {
+        Tick(self.0.saturating_add(delay.0))
+    }
+}
 
 /// Milliseconds per simulation tick — our time base (nonzero by construction).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -424,5 +483,45 @@ mod tests {
     fn resistance_denominator_is_byte_scale() {
         assert_eq!(Resistance::DENOMINATOR, 255);
         assert_eq!(Resistance(3).0, 3);
+    }
+
+    #[test]
+    fn duration_ms_in_ticks_rounds_up() {
+        let per = TickDuration::new(50).unwrap();
+        assert_eq!(DurationMs(400).in_ticks(per), Ticks(8));
+        assert_eq!(DurationMs(410).in_ticks(per), Ticks(9));
+        assert_eq!(DurationMs(1).in_ticks(per), Ticks(1));
+        assert_eq!(DurationMs(0).in_ticks(per), Ticks(0));
+    }
+
+    #[test]
+    fn tick_reached_is_inclusive_and_ready_at_zero() {
+        assert!(Tick(5).reached(Tick(5)));
+        assert!(Tick(5).reached(Tick(6)));
+        assert!(!Tick(5).reached(Tick(4)));
+        assert!(Tick(0).reached(Tick(0)));
+    }
+
+    #[test]
+    fn tick_add_saturates() {
+        assert_eq!(Tick(5) + Ticks(3), Tick(8));
+        assert_eq!(Tick(u64::MAX) + Ticks(1), Tick(u64::MAX));
+    }
+
+    #[test]
+    fn tick_and_ticks_round_trip_as_bare_integers() {
+        assert_eq!(serde_json::to_string(&Tick(42)).unwrap(), "42");
+        assert_eq!(serde_json::from_str::<Tick>("42").unwrap(), Tick(42));
+        assert_eq!(serde_json::to_string(&Ticks(7)).unwrap(), "7");
+        assert_eq!(serde_json::from_str::<Ticks>("7").unwrap(), Ticks(7));
+    }
+
+    #[test]
+    fn map_number_round_trips_as_bare_integer() {
+        assert_eq!(serde_json::to_string(&MapNumber(5)).unwrap(), "5");
+        assert_eq!(
+            serde_json::from_str::<MapNumber>("5").unwrap(),
+            MapNumber(5)
+        );
     }
 }

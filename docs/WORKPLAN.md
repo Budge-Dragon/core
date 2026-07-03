@@ -84,8 +84,8 @@ cargo check -p mu-core --target wasm32-unknown-unknown
 
 Verified against the repo on 2026-07-03.
 
-- **Branch:** `entities` (W-ENT), off `spatial-foundation` (Waves A/B). Merge to
-  `main` is a separate step.
+- **Branch:** `movement` (W-MOV), off `entities` (W-ENT), off `spatial-foundation`
+  (Waves A/B). Merge to `main` is a separate step.
 - **DONE:**
   - Full static-data layer (`core/src/data/`) — monster/item/skill/map/drop/exp
     definitions, chaos mixes, ancient sets, gates/warps, classes, game-config —
@@ -104,15 +104,25 @@ Verified against the repo on 2026-07-03.
     world positions deterministically; Atlas `MapHandle` (proven-present map
     handle) making walk-grid access total; `WalkGrid::walkable_positions_in`.
     Closed **D4** + **T4**. Green: `clippy -D warnings` clean, 162 tests, wasm OK.
+  - **W-MOV — Movement & Flight** (branch `movement`): the D2 fixed-point
+    narrowing surface (`NonZeroFixed`, `Fixed` `*`/`/`, `DistanceSq::isqrt`,
+    `WorldVec::normalized_to`→`Displacement`, `Radius::from_tiles`);
+    `Tick`/`Ticks`/`DurationMs::in_ticks`; the flight-toggle FSM + eligibility
+    gate + grounded step + warp arrival (`core/src/services/movement.rs`);
+    deterministic monster wander/chase/leash/attack-intent AI
+    (`core/src/services/monster_ai.rs`); the movement/flight/warp/AI event enums
+    (`core/src/events/{movement,monster_ai}.rs`); `MapNumber` relocated to
+    `components/units.rs`; `MonsterInstance` widened with `anchor`/`next_action`.
+    Closed **D1/D2/D3/D5** + **T2/T3**; opened **MOB-SPD**. Green: four gates,
+    208 tests, wasm OK.
 - **EMPTY / MINIMAL:**
-  - `core/src/services/` — the first behavioral service (`spawn.rs`: entity state
-    + injected RNG → placed state + events) now lands alongside `chance.rs` /
-    `item_rules.rs`. Combat / movement / AI services are still to come
-    (W-CMB / W-MOV / W-AI).
+  - `core/src/services/` — behavioral services now include `spawn.rs` (W-ENT),
+    `movement.rs` + `monster_ai.rs` (W-MOV), alongside `chance.rs` /
+    `item_rules.rs`. Combat (W-CMB) is still to come.
   - `hosts/` — placeholder `README.md` only. **No host crate.**
-- **Backlog:** `docs/debt/DEBT-INDEX.md` — 12 open items: **W-SRC** (data
-  provenance), **D1/D2/D3/D5** (movement/flight), **T1/T2/T3** (spatial
-  follow-ups), **Q1–Q4** (tooling/CI quality gaps). **D4 + T4 closed by W-ENT.**
+- **Backlog:** `docs/debt/DEBT-INDEX.md` — 7 open items: **W-SRC** + **MOB-SPD**
+  (data provenance), **T1** (spatial follow-up), **Q1–Q4** (tooling/CI quality
+  gaps). **D1/D2/D3/D5 + T2/T3 closed by W-MOV; D4 + T4 closed by W-ENT.**
 
 ---
 
@@ -576,7 +586,8 @@ Verified against the repo on 2026-07-03.
 
 ## W-MOV — Movement & Flight
 
-- **Status:** NOT STARTED
+- **Status:** DONE (branch `movement`, off `entities`, 2026-07-03; four green
+  gates, 208 tests; closed D1/D2/D3/D5 + T2/T3; opened MOB-SPD provenance debt).
 - **Goal:** Give the simulation its first movement behavior — grounded steps
   validated against the walk grid, a flight-mode toggle, warp/gate arrival, and
   monster wander/chase/leash AI — all as pure services over the already-built
@@ -1252,3 +1263,7 @@ decision pinned). Most recent at the bottom.
 | 2026-07-03 | W-ENT→W-MOV | **Decision pinned:** entity map membership (`MapNumber`) lands on `Placement` (co-located with `position`, matching the `Landing { map, .. }` precedent), added by W-MOV when cross-map operations need it — a purely-additive change, correctly deferred (no consumer in W-ENT). |
 | 2026-07-03 | (cleanup) | **Convention pinned:** added "File & module organization" to CLAUDE.md (+ README pointer) — promote a flat file to a directory module only for separable concerns, never line count; unit tests inline, cross-file/dataset contracts in `core/tests/`; any split freezes the public API via re-exports. Deep-module + architecture audits found `atlas.rs` the only file warranting a split. |
 | 2026-07-03 | (cleanup) | Applied the convention: extracted `DropPool` → `data/drop_pool.rs` (private module; public only via `data::atlas::DropPool`); split `atlas.rs` (1180 lines) → `data/atlas/{mod.rs, resolve.rs, check.rs, views.rs}` (navigation reorg, public API byte-frozen). rules-guardian caught two API-freeze slips (accidental `pub mod`; `AtlasError` split from its type) — both fixed; final rules-guardian **PASS**, four gates green, 162 tests. |
+| 2026-07-03 | W-MOV | Started on branch `movement` (off `entities`). Core Domain Feature pipeline: spec → architecture(plan) → canon(plan) → state-machine → implementation → architecture(code) → deep-module → canon(code) → debt → rules. |
+| 2026-07-03 | W-MOV | **Plan phase pinned (both plan-guardians APPROVE-WITH-REQUIRED-CHANGES).** Key reshapes beyond the literal plan: (1) `MapNumber` relocated `data/common.rs` → `components/units.rs` (re-exported from `data::common`, public path byte-frozen) so `map` on `Placement` opens no components→data reverse edge; (2) `MonsterInstance` widened with `anchor: WorldPos` (leash tether) + `next_action: Tick` (cadence clock); (3) flight eligibility takes enum-shaped host inputs (`Wings`/`CombatLock`), not bools, not fabricated `Character` fields; (4) round-nearest-ties-away uses the magnitude/sign form (naive `(p+half)>>shift` rounds toward +∞); (5) normalize tolerance is linear; (6) greedy step got Reynolds seek+arrival clamping. |
+| 2026-07-03 | W-MOV | **Landed.** D2 fixed-point narrowing surface (`NonZeroFixed`, `Fixed`×`/` as operator traits, `DistanceSq::isqrt` via std `u128::isqrt`, `WorldVec::normalized_to`→`Displacement`, `Radius::from_tiles`); `Tick`/`Ticks`/`DurationMs::in_ticks` (ceil); flight FSM (`apply_flight_change` 2×2 + `flight_gate` + `change_flight`) with `FlightOutcome`; grounded-step `resolve_step`/`resolve_drift` + `StepOutcome`; warp `resolve_arrival` + `WarpOutcome`; monster AI `decide_monster_action` (not-ready→leash→attack→chase→wander) + `MonsterIntent`; `draw_cardinal` extracted to `chance.rs` (shared with spawn). Four green gates, 208 tests (+46 net). All five guardians cleared (rules-guardian PASS with independent gate re-run). |
+| 2026-07-03 | W-MOV | Closed **D1** (flight FSM + movement service), **D2** (fixed-point narrowing surface with its `normalized_to` consumer), **D3** (walk-grid grounded-step consumer), **D5** (`Landing.facing` explicit-policy match), **T3** (`length_sq` consumer), **T2** (`TileArea::contains` trimmed — proved world-space-only). Rows removed from DEBT-INDEX; `movement-flight-wave.md` closed; T2/T3 closed in `spatial-foundation-followups.md` (T1 remains). Opened **MOB-SPD** (`mob-step-speed-provenance.md`, owner W-SRC) for the invented 1-tile monster per-step distance. |
