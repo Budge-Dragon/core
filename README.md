@@ -46,6 +46,12 @@ convention, enforced by code review.
   - `src/data/` — static game data struct definitions
 - `hosts/` — future host crates (placeholders, see `hosts/README.md`)
 
+One concept per file; a file grows to a directory module (`foo/{mod.rs, …}`)
+only when it holds separable concerns, never for line count. Unit tests live
+inline; cross-file/dataset contracts live in `core/tests/`. The full
+file-organization rule is in [`CLAUDE.md`](./CLAUDE.md) ("File & module
+organization").
+
 ## Development
 
 ```sh

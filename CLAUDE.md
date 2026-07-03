@@ -150,6 +150,17 @@ These follow from the four laws above.
 
 The real fix is upstream: a missing enum variant absorbs toggle/mode params (Iron Law 2); the operation is recomposed so data never crosses; the params were wrong-layer (Iron Law 1). **Litmus:** if a wrapper cleans the call site without changing the module, the smell is unchanged. **Soft anchor:** ≤5 params is the target; 6+ triggers scrutiny, not rejection — ships only when every param is a distinct non-bundleable domain entity at the right layer and no upstream reshape shrinks the count. Bundling is never the fix.
 
+**File & module organization — length is not the trigger; separable concerns are.** A file is long because its *problem* is large or its *vocabulary* is broad — that is cohesion, not a smell. A long file that hides one thing behind a small interface is a **deep module** and stays one file. Promote a flat `foo.rs` to a directory module `foo/{mod.rs, …}` **only** when it holds two or more sub-modules that hide *different* things — each with its own interface, neither needing the other's internals. Splitting for any of the following is forbidden — each is the **Classitis** banned above:
+
+- **Line count.** A 1,200-line file that hides one concern behind a small interface stays one file.
+- **A broad single-concept enum or vocabulary** — a schema record and its field enums, or a family of peer newtypes sharing one error. Breadth of one concept is not multiple concerns.
+- **Separating a builder from the product it builds** when they share a private representation — that is temporal decomposition.
+- **Splitting a type from its 1:1 error enum** and its `Display`/`Error` impls.
+
+**Tests by kind.** White-box tests of a type's private invariants, smart constructors, and wire round-trips live **inline** (`#[cfg(test)] mod tests`) — they need private access. Cross-file / dataset / whole-service contracts live in **`core/tests/`**, proven against the real `/data`. A data-schema module correctly carries no inline tests — its whole job *is* a cross-file contract. This split is by test *kind*, not an inconsistency to unify.
+
+**Re-export rule (the public API is frozen across any split).** After any promotion or extraction, every reachable `pub` path is byte-identical: `mod.rs` carries an explicit `pub use` for each public item (no globs), and private helpers widen to `pub(super)`/`pub(crate)` only — never `pub`, never re-exported. A rustdoc / `cargo public-api` diff before and after must be empty.
+
 ---
 
 ## Core Module Shape

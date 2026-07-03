@@ -13,6 +13,7 @@ pub mod chaos_mixes;
 pub mod classes;
 pub mod common;
 pub mod drop_config;
+mod drop_pool;
 pub mod effects;
 pub mod exp_tables;
 pub mod game_config;
