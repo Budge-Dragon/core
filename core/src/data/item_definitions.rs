@@ -17,8 +17,6 @@ use super::common::{ItemRef, MonsterNumber, Provenance, SkillNumber};
 pub struct ItemDefinition {
     /// The game's own item identity (group 0-15 x number).
     pub id: ItemRef,
-    /// Client display name (display/debug only — never a key).
-    pub name: String,
     /// Extraction provenance: dataset era plus optional curation note.
     #[serde(flatten)]
     pub provenance: Provenance,
@@ -525,3 +523,5 @@ impl core::fmt::Display for TransformationSkinsError {
         write!(f, "expected 6 transformation skins, found {}", self.found)
     }
 }
+
+impl core::error::Error for TransformationSkinsError {}

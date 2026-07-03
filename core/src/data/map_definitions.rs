@@ -11,8 +11,6 @@ use super::common::{MapNumber, Provenance};
 pub struct MapDefinition {
     /// Client map number — the game's own map identity.
     pub number: MapNumber,
-    /// Display name as the client knows it.
-    pub name: String,
     /// Traversal medium; entry and movement rules in services match on it.
     pub environment: MapEnvironment,
     /// Battle-soccer pitch; present only on Arena.

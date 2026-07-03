@@ -22,8 +22,6 @@ use super::common::{ItemRef, SourceVersion};
 /// convention, kept so the recipe stays the record's one nested payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChaosMix {
-    /// Display name of the mix (authentic recipe name).
-    pub name: String,
     /// Dataset era the record's values were extracted from.
     pub source_version: SourceVersion,
     /// Review note naming OpenMU-default values or era doubts; absent =

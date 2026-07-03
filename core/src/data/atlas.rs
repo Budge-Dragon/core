@@ -1,20 +1,24 @@
 //! Cross-checked, resolved view over the entire static dataset, built once at
 //! load. `Atlas::parse` is the single referential-integrity proof for every v2
 //! file: per-file identity uniqueness plus resolution of every declared
-//! cross-file reference, in one pass. Every accessor downstream is total or
-//! genuinely optional.
+//! cross-file reference, in one pass — and it *keeps* the proven-unique records
+//! as total by-id lookups, so a consuming service reaches any definition
+//! through the Atlas without re-scanning a raw `Vec`. Every accessor downstream
+//! is total or genuinely optional.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::components::geometry::{Direction, Point, Rect};
+use crate::components::interval::Interval;
 use crate::components::levels::TransformationLevel;
 
-use super::ancient_sets::AncientSet;
+use super::ancient_sets::{AncientRoster, AncientRosterError, AncientSet};
 use super::box_drops::BoxDrop;
 use super::chaos_mixes::{ChaosMix, ChaosRecipe};
-use super::classes::ClassRecord;
+use super::classes::{ClassRecord, ClassTable, ClassTableError};
 use super::common::{DataFile, GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
-use super::exp_tables::ExpTable;
+use super::drop_config::DropConfig;
+use super::exp_tables::{ExpCurve, ExpTable, ExpTableError};
 use super::game_config::GameConfig;
 use super::gates_warps::{EnterGate, GateWarpRecord, SpawnGate, TargetGate, Warp, WarpIndex};
 use super::item_definitions::{ItemDefinition, ItemKind};
@@ -87,31 +91,80 @@ pub struct WarpView<'a> {
     pub landing: Landing,
 }
 
-/// The static dataset with every cross-file reference resolved. Construction
-/// proves, dataset-wide, per-file identity uniqueness and resolution of every
-/// declared cross-file edge.
+/// Droppable items grouped by their base drop level, built once at load so drop
+/// resolution range-queries the eligible pool (`O(log n)` plus the matches)
+/// instead of linear-scanning every item definition on every kill. An item
+/// enters the pool only when it drops from monsters; the classic per-level drop
+/// index (OpenMU's `DropItemGroup`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DropPool {
+    by_drop_level: BTreeMap<u8, Vec<ItemRef>>,
+}
+
+impl DropPool {
+    fn build<'a>(items: impl Iterator<Item = &'a ItemDefinition>) -> Self {
+        let mut by_drop_level: BTreeMap<u8, Vec<ItemRef>> = BTreeMap::new();
+        for item in items {
+            if item.drops_from_monsters {
+                by_drop_level
+                    .entry(item.drop_level)
+                    .or_default()
+                    .push(item.id);
+            }
+        }
+        Self { by_drop_level }
+    }
+
+    /// The droppable items whose base drop level falls in the inclusive window
+    /// (a monster's level pool: floor = `monster_level - gap`, ceiling =
+    /// `monster_level`). The window is an [`Interval`], so `min <= max` is
+    /// proven and the range query never panics; an empty iterator is the
+    /// genuine "no eligible item" answer.
+    pub fn in_window(&self, window: Interval<u8>) -> impl Iterator<Item = ItemRef> + '_ {
+        self.by_drop_level
+            .range(window.min()..=window.max())
+            .flat_map(|(_, refs)| refs.iter().copied())
+    }
+}
+
+/// The static dataset with every cross-file reference resolved and every
+/// proven-unique record retained as a total by-id lookup. Construction proves,
+/// dataset-wide, per-file identity uniqueness and resolution of every declared
+/// cross-file edge, then keeps the resolved store so a resolved handle proves
+/// its referent exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Atlas {
     maps: Vec<MapDefinition>,
-    spawn_gates_by_map: HashMap<MapNumber, Vec<SpawnGate>>,
-    enter_gates_by_map: HashMap<MapNumber, Vec<(EnterGate, Landing)>>,
+    spawn_gates_by_map: BTreeMap<MapNumber, Vec<SpawnGate>>,
+    enter_gates_by_map: BTreeMap<MapNumber, Vec<(EnterGate, Landing)>>,
     warps: Vec<(Warp, Landing)>,
     fallback: SpawnGate,
+    items: BTreeMap<ItemRef, ItemDefinition>,
+    monsters: BTreeMap<MonsterNumber, MonsterDefinition>,
+    skills: BTreeMap<SkillNumber, Skill>,
+    classes: ClassTable,
+    exp_curve: ExpCurve,
+    ancient_roster: AncientRoster,
+    drop_config: DropConfig,
+    special_drops: Vec<SpecialDropRecord>,
+    box_drops: Vec<BoxDrop>,
+    drop_pool: DropPool,
 }
 
 impl Atlas {
     /// Builds the atlas from the whole dataset, proving referential integrity
-    /// of every file in one pass.
+    /// of every file in one pass and retaining the resolved store.
     ///
     /// # Errors
-    /// Returns the first [`AtlasError`] found: a duplicated per-file identity
-    /// or a cross-file reference that resolves to nothing (or to a wrong-kind
-    /// gate).
+    /// Returns the first [`AtlasError`] found: a duplicated per-file identity, a
+    /// cross-file reference that resolves to nothing (or to a wrong-kind gate),
+    /// a malformed resolved structure (class table, experience curve, ancient
+    /// roster), or a singleton config file that is not exactly one record.
     pub fn parse(data: StaticData) -> Result<Self, AtlasError> {
         let map_numbers = unique_map_numbers(&data.maps.records)?;
-        let monster_numbers = unique_monster_numbers(&data.monsters.records)?;
-        let skill_numbers = unique_skill_numbers(&data.skills.records)?;
-        let item_refs = unique_item_refs(&data.items.records)?;
+        let monsters = index_monsters(data.monsters.records)?;
+        let skills = index_skills(data.skills.records)?;
+        let items = index_items(data.items.records)?;
 
         let gates = GatePartition::partition(data.gates_warps.records)?;
         gates.check_maps(&map_numbers)?;
@@ -121,20 +174,26 @@ impl Atlas {
         let enter_gates_by_map =
             resolve_enter_gates(gates.enter_gates, &landings, &gates.enter_gate_numbers)?;
 
-        check_spawns(&data.spawns.records, &map_numbers, &monster_numbers)?;
-        check_monster_attacks(&data.monsters.records, &skill_numbers)?;
-        check_summons(&data.skills.records, &monster_numbers)?;
-        check_items(&data.items.records, &skill_numbers, &monster_numbers)?;
-        check_ancient_sets(&data.ancient_sets.records, &item_refs)?;
-        check_chaos_mixes(&data.chaos_mixes.records, &item_refs)?;
-        check_special_drops(
-            &data.special_drops.records,
-            &item_refs,
-            &monster_numbers,
-            &map_numbers,
-        )?;
-        check_box_drops(&data.box_drops.records, &item_refs)?;
+        check_spawns(&data.spawns.records, &map_numbers, &monsters)?;
+        check_monster_attacks(&monsters, &skills)?;
+        check_summons(&skills, &monsters)?;
+        check_items(&items, &skills, &monsters)?;
+        check_ancient_sets(&data.ancient_sets.records, &items)?;
+        check_chaos_mixes(&data.chaos_mixes.records, &items)?;
+        check_special_drops(&data.special_drops.records, &items, &monsters, &map_numbers)?;
+        check_box_drops(&data.box_drops.records, &items)?;
         check_classes(&data.classes.records, &map_numbers)?;
+
+        let classes = ClassTable::try_from(data.classes.records).map_err(AtlasError::ClassTable)?;
+        let exp_table = take_single(data.exp_tables.records)
+            .map_err(|found| AtlasError::ExpTableNotSingle { found })?;
+        let exp_curve = ExpCurve::parse(exp_table).map_err(AtlasError::ExpCurve)?;
+        let ancient_roster =
+            AncientRoster::build(data.ancient_sets.records).map_err(AtlasError::AncientRoster)?;
+        let game_config = take_single(data.game_config.records)
+            .map_err(|found| AtlasError::GameConfigNotSingle { found })?;
+        let drop_config = game_config.drops;
+        let drop_pool = DropPool::build(items.values());
 
         let fallback = gates
             .spawn_gates
@@ -143,7 +202,7 @@ impl Atlas {
             .cloned()
             .ok_or(AtlasError::FallbackSpawnGateMissing)?;
 
-        let mut spawn_gates_by_map: HashMap<MapNumber, Vec<SpawnGate>> = HashMap::new();
+        let mut spawn_gates_by_map: BTreeMap<MapNumber, Vec<SpawnGate>> = BTreeMap::new();
         for gate in gates.spawn_gates {
             spawn_gates_by_map.entry(gate.map).or_default().push(gate);
         }
@@ -154,6 +213,16 @@ impl Atlas {
             enter_gates_by_map,
             warps,
             fallback,
+            items,
+            monsters,
+            skills,
+            classes,
+            exp_curve,
+            ancient_roster,
+            drop_config,
+            special_drops: data.special_drops.records,
+            box_drops: data.box_drops.records,
+            drop_pool,
         })
     }
 
@@ -196,6 +265,92 @@ impl Atlas {
             landing: *landing,
         })
     }
+
+    /// The item definition for an identity; `None` when no record carries it —
+    /// genuine optionality of an open `{group, number}` key. A ref taken from a
+    /// resolved edge (ancient piece, chaos recipe, drop) is proven present by
+    /// `parse`.
+    #[must_use]
+    pub fn item(&self, id: ItemRef) -> Option<&ItemDefinition> {
+        self.items.get(&id)
+    }
+
+    /// Every item definition, ordered by identity.
+    pub fn items(&self) -> impl Iterator<Item = &ItemDefinition> {
+        self.items.values()
+    }
+
+    /// The monster definition for a number; `None` when no record carries it —
+    /// genuine optionality of an open number. A number taken from a resolved
+    /// edge (spawn, summon, transformation skin, skill attack) is proven present
+    /// by `parse`.
+    #[must_use]
+    pub fn monster(&self, number: MonsterNumber) -> Option<&MonsterDefinition> {
+        self.monsters.get(&number)
+    }
+
+    /// Every monster definition, ordered by number.
+    pub fn monsters(&self) -> impl Iterator<Item = &MonsterDefinition> {
+        self.monsters.values()
+    }
+
+    /// The skill definition for a number; `None` when no record carries it —
+    /// genuine optionality of an open number. A number taken from a resolved
+    /// edge (monster attack, item skill/teaches, summon) is proven present by
+    /// `parse`.
+    #[must_use]
+    pub fn skill(&self, number: SkillNumber) -> Option<&Skill> {
+        self.skills.get(&number)
+    }
+
+    /// Every skill definition, ordered by number.
+    pub fn skills(&self) -> impl Iterator<Item = &Skill> {
+        self.skills.values()
+    }
+
+    /// The total class lookup — every class present exactly once, proven at
+    /// parse.
+    #[must_use]
+    pub fn classes(&self) -> &ClassTable {
+        &self.classes
+    }
+
+    /// The experience curve — level cap and per-level thresholds, proven at
+    /// parse.
+    #[must_use]
+    pub fn exp_curve(&self) -> &ExpCurve {
+        &self.exp_curve
+    }
+
+    /// The ancient set roster and its membership lookup.
+    #[must_use]
+    pub fn ancient_roster(&self) -> &AncientRoster {
+        &self.ancient_roster
+    }
+
+    /// The global per-kill drop tuning.
+    #[must_use]
+    pub fn drop_config(&self) -> &DropConfig {
+        &self.drop_config
+    }
+
+    /// The special-drop records, in load order.
+    #[must_use]
+    pub fn special_drops(&self) -> &[SpecialDropRecord] {
+        &self.special_drops
+    }
+
+    /// The openable-box drop records, in load order.
+    #[must_use]
+    pub fn box_drops(&self) -> &[BoxDrop] {
+        &self.box_drops
+    }
+
+    /// The per-level drop pool index over the droppable items.
+    #[must_use]
+    pub fn drop_pool(&self) -> &DropPool {
+        &self.drop_pool
+    }
 }
 
 /// The gate records partitioned by kind, with per-file identity sets proven
@@ -205,7 +360,7 @@ struct GatePartition {
     enter_gates: Vec<EnterGate>,
     target_gates: Vec<TargetGate>,
     warps: Vec<Warp>,
-    enter_gate_numbers: HashSet<GateNumber>,
+    enter_gate_numbers: BTreeSet<GateNumber>,
 }
 
 impl GatePartition {
@@ -214,9 +369,9 @@ impl GatePartition {
         let mut enter_gates = Vec::new();
         let mut target_gates = Vec::new();
         let mut warps = Vec::new();
-        let mut gate_numbers = HashSet::new();
-        let mut warp_indices = HashSet::new();
-        let mut enter_gate_numbers = HashSet::new();
+        let mut gate_numbers = BTreeSet::new();
+        let mut warp_indices = BTreeSet::new();
+        let mut enter_gate_numbers = BTreeSet::new();
 
         for record in records {
             match record {
@@ -251,7 +406,7 @@ impl GatePartition {
         })
     }
 
-    fn check_maps(&self, map_numbers: &HashSet<MapNumber>) -> Result<(), AtlasError> {
+    fn check_maps(&self, map_numbers: &BTreeSet<MapNumber>) -> Result<(), AtlasError> {
         for gate in &self.spawn_gates {
             require_map(map_numbers, gate.number, gate.map)?;
         }
@@ -264,8 +419,8 @@ impl GatePartition {
         Ok(())
     }
 
-    fn landings(&self) -> HashMap<GateNumber, Landing> {
-        let mut landings = HashMap::new();
+    fn landings(&self) -> BTreeMap<GateNumber, Landing> {
+        let mut landings = BTreeMap::new();
         for gate in &self.spawn_gates {
             landings.insert(
                 gate.number,
@@ -295,8 +450,8 @@ impl GatePartition {
 /// resolves to nothing (or to a wrong-kind enter gate) is the error.
 fn resolve_warps(
     warps: Vec<Warp>,
-    landings: &HashMap<GateNumber, Landing>,
-    enter_gate_numbers: &HashSet<GateNumber>,
+    landings: &BTreeMap<GateNumber, Landing>,
+    enter_gate_numbers: &BTreeSet<GateNumber>,
 ) -> Result<Vec<(Warp, Landing)>, AtlasError> {
     let mut resolved = Vec::with_capacity(warps.len());
     for warp in warps {
@@ -326,10 +481,10 @@ fn resolve_warps(
 /// (or to a wrong-kind enter gate) is the error.
 fn resolve_enter_gates(
     enter_gates: Vec<EnterGate>,
-    landings: &HashMap<GateNumber, Landing>,
-    enter_gate_numbers: &HashSet<GateNumber>,
-) -> Result<HashMap<MapNumber, Vec<(EnterGate, Landing)>>, AtlasError> {
-    let mut by_map: HashMap<MapNumber, Vec<(EnterGate, Landing)>> = HashMap::new();
+    landings: &BTreeMap<GateNumber, Landing>,
+    enter_gate_numbers: &BTreeSet<GateNumber>,
+) -> Result<BTreeMap<MapNumber, Vec<(EnterGate, Landing)>>, AtlasError> {
+    let mut by_map: BTreeMap<MapNumber, Vec<(EnterGate, Landing)>> = BTreeMap::new();
     for gate in enter_gates {
         let target = gate.target_gate;
         let landing = match landings.get(&target) {
@@ -352,7 +507,18 @@ fn resolve_enter_gates(
     Ok(by_map)
 }
 
-fn claim_gate(seen: &mut HashSet<GateNumber>, number: GateNumber) -> Result<(), AtlasError> {
+/// Extracts the sole record of a singleton file; the count is the error payload
+/// when the file does not carry exactly one.
+fn take_single<T>(records: Vec<T>) -> Result<T, usize> {
+    let found = records.len();
+    let mut iter = records.into_iter();
+    match (iter.next(), iter.next()) {
+        (Some(only), None) => Ok(only),
+        (None | Some(_), _) => Err(found),
+    }
+}
+
+fn claim_gate(seen: &mut BTreeSet<GateNumber>, number: GateNumber) -> Result<(), AtlasError> {
     if seen.insert(number) {
         Ok(())
     } else {
@@ -361,7 +527,7 @@ fn claim_gate(seen: &mut HashSet<GateNumber>, number: GateNumber) -> Result<(), 
 }
 
 fn require_map(
-    map_numbers: &HashSet<MapNumber>,
+    map_numbers: &BTreeSet<MapNumber>,
     gate: GateNumber,
     map: MapNumber,
 ) -> Result<(), AtlasError> {
@@ -372,8 +538,8 @@ fn require_map(
     }
 }
 
-fn unique_map_numbers(maps: &[MapDefinition]) -> Result<HashSet<MapNumber>, AtlasError> {
-    let mut set = HashSet::new();
+fn unique_map_numbers(maps: &[MapDefinition]) -> Result<BTreeSet<MapNumber>, AtlasError> {
+    let mut set = BTreeSet::new();
     for map in maps {
         if !set.insert(map.number) {
             return Err(AtlasError::DuplicateMapNumber { number: map.number });
@@ -382,65 +548,62 @@ fn unique_map_numbers(maps: &[MapDefinition]) -> Result<HashSet<MapNumber>, Atla
     Ok(set)
 }
 
-fn unique_monster_numbers(
-    monsters: &[MonsterDefinition],
-) -> Result<HashSet<MonsterNumber>, AtlasError> {
-    let mut set = HashSet::new();
+fn index_monsters(
+    monsters: Vec<MonsterDefinition>,
+) -> Result<BTreeMap<MonsterNumber, MonsterDefinition>, AtlasError> {
+    let mut by_number = BTreeMap::new();
     for monster in monsters {
-        if !set.insert(monster.number) {
-            return Err(AtlasError::DuplicateMonsterNumber {
-                number: monster.number,
-            });
+        let number = monster.number;
+        if by_number.insert(number, monster).is_some() {
+            return Err(AtlasError::DuplicateMonsterNumber { number });
         }
     }
-    Ok(set)
+    Ok(by_number)
 }
 
-fn unique_skill_numbers(skills: &[Skill]) -> Result<HashSet<SkillNumber>, AtlasError> {
-    let mut set = HashSet::new();
+fn index_skills(skills: Vec<Skill>) -> Result<BTreeMap<SkillNumber, Skill>, AtlasError> {
+    let mut by_number = BTreeMap::new();
     for skill in skills {
-        if !set.insert(skill.number) {
-            return Err(AtlasError::DuplicateSkillNumber {
-                number: skill.number,
-            });
+        let number = skill.number;
+        if by_number.insert(number, skill).is_some() {
+            return Err(AtlasError::DuplicateSkillNumber { number });
         }
     }
-    Ok(set)
+    Ok(by_number)
 }
 
-fn unique_item_refs(items: &[ItemDefinition]) -> Result<HashSet<ItemRef>, AtlasError> {
-    let mut set = HashSet::new();
+fn index_items(
+    items: Vec<ItemDefinition>,
+) -> Result<BTreeMap<ItemRef, ItemDefinition>, AtlasError> {
+    let mut by_ref = BTreeMap::new();
     for item in items {
-        if !set.insert(item.id) {
-            return Err(AtlasError::DuplicateItemRef { item: item.id });
+        let id = item.id;
+        if by_ref.insert(id, item).is_some() {
+            return Err(AtlasError::DuplicateItemRef { item: id });
         }
     }
-    Ok(set)
+    Ok(by_ref)
 }
 
 fn check_spawns(
     spawns: &[Spawn],
-    map_numbers: &HashSet<MapNumber>,
-    monster_numbers: &HashSet<MonsterNumber>,
+    map_numbers: &BTreeSet<MapNumber>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
 ) -> Result<(), AtlasError> {
     for spawn in spawns {
         if !map_numbers.contains(&spawn.map) {
             return Err(AtlasError::UnknownMapRef { map: spawn.map });
         }
-        if !monster_numbers.contains(&spawn.monster) {
-            return Err(AtlasError::UnknownMonsterRef {
-                monster: spawn.monster,
-            });
-        }
+        require_monster(monsters, spawn.monster)?;
     }
     Ok(())
 }
 
 fn check_monster_attacks(
-    monsters: &[MonsterDefinition],
-    skill_numbers: &HashSet<SkillNumber>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
+    skills: &BTreeMap<SkillNumber, Skill>,
 ) -> Result<(), AtlasError> {
-    for monster in monsters {
+    for monster in monsters.values() {
         let attack = match &monster.role {
             MonsterRole::Monster { attack, .. } | MonsterRole::Trap { attack, .. } => attack,
             MonsterRole::Guard { .. } | MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
@@ -448,30 +611,30 @@ fn check_monster_attacks(
             }
         };
         if let MonsterAttack::Skill { skill } = attack {
-            require_skill(skill_numbers, *skill)?;
+            require_skill(skills, *skill)?;
         }
     }
     Ok(())
 }
 
 fn check_summons(
-    skills: &[Skill],
-    monster_numbers: &HashSet<MonsterNumber>,
+    skills: &BTreeMap<SkillNumber, Skill>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
 ) -> Result<(), AtlasError> {
-    for skill in skills {
+    for skill in skills.values() {
         if let SkillShape::Summon { monster } = skill.shape {
-            require_monster(monster_numbers, monster)?;
+            require_monster(monsters, monster)?;
         }
     }
     Ok(())
 }
 
 fn check_items(
-    items: &[ItemDefinition],
-    skill_numbers: &HashSet<SkillNumber>,
-    monster_numbers: &HashSet<MonsterNumber>,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    skills: &BTreeMap<SkillNumber, Skill>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
 ) -> Result<(), AtlasError> {
-    for item in items {
+    for item in items.values() {
         match &item.kind {
             ItemKind::Weapon { skill, .. }
             | ItemKind::Bow { skill, .. }
@@ -480,22 +643,15 @@ fn check_items(
             | ItemKind::Shield { skill, .. }
             | ItemKind::Pet { skill, .. } => {
                 if let Some(skill) = skill {
-                    require_skill(skill_numbers, *skill)?;
+                    require_skill(skills, *skill)?;
                 }
             }
             ItemKind::Orb { teaches, .. } | ItemKind::SkillScroll { teaches, .. } => {
-                require_skill(skill_numbers, *teaches)?;
+                require_skill(skills, *teaches)?;
             }
             ItemKind::TransformationRing { skins, .. } => {
-                for level in [
-                    TransformationLevel::L0,
-                    TransformationLevel::L1,
-                    TransformationLevel::L2,
-                    TransformationLevel::L3,
-                    TransformationLevel::L4,
-                    TransformationLevel::L5,
-                ] {
-                    require_monster(monster_numbers, skins.skin(level))?;
+                for level in TransformationLevel::ALL {
+                    require_monster(monsters, skins.skin(level))?;
                 }
             }
             ItemKind::Arrows { .. }
@@ -519,19 +675,25 @@ fn check_items(
     Ok(())
 }
 
-fn check_ancient_sets(sets: &[AncientSet], item_refs: &HashSet<ItemRef>) -> Result<(), AtlasError> {
+fn check_ancient_sets(
+    sets: &[AncientSet],
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<(), AtlasError> {
     for set in sets {
         for piece in &set.pieces {
-            require_item(item_refs, piece.item)?;
+            require_item(items, piece.item)?;
         }
     }
     Ok(())
 }
 
-fn check_chaos_mixes(mixes: &[ChaosMix], item_refs: &HashSet<ItemRef>) -> Result<(), AtlasError> {
+fn check_chaos_mixes(
+    mixes: &[ChaosMix],
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<(), AtlasError> {
     for mix in mixes {
         for item in recipe_item_refs(&mix.recipe) {
-            require_item(item_refs, item)?;
+            require_item(items, item)?;
         }
     }
     Ok(())
@@ -588,35 +750,42 @@ fn recipe_item_refs(recipe: &ChaosRecipe) -> Vec<ItemRef> {
 
 fn check_special_drops(
     records: &[SpecialDropRecord],
-    item_refs: &HashSet<ItemRef>,
-    monster_numbers: &HashSet<MonsterNumber>,
-    map_numbers: &HashSet<MapNumber>,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
+    map_numbers: &BTreeSet<MapNumber>,
 ) -> Result<(), AtlasError> {
     for record in records {
         match &record.drop {
-            SpecialDrop::LevelBanded { item, .. } => require_item(item_refs, *item)?,
-            SpecialDrop::MonsterBound { monster, items, .. } => {
-                require_monster(monster_numbers, *monster)?;
-                for &item in items.iter() {
-                    require_item(item_refs, item)?;
+            SpecialDrop::LevelBanded { item, .. } => require_item(items, *item)?,
+            SpecialDrop::MonsterBound {
+                monster,
+                items: drops,
+                ..
+            } => {
+                require_monster(monsters, *monster)?;
+                for &item in drops.iter() {
+                    require_item(items, item)?;
                 }
             }
             SpecialDrop::MapBound { map, item, .. } => {
                 if !map_numbers.contains(map) {
                     return Err(AtlasError::UnknownMapRef { map: *map });
                 }
-                require_item(item_refs, *item)?;
+                require_item(items, *item)?;
             }
         }
     }
     Ok(())
 }
 
-fn check_box_drops(records: &[BoxDrop], item_refs: &HashSet<ItemRef>) -> Result<(), AtlasError> {
+fn check_box_drops(
+    records: &[BoxDrop],
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<(), AtlasError> {
     for record in records {
-        require_item(item_refs, record.box_item)?;
+        require_item(items, record.box_item)?;
         for &item in record.items.iter() {
-            require_item(item_refs, item)?;
+            require_item(items, item)?;
         }
     }
     Ok(())
@@ -624,7 +793,7 @@ fn check_box_drops(records: &[BoxDrop], item_refs: &HashSet<ItemRef>) -> Result<
 
 fn check_classes(
     classes: &[ClassRecord],
-    map_numbers: &HashSet<MapNumber>,
+    map_numbers: &BTreeSet<MapNumber>,
 ) -> Result<(), AtlasError> {
     for class in classes {
         if !map_numbers.contains(&class.home_map) {
@@ -636,8 +805,11 @@ fn check_classes(
     Ok(())
 }
 
-fn require_skill(skills: &HashSet<SkillNumber>, skill: SkillNumber) -> Result<(), AtlasError> {
-    if skills.contains(&skill) {
+fn require_skill(
+    skills: &BTreeMap<SkillNumber, Skill>,
+    skill: SkillNumber,
+) -> Result<(), AtlasError> {
+    if skills.contains_key(&skill) {
         Ok(())
     } else {
         Err(AtlasError::UnknownSkillRef { skill })
@@ -645,18 +817,21 @@ fn require_skill(skills: &HashSet<SkillNumber>, skill: SkillNumber) -> Result<()
 }
 
 fn require_monster(
-    monsters: &HashSet<MonsterNumber>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
     monster: MonsterNumber,
 ) -> Result<(), AtlasError> {
-    if monsters.contains(&monster) {
+    if monsters.contains_key(&monster) {
         Ok(())
     } else {
         Err(AtlasError::UnknownMonsterRef { monster })
     }
 }
 
-fn require_item(items: &HashSet<ItemRef>, item: ItemRef) -> Result<(), AtlasError> {
-    if items.contains(&item) {
+fn require_item(
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    item: ItemRef,
+) -> Result<(), AtlasError> {
+    if items.contains_key(&item) {
         Ok(())
     } else {
         Err(AtlasError::UnknownItemRef { item })
@@ -753,6 +928,22 @@ pub enum AtlasError {
         /// The unresolved item.
         item: ItemRef,
     },
+    /// The class records do not form a complete, unique roster.
+    ClassTable(ClassTableError),
+    /// The experience curve is malformed.
+    ExpCurve(ExpTableError),
+    /// The ancient roster has an ambiguous membership.
+    AncientRoster(AncientRosterError),
+    /// The `exp_tables` file does not carry exactly one record.
+    ExpTableNotSingle {
+        /// The number of records found.
+        found: usize,
+    },
+    /// The `game_config` file does not carry exactly one record.
+    GameConfigNotSingle {
+        /// The number of records found.
+        found: usize,
+    },
 }
 
 impl core::fmt::Display for AtlasError {
@@ -790,6 +981,43 @@ impl core::fmt::Display for AtlasError {
             }
             Self::UnknownSkillRef { skill } => write!(f, "reference to unknown skill {skill:?}"),
             Self::UnknownItemRef { item } => write!(f, "reference to unknown item {item:?}"),
+            Self::ClassTable(err) => write!(f, "class table: {err}"),
+            Self::ExpCurve(err) => write!(f, "experience curve: {err}"),
+            Self::AncientRoster(err) => write!(f, "ancient roster: {err}"),
+            Self::ExpTableNotSingle { found } => {
+                write!(f, "expected exactly one exp table, found {found}")
+            }
+            Self::GameConfigNotSingle { found } => {
+                write!(f, "expected exactly one game config, found {found}")
+            }
+        }
+    }
+}
+
+impl core::error::Error for AtlasError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::ClassTable(err) => Some(err),
+            Self::ExpCurve(err) => Some(err),
+            Self::AncientRoster(err) => Some(err),
+            Self::DuplicateMapNumber { .. }
+            | Self::DuplicateGateNumber { .. }
+            | Self::DuplicateWarpIndex { .. }
+            | Self::DuplicateMonsterNumber { .. }
+            | Self::DuplicateSkillNumber { .. }
+            | Self::DuplicateItemRef { .. }
+            | Self::GateOnUnknownMap { .. }
+            | Self::EnterTargetsUnknownGate { .. }
+            | Self::EnterTargetsEnterGate { .. }
+            | Self::WarpTargetsUnknownGate { .. }
+            | Self::WarpTargetsEnterGate { .. }
+            | Self::FallbackSpawnGateMissing
+            | Self::UnknownMapRef { .. }
+            | Self::UnknownMonsterRef { .. }
+            | Self::UnknownSkillRef { .. }
+            | Self::UnknownItemRef { .. }
+            | Self::ExpTableNotSingle { .. }
+            | Self::GameConfigNotSingle { .. } => None,
         }
     }
 }

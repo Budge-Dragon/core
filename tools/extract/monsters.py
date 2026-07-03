@@ -37,7 +37,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, write_datafile
+from common import coverage, without_name, write_datafile, write_names
 
 OPENMU = "/tmp/openmu-ref/src/Persistence/Initialization"
 SKILL_NUMBER_CS = os.path.join(OPENMU, "Skills/SkillNumber.cs")
@@ -528,7 +528,12 @@ def main():
     if dangling:
         raise SystemExit(f"spawns reference undefined monsters: {sorted(dangling)}")
 
-    m_out = write_datafile("monster_definitions.json", monsters)
+    # Display names -> host-owned sidecar keyed by number; the core file carries
+    # only the number and rules. Spawns never carried a name.
+    write_names("monster_definitions.json", {"records": [
+        {"number": r["number"], "name": r["name"]} for r in monsters]})
+    m_out = write_datafile("monster_definitions.json",
+                           [without_name(r) for r in monsters])
     s_out = write_datafile("spawns.json", spawns)
     print(f"wrote {m_out}: {len(monsters)} monsters {mcounts}")
     print(f"wrote {s_out}: {len(spawns)} spawns {scounts} "

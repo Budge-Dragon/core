@@ -46,7 +46,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, write_datafile
+from common import coverage, without_name, write_datafile, write_names
 
 # ---------------------------------------------------------------- shapes
 
@@ -408,7 +408,11 @@ def main():
     skills = sorted(SKILLS, key=lambda s: s["number"])
     check(skills)
 
-    write_datafile("skills.json", skills)
+    # Display names -> host-owned sidecar keyed by number; the core file carries
+    # only the number and rules.
+    write_names("skills.json", {"records": [
+        {"number": s["number"], "name": s["name"]} for s in skills]})
+    write_datafile("skills.json", [without_name(s) for s in skills])
 
     reviews = {f"skills/{r['number']}": r["review"]
                for r in skills if "review" in r}

@@ -1,0 +1,60 @@
+{
+  "records": [
+    {
+      "index": 1,
+      "name": "Arena"
+    },
+    {
+      "index": 2,
+      "name": "Lorencia"
+    },
+    {
+      "index": 3,
+      "name": "Noria"
+    },
+    {
+      "index": 4,
+      "name": "Devias"
+    },
+    {
+      "index": 5,
+      "name": "Dungeon"
+    },
+    {
+      "index": 6,
+      "name": "Dungeon2"
+    },
+    {
+      "index": 7,
+      "name": "Dungeon3"
+    },
+    {
+      "index": 8,
+      "name": "LostTower"
+    },
+    {
+      "index": 9,
+      "name": "LostTower2"
+    },
+    {
+      "index": 10,
+      "name": "LostTower3"
+    },
+    {
+      "index": 11,
+      "name": "LostTower4"
+    },
+    {
+      "index": 12,
+      "name": "LostTower5"
+    },
+    {
+      "index": 13,
+      "name": "LostTower6"
+    },
+    {
+      "index": 14,
+      "name": "LostTower7"
+    }
+  ]
+}

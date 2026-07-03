@@ -1,0 +1,48 @@
+{
+  "records": [
+    {
+      "number": 0,
+      "name": "Lorencia"
+    },
+    {
+      "number": 1,
+      "name": "Dungeon"
+    },
+    {
+      "number": 2,
+      "name": "Devias"
+    },
+    {
+      "number": 3,
+      "name": "Noria"
+    },
+    {
+      "number": 4,
+      "name": "Lost Tower"
+    },
+    {
+      "number": 5,
+      "name": "Exile"
+    },
+    {
+      "number": 6,
+      "name": "Arena"
+    },
+    {
+      "number": 7,
+      "name": "Atlans"
+    },
+    {
+      "number": 8,
+      "name": "Tarkan"
+    },
+    {
+      "number": 10,
+      "name": "Icarus"
+    },
+    {
+      "number": 9,
+      "name": "Devil Square"
+    }
+  ]
+}

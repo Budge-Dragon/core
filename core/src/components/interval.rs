@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
         deserialize = "T: Ord + Copy + core::fmt::Debug + Deserialize<'de>"
     )
 )]
-pub struct Interval<T: Ord + Copy> {
+pub struct Interval<T> {
     min: T,
     max: T,
 }
@@ -90,6 +90,8 @@ impl<T: core::fmt::Debug> core::fmt::Display for IntervalError<T> {
         write!(f, "interval min {:?} exceeds max {:?}", self.min, self.max)
     }
 }
+
+impl<T: core::fmt::Debug> core::error::Error for IntervalError<T> {}
 
 #[cfg(test)]
 mod tests {

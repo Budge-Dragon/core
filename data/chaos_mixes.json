@@ -1,7 +1,6 @@
 {
   "records": [
     {
-      "name": "Chaos Weapon",
       "source_version": "075",
       "recipe": {
         "kind": "chaos_weapon",
@@ -26,7 +25,6 @@
       }
     },
     {
-      "name": "1st Level Wings",
       "source_version": "095d",
       "recipe": {
         "kind": "first_wings",
@@ -69,7 +67,6 @@
       }
     },
     {
-      "name": "2nd Level Wings",
       "source_version": "s6",
       "review": "2nd wings are 1.0-era, data only in S6 (Summoner input/result removed, level caps clamped 15->11); wing_value_zen_per_percent 4,000,000 and excellent_value_zen_per_percent 40,000 exist only as OpenMU divisor encodings, and luck/excellent 20/20 only in OpenMU's S6 initializer — all four are OpenMU defaults pending classic sourcing",
       "recipe": {
@@ -132,7 +129,6 @@
       }
     },
     {
-      "name": "Cape of Lord",
       "source_version": "s6",
       "review": "Cape of Lord is the 1.0-era Dark Lord wing but this crafting (Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are OpenMU defaults pending classic sourcing",
       "recipe": {
@@ -181,7 +177,6 @@
       }
     },
     {
-      "name": "+10 Item Combination",
       "source_version": "095d",
       "recipe": {
         "kind": "item_upgrade",
@@ -193,7 +188,6 @@
       }
     },
     {
-      "name": "+11 Item Combination",
       "source_version": "095d",
       "recipe": {
         "kind": "item_upgrade",
@@ -205,7 +199,6 @@
       }
     },
     {
-      "name": "Dinorant",
       "source_version": "095d",
       "review": "horn_count 3 and fee 250,000 exist only in OpenMU's 095d dataset; every classic source (and OpenMU's own S6 data) documents 10 full-durability Horns of Uniria for 500,000 zen — OpenMU defaults pending catalog decision; 70% and the full-durability horn rule are authentic",
       "recipe": {
@@ -224,7 +217,6 @@
       }
     },
     {
-      "name": "Fruits",
       "source_version": "s6",
       "review": "stat fruits are 1.0-era, data only in S6; the created fruit's stat kind is a weighted services roll (weights are OpenMU defaults, see FRUIT_STAT_WEIGHTS), not data",
       "recipe": {
@@ -242,7 +234,6 @@
       }
     },
     {
-      "name": "Devil's Square Ticket",
       "source_version": "095d",
       "review": "fee band and 7-level breadth come from OpenMU's version-shared handler table (classic-documented fees; pre-S3 Devil's Square level count pending era verification); the 80/70 success split at level 5 is an OpenMU handler constant pending classic sourcing",
       "recipe": {
@@ -280,7 +271,6 @@
       }
     },
     {
-      "name": "Blood Castle Ticket",
       "source_version": "s6",
       "review": "Blood Castle is 0.97/1.0-era; fee band is the documented classic recipe, 8-level breadth pending era verification; flat 80% success is an OpenMU handler constant pending classic sourcing",
       "recipe": {

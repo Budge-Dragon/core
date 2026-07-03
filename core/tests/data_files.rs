@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 
 use mu_core::components::class::CharacterClass;
+use mu_core::components::interval::Interval;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
 use mu_core::components::units::{ItemLevel, Level};
@@ -19,7 +20,7 @@ use mu_core::data::atlas::{Atlas, AtlasError, StaticData};
 use mu_core::data::box_drops::BoxDrop;
 use mu_core::data::chaos_mixes::ChaosMix;
 use mu_core::data::classes::{ClassRecord, ClassTable, ClassTableError};
-use mu_core::data::common::DataFile;
+use mu_core::data::common::{DataFile, ItemRef, MonsterNumber};
 use mu_core::data::drop_config::DropConfig;
 use mu_core::data::exp_tables::{ExpCurve, ExpTable};
 use mu_core::data::game_config::GameConfig;
@@ -129,7 +130,7 @@ fn exp_curve_builds_from_real_data() {
 #[test]
 fn ancient_roster_builds_from_real_data() {
     let sets = load!(AncientSet, "ancient_sets", 36);
-    let roster = AncientRoster::build(sets.records);
+    let roster = AncientRoster::build(sets.records).unwrap();
     assert_eq!(roster.sets().len(), 36);
 }
 
@@ -159,6 +160,47 @@ fn atlas_resolves_the_whole_real_dataset() {
     // Lorencia's spawn gate is proven present by construction.
     let fallback = atlas.fallback_spawn_gate();
     assert_eq!(fallback.map.0, 0);
+}
+
+#[test]
+fn atlas_retains_the_resolved_dataset_for_by_id_lookup() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+
+    // By-id lookups reach the retained definitions instead of re-scanning a Vec;
+    // an open id that names no record is genuine `None`.
+    assert!(
+        atlas
+            .item(ItemRef {
+                group: 0,
+                number: 0
+            })
+            .is_some()
+    );
+    assert!(atlas.monster(MonsterNumber(0)).is_some());
+    assert!(
+        atlas
+            .item(ItemRef {
+                group: 200,
+                number: 0
+            })
+            .is_none()
+    );
+
+    // The resolved structures the loader validated are held on the Atlas.
+    assert_eq!(
+        atlas.classes().record(CharacterClass::DarkLord).number.0,
+        16
+    );
+    assert_eq!(atlas.exp_curve().max_level().get(), 400);
+    assert_eq!(atlas.ancient_roster().sets().len(), 36);
+    assert!(atlas.drop_config().nothing_weight() <= 10_000);
+
+    // The drop pool is a per-level index: a wide window yields droppable items,
+    // and every pooled ref resolves through the retained item lookup.
+    let window = Interval::new(0u8, 255u8).unwrap();
+    let droppable: Vec<ItemRef> = atlas.drop_pool().in_window(window).collect();
+    assert!(!droppable.is_empty());
+    assert!(droppable.iter().all(|&id| atlas.item(id).is_some()));
 }
 
 // --- Negative tests: type invariants that valid on-disk data cannot exercise.

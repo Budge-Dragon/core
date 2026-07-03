@@ -33,30 +33,29 @@ fn by_enhance_level<T: Copy>(level: EnhanceLevel, table: &[T; 12]) -> T {
 // ── +level growth curves (classic client progressions; 075 bonus tables) ──
 
 /// Weapon damage bonus per enhancement level.
-pub const WEAPON_DAMAGE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
+const WEAPON_DAMAGE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
 /// Armor defense bonus per enhancement level.
-pub const ARMOR_DEFENSE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
+const ARMOR_DEFENSE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
 /// Shield defense bonus per enhancement level.
-pub const SHIELD_DEFENSE_BONUS_BY_LEVEL: [u16; 12] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const SHIELD_DEFENSE_BONUS_BY_LEVEL: [u16; 12] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 /// Shield defense-rate bonus per enhancement level.
-pub const SHIELD_DEFENSE_RATE_BONUS_BY_LEVEL: [u16; 12] =
-    [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
+const SHIELD_DEFENSE_RATE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
 /// Wing defense bonus per enhancement level.
-pub const WING_DEFENSE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
+const WING_DEFENSE_BONUS_BY_LEVEL: [u16; 12] = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 31, 36];
 /// Staff rise growth for even magic-power (client rounding of MP/2).
-pub const STAFF_RISE_BONUS_BY_LEVEL_EVEN: [u16; 12] = [0, 3, 7, 10, 14, 17, 21, 24, 28, 31, 35, 40];
+const STAFF_RISE_BONUS_BY_LEVEL_EVEN: [u16; 12] = [0, 3, 7, 10, 14, 17, 21, 24, 28, 31, 35, 40];
 /// Staff rise growth for odd magic-power.
-pub const STAFF_RISE_BONUS_BY_LEVEL_ODD: [u16; 12] = [0, 4, 7, 11, 14, 18, 21, 25, 28, 32, 36, 40];
+const STAFF_RISE_BONUS_BY_LEVEL_ODD: [u16; 12] = [0, 4, 7, 11, 14, 18, 21, 25, 28, 32, 36, 40];
 /// Wing damage-absorption growth, percent points per level.
-pub const WING_ABSORB_PCT_PER_LEVEL: u8 = 2;
+const WING_ABSORB_PCT_PER_LEVEL: u8 = 2;
 /// First-generation wing damage-increase growth, percent points per level.
-pub const FIRST_WING_DAMAGE_PCT_PER_LEVEL: u8 = 2;
+const FIRST_WING_DAMAGE_PCT_PER_LEVEL: u8 = 2;
 /// Second-generation wing damage-increase growth, percent points per level.
 /// Review: S6-sourced backport riding the 2nd-wings curation.
-pub const SECOND_WING_DAMAGE_PCT_PER_LEVEL: u8 = 1;
+const SECOND_WING_DAMAGE_PCT_PER_LEVEL: u8 = 1;
 /// Jewelry resistance growth per item level; the +4 ceiling is the jewelry
 /// `max_item_level`.
-pub const JEWELRY_RESISTANCE_PER_LEVEL: u8 = 1;
+const JEWELRY_RESISTANCE_PER_LEVEL: u8 = 1;
 
 /// Weapon damage bonus at an enhancement level.
 #[must_use]
@@ -144,16 +143,14 @@ pub fn ammunition_damage_percent(level: AmmoLevel) -> u8 {
 // ── durability (classic per-level bonus table) ──
 
 /// Durability bonus per enhancement level.
-pub const DURABILITY_BONUS_BY_LEVEL: [u8; 12] = [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 17, 21];
+const DURABILITY_BONUS_BY_LEVEL: [u8; 12] = [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 17, 21];
 /// Extra durability granted to excellent items.
-pub const EXCELLENT_DURABILITY_BONUS: u8 = 15;
+const EXCELLENT_DURABILITY_BONUS: u8 = 15;
 /// Extra durability granted to ancient items.
-pub const ANCIENT_DURABILITY_BONUS: u8 = 20;
-/// Largest durability the wire encoding carries.
-pub const MAX_DURABILITY: u8 = 255;
+const ANCIENT_DURABILITY_BONUS: u8 = 20;
 
-/// Maximum durability of an item at a level and rarity, capped at
-/// [`MAX_DURABILITY`].
+/// Maximum durability of an item at a level and rarity, capped at 255 by the
+/// `u8` wire encoding (the saturating adds never exceed it).
 #[must_use]
 pub fn max_durability(base: u8, level: EnhanceLevel, rarity: ItemRarity) -> u8 {
     let level_bonus = by_enhance_level(level, &DURABILITY_BONUS_BY_LEVEL);

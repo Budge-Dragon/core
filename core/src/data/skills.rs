@@ -13,8 +13,6 @@ use super::effects::{Ailment, Buff};
 pub struct Skill {
     /// Skill number as the client knows it (Skill.txt index).
     pub number: SkillNumber,
-    /// Display name.
-    pub name: String,
     /// Extraction provenance: dataset era plus optional curation note.
     #[serde(flatten)]
     pub provenance: Provenance,

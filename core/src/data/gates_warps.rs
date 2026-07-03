@@ -85,9 +85,6 @@ pub struct EnterGate {
 pub struct Warp {
     /// Position in the warp list.
     pub index: WarpIndex,
-    /// Warp name — the Move.txt name column; the chat warp command's key and
-    /// the entry's label.
-    pub name: String,
     /// Zen fee charged per warp.
     pub cost_zen: Zen,
     /// Minimum character level to warp (before the class warp reduction).

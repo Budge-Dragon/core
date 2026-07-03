@@ -38,6 +38,31 @@ def write_datafile(path, records):
     return path
 
 
+NAMES_DIR = os.path.join(DATA_DIR, "names")
+
+
+def write_names(filename, payload):
+    """Write a HOST-OWNED display-name sidecar to data/names/<filename>.
+
+    Display names are extracted identity->name mappings, kept out of the pure
+    core data files (which carry only identities and rules). `filename` shadows
+    the core data file the names re-attach to (e.g. "item_definitions.json").
+    `validate_refs.py` ignores data/names/ (it globs only top-level *.json).
+    """
+    path = os.path.join(NAMES_DIR, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    return path
+
+
+def without_name(record):
+    """A copy of a built record with the display `name` dropped — the core data
+    files carry no name (it lives in the data/names/ sidecar)."""
+    return {k: v for k, v in record.items() if k != "name"}
+
+
 def item_ref(group, number):
     return {"group": int(group), "number": int(number)}
 

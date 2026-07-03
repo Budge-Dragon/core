@@ -176,26 +176,31 @@ def percent_from_multiplicate(value):
 
 
 def set_option(stat_name, value, aggregate):
-    """Resolve one (Stats.X, value, aggregate) to a CombatBonus /
-    ConditionalSetBonus wire dict. Raises on an unmapped stat (fail loudly)."""
+    """Resolve one (Stats.X, value, aggregate) to an AncientSetOption wire dict.
+
+    The outer `scope` tag ("resolved" for a CombatBonus, "conditional" for a
+    ConditionalSetBonus) is the core's internally-tagged discriminator: the two
+    inner `kind` namespaces cannot collide at parse. Raises on an unmapped stat
+    (fail loudly)."""
     if stat_name in AMOUNT_KINDS:
         assert aggregate in ("add_raw", "add_final"), \
             "unexpected aggregate %s for %s" % (aggregate, stat_name)
-        return {"kind": AMOUNT_KINDS[stat_name], "amount": whole_amount(value)}
+        return {"scope": "resolved", "kind": AMOUNT_KINDS[stat_name],
+                "amount": whole_amount(value)}
     if stat_name in FRACTION_PCT_KINDS:
         assert aggregate == "add_raw", \
             "unexpected aggregate %s for %s" % (aggregate, stat_name)
-        return {"kind": FRACTION_PCT_KINDS[stat_name],
+        return {"scope": "resolved", "kind": FRACTION_PCT_KINDS[stat_name],
                 "percent": percent_from_fraction(value)}
     if stat_name in MULTIPLICATE_PCT_KINDS:
         assert aggregate == "multiplicate", \
             "unexpected aggregate %s for %s" % (aggregate, stat_name)
-        return {"kind": MULTIPLICATE_PCT_KINDS[stat_name],
+        return {"scope": "resolved", "kind": MULTIPLICATE_PCT_KINDS[stat_name],
                 "percent": percent_from_multiplicate(value)}
     if stat_name in CONDITIONAL_PCT_KINDS:
         assert aggregate == "add_raw", \
             "unexpected aggregate %s for %s" % (aggregate, stat_name)
-        return {"kind": CONDITIONAL_PCT_KINDS[stat_name],
+        return {"scope": "conditional", "kind": CONDITIONAL_PCT_KINDS[stat_name],
                 "percent": percent_from_fraction(value)}
     raise KeyError("unmapped ancient set option stat: " + stat_name)
 
@@ -264,7 +269,7 @@ def verify(path):
         seen_numbers.add(n)
         assert r["source_version"] == "s6", r
         assert r["review"], r
-        assert r["name"], r
+        assert "name" not in r, "core record must not carry a display name"
         assert r["pieces"], r
         assert r["set_options"], r
         for p in r["pieces"]:
@@ -274,6 +279,7 @@ def verify(path):
                 assert p["bonus_stat"] in ("strength", "agility", "vitality",
                                            "energy"), p
         for opt in r["set_options"]:
+            assert opt["scope"] in ("resolved", "conditional"), opt
             assert opt["kind"] in ALL_KINDS, opt
             assert ("amount" in opt) ^ ("percent" in opt), opt
             if "percent" in opt:
@@ -291,8 +297,13 @@ def main():
         if os.path.exists(dead_path):
             os.remove(dead_path)
 
-    path = common.write_datafile("ancient_sets.json", records)
-    records = verify(path)
+    # Display names -> host-owned sidecar, keyed by set_number; the core file
+    # carries only identities and rules.
+    common.write_names("ancient_sets.json", {"records": [
+        {"set_number": r["set_number"], "name": r["name"]} for r in records]})
+    path = common.write_datafile(
+        "ancient_sets.json", [common.without_name(r) for r in records])
+    verify(path)
 
     info = {
         "category": "options_sets",

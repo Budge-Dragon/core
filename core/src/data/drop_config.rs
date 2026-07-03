@@ -145,3 +145,5 @@ impl core::fmt::Display for DropConfigError {
         }
     }
 }
+
+impl core::error::Error for DropConfigError {}

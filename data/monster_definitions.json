@@ -2,7 +2,6 @@
   "records": [
     {
       "number": 0,
-      "name": "Bull Fighter",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -39,7 +38,6 @@
     },
     {
       "number": 1,
-      "name": "Hound",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -76,7 +74,6 @@
     },
     {
       "number": 2,
-      "name": "Budge Dragon",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -113,7 +110,6 @@
     },
     {
       "number": 3,
-      "name": "Spider",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -150,7 +146,6 @@
     },
     {
       "number": 4,
-      "name": "Elite Bull Fighter",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -187,7 +182,6 @@
     },
     {
       "number": 5,
-      "name": "Hell Hound",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -224,7 +218,6 @@
     },
     {
       "number": 6,
-      "name": "Lich",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -262,7 +255,6 @@
     },
     {
       "number": 7,
-      "name": "Giant",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -299,7 +291,6 @@
     },
     {
       "number": 8,
-      "name": "Poison Bull",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -337,7 +328,6 @@
     },
     {
       "number": 9,
-      "name": "Thunder Lich",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -376,7 +366,6 @@
     },
     {
       "number": 10,
-      "name": "Dark Knight",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -414,7 +403,6 @@
     },
     {
       "number": 11,
-      "name": "Ghost",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -452,7 +440,6 @@
     },
     {
       "number": 12,
-      "name": "Larva",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -490,7 +477,6 @@
     },
     {
       "number": 13,
-      "name": "Hell Spider",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -528,7 +514,6 @@
     },
     {
       "number": 14,
-      "name": "Skeleton Warrior",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -565,7 +550,6 @@
     },
     {
       "number": 15,
-      "name": "Skeleton Archer",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -602,7 +586,6 @@
     },
     {
       "number": 16,
-      "name": "Elite Skeleton",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -639,7 +622,6 @@
     },
     {
       "number": 17,
-      "name": "Cyclops",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -676,7 +658,6 @@
     },
     {
       "number": 18,
-      "name": "Gorgon",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -714,7 +695,6 @@
     },
     {
       "number": 19,
-      "name": "Yeti",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -752,7 +732,6 @@
     },
     {
       "number": 20,
-      "name": "Elite Yeti",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -790,7 +769,6 @@
     },
     {
       "number": 21,
-      "name": "Assassin",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -827,7 +805,6 @@
     },
     {
       "number": 22,
-      "name": "Ice Monster",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -865,7 +842,6 @@
     },
     {
       "number": 23,
-      "name": "Hommerd",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -902,7 +878,6 @@
     },
     {
       "number": 24,
-      "name": "Worm",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -939,7 +914,6 @@
     },
     {
       "number": 25,
-      "name": "Ice Queen",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -978,7 +952,6 @@
     },
     {
       "number": 26,
-      "name": "Goblin",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1016,7 +989,6 @@
     },
     {
       "number": 27,
-      "name": "Chain Scorpion",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1053,7 +1025,6 @@
     },
     {
       "number": 28,
-      "name": "Beetle Monster",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1090,7 +1061,6 @@
     },
     {
       "number": 29,
-      "name": "Hunter",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1127,7 +1097,6 @@
     },
     {
       "number": 30,
-      "name": "Forest Monster",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1164,7 +1133,6 @@
     },
     {
       "number": 31,
-      "name": "Agon",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1201,7 +1169,6 @@
     },
     {
       "number": 32,
-      "name": "Stone Golem",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1238,7 +1205,6 @@
     },
     {
       "number": 33,
-      "name": "Elite Goblin",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1275,7 +1241,6 @@
     },
     {
       "number": 34,
-      "name": "Cursed Wizard",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1314,7 +1279,6 @@
     },
     {
       "number": 35,
-      "name": "Death Gorgon",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1352,7 +1316,6 @@
     },
     {
       "number": 36,
-      "name": "Shadow",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1390,7 +1353,6 @@
     },
     {
       "number": 37,
-      "name": "Devil",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1429,7 +1391,6 @@
     },
     {
       "number": 38,
-      "name": "Balrog",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1467,7 +1428,6 @@
     },
     {
       "number": 39,
-      "name": "Poison Shadow",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1506,7 +1466,6 @@
     },
     {
       "number": 40,
-      "name": "Death Knight",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1544,7 +1503,6 @@
     },
     {
       "number": 41,
-      "name": "Death Cow",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1582,7 +1540,6 @@
     },
     {
       "number": 43,
-      "name": "Golden Budge Dragon",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -1620,7 +1577,6 @@
     },
     {
       "number": 44,
-      "name": "Red Dragon",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -1658,7 +1614,6 @@
     },
     {
       "number": 45,
-      "name": "Bahamut",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1696,7 +1651,6 @@
     },
     {
       "number": 46,
-      "name": "Vepar",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1735,7 +1689,6 @@
     },
     {
       "number": 47,
-      "name": "Valkyrie",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1773,7 +1726,6 @@
     },
     {
       "number": 48,
-      "name": "Lizard King",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1812,7 +1764,6 @@
     },
     {
       "number": 49,
-      "name": "Hydra",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1850,7 +1801,6 @@
     },
     {
       "number": 50,
-      "name": "Sea Worm",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1888,7 +1838,6 @@
     },
     {
       "number": 51,
-      "name": "Great Bahamut",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1926,7 +1875,6 @@
     },
     {
       "number": 52,
-      "name": "Silver Valkyrie",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -1965,7 +1913,6 @@
     },
     {
       "number": 53,
-      "name": "Golden Titan",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2003,7 +1950,6 @@
     },
     {
       "number": 54,
-      "name": "Golden Soldier",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2041,7 +1987,6 @@
     },
     {
       "number": 57,
-      "name": "Iron Wheel",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2079,7 +2024,6 @@
     },
     {
       "number": 58,
-      "name": "Tantallos",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2117,7 +2061,6 @@
     },
     {
       "number": 59,
-      "name": "Zaikan",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2155,7 +2098,6 @@
     },
     {
       "number": 60,
-      "name": "Bloody Wolf",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2193,7 +2135,6 @@
     },
     {
       "number": 61,
-      "name": "Beam Knight",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2232,7 +2173,6 @@
     },
     {
       "number": 62,
-      "name": "Mutant",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2270,7 +2210,6 @@
     },
     {
       "number": 63,
-      "name": "Death Beam Knight",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2308,7 +2247,6 @@
     },
     {
       "number": 64,
-      "name": "Orc Archer",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2346,7 +2284,6 @@
     },
     {
       "number": 65,
-      "name": "Elite Orc",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2384,7 +2321,6 @@
     },
     {
       "number": 66,
-      "name": "Cursed King",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2422,7 +2358,6 @@
     },
     {
       "number": 67,
-      "name": "Metal Balrog",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2460,7 +2395,6 @@
     },
     {
       "number": 69,
-      "name": "Alquamos",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2499,7 +2433,6 @@
     },
     {
       "number": 70,
-      "name": "Queen Rainer",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2538,7 +2471,6 @@
     },
     {
       "number": 71,
-      "name": "Mega Crust",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2576,7 +2508,6 @@
     },
     {
       "number": 72,
-      "name": "Phantom Knight",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2614,7 +2545,6 @@
     },
     {
       "number": 73,
-      "name": "Drakan",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2652,7 +2582,6 @@
     },
     {
       "number": 74,
-      "name": "Alpha Crust",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2690,7 +2619,6 @@
     },
     {
       "number": 75,
-      "name": "Great Drakan",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2728,7 +2656,6 @@
     },
     {
       "number": 76,
-      "name": "Dark Phoenix Shield",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2767,7 +2694,6 @@
     },
     {
       "number": 77,
-      "name": "Dark Phoenix",
       "source_version": "095d",
       "role": {
         "kind": "monster",
@@ -2805,7 +2731,6 @@
     },
     {
       "number": 100,
-      "name": "Lance Trap",
       "source_version": "075",
       "role": {
         "kind": "trap",
@@ -2843,7 +2768,6 @@
     },
     {
       "number": 101,
-      "name": "Iron Stick Trap",
       "source_version": "075",
       "role": {
         "kind": "trap",
@@ -2881,7 +2805,6 @@
     },
     {
       "number": 102,
-      "name": "Fire Trap",
       "source_version": "075",
       "role": {
         "kind": "trap",
@@ -2919,7 +2842,6 @@
     },
     {
       "number": 103,
-      "name": "Meteorite Trap",
       "source_version": "075",
       "role": {
         "kind": "trap",
@@ -2958,7 +2880,6 @@
     },
     {
       "number": 150,
-      "name": "Bali",
       "source_version": "075",
       "role": {
         "kind": "monster",
@@ -2996,7 +2917,6 @@
     },
     {
       "number": 200,
-      "name": "Soccerball",
       "source_version": "075",
       "role": {
         "kind": "soccer_ball"
@@ -3004,7 +2924,6 @@
     },
     {
       "number": 235,
-      "name": "Sevina the Priestess",
       "source_version": "095d",
       "role": {
         "kind": "npc",
@@ -3013,7 +2932,6 @@
     },
     {
       "number": 236,
-      "name": "Golden Archer",
       "source_version": "095d",
       "role": {
         "kind": "npc"
@@ -3021,7 +2939,6 @@
     },
     {
       "number": 237,
-      "name": "Charon",
       "source_version": "095d",
       "role": {
         "kind": "npc",
@@ -3030,7 +2947,6 @@
     },
     {
       "number": 238,
-      "name": "Chaos Goblin",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3039,7 +2955,6 @@
     },
     {
       "number": 239,
-      "name": "Arena Guard",
       "source_version": "075",
       "role": {
         "kind": "npc"
@@ -3047,7 +2962,6 @@
     },
     {
       "number": 240,
-      "name": "Baz The Vault Keeper",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3056,7 +2970,6 @@
     },
     {
       "number": 241,
-      "name": "Guild Master",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3065,7 +2978,6 @@
     },
     {
       "number": 242,
-      "name": "Elf Lala",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3074,7 +2986,6 @@
     },
     {
       "number": 243,
-      "name": "Eo the Craftsman",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3083,7 +2994,6 @@
     },
     {
       "number": 244,
-      "name": "Caren the Barmaid",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3092,7 +3002,6 @@
     },
     {
       "number": 245,
-      "name": "Izabel The Wizard",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3101,7 +3010,6 @@
     },
     {
       "number": 246,
-      "name": "Zienna The Weapons Merchant",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3110,7 +3018,6 @@
     },
     {
       "number": 247,
-      "name": "Crossbow Guard",
       "source_version": "075",
       "role": {
         "kind": "guard",
@@ -3144,7 +3051,6 @@
     },
     {
       "number": 248,
-      "name": "Wandering Merchant Martin",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3153,7 +3059,6 @@
     },
     {
       "number": 249,
-      "name": "Berdysh Guard",
       "source_version": "075",
       "role": {
         "kind": "guard",
@@ -3187,7 +3092,6 @@
     },
     {
       "number": 250,
-      "name": "Wandering Merchant Harold",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3196,7 +3100,6 @@
     },
     {
       "number": 251,
-      "name": "Hanzo The Blacksmith",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3205,7 +3108,6 @@
     },
     {
       "number": 253,
-      "name": "Potion Girl Amy",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3214,7 +3116,6 @@
     },
     {
       "number": 254,
-      "name": "Pasi The Mage",
       "source_version": "075",
       "role": {
         "kind": "npc",
@@ -3223,7 +3124,6 @@
     },
     {
       "number": 255,
-      "name": "Lumen the Barmaid",
       "source_version": "075",
       "role": {
         "kind": "npc",

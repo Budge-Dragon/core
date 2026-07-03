@@ -154,6 +154,10 @@ pub enum TransformationLevel {
 }
 
 impl TransformationLevel {
+    /// The roster in declaration order — a fixed-length array keyed by the
+    /// enum, so every level's skin is reachable through one total iteration.
+    pub(crate) const ALL: [Self; 6] = [Self::L0, Self::L1, Self::L2, Self::L3, Self::L4, Self::L5];
+
     /// The wire value `0..=5`.
     #[must_use]
     pub fn wire(self) -> u8 {
@@ -418,6 +422,8 @@ impl core::fmt::Display for LevelKeyError {
         }
     }
 }
+
+impl core::error::Error for LevelKeyError {}
 
 #[cfg(test)]
 mod tests {

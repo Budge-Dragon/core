@@ -10,7 +10,7 @@ use rand_core::RngCore;
 
 use crate::components::collections::OneOrMore;
 use crate::components::units::{ChancePer10000, Percent, Resistance};
-use crate::rng::uniform_below;
+use crate::rng::{uniform_below, uniform_below_usize};
 
 /// Rolls a per-10,000 chance: `true` iff `uniform_below(10_000) < numerator`.
 #[must_use]
@@ -94,6 +94,8 @@ impl core::fmt::Display for WeightError {
     }
 }
 
+impl core::error::Error for WeightError {}
+
 /// Picks one entry by weight: rolls `uniform_below(table.total())` and walks
 /// the cumulative weights. The total is derived, so editing a weight list can
 /// never leave a roll with no bucket — a roll at or beyond the leading entries'
@@ -117,14 +119,10 @@ pub fn weighted_pick<'a, T>(table: &'a WeightedTable<T>, rng: &mut impl RngCore)
 /// lands on position zero and the terminal case alike, never a fabricated
 /// default.
 #[must_use]
-pub fn pick_one<'a, T: Clone>(list: &'a OneOrMore<T>, rng: &mut impl RngCore) -> &'a T {
-    let bound = match NonZeroU32::try_from(list.count()) {
-        Ok(bound) => bound,
-        Err(_) => NonZeroU32::MAX,
-    };
-    let target = uniform_below(bound, rng);
-    let mut position = 0u32;
-    for item in list.iter() {
+pub fn pick_one<'a, T>(list: &'a OneOrMore<T>, rng: &mut impl RngCore) -> &'a T {
+    let target = uniform_below_usize(list.count(), rng);
+    let mut position = 0usize;
+    for item in list {
         if position == target {
             return item;
         }

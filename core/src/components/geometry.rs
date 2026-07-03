@@ -121,6 +121,8 @@ impl core::fmt::Display for GeometryError {
     }
 }
 
+impl core::error::Error for GeometryError {}
+
 /// A map footprint that classic files express as either one tile or an area
 /// (MonsterSetBase single-spot rows vs area rows).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

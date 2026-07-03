@@ -205,6 +205,8 @@ impl core::fmt::Display for AncientBonusLevelOutOfRange {
     }
 }
 
+impl core::error::Error for AncientBonusLevelOutOfRange {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

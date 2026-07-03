@@ -1,0 +1,208 @@
+{
+  "records": [
+    {
+      "number": 1,
+      "name": "Poison"
+    },
+    {
+      "number": 2,
+      "name": "Meteorite"
+    },
+    {
+      "number": 3,
+      "name": "Lightning"
+    },
+    {
+      "number": 4,
+      "name": "Fire Ball"
+    },
+    {
+      "number": 5,
+      "name": "Flame"
+    },
+    {
+      "number": 6,
+      "name": "Teleport"
+    },
+    {
+      "number": 7,
+      "name": "Ice"
+    },
+    {
+      "number": 8,
+      "name": "Twister"
+    },
+    {
+      "number": 9,
+      "name": "Evil Spirit"
+    },
+    {
+      "number": 10,
+      "name": "Hellfire"
+    },
+    {
+      "number": 11,
+      "name": "Power Wave"
+    },
+    {
+      "number": 12,
+      "name": "Aqua Beam"
+    },
+    {
+      "number": 13,
+      "name": "Cometfall"
+    },
+    {
+      "number": 14,
+      "name": "Inferno"
+    },
+    {
+      "number": 16,
+      "name": "Soul Barrier"
+    },
+    {
+      "number": 17,
+      "name": "Energy Ball"
+    },
+    {
+      "number": 18,
+      "name": "Defense"
+    },
+    {
+      "number": 19,
+      "name": "Falling Slash"
+    },
+    {
+      "number": 20,
+      "name": "Lunge"
+    },
+    {
+      "number": 21,
+      "name": "Uppercut"
+    },
+    {
+      "number": 22,
+      "name": "Cyclone"
+    },
+    {
+      "number": 23,
+      "name": "Slash"
+    },
+    {
+      "number": 24,
+      "name": "Triple Shot"
+    },
+    {
+      "number": 26,
+      "name": "Heal"
+    },
+    {
+      "number": 27,
+      "name": "Greater Defense"
+    },
+    {
+      "number": 28,
+      "name": "Greater Damage"
+    },
+    {
+      "number": 30,
+      "name": "Summon Goblin"
+    },
+    {
+      "number": 31,
+      "name": "Summon Stone Golem"
+    },
+    {
+      "number": 32,
+      "name": "Summon Assassin"
+    },
+    {
+      "number": 33,
+      "name": "Summon Elite Yeti"
+    },
+    {
+      "number": 34,
+      "name": "Summon Dark Knight"
+    },
+    {
+      "number": 35,
+      "name": "Summon Bali"
+    },
+    {
+      "number": 39,
+      "name": "Ice Storm"
+    },
+    {
+      "number": 40,
+      "name": "Nova"
+    },
+    {
+      "number": 41,
+      "name": "Twisting Slash"
+    },
+    {
+      "number": 42,
+      "name": "Rageful Blow"
+    },
+    {
+      "number": 43,
+      "name": "Death Stab"
+    },
+    {
+      "number": 47,
+      "name": "Impale"
+    },
+    {
+      "number": 48,
+      "name": "Swell Life"
+    },
+    {
+      "number": 49,
+      "name": "Fire Breath"
+    },
+    {
+      "number": 50,
+      "name": "Flame of Evil (Monster)"
+    },
+    {
+      "number": 51,
+      "name": "Ice Arrow"
+    },
+    {
+      "number": 52,
+      "name": "Penetration"
+    },
+    {
+      "number": 55,
+      "name": "Fire Slash"
+    },
+    {
+      "number": 56,
+      "name": "Power Slash"
+    },
+    {
+      "number": 58,
+      "name": "Nova (Start)"
+    },
+    {
+      "number": 61,
+      "name": "Fire Burst"
+    },
+    {
+      "number": 62,
+      "name": "Earthshake"
+    },
+    {
+      "number": 63,
+      "name": "Summon"
+    },
+    {
+      "number": 64,
+      "name": "Increase Critical Damage"
+    },
+    {
+      "number": 77,
+      "name": "Infinity Arrow"
+    }
+  ]
+}

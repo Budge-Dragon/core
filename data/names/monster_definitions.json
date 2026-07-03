@@ -1,0 +1,404 @@
+{
+  "records": [
+    {
+      "number": 0,
+      "name": "Bull Fighter"
+    },
+    {
+      "number": 1,
+      "name": "Hound"
+    },
+    {
+      "number": 2,
+      "name": "Budge Dragon"
+    },
+    {
+      "number": 3,
+      "name": "Spider"
+    },
+    {
+      "number": 4,
+      "name": "Elite Bull Fighter"
+    },
+    {
+      "number": 5,
+      "name": "Hell Hound"
+    },
+    {
+      "number": 6,
+      "name": "Lich"
+    },
+    {
+      "number": 7,
+      "name": "Giant"
+    },
+    {
+      "number": 8,
+      "name": "Poison Bull"
+    },
+    {
+      "number": 9,
+      "name": "Thunder Lich"
+    },
+    {
+      "number": 10,
+      "name": "Dark Knight"
+    },
+    {
+      "number": 11,
+      "name": "Ghost"
+    },
+    {
+      "number": 12,
+      "name": "Larva"
+    },
+    {
+      "number": 13,
+      "name": "Hell Spider"
+    },
+    {
+      "number": 14,
+      "name": "Skeleton Warrior"
+    },
+    {
+      "number": 15,
+      "name": "Skeleton Archer"
+    },
+    {
+      "number": 16,
+      "name": "Elite Skeleton"
+    },
+    {
+      "number": 17,
+      "name": "Cyclops"
+    },
+    {
+      "number": 18,
+      "name": "Gorgon"
+    },
+    {
+      "number": 19,
+      "name": "Yeti"
+    },
+    {
+      "number": 20,
+      "name": "Elite Yeti"
+    },
+    {
+      "number": 21,
+      "name": "Assassin"
+    },
+    {
+      "number": 22,
+      "name": "Ice Monster"
+    },
+    {
+      "number": 23,
+      "name": "Hommerd"
+    },
+    {
+      "number": 24,
+      "name": "Worm"
+    },
+    {
+      "number": 25,
+      "name": "Ice Queen"
+    },
+    {
+      "number": 26,
+      "name": "Goblin"
+    },
+    {
+      "number": 27,
+      "name": "Chain Scorpion"
+    },
+    {
+      "number": 28,
+      "name": "Beetle Monster"
+    },
+    {
+      "number": 29,
+      "name": "Hunter"
+    },
+    {
+      "number": 30,
+      "name": "Forest Monster"
+    },
+    {
+      "number": 31,
+      "name": "Agon"
+    },
+    {
+      "number": 32,
+      "name": "Stone Golem"
+    },
+    {
+      "number": 33,
+      "name": "Elite Goblin"
+    },
+    {
+      "number": 34,
+      "name": "Cursed Wizard"
+    },
+    {
+      "number": 35,
+      "name": "Death Gorgon"
+    },
+    {
+      "number": 36,
+      "name": "Shadow"
+    },
+    {
+      "number": 37,
+      "name": "Devil"
+    },
+    {
+      "number": 38,
+      "name": "Balrog"
+    },
+    {
+      "number": 39,
+      "name": "Poison Shadow"
+    },
+    {
+      "number": 40,
+      "name": "Death Knight"
+    },
+    {
+      "number": 41,
+      "name": "Death Cow"
+    },
+    {
+      "number": 43,
+      "name": "Golden Budge Dragon"
+    },
+    {
+      "number": 44,
+      "name": "Red Dragon"
+    },
+    {
+      "number": 45,
+      "name": "Bahamut"
+    },
+    {
+      "number": 46,
+      "name": "Vepar"
+    },
+    {
+      "number": 47,
+      "name": "Valkyrie"
+    },
+    {
+      "number": 48,
+      "name": "Lizard King"
+    },
+    {
+      "number": 49,
+      "name": "Hydra"
+    },
+    {
+      "number": 50,
+      "name": "Sea Worm"
+    },
+    {
+      "number": 51,
+      "name": "Great Bahamut"
+    },
+    {
+      "number": 52,
+      "name": "Silver Valkyrie"
+    },
+    {
+      "number": 53,
+      "name": "Golden Titan"
+    },
+    {
+      "number": 54,
+      "name": "Golden Soldier"
+    },
+    {
+      "number": 57,
+      "name": "Iron Wheel"
+    },
+    {
+      "number": 58,
+      "name": "Tantallos"
+    },
+    {
+      "number": 59,
+      "name": "Zaikan"
+    },
+    {
+      "number": 60,
+      "name": "Bloody Wolf"
+    },
+    {
+      "number": 61,
+      "name": "Beam Knight"
+    },
+    {
+      "number": 62,
+      "name": "Mutant"
+    },
+    {
+      "number": 63,
+      "name": "Death Beam Knight"
+    },
+    {
+      "number": 64,
+      "name": "Orc Archer"
+    },
+    {
+      "number": 65,
+      "name": "Elite Orc"
+    },
+    {
+      "number": 66,
+      "name": "Cursed King"
+    },
+    {
+      "number": 67,
+      "name": "Metal Balrog"
+    },
+    {
+      "number": 69,
+      "name": "Alquamos"
+    },
+    {
+      "number": 70,
+      "name": "Queen Rainer"
+    },
+    {
+      "number": 71,
+      "name": "Mega Crust"
+    },
+    {
+      "number": 72,
+      "name": "Phantom Knight"
+    },
+    {
+      "number": 73,
+      "name": "Drakan"
+    },
+    {
+      "number": 74,
+      "name": "Alpha Crust"
+    },
+    {
+      "number": 75,
+      "name": "Great Drakan"
+    },
+    {
+      "number": 76,
+      "name": "Dark Phoenix Shield"
+    },
+    {
+      "number": 77,
+      "name": "Dark Phoenix"
+    },
+    {
+      "number": 100,
+      "name": "Lance Trap"
+    },
+    {
+      "number": 101,
+      "name": "Iron Stick Trap"
+    },
+    {
+      "number": 102,
+      "name": "Fire Trap"
+    },
+    {
+      "number": 103,
+      "name": "Meteorite Trap"
+    },
+    {
+      "number": 150,
+      "name": "Bali"
+    },
+    {
+      "number": 200,
+      "name": "Soccerball"
+    },
+    {
+      "number": 235,
+      "name": "Sevina the Priestess"
+    },
+    {
+      "number": 236,
+      "name": "Golden Archer"
+    },
+    {
+      "number": 237,
+      "name": "Charon"
+    },
+    {
+      "number": 238,
+      "name": "Chaos Goblin"
+    },
+    {
+      "number": 239,
+      "name": "Arena Guard"
+    },
+    {
+      "number": 240,
+      "name": "Baz The Vault Keeper"
+    },
+    {
+      "number": 241,
+      "name": "Guild Master"
+    },
+    {
+      "number": 242,
+      "name": "Elf Lala"
+    },
+    {
+      "number": 243,
+      "name": "Eo the Craftsman"
+    },
+    {
+      "number": 244,
+      "name": "Caren the Barmaid"
+    },
+    {
+      "number": 245,
+      "name": "Izabel The Wizard"
+    },
+    {
+      "number": 246,
+      "name": "Zienna The Weapons Merchant"
+    },
+    {
+      "number": 247,
+      "name": "Crossbow Guard"
+    },
+    {
+      "number": 248,
+      "name": "Wandering Merchant Martin"
+    },
+    {
+      "number": 249,
+      "name": "Berdysh Guard"
+    },
+    {
+      "number": 250,
+      "name": "Wandering Merchant Harold"
+    },
+    {
+      "number": 251,
+      "name": "Hanzo The Blacksmith"
+    },
+    {
+      "number": 253,
+      "name": "Potion Girl Amy"
+    },
+    {
+      "number": 254,
+      "name": "Pasi The Mage"
+    },
+    {
+      "number": 255,
+      "name": "Lumen the Barmaid"
+    }
+  ]
+}

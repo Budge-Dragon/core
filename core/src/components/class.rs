@@ -161,6 +161,8 @@ impl core::fmt::Display for DuplicateClassEntry {
     }
 }
 
+impl core::error::Error for DuplicateClassEntry {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

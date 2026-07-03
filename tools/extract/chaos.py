@@ -35,7 +35,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, item_ref, write_datafile
+from common import coverage, item_ref, without_name, write_datafile, write_names
 
 # Constants.MaximumItemLevel = 11 for both pre-S3 datasets; s6 caps of 15 are
 # clamped to 11 (approved decision 2).
@@ -311,10 +311,23 @@ def verify_wing_economics(e, rid):
         assert 0 <= e[p] <= 100, rid
 
 
+def name_key(record):
+    """Sidecar identity for a mix: its recipe kind (plus the upgrade target,
+    the only field distinguishing the two item_upgrade rows)."""
+    recipe = record["recipe"]
+    key = {"recipe": recipe["kind"], "name": record["name"]}
+    if recipe["kind"] == "item_upgrade":
+        key["target"] = recipe["target"]
+    return key
+
+
 def main():
     assert len(RECORDS) == 10, len(RECORDS)
     verify(RECORDS)
-    path = write_datafile("chaos_mixes.json", RECORDS)
+    # Display names -> host-owned sidecar keyed by recipe; the core file carries
+    # only the recipe facts (pre-S3 wire has no mix id — see notes).
+    write_names("chaos_mixes.json", {"records": [name_key(r) for r in RECORDS]})
+    path = write_datafile("chaos_mixes.json", [without_name(r) for r in RECORDS])
 
     by_version = {}
     for r in RECORDS:

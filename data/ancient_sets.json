@@ -2,7 +2,6 @@
   "records": [
     {
       "set_number": 1,
-      "name": "Warrior Leather",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -65,38 +64,47 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_ability",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "ability_recovery",
           "amount": 5
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 25
         }
@@ -104,7 +112,6 @@
     },
     {
       "set_number": 2,
-      "name": "Anonymous Leather",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -143,18 +150,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 50
         },
         {
+          "scope": "conditional",
           "kind": "defense_with_shield_pct",
           "percent": 25
         },
         {
+          "scope": "resolved",
           "kind": "damage",
           "amount": 30
         }
@@ -162,7 +173,6 @@
     },
     {
       "set_number": 3,
-      "name": "Hyperion Bronze",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -193,18 +203,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 30
         }
@@ -212,7 +226,6 @@
     },
     {
       "set_number": 4,
-      "name": "Mist Bronze",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -243,18 +256,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "vitality",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 20
         }
@@ -262,7 +279,6 @@
     },
     {
       "set_number": 5,
-      "name": "Eplete Scale",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -309,30 +325,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "attack_rate",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "max_ability",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 10
         }
@@ -340,7 +363,6 @@
     },
     {
       "set_number": 6,
-      "name": "Berserker Scale",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -387,26 +409,32 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 40
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 40
         }
@@ -414,7 +442,6 @@
     },
     {
       "set_number": 7,
-      "name": "Garuda Brass",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -461,26 +488,32 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "max_ability",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 15
         }
@@ -488,7 +521,6 @@
     },
     {
       "set_number": 8,
-      "name": "Cloud Brass",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -511,10 +543,12 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 20
         },
         {
+          "scope": "resolved",
           "kind": "critical_damage",
           "amount": 50
         }
@@ -522,7 +556,6 @@
     },
     {
       "set_number": 9,
-      "name": "Kantata Plate",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file; fixed OpenMU data bug: excellent damage chance 10.0 -> 0.10 (percent 10)",
       "pieces": [
@@ -569,30 +602,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "vitality",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 20
         }
@@ -600,7 +640,6 @@
     },
     {
       "set_number": 10,
-      "name": "Rave Plate",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -631,18 +670,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "two_handed_weapon_damage_pct",
           "percent": 30
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         }
@@ -650,7 +693,6 @@
     },
     {
       "set_number": 11,
-      "name": "Hyon Dragon",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -689,30 +731,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "critical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 20
         }
@@ -720,7 +769,6 @@
     },
     {
       "set_number": 12,
-      "name": "Vicious Dragon",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -759,26 +807,32 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "damage",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "min_physical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         }
@@ -786,7 +840,6 @@
     },
     {
       "set_number": 13,
-      "name": "Apollo Pad",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -849,38 +902,47 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "max_ability",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 30
         }
@@ -888,7 +950,6 @@
     },
     {
       "set_number": 14,
-      "name": "Barnake Pad",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -919,18 +980,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 100
         }
@@ -938,7 +1003,6 @@
     },
     {
       "set_number": 15,
-      "name": "Evis Bone",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -977,26 +1041,32 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "vitality",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "attack_rate",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "ability_recovery",
           "amount": 5
         }
@@ -1004,7 +1074,6 @@
     },
     {
       "set_number": 16,
-      "name": "Sylion Bone",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1043,30 +1112,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "vitality",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 50
         }
@@ -1074,7 +1150,6 @@
     },
     {
       "set_number": 17,
-      "name": "Heras Sphinx",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1129,38 +1204,47 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "conditional",
           "kind": "defense_with_shield_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "attack_rate",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 50
         }
@@ -1168,7 +1252,6 @@
     },
     {
       "set_number": 18,
-      "name": "Minet Sphinx",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1199,18 +1282,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 100
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 15
         }
@@ -1218,7 +1305,6 @@
     },
     {
       "set_number": 19,
-      "name": "Anubis Legendary",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1257,30 +1343,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "critical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 20
         }
@@ -1288,7 +1381,6 @@
     },
     {
       "set_number": 20,
-      "name": "Enis Legendary",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1327,22 +1419,27 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         }
@@ -1350,7 +1447,6 @@
     },
     {
       "set_number": 21,
-      "name": "Ceto Vine",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1405,30 +1501,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 20
         },
         {
+          "scope": "conditional",
           "kind": "defense_with_shield_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 20
         }
@@ -1436,7 +1539,6 @@
     },
     {
       "set_number": 22,
-      "name": "Drake Vine",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1475,22 +1577,27 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "damage",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 20
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 40
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 10
         }
@@ -1498,7 +1605,6 @@
     },
     {
       "set_number": 23,
-      "name": "Gaia Silk",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1545,30 +1651,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 10
         }
@@ -1576,7 +1689,6 @@
     },
     {
       "set_number": 24,
-      "name": "Fase Silk",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1607,14 +1719,17 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 100
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 100
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 100
         }
@@ -1622,7 +1737,6 @@
     },
     {
       "set_number": 25,
-      "name": "Odin Wind",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1669,30 +1783,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "max_health",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "attack_rate",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "max_mana",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "max_ability",
           "amount": 50
         }
@@ -1700,7 +1821,6 @@
     },
     {
       "set_number": 26,
-      "name": "Elvian Wind",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1723,10 +1843,12 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         }
@@ -1734,7 +1856,6 @@
     },
     {
       "set_number": 27,
-      "name": "Argo Spirit",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1765,18 +1886,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "max_ability",
           "amount": 50
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 5
         }
@@ -1784,7 +1909,6 @@
     },
     {
       "set_number": 28,
-      "name": "Karis Spirit",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1815,18 +1939,22 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 40
         }
@@ -1834,7 +1962,6 @@
     },
     {
       "set_number": 29,
-      "name": "Gywen Guardian",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1880,34 +2007,42 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "agility",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "min_physical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "max_physical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "critical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 20
         }
@@ -1915,7 +2050,6 @@
     },
     {
       "set_number": 30,
-      "name": "Aruan Guardian",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -1954,26 +2088,32 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         }
@@ -1981,7 +2121,6 @@
     },
     {
       "set_number": 31,
-      "name": "Gaion Storm Crow",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -2020,30 +2159,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "strength",
           "amount": 30
         }
@@ -2051,7 +2197,6 @@
     },
     {
       "set_number": 32,
-      "name": "Muren Storm Crow",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -2090,30 +2235,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 10
         },
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "two_handed_weapon_damage_pct",
           "percent": 20
         }
@@ -2121,7 +2273,6 @@
     },
     {
       "set_number": 33,
-      "name": "Agnis Adamantine",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -2160,30 +2311,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 10
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 40
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "critical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 20
         }
@@ -2191,7 +2349,6 @@
     },
     {
       "set_number": 34,
-      "name": "Broy Adamantine",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -2230,30 +2387,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         },
         {
+          "scope": "resolved",
           "kind": "command",
           "amount": 30
         }
@@ -2261,7 +2425,6 @@
     },
     {
       "set_number": 35,
-      "name": "Chrono Red Wing",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -2300,30 +2463,37 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "double_damage_chance_pct",
           "percent": 20
         },
         {
+          "scope": "resolved",
           "kind": "defense",
           "amount": 60
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "critical_damage",
           "amount": 20
         },
         {
+          "scope": "resolved",
           "kind": "excellent_damage",
           "amount": 20
         }
@@ -2331,7 +2501,6 @@
     },
     {
       "set_number": 36,
-      "name": "Semeden Red Wing",
       "source_version": "s6",
       "review": "s1-era ancient set backported from the s6 dataset; set_number ordering transcribed from OpenMU's initializer, pending verification against a classic SetItemOption client file",
       "pieces": [
@@ -2370,26 +2539,32 @@
       ],
       "set_options": [
         {
+          "scope": "resolved",
           "kind": "wizardry_damage_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "skill_damage",
           "amount": 25
         },
         {
+          "scope": "resolved",
           "kind": "energy",
           "amount": 30
         },
         {
+          "scope": "resolved",
           "kind": "critical_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "excellent_chance_pct",
           "percent": 15
         },
         {
+          "scope": "resolved",
           "kind": "defense_ignore_chance_pct",
           "percent": 5
         }

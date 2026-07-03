@@ -1,0 +1,1219 @@
+{
+  "records": [
+    {
+      "group": 0,
+      "number": 0,
+      "name": "Kris"
+    },
+    {
+      "group": 0,
+      "number": 1,
+      "name": "Short Sword"
+    },
+    {
+      "group": 0,
+      "number": 2,
+      "name": "Rapier"
+    },
+    {
+      "group": 0,
+      "number": 3,
+      "name": "Katache"
+    },
+    {
+      "group": 0,
+      "number": 4,
+      "name": "Sword of Assassin"
+    },
+    {
+      "group": 0,
+      "number": 5,
+      "name": "Blade"
+    },
+    {
+      "group": 0,
+      "number": 6,
+      "name": "Gladius"
+    },
+    {
+      "group": 0,
+      "number": 7,
+      "name": "Falchion"
+    },
+    {
+      "group": 0,
+      "number": 8,
+      "name": "Serpent Sword"
+    },
+    {
+      "group": 0,
+      "number": 9,
+      "name": "Sword of Salamander"
+    },
+    {
+      "group": 0,
+      "number": 10,
+      "name": "Light Saber"
+    },
+    {
+      "group": 0,
+      "number": 11,
+      "name": "Legendary Sword"
+    },
+    {
+      "group": 0,
+      "number": 12,
+      "name": "Heliacal Sword"
+    },
+    {
+      "group": 0,
+      "number": 13,
+      "name": "Double Blade"
+    },
+    {
+      "group": 0,
+      "number": 14,
+      "name": "Lighting Sword"
+    },
+    {
+      "group": 0,
+      "number": 15,
+      "name": "Giant Sword"
+    },
+    {
+      "group": 0,
+      "number": 16,
+      "name": "Sword of Destruction"
+    },
+    {
+      "group": 0,
+      "number": 17,
+      "name": "Dark Breaker"
+    },
+    {
+      "group": 0,
+      "number": 18,
+      "name": "Thunder Blade"
+    },
+    {
+      "group": 1,
+      "number": 0,
+      "name": "Small Axe"
+    },
+    {
+      "group": 1,
+      "number": 1,
+      "name": "Hand Axe"
+    },
+    {
+      "group": 1,
+      "number": 2,
+      "name": "Double Axe"
+    },
+    {
+      "group": 1,
+      "number": 3,
+      "name": "Tomahawk"
+    },
+    {
+      "group": 1,
+      "number": 4,
+      "name": "Elven Axe"
+    },
+    {
+      "group": 1,
+      "number": 5,
+      "name": "Battle Axe"
+    },
+    {
+      "group": 1,
+      "number": 6,
+      "name": "Nikkea Axe"
+    },
+    {
+      "group": 1,
+      "number": 7,
+      "name": "Larkan Axe"
+    },
+    {
+      "group": 1,
+      "number": 8,
+      "name": "Crescent Axe"
+    },
+    {
+      "group": 2,
+      "number": 0,
+      "name": "Mace"
+    },
+    {
+      "group": 2,
+      "number": 1,
+      "name": "Morning Star"
+    },
+    {
+      "group": 2,
+      "number": 2,
+      "name": "Flail"
+    },
+    {
+      "group": 2,
+      "number": 3,
+      "name": "Great Hammer"
+    },
+    {
+      "group": 2,
+      "number": 4,
+      "name": "Crystal Morning Star"
+    },
+    {
+      "group": 2,
+      "number": 5,
+      "name": "Crystal Sword"
+    },
+    {
+      "group": 2,
+      "number": 6,
+      "name": "Chaos Dragon Axe"
+    },
+    {
+      "group": 3,
+      "number": 0,
+      "name": "Light Spear"
+    },
+    {
+      "group": 3,
+      "number": 1,
+      "name": "Spear"
+    },
+    {
+      "group": 3,
+      "number": 2,
+      "name": "Dragon Lance"
+    },
+    {
+      "group": 3,
+      "number": 3,
+      "name": "Giant Trident"
+    },
+    {
+      "group": 3,
+      "number": 4,
+      "name": "Serpent Spear"
+    },
+    {
+      "group": 3,
+      "number": 5,
+      "name": "Double Poleaxe"
+    },
+    {
+      "group": 3,
+      "number": 6,
+      "name": "Halberd"
+    },
+    {
+      "group": 3,
+      "number": 7,
+      "name": "Berdysh"
+    },
+    {
+      "group": 3,
+      "number": 8,
+      "name": "Great Scythe"
+    },
+    {
+      "group": 3,
+      "number": 9,
+      "name": "Bill of Balrog"
+    },
+    {
+      "group": 4,
+      "number": 0,
+      "name": "Short Bow"
+    },
+    {
+      "group": 4,
+      "number": 1,
+      "name": "Bow"
+    },
+    {
+      "group": 4,
+      "number": 2,
+      "name": "Elven Bow"
+    },
+    {
+      "group": 4,
+      "number": 3,
+      "name": "Battle Bow"
+    },
+    {
+      "group": 4,
+      "number": 4,
+      "name": "Tiger Bow"
+    },
+    {
+      "group": 4,
+      "number": 5,
+      "name": "Silver Bow"
+    },
+    {
+      "group": 4,
+      "number": 6,
+      "name": "Chaos Nature Bow"
+    },
+    {
+      "group": 4,
+      "number": 7,
+      "name": "Bolt"
+    },
+    {
+      "group": 4,
+      "number": 8,
+      "name": "Crossbow"
+    },
+    {
+      "group": 4,
+      "number": 9,
+      "name": "Golden Crossbow"
+    },
+    {
+      "group": 4,
+      "number": 10,
+      "name": "Arquebus"
+    },
+    {
+      "group": 4,
+      "number": 11,
+      "name": "Light Crossbow"
+    },
+    {
+      "group": 4,
+      "number": 12,
+      "name": "Serpent Crossbow"
+    },
+    {
+      "group": 4,
+      "number": 13,
+      "name": "Bluewing Crossbow"
+    },
+    {
+      "group": 4,
+      "number": 14,
+      "name": "Aquagold Crossbow"
+    },
+    {
+      "group": 4,
+      "number": 15,
+      "name": "Arrows"
+    },
+    {
+      "group": 4,
+      "number": 16,
+      "name": "Saint Crossbow"
+    },
+    {
+      "group": 5,
+      "number": 0,
+      "name": "Skull Staff"
+    },
+    {
+      "group": 5,
+      "number": 1,
+      "name": "Angelic Staff"
+    },
+    {
+      "group": 5,
+      "number": 2,
+      "name": "Serpent Staff"
+    },
+    {
+      "group": 5,
+      "number": 3,
+      "name": "Thunder Staff"
+    },
+    {
+      "group": 5,
+      "number": 4,
+      "name": "Gorgon Staff"
+    },
+    {
+      "group": 5,
+      "number": 5,
+      "name": "Legendary Staff"
+    },
+    {
+      "group": 5,
+      "number": 6,
+      "name": "Staff of Resurrection"
+    },
+    {
+      "group": 5,
+      "number": 7,
+      "name": "Chaos Lightning Staff"
+    },
+    {
+      "group": 5,
+      "number": 8,
+      "name": "Staff of Destruction"
+    },
+    {
+      "group": 6,
+      "number": 0,
+      "name": "Small Shield"
+    },
+    {
+      "group": 6,
+      "number": 1,
+      "name": "Horn Shield"
+    },
+    {
+      "group": 6,
+      "number": 2,
+      "name": "Kite Shield"
+    },
+    {
+      "group": 6,
+      "number": 3,
+      "name": "Elven Shield"
+    },
+    {
+      "group": 6,
+      "number": 4,
+      "name": "Buckler"
+    },
+    {
+      "group": 6,
+      "number": 5,
+      "name": "Dragon Slayer Shield"
+    },
+    {
+      "group": 6,
+      "number": 6,
+      "name": "Skull Shield"
+    },
+    {
+      "group": 6,
+      "number": 7,
+      "name": "Spiked Shield"
+    },
+    {
+      "group": 6,
+      "number": 8,
+      "name": "Tower Shield"
+    },
+    {
+      "group": 6,
+      "number": 9,
+      "name": "Plate Shield"
+    },
+    {
+      "group": 6,
+      "number": 10,
+      "name": "Big Round Shield"
+    },
+    {
+      "group": 6,
+      "number": 11,
+      "name": "Serpent Shield"
+    },
+    {
+      "group": 6,
+      "number": 12,
+      "name": "Bronze Shield"
+    },
+    {
+      "group": 6,
+      "number": 13,
+      "name": "Dragon Shield"
+    },
+    {
+      "group": 6,
+      "number": 14,
+      "name": "Legendary Shield"
+    },
+    {
+      "group": 7,
+      "number": 0,
+      "name": "Bronze Helm"
+    },
+    {
+      "group": 7,
+      "number": 1,
+      "name": "Dragon Helm"
+    },
+    {
+      "group": 7,
+      "number": 2,
+      "name": "Pad Helm"
+    },
+    {
+      "group": 7,
+      "number": 3,
+      "name": "Legendary Helm"
+    },
+    {
+      "group": 7,
+      "number": 4,
+      "name": "Bone Helm"
+    },
+    {
+      "group": 7,
+      "number": 5,
+      "name": "Leather Helm"
+    },
+    {
+      "group": 7,
+      "number": 6,
+      "name": "Scale Helm"
+    },
+    {
+      "group": 7,
+      "number": 7,
+      "name": "Sphinx Mask"
+    },
+    {
+      "group": 7,
+      "number": 8,
+      "name": "Brass Helm"
+    },
+    {
+      "group": 7,
+      "number": 9,
+      "name": "Plate Helm"
+    },
+    {
+      "group": 7,
+      "number": 10,
+      "name": "Vine Helm"
+    },
+    {
+      "group": 7,
+      "number": 11,
+      "name": "Silk Helm"
+    },
+    {
+      "group": 7,
+      "number": 12,
+      "name": "Wind Helm"
+    },
+    {
+      "group": 7,
+      "number": 13,
+      "name": "Spirit Helm"
+    },
+    {
+      "group": 7,
+      "number": 14,
+      "name": "Guardian Helm"
+    },
+    {
+      "group": 7,
+      "number": 26,
+      "name": "Adamantine Mask"
+    },
+    {
+      "group": 7,
+      "number": 40,
+      "name": "Red Wing Helm"
+    },
+    {
+      "group": 8,
+      "number": 0,
+      "name": "Bronze Armor"
+    },
+    {
+      "group": 8,
+      "number": 1,
+      "name": "Dragon Armor"
+    },
+    {
+      "group": 8,
+      "number": 2,
+      "name": "Pad Armor"
+    },
+    {
+      "group": 8,
+      "number": 3,
+      "name": "Legendary Armor"
+    },
+    {
+      "group": 8,
+      "number": 4,
+      "name": "Bone Armor"
+    },
+    {
+      "group": 8,
+      "number": 5,
+      "name": "Leather Armor"
+    },
+    {
+      "group": 8,
+      "number": 6,
+      "name": "Scale Armor"
+    },
+    {
+      "group": 8,
+      "number": 7,
+      "name": "Sphinx Armor"
+    },
+    {
+      "group": 8,
+      "number": 8,
+      "name": "Brass Armor"
+    },
+    {
+      "group": 8,
+      "number": 9,
+      "name": "Plate Armor"
+    },
+    {
+      "group": 8,
+      "number": 10,
+      "name": "Vine Armor"
+    },
+    {
+      "group": 8,
+      "number": 11,
+      "name": "Silk Armor"
+    },
+    {
+      "group": 8,
+      "number": 12,
+      "name": "Wind Armor"
+    },
+    {
+      "group": 8,
+      "number": 13,
+      "name": "Spirit Armor"
+    },
+    {
+      "group": 8,
+      "number": 14,
+      "name": "Guardian Armor"
+    },
+    {
+      "group": 8,
+      "number": 15,
+      "name": "Storm Crow Armor"
+    },
+    {
+      "group": 8,
+      "number": 26,
+      "name": "Adamantine Armor"
+    },
+    {
+      "group": 8,
+      "number": 40,
+      "name": "Red Wing Armor"
+    },
+    {
+      "group": 9,
+      "number": 0,
+      "name": "Bronze Pants"
+    },
+    {
+      "group": 9,
+      "number": 1,
+      "name": "Dragon Pants"
+    },
+    {
+      "group": 9,
+      "number": 2,
+      "name": "Pad Pants"
+    },
+    {
+      "group": 9,
+      "number": 3,
+      "name": "Legendary Pants"
+    },
+    {
+      "group": 9,
+      "number": 4,
+      "name": "Bone Pants"
+    },
+    {
+      "group": 9,
+      "number": 5,
+      "name": "Leather Pants"
+    },
+    {
+      "group": 9,
+      "number": 6,
+      "name": "Scale Pants"
+    },
+    {
+      "group": 9,
+      "number": 7,
+      "name": "Sphinx Pants"
+    },
+    {
+      "group": 9,
+      "number": 8,
+      "name": "Brass Pants"
+    },
+    {
+      "group": 9,
+      "number": 9,
+      "name": "Plate Pants"
+    },
+    {
+      "group": 9,
+      "number": 10,
+      "name": "Vine Pants"
+    },
+    {
+      "group": 9,
+      "number": 11,
+      "name": "Silk Pants"
+    },
+    {
+      "group": 9,
+      "number": 12,
+      "name": "Wind Pants"
+    },
+    {
+      "group": 9,
+      "number": 13,
+      "name": "Spirit Pants"
+    },
+    {
+      "group": 9,
+      "number": 14,
+      "name": "Guardian Pants"
+    },
+    {
+      "group": 9,
+      "number": 15,
+      "name": "Storm Crow Pants"
+    },
+    {
+      "group": 9,
+      "number": 26,
+      "name": "Adamantine Pants"
+    },
+    {
+      "group": 9,
+      "number": 40,
+      "name": "Red Wing Pants"
+    },
+    {
+      "group": 10,
+      "number": 0,
+      "name": "Bronze Gloves"
+    },
+    {
+      "group": 10,
+      "number": 1,
+      "name": "Dragon Gloves"
+    },
+    {
+      "group": 10,
+      "number": 2,
+      "name": "Pad Gloves"
+    },
+    {
+      "group": 10,
+      "number": 3,
+      "name": "Legendary Gloves"
+    },
+    {
+      "group": 10,
+      "number": 4,
+      "name": "Bone Gloves"
+    },
+    {
+      "group": 10,
+      "number": 5,
+      "name": "Leather Gloves"
+    },
+    {
+      "group": 10,
+      "number": 6,
+      "name": "Scale Gloves"
+    },
+    {
+      "group": 10,
+      "number": 7,
+      "name": "Sphinx Gloves"
+    },
+    {
+      "group": 10,
+      "number": 8,
+      "name": "Brass Gloves"
+    },
+    {
+      "group": 10,
+      "number": 9,
+      "name": "Plate Gloves"
+    },
+    {
+      "group": 10,
+      "number": 10,
+      "name": "Vine Gloves"
+    },
+    {
+      "group": 10,
+      "number": 11,
+      "name": "Silk Gloves"
+    },
+    {
+      "group": 10,
+      "number": 12,
+      "name": "Wind Gloves"
+    },
+    {
+      "group": 10,
+      "number": 13,
+      "name": "Spirit Gloves"
+    },
+    {
+      "group": 10,
+      "number": 14,
+      "name": "Guardian Gloves"
+    },
+    {
+      "group": 10,
+      "number": 15,
+      "name": "Storm Crow Gloves"
+    },
+    {
+      "group": 10,
+      "number": 26,
+      "name": "Adamantine Gloves"
+    },
+    {
+      "group": 10,
+      "number": 40,
+      "name": "Red Wing Gloves"
+    },
+    {
+      "group": 11,
+      "number": 0,
+      "name": "Bronze Boots"
+    },
+    {
+      "group": 11,
+      "number": 1,
+      "name": "Dragon Boots"
+    },
+    {
+      "group": 11,
+      "number": 2,
+      "name": "Pad Boots"
+    },
+    {
+      "group": 11,
+      "number": 3,
+      "name": "Legendary Boots"
+    },
+    {
+      "group": 11,
+      "number": 4,
+      "name": "Bone Boots"
+    },
+    {
+      "group": 11,
+      "number": 5,
+      "name": "Leather Boots"
+    },
+    {
+      "group": 11,
+      "number": 6,
+      "name": "Scale Boots"
+    },
+    {
+      "group": 11,
+      "number": 7,
+      "name": "Sphinx Boots"
+    },
+    {
+      "group": 11,
+      "number": 8,
+      "name": "Brass Boots"
+    },
+    {
+      "group": 11,
+      "number": 9,
+      "name": "Plate Boots"
+    },
+    {
+      "group": 11,
+      "number": 10,
+      "name": "Vine Boots"
+    },
+    {
+      "group": 11,
+      "number": 11,
+      "name": "Silk Boots"
+    },
+    {
+      "group": 11,
+      "number": 12,
+      "name": "Wind Boots"
+    },
+    {
+      "group": 11,
+      "number": 13,
+      "name": "Spirit Boots"
+    },
+    {
+      "group": 11,
+      "number": 14,
+      "name": "Guardian Boots"
+    },
+    {
+      "group": 11,
+      "number": 15,
+      "name": "Storm Crow Boots"
+    },
+    {
+      "group": 11,
+      "number": 26,
+      "name": "Adamantine Boots"
+    },
+    {
+      "group": 11,
+      "number": 40,
+      "name": "Red Wing Boots"
+    },
+    {
+      "group": 12,
+      "number": 0,
+      "name": "Wings of Elf"
+    },
+    {
+      "group": 12,
+      "number": 1,
+      "name": "Wings of Heaven"
+    },
+    {
+      "group": 12,
+      "number": 2,
+      "name": "Wings of Satan"
+    },
+    {
+      "group": 12,
+      "number": 3,
+      "name": "Wings of Spirits"
+    },
+    {
+      "group": 12,
+      "number": 4,
+      "name": "Wings of Soul"
+    },
+    {
+      "group": 12,
+      "number": 5,
+      "name": "Wings of Dragon"
+    },
+    {
+      "group": 12,
+      "number": 6,
+      "name": "Wings of Darkness"
+    },
+    {
+      "group": 12,
+      "number": 7,
+      "name": "Orb of Twisting Slash"
+    },
+    {
+      "group": 12,
+      "number": 8,
+      "name": "Orb of Healing"
+    },
+    {
+      "group": 12,
+      "number": 9,
+      "name": "Orb of Greater Defense"
+    },
+    {
+      "group": 12,
+      "number": 10,
+      "name": "Orb of Greater Damage"
+    },
+    {
+      "group": 12,
+      "number": 11,
+      "name": "Orb of Summoning"
+    },
+    {
+      "group": 12,
+      "number": 15,
+      "name": "Jewel of Chaos"
+    },
+    {
+      "group": 13,
+      "number": 0,
+      "name": "Guardian Angel"
+    },
+    {
+      "group": 13,
+      "number": 1,
+      "name": "Imp"
+    },
+    {
+      "group": 13,
+      "number": 2,
+      "name": "Horn of Uniria"
+    },
+    {
+      "group": 13,
+      "number": 3,
+      "name": "Horn of Dinorant"
+    },
+    {
+      "group": 13,
+      "number": 8,
+      "name": "Ring of Ice"
+    },
+    {
+      "group": 13,
+      "number": 9,
+      "name": "Ring of Poison"
+    },
+    {
+      "group": 13,
+      "number": 10,
+      "name": "Transformation Ring"
+    },
+    {
+      "group": 13,
+      "number": 12,
+      "name": "Pendant of Lighting"
+    },
+    {
+      "group": 13,
+      "number": 13,
+      "name": "Pendant of Fire"
+    },
+    {
+      "group": 13,
+      "number": 14,
+      "name": "Loch's Feather"
+    },
+    {
+      "group": 13,
+      "number": 15,
+      "name": "Fruits"
+    },
+    {
+      "group": 13,
+      "number": 16,
+      "name": "Scroll of Archangel"
+    },
+    {
+      "group": 13,
+      "number": 17,
+      "name": "Blood Bone"
+    },
+    {
+      "group": 13,
+      "number": 18,
+      "name": "Invisibility Cloak"
+    },
+    {
+      "group": 13,
+      "number": 21,
+      "name": "Ring of Fire"
+    },
+    {
+      "group": 13,
+      "number": 22,
+      "name": "Ring of Earth"
+    },
+    {
+      "group": 13,
+      "number": 23,
+      "name": "Ring of Wind"
+    },
+    {
+      "group": 13,
+      "number": 24,
+      "name": "Ring of Magic"
+    },
+    {
+      "group": 13,
+      "number": 25,
+      "name": "Pendant of Ice"
+    },
+    {
+      "group": 13,
+      "number": 26,
+      "name": "Pendant of Wind"
+    },
+    {
+      "group": 13,
+      "number": 27,
+      "name": "Pendant of Water"
+    },
+    {
+      "group": 13,
+      "number": 28,
+      "name": "Pendant of Ability"
+    },
+    {
+      "group": 13,
+      "number": 30,
+      "name": "Cape of Lord"
+    },
+    {
+      "group": 14,
+      "number": 0,
+      "name": "Apple"
+    },
+    {
+      "group": 14,
+      "number": 1,
+      "name": "Small Healing Potion"
+    },
+    {
+      "group": 14,
+      "number": 2,
+      "name": "Medium Healing Potion"
+    },
+    {
+      "group": 14,
+      "number": 3,
+      "name": "Large Healing Potion"
+    },
+    {
+      "group": 14,
+      "number": 4,
+      "name": "Small Mana Potion"
+    },
+    {
+      "group": 14,
+      "number": 5,
+      "name": "Medium Mana Potion"
+    },
+    {
+      "group": 14,
+      "number": 6,
+      "name": "Large Mana Potion"
+    },
+    {
+      "group": 14,
+      "number": 8,
+      "name": "Antidote"
+    },
+    {
+      "group": 14,
+      "number": 9,
+      "name": "Ale"
+    },
+    {
+      "group": 14,
+      "number": 10,
+      "name": "Town Portal Scroll"
+    },
+    {
+      "group": 14,
+      "number": 11,
+      "name": "Box of Luck"
+    },
+    {
+      "group": 14,
+      "number": 13,
+      "name": "Jewel of Bless"
+    },
+    {
+      "group": 14,
+      "number": 14,
+      "name": "Jewel of Soul"
+    },
+    {
+      "group": 14,
+      "number": 16,
+      "name": "Jewel of Life"
+    },
+    {
+      "group": 14,
+      "number": 17,
+      "name": "Devil's Eye"
+    },
+    {
+      "group": 14,
+      "number": 18,
+      "name": "Devil's Key"
+    },
+    {
+      "group": 14,
+      "number": 19,
+      "name": "Devil's Invitation"
+    },
+    {
+      "group": 14,
+      "number": 22,
+      "name": "Jewel of Creation"
+    },
+    {
+      "group": 15,
+      "number": 0,
+      "name": "Scroll of Poison"
+    },
+    {
+      "group": 15,
+      "number": 1,
+      "name": "Scroll of Meteorite"
+    },
+    {
+      "group": 15,
+      "number": 2,
+      "name": "Scroll of Lighting"
+    },
+    {
+      "group": 15,
+      "number": 3,
+      "name": "Scroll of Fire Ball"
+    },
+    {
+      "group": 15,
+      "number": 4,
+      "name": "Scroll of Flame"
+    },
+    {
+      "group": 15,
+      "number": 5,
+      "name": "Scroll of Teleport"
+    },
+    {
+      "group": 15,
+      "number": 6,
+      "name": "Scroll of Ice"
+    },
+    {
+      "group": 15,
+      "number": 7,
+      "name": "Scroll of Twister"
+    },
+    {
+      "group": 15,
+      "number": 8,
+      "name": "Scroll of Evil Spirit"
+    },
+    {
+      "group": 15,
+      "number": 9,
+      "name": "Scroll of Hellfire"
+    },
+    {
+      "group": 15,
+      "number": 10,
+      "name": "Scroll of Power Wave"
+    },
+    {
+      "group": 15,
+      "number": 11,
+      "name": "Scroll of Aqua Beam"
+    },
+    {
+      "group": 15,
+      "number": 12,
+      "name": "Scroll of Cometfall"
+    },
+    {
+      "group": 15,
+      "number": 13,
+      "name": "Scroll of Inferno"
+    }
+  ]
+}

@@ -789,7 +789,13 @@ def main():
     assert len(ids) == len(set(ids)), "duplicate item identity"
     records.sort(key=lambda r: (r["id"]["group"], r["id"]["number"]))
 
-    items_path = common.write_datafile("item_definitions.json", records)
+    # Display names -> host-owned sidecar keyed by {group, number}; the core
+    # file carries only the identity and rules.
+    common.write_names("item_definitions.json", {"records": [
+        {"group": r["id"]["group"], "number": r["id"]["number"], "name": r["name"]}
+        for r in records]})
+    items_path = common.write_datafile(
+        "item_definitions.json", [common.without_name(r) for r in records])
 
     def by_version(recs):
         out = {}

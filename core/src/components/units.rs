@@ -345,6 +345,8 @@ impl core::fmt::Display for UnitError {
     }
 }
 
+impl core::error::Error for UnitError {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

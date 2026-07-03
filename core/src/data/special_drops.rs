@@ -147,3 +147,5 @@ impl core::fmt::Display for DropBandsError {
         }
     }
 }
+
+impl core::error::Error for DropBandsError {}

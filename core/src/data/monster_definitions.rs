@@ -13,8 +13,6 @@ use super::common::{MonsterNumber, Provenance, SkillNumber};
 pub struct MonsterDefinition {
     /// Monster number as the client knows it (model/NPC id).
     pub number: MonsterNumber,
-    /// Display name (Monster.txt name column); informational, never a key.
-    pub name: String,
     /// Extraction provenance: dataset era plus optional curation note.
     #[serde(flatten)]
     pub provenance: Provenance,

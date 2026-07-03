@@ -2,7 +2,6 @@
   "records": [
     {
       "number": 1,
-      "name": "Poison",
       "source_version": "075",
       "attack_damage": 12,
       "damage_type": "wizardry",
@@ -28,7 +27,6 @@
     },
     {
       "number": 2,
-      "name": "Meteorite",
       "source_version": "075",
       "attack_damage": 21,
       "damage_type": "wizardry",
@@ -54,7 +52,6 @@
     },
     {
       "number": 3,
-      "name": "Lightning",
       "source_version": "075",
       "attack_damage": 17,
       "damage_type": "wizardry",
@@ -80,7 +77,6 @@
     },
     {
       "number": 4,
-      "name": "Fire Ball",
       "source_version": "075",
       "attack_damage": 8,
       "damage_type": "wizardry",
@@ -106,7 +102,6 @@
     },
     {
       "number": 5,
-      "name": "Flame",
       "source_version": "075",
       "attack_damage": 25,
       "damage_type": "wizardry",
@@ -133,7 +128,6 @@
     },
     {
       "number": 6,
-      "name": "Teleport",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -158,7 +152,6 @@
     },
     {
       "number": 7,
-      "name": "Ice",
       "source_version": "075",
       "attack_damage": 10,
       "damage_type": "wizardry",
@@ -184,7 +177,6 @@
     },
     {
       "number": 8,
-      "name": "Twister",
       "source_version": "075",
       "attack_damage": 35,
       "damage_type": "wizardry",
@@ -211,7 +203,6 @@
     },
     {
       "number": 9,
-      "name": "Evil Spirit",
       "source_version": "075",
       "attack_damage": 45,
       "damage_type": "wizardry",
@@ -238,7 +229,6 @@
     },
     {
       "number": 10,
-      "name": "Hellfire",
       "source_version": "075",
       "attack_damage": 120,
       "damage_type": "wizardry",
@@ -265,7 +255,6 @@
     },
     {
       "number": 11,
-      "name": "Power Wave",
       "source_version": "075",
       "attack_damage": 14,
       "damage_type": "wizardry",
@@ -291,7 +280,6 @@
     },
     {
       "number": 12,
-      "name": "Aqua Beam",
       "source_version": "075",
       "attack_damage": 80,
       "damage_type": "wizardry",
@@ -318,7 +306,6 @@
     },
     {
       "number": 13,
-      "name": "Cometfall",
       "source_version": "095d",
       "attack_damage": 70,
       "damage_type": "wizardry",
@@ -346,7 +333,6 @@
     },
     {
       "number": 14,
-      "name": "Inferno",
       "source_version": "095d",
       "attack_damage": 100,
       "damage_type": "wizardry",
@@ -373,7 +359,6 @@
     },
     {
       "number": 16,
-      "name": "Soul Barrier",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "none",
@@ -400,7 +385,6 @@
     },
     {
       "number": 17,
-      "name": "Energy Ball",
       "source_version": "075",
       "attack_damage": 3,
       "damage_type": "wizardry",
@@ -426,7 +410,6 @@
     },
     {
       "number": 18,
-      "name": "Defense",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -453,7 +436,6 @@
     },
     {
       "number": 19,
-      "name": "Falling Slash",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -479,7 +461,6 @@
     },
     {
       "number": 20,
-      "name": "Lunge",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -505,7 +486,6 @@
     },
     {
       "number": 21,
-      "name": "Uppercut",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -531,7 +511,6 @@
     },
     {
       "number": 22,
-      "name": "Cyclone",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -557,7 +536,6 @@
     },
     {
       "number": 23,
-      "name": "Slash",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -583,7 +561,6 @@
     },
     {
       "number": 24,
-      "name": "Triple Shot",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -609,7 +586,6 @@
     },
     {
       "number": 26,
-      "name": "Heal",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -634,7 +610,6 @@
     },
     {
       "number": 27,
-      "name": "Greater Defense",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -660,7 +635,6 @@
     },
     {
       "number": 28,
-      "name": "Greater Damage",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -686,7 +660,6 @@
     },
     {
       "number": 30,
-      "name": "Summon Goblin",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -712,7 +685,6 @@
     },
     {
       "number": 31,
-      "name": "Summon Stone Golem",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -738,7 +710,6 @@
     },
     {
       "number": 32,
-      "name": "Summon Assassin",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -764,7 +735,6 @@
     },
     {
       "number": 33,
-      "name": "Summon Elite Yeti",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -790,7 +760,6 @@
     },
     {
       "number": 34,
-      "name": "Summon Dark Knight",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -816,7 +785,6 @@
     },
     {
       "number": 35,
-      "name": "Summon Bali",
       "source_version": "075",
       "attack_damage": 0,
       "damage_type": "none",
@@ -842,7 +810,6 @@
     },
     {
       "number": 39,
-      "name": "Ice Storm",
       "source_version": "s6",
       "attack_damage": 80,
       "damage_type": "wizardry",
@@ -869,7 +836,6 @@
     },
     {
       "number": 40,
-      "name": "Nova",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "wizardry",
@@ -896,7 +862,6 @@
     },
     {
       "number": 41,
-      "name": "Twisting Slash",
       "source_version": "095d",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -923,7 +888,6 @@
     },
     {
       "number": 42,
-      "name": "Rageful Blow",
       "source_version": "s6",
       "attack_damage": 60,
       "damage_type": "physical",
@@ -950,7 +914,6 @@
     },
     {
       "number": 43,
-      "name": "Death Stab",
       "source_version": "s6",
       "attack_damage": 70,
       "damage_type": "physical",
@@ -977,7 +940,6 @@
     },
     {
       "number": 47,
-      "name": "Impale",
       "source_version": "095d",
       "attack_damage": 15,
       "damage_type": "physical",
@@ -1003,7 +965,6 @@
     },
     {
       "number": 48,
-      "name": "Swell Life",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "none",
@@ -1031,7 +992,6 @@
     },
     {
       "number": 49,
-      "name": "Fire Breath",
       "source_version": "095d",
       "attack_damage": 30,
       "damage_type": "physical",
@@ -1057,7 +1017,6 @@
     },
     {
       "number": 50,
-      "name": "Flame of Evil (Monster)",
       "source_version": "075",
       "attack_damage": 120,
       "damage_type": "none",
@@ -1080,7 +1039,6 @@
     },
     {
       "number": 51,
-      "name": "Ice Arrow",
       "source_version": "s6",
       "attack_damage": 105,
       "damage_type": "physical",
@@ -1106,7 +1064,6 @@
     },
     {
       "number": 52,
-      "name": "Penetration",
       "source_version": "s6",
       "attack_damage": 70,
       "damage_type": "physical",
@@ -1134,7 +1091,6 @@
     },
     {
       "number": 55,
-      "name": "Fire Slash",
       "source_version": "s6",
       "attack_damage": 80,
       "damage_type": "physical",
@@ -1161,7 +1117,6 @@
     },
     {
       "number": 56,
-      "name": "Power Slash",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "physical",
@@ -1188,7 +1143,6 @@
     },
     {
       "number": 58,
-      "name": "Nova (Start)",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "none",
@@ -1214,7 +1168,6 @@
     },
     {
       "number": 61,
-      "name": "Fire Burst",
       "source_version": "s6",
       "attack_damage": 100,
       "damage_type": "physical",
@@ -1241,7 +1194,6 @@
     },
     {
       "number": 62,
-      "name": "Earthshake",
       "source_version": "s6",
       "attack_damage": 150,
       "damage_type": "physical",
@@ -1268,7 +1220,6 @@
     },
     {
       "number": 63,
-      "name": "Summon",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "none",
@@ -1294,7 +1245,6 @@
     },
     {
       "number": 64,
-      "name": "Increase Critical Damage",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "none",
@@ -1321,7 +1271,6 @@
     },
     {
       "number": 77,
-      "name": "Infinity Arrow",
       "source_version": "s6",
       "attack_damage": 0,
       "damage_type": "none",

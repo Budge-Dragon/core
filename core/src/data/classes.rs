@@ -199,6 +199,8 @@ impl core::fmt::Display for ClassRecordError {
     }
 }
 
+impl core::error::Error for ClassRecordError {}
+
 /// Creation-time current vitals. The uniform `ability: 1` is review-flagged on
 /// every record (OpenMU initializer seed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -300,6 +302,8 @@ impl core::fmt::Display for ClassTableError {
         }
     }
 }
+
+impl core::error::Error for ClassTableError {}
 
 /// One roster slot while assembling the table: the record, or its absence.
 enum Slot {

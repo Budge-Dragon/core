@@ -157,3 +157,5 @@ impl core::fmt::Display for ExpTableError {
         }
     }
 }
+
+impl core::error::Error for ExpTableError {}

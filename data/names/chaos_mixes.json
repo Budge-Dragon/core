@@ -1,0 +1,46 @@
+{
+  "records": [
+    {
+      "recipe": "chaos_weapon",
+      "name": "Chaos Weapon"
+    },
+    {
+      "recipe": "first_wings",
+      "name": "1st Level Wings"
+    },
+    {
+      "recipe": "second_wings",
+      "name": "2nd Level Wings"
+    },
+    {
+      "recipe": "cape_of_lord",
+      "name": "Cape of Lord"
+    },
+    {
+      "recipe": "item_upgrade",
+      "name": "+10 Item Combination",
+      "target": "plus_ten"
+    },
+    {
+      "recipe": "item_upgrade",
+      "name": "+11 Item Combination",
+      "target": "plus_eleven"
+    },
+    {
+      "recipe": "dinorant",
+      "name": "Dinorant"
+    },
+    {
+      "recipe": "fruits",
+      "name": "Fruits"
+    },
+    {
+      "recipe": "devil_square_ticket",
+      "name": "Devil's Square Ticket"
+    },
+    {
+      "recipe": "blood_castle_ticket",
+      "name": "Blood Castle Ticket"
+    }
+  ]
+}

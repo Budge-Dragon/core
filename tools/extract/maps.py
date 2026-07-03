@@ -37,7 +37,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, write_datafile, DATA_DIR
+from common import coverage, without_name, write_datafile, write_names, DATA_DIR
 
 INIT = "/tmp/openmu-ref/src/Persistence/Initialization"
 RESOURCES = os.path.join(INIT, "Resources")
@@ -369,8 +369,16 @@ def main():
         assert record["map"] in map_numbers if "map" in record else True, record
     assert len(gate_records) == 70, len(gate_records)
 
-    write_datafile("map_definitions.json", map_records)
-    write_datafile("gates_warps.json", gate_records)
+    # Display names -> host-owned sidecars; the core files carry only
+    # identities and rules. Map names key by number; warp names by list index
+    # (only warp gate records carry a name).
+    write_names("map_definitions.json", {"records": [
+        {"number": r["number"], "name": r["name"]} for r in map_records]})
+    write_names("gates_warps.json", {"records": [
+        {"index": r["index"], "name": r["name"]}
+        for r in gate_records if r["kind"] == "warp"]})
+    write_datafile("map_definitions.json", [without_name(r) for r in map_records])
+    write_datafile("gates_warps.json", [without_name(r) for r in gate_records])
 
     # ---- coverage ----
     def by_version(records):

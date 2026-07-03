@@ -9,13 +9,20 @@ use serde::{Deserialize, Serialize};
 /// parse error. It proves non-emptiness by construction — the first element
 /// always exists, so `first` returns `T`, never `Option<T>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "Vec<T>", into = "Vec<T>")]
-pub struct OneOrMore<T: Clone> {
+#[serde(
+    try_from = "Vec<T>",
+    into = "Vec<T>",
+    bound(
+        serialize = "T: Clone + Serialize",
+        deserialize = "T: Deserialize<'de>"
+    )
+)]
+pub struct OneOrMore<T> {
     head: T,
     tail: Vec<T>,
 }
 
-impl<T: Clone> OneOrMore<T> {
+impl<T> OneOrMore<T> {
     /// Builds a non-empty list from a vector.
     ///
     /// # Errors
@@ -38,7 +45,7 @@ impl<T: Clone> OneOrMore<T> {
 
     /// Borrows every element, head first.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        core::iter::once(&self.head).chain(self.tail.iter())
+        self.into_iter()
     }
 
     /// The number of elements — always at least one.
@@ -48,7 +55,25 @@ impl<T: Clone> OneOrMore<T> {
     }
 }
 
-impl<T: Clone> TryFrom<Vec<T>> for OneOrMore<T> {
+impl<'a, T> IntoIterator for &'a OneOrMore<T> {
+    type Item = &'a T;
+    type IntoIter = core::iter::Chain<core::iter::Once<&'a T>, core::slice::Iter<'a, T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        core::iter::once(&self.head).chain(self.tail.iter())
+    }
+}
+
+impl<T> IntoIterator for OneOrMore<T> {
+    type Item = T;
+    type IntoIter = core::iter::Chain<core::iter::Once<T>, std::vec::IntoIter<T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        core::iter::once(self.head).chain(self.tail)
+    }
+}
+
+impl<T> TryFrom<Vec<T>> for OneOrMore<T> {
     type Error = EmptyCollection;
 
     fn try_from(items: Vec<T>) -> Result<Self, Self::Error> {
@@ -56,7 +81,7 @@ impl<T: Clone> TryFrom<Vec<T>> for OneOrMore<T> {
     }
 }
 
-impl<T: Clone> From<OneOrMore<T>> for Vec<T> {
+impl<T> From<OneOrMore<T>> for Vec<T> {
     fn from(list: OneOrMore<T>) -> Self {
         let mut items = Self::with_capacity(1 + list.tail.len());
         items.push(list.head);
@@ -74,6 +99,8 @@ impl core::fmt::Display for EmptyCollection {
         write!(f, "expected at least one element, found none")
     }
 }
+
+impl core::error::Error for EmptyCollection {}
 
 #[cfg(test)]
 mod tests {
@@ -118,5 +145,37 @@ mod tests {
         let list = OneOrMore::new(vec![5u8, 6]).unwrap();
         let items: Vec<u8> = list.into();
         assert_eq!(items, vec![5, 6]);
+    }
+
+    /// A deliberately non-`Clone` payload: the type must still be
+    /// representable now the `Clone` bound sits only on the serialize path.
+    #[derive(Debug, PartialEq, Eq)]
+    struct NonClone(u8);
+
+    #[test]
+    fn non_clone_element_is_representable() {
+        let list = OneOrMore::new(vec![NonClone(1), NonClone(2)]).unwrap();
+        assert_eq!(list.first(), &NonClone(1));
+        assert_eq!(list.count().get(), 2);
+    }
+
+    #[test]
+    fn borrowing_into_iterator_yields_refs_in_order() {
+        let list = OneOrMore::new(vec![NonClone(1), NonClone(2), NonClone(3)]).unwrap();
+        let seen: Vec<&NonClone> = (&list).into_iter().collect();
+        assert_eq!(seen, vec![&NonClone(1), &NonClone(2), &NonClone(3)]);
+        // `for x in &list` composes through the same impl.
+        let mut total = 0u8;
+        for item in &list {
+            total += item.0;
+        }
+        assert_eq!(total, 6);
+    }
+
+    #[test]
+    fn owning_into_iterator_yields_owned_in_order() {
+        let list = OneOrMore::new(vec![NonClone(4), NonClone(5)]).unwrap();
+        let owned: Vec<NonClone> = list.into_iter().collect();
+        assert_eq!(owned, vec![NonClone(4), NonClone(5)]);
     }
 }
