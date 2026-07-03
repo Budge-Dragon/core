@@ -262,6 +262,10 @@ pub struct Percent(u8);
 impl Percent {
     /// Denominator of the roll.
     pub const DENOMINATOR: u8 = 100;
+    /// Zero percent — the authentic gearless chance (no critical, excellent,
+    /// defense-ignore, or double-damage roll succeeds). A real domain value, not
+    /// a fabricated default.
+    pub const ZERO: Self = Self(0);
 
     /// Builds a percentage; values above 100 are rejected.
     ///
@@ -318,6 +322,9 @@ pub struct ItemLevel(u8);
 impl ItemLevel {
     /// Largest value the client's 4-bit item-level field can carry.
     pub const WIRE_MAX: u8 = 15;
+    /// Plus level zero — a base (un-enhanced) item instance. A real domain
+    /// value, not a fabricated default.
+    pub const ZERO: Self = Self(0);
 
     /// Builds an item level; values above 15 are rejected.
     ///
@@ -329,6 +336,19 @@ impl ItemLevel {
             return Err(UnitError::ItemLevelAbove15 { value: level });
         }
         Ok(Self(level))
+    }
+
+    /// Clamps a value into the wire item-level range: values above 15 saturate
+    /// to [`Self::WIRE_MAX`]. Total, and takes `u64` so a wide computation feeds
+    /// it with no narrowing cast — the compute-path constructor for a derived
+    /// plus level. Parsing external input stays on the fallible `new`/`try_from`,
+    /// where out-of-range is an error, never a clamp.
+    #[must_use]
+    pub fn clamped(value: u64) -> Self {
+        match u8::try_from(value) {
+            Ok(level) => Self(level.min(Self::WIRE_MAX)),
+            Err(_) => Self(Self::WIRE_MAX),
+        }
     }
 
     /// The plus-level value.
@@ -471,6 +491,15 @@ mod tests {
     #[test]
     fn enhance_level_widens_into_item_level() {
         assert_eq!(ItemLevel::from(EnhanceLevel::L7).get(), 7);
+    }
+
+    #[test]
+    fn item_level_clamped_saturates_at_wire_max() {
+        assert_eq!(ItemLevel::clamped(0), ItemLevel::ZERO);
+        assert_eq!(ItemLevel::clamped(9).get(), 9);
+        assert_eq!(ItemLevel::clamped(15).get(), 15);
+        assert_eq!(ItemLevel::clamped(16).get(), 15);
+        assert_eq!(ItemLevel::clamped(u64::MAX).get(), 15);
     }
 
     #[test]

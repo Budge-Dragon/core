@@ -21,7 +21,7 @@ use crate::data::classes::{ClassRecord, ClassTable, ClassTableError};
 use crate::data::common::{DataFile, GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::drop_config::DropConfig;
 use crate::data::exp_tables::{ExpCurve, ExpTable, ExpTableError};
-use crate::data::game_config::GameConfig;
+use crate::data::game_config::{GameConfig, ProgressionConfig};
 use crate::data::gates_warps::{GateWarpRecord, SpawnGate, Warp, WarpIndex};
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::MapDefinition;
@@ -101,6 +101,7 @@ pub struct Atlas {
     exp_curve: ExpCurve,
     ancient_roster: AncientRoster,
     drop_config: DropConfig,
+    progression: ProgressionConfig,
     special_drops: Vec<SpecialDropRecord>,
     box_drops: Vec<BoxDrop>,
     drop_pool: DropPool,
@@ -148,6 +149,7 @@ impl Atlas {
             AncientRoster::build(data.ancient_sets.records).map_err(AtlasError::AncientRoster)?;
         let game_config = take_single(data.game_config.records)
             .map_err(|found| AtlasError::GameConfigNotSingle { found })?;
+        let progression = game_config.progression;
         let drop_config = game_config.drops;
         let drop_pool = DropPool::build(items.values());
 
@@ -180,6 +182,7 @@ impl Atlas {
             exp_curve,
             ancient_roster,
             drop_config,
+            progression,
             special_drops: data.special_drops.records,
             box_drops: data.box_drops.records,
             drop_pool,
@@ -341,6 +344,13 @@ impl Atlas {
     #[must_use]
     pub fn drop_config(&self) -> &DropConfig {
         &self.drop_config
+    }
+
+    /// The party and experience-award facts (including the per-kill experience
+    /// jitter band).
+    #[must_use]
+    pub fn progression(&self) -> ProgressionConfig {
+        self.progression
     }
 
     /// The special-drop records, in load order.

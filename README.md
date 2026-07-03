@@ -9,7 +9,10 @@ The same crate must compile and behave identically everywhere it is embedded:
 
 - **native** — game server / SpacetimeDB module
 - **`wasm32-unknown-unknown`** — browser
-- **FFI** — Unity bindings (via a future host crate)
+- **Unity** — iOS (`aarch64-apple-ios`), Android (`aarch64-linux-android`), and
+  WebGL (`wasm32-unknown-emscripten`). The pure core must compile for all three
+  (enforced in CI); the C-ABI FFI shim that exposes it to C# lands in a future
+  host crate.
 
 ## Portability rules
 
@@ -22,14 +25,25 @@ The same crate must compile and behave identically everywhere it is embedded:
    never a global generator. Deterministic given a seed.
 6. **Static game data is defined as structs here.** The core defines the
    shapes and the rules that read them; hosts load the data.
+7. **No float math.** All arithmetic is integer or `Q40.24` fixed-point
+   (`components::spatial::Fixed`). `f32`/`f64` round differently across
+   native/wasm/FFI and break replay determinism.
+8. **Client proposes, server decides.** Every service takes a typed *intent*
+   plus current state and computes the authoritative *result*; it never trusts a
+   client-claimed outcome. Intent types in, distinct result/event types out.
 
 Architecture and coding laws live in [`CLAUDE.md`](./CLAUDE.md) — required
 reading before writing any code.
 
-`clippy.toml` mechanically catches the common violations of rules 1–3:
-`SystemTime`/`Instant`, `thread::{spawn, Builder::spawn, scope, sleep}`, and
-the `print!`/`dbg!` macro family. Async and everything else in the rules are
-convention, enforced by code review.
+Mechanical enforcement (build-failing under `cargo clippy -- -D warnings`):
+`clippy.toml` disallows `SystemTime`/`Instant` (rule 1),
+`thread::{spawn, Builder::spawn, scope, sleep}` (rule 2), the `print!`/`dbg!`
+macro family (rule 3), and entropy-seeded `HashMap`/`HashSet`/`RandomState`
+(rule 5 — nondeterministic iteration order); `[workspace.lints.clippy]` sets
+`float_arithmetic` (rule 7). Async, engine/DB types, injected RNG, and the
+authoritative intent→result flow (rule 8) are convention, enforced by code
+review. The full architectural laws — including the six authoritative-server
+invariants — live in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Dependencies
 
@@ -56,8 +70,15 @@ organization").
 
 ```sh
 cargo check                                              # native
-cargo check -p mu-core --target wasm32-unknown-unknown   # browser target
 cargo test
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
+
+# Portability gate — the pure core compiles for every deployment target.
+# One-time: rustup target add wasm32-unknown-unknown wasm32-unknown-emscripten \
+#           aarch64-apple-ios aarch64-linux-android
+cargo check -p mu-core --target wasm32-unknown-unknown      # browser
+cargo check -p mu-core --target wasm32-unknown-emscripten   # Unity WebGL
+cargo check -p mu-core --target aarch64-apple-ios           # Unity iOS
+cargo check -p mu-core --target aarch64-linux-android       # Unity Android
 ```

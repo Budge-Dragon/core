@@ -9,6 +9,7 @@ use core::num::{NonZeroU32, NonZeroUsize};
 use rand_core::RngCore;
 
 use crate::components::collections::OneOrMore;
+use crate::components::interval::Interval;
 use crate::components::spatial::Facing;
 use crate::components::units::{ChancePer10000, Percent, Resistance};
 use crate::rng::{uniform_below, uniform_below_usize};
@@ -63,6 +64,40 @@ pub fn roll_percent(percent: Percent, rng: &mut impl RngCore) -> bool {
 pub fn roll_resistance(resistance: Resistance, rng: &mut impl RngCore) -> bool {
     let bound = NonZeroU32::MIN.saturating_add(u32::from(Resistance::DENOMINATOR) - 1);
     uniform_below(bound, rng) < u32::from(resistance.0)
+}
+
+/// Draws a value uniformly from an inclusive `[min, max]` span, reaching both
+/// endpoints. The width is `max - min + 1` (at least one, since `min <= max` is
+/// proven by the [`Interval`]), so a single-point span is total and consumes one
+/// word. The drawn offset is proven below the width, hence at most `max - min`,
+/// so the sum with `min` never exceeds `max` and narrows losslessly.
+#[must_use]
+pub fn uniform_in_inclusive(span: Interval<u16>, rng: &mut impl RngCore) -> u16 {
+    let low = u32::from(span.min());
+    let width = u32::from(span.max()) - low + 1;
+    let bound = NonZeroU32::MIN.saturating_add(width - 1);
+    let offset = low_u16(uniform_below(bound, rng));
+    span.min().saturating_add(offset)
+}
+
+/// Rolls whether an elemental effect applies to a target: `false` when immune
+/// (`resistance == 255`, short-circuiting with no draw), otherwise `true` with
+/// probability `1/(resistance + 1)` — `uniform_below(resistance + 1) == 0`. The
+/// faithful application curve (distinct from [`roll_resistance`], which is the
+/// `n/255` resist-chance roll); a byte of `0` always applies, mid values thin it
+/// hyperbolically.
+#[must_use]
+pub fn roll_apply_elemental(resistance: Resistance, rng: &mut impl RngCore) -> bool {
+    resistance.0 < 255
+        && uniform_below(NonZeroU32::MIN.saturating_add(u32::from(resistance.0)), rng) == 0
+}
+
+/// Keeps the low two bytes of a `u32`, dropping the high two. Callers pass a
+/// value whose high bytes are proven zero, so this is lossless, cast-free, and
+/// total — mirroring the byte-decomposition narrows in [`crate::rng`].
+fn low_u16(value: u32) -> u16 {
+    let [b0, b1, _, _] = value.to_le_bytes();
+    u16::from_le_bytes([b0, b1])
 }
 
 /// A non-empty cumulative-weight table whose total is DERIVED from its weights
@@ -272,5 +307,61 @@ mod tests {
             let picked = *pick_one(&list, &mut rng);
             assert!(picked == 10 || picked == 20 || picked == 30);
         }
+    }
+
+    #[test]
+    fn uniform_in_inclusive_single_point_is_total_and_draws_one_word() {
+        let point = Interval::new(7u16, 7u16).unwrap();
+        let mut rng = TestRng::new(11);
+        for _ in 0..64 {
+            assert_eq!(uniform_in_inclusive(point, &mut rng), 7);
+        }
+    }
+
+    #[test]
+    fn uniform_in_inclusive_reaches_both_endpoints_and_stays_in_range() {
+        let span = Interval::new(3u16, 9u16).unwrap();
+        let mut rng = TestRng::new(12);
+        let mut saw_min = false;
+        let mut saw_max = false;
+        for _ in 0..10_000 {
+            let value = uniform_in_inclusive(span, &mut rng);
+            assert!((3..=9).contains(&value));
+            saw_min |= value == 3;
+            saw_max |= value == 9;
+        }
+        assert!(saw_min && saw_max, "both endpoints must be reachable");
+    }
+
+    #[test]
+    fn roll_apply_elemental_extremes() {
+        let mut rng = TestRng::new(13);
+        for _ in 0..1000 {
+            // resistance 0 always applies; 255 is immune (and consumes no word).
+            assert!(roll_apply_elemental(Resistance(0), &mut rng));
+            assert!(!roll_apply_elemental(Resistance(255), &mut rng));
+        }
+    }
+
+    #[test]
+    fn roll_apply_elemental_immune_consumes_no_word() {
+        let mut rng = TestRng::new(99);
+        let mut probe = TestRng::new(99);
+        assert!(!roll_apply_elemental(Resistance(255), &mut rng));
+        assert_eq!(rng.next_u64(), probe.next_u64());
+    }
+
+    #[test]
+    fn roll_apply_elemental_mid_resistance_is_bernoulli() {
+        // resistance 3 applies with probability 1/4 — an integer count check.
+        let mut rng = TestRng::new(14);
+        let mut applied = 0u32;
+        for _ in 0..8000 {
+            if roll_apply_elemental(Resistance(3), &mut rng) {
+                applied += 1;
+            }
+        }
+        // Around 2000 of 8000; a wide band proves the curve without flaking.
+        assert!((1500..2500).contains(&applied), "applied {applied}");
     }
 }

@@ -53,6 +53,17 @@ impl Pool {
     pub const fn max(self) -> u32 {
         self.max
     }
+
+    /// This pool with `amount` removed from `current`, saturating at zero; the
+    /// maximum is unchanged. The shared reduction path for damage taken and for
+    /// spending a resource (mana/ability) on a cast.
+    #[must_use]
+    pub const fn reduced(self, amount: u32) -> Pool {
+        Pool {
+            current: self.current.saturating_sub(amount),
+            max: self.max,
+        }
+    }
 }
 
 impl TryFrom<PoolWire> for Pool {
@@ -131,6 +142,18 @@ mod tests {
         let pool = Pool::full(15_000);
         assert_eq!(pool.current(), 15_000);
         assert_eq!(pool.max(), 15_000);
+    }
+
+    #[test]
+    fn reduced_saturates_at_zero_and_keeps_max() {
+        let pool = Pool::new(30, 60).unwrap();
+        assert_eq!(pool.reduced(10), Pool::new(20, 60).unwrap());
+        // Over-reduction saturates the current value at zero.
+        let drained = pool.reduced(1000);
+        assert_eq!(drained.current(), 0);
+        assert_eq!(drained.max(), 60);
+        // Reducing by zero is the identity.
+        assert_eq!(pool.reduced(0), pool);
     }
 
     #[test]

@@ -50,6 +50,15 @@ impl<T: Ord + Copy> Interval<T> {
     pub fn contains(self, value: T) -> bool {
         self.min <= value && value <= self.max
     }
+
+    /// The inclusive interval spanning two endpoints, sorting them so the
+    /// result is total and can never invert — mirrors
+    /// [`crate::components::spatial::WorldRect::spanning`].
+    #[must_use]
+    pub fn spanning(a: T, b: T) -> Self {
+        let (min, max) = if a <= b { (a, b) } else { (b, a) };
+        Self { min, max }
+    }
 }
 
 /// Wire mirror of [`Interval`]; edge order checked on the way in.
@@ -112,6 +121,19 @@ mod tests {
         assert!(interval.contains(6));
         assert!(!interval.contains(1));
         assert!(!interval.contains(7));
+    }
+
+    #[test]
+    fn spanning_sorts_endpoints_and_is_total() {
+        let ordered = Interval::spanning(3u16, 9u16);
+        assert_eq!(ordered.min(), 3);
+        assert_eq!(ordered.max(), 9);
+        // Reversed endpoints produce the identical interval.
+        assert_eq!(Interval::spanning(9u16, 3u16), ordered);
+        // A single point is the degenerate closed interval.
+        let point = Interval::spanning(5u16, 5u16);
+        assert_eq!(point.min(), 5);
+        assert_eq!(point.max(), 5);
     }
 
     #[test]

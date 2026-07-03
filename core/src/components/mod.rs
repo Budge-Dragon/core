@@ -7,6 +7,7 @@
 pub mod bonus;
 pub mod class;
 pub mod collections;
+pub mod combat_profile;
 pub mod element;
 pub mod interval;
 pub mod item_options;

@@ -1,0 +1,228 @@
+//! The resolved combat snapshot a service reads to strike: a fighter's
+//! offensive and defensive magnitudes, its per-element resistances, and its four
+//! special-hit chances — plus the player-only derived vital capacities and a
+//! resolvable target snapshot. Data only: the profile service derives these from
+//! a character or a monster definition; nothing here decides or rolls.
+
+use serde::{Deserialize, Serialize};
+
+use crate::components::element::{Element, PerElement};
+use crate::components::interval::Interval;
+use crate::components::placement::Placement;
+use crate::components::pool::Pool;
+use crate::components::units::{Level, Percent, Resistance};
+
+/// A fighter's resolved combat magnitudes — the view a strike reads. Physical
+/// damage is an inclusive span; wizardry is present only for spellcasters. The
+/// four special-hit chances are gearless zero until an equipment wave feeds
+/// them. No live-health field: current health travels beside the profile (a
+/// [`CombatTarget`] for a defender, the caller's own pool for an attacker).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatProfile {
+    pub(crate) level: Level,
+    pub(crate) physical: Interval<u16>,
+    pub(crate) wizardry: Option<Interval<u16>>,
+    pub(crate) defense: u16,
+    pub(crate) attack_rate: u16,
+    pub(crate) defense_rate: u16,
+    pub(crate) resistances: PerElement<Resistance>,
+    pub(crate) critical_chance: Percent,
+    pub(crate) excellent_chance: Percent,
+    pub(crate) defense_ignore_chance: Percent,
+    pub(crate) double_damage_chance: Percent,
+}
+
+impl CombatProfile {
+    /// The fighter's level — sets the min-damage floor.
+    #[must_use]
+    pub fn level(&self) -> Level {
+        self.level
+    }
+
+    /// The inclusive physical-damage span.
+    #[must_use]
+    pub fn physical(&self) -> Interval<u16> {
+        self.physical
+    }
+
+    /// The wizardry-damage span, present only for spellcasters.
+    #[must_use]
+    pub fn wizardry(&self) -> Option<Interval<u16>> {
+        self.wizardry
+    }
+
+    /// Defense subtracted from incoming physical damage.
+    #[must_use]
+    pub fn defense(&self) -> u16 {
+        self.defense
+    }
+
+    /// Attack success rate — drives the hit chance and the overrate penalty.
+    #[must_use]
+    pub fn attack_rate(&self) -> u16 {
+        self.attack_rate
+    }
+
+    /// Defense success rate — drives the hit chance and the overrate penalty.
+    #[must_use]
+    pub fn defense_rate(&self) -> u16 {
+        self.defense_rate
+    }
+
+    /// Resistance to one element — delegates the total per-element lookup.
+    #[must_use]
+    pub fn resistance(&self, element: Element) -> Resistance {
+        *self.resistances.of(element)
+    }
+
+    /// Chance a hit rolls critical.
+    #[must_use]
+    pub fn critical_chance(&self) -> Percent {
+        self.critical_chance
+    }
+
+    /// Chance a hit rolls excellent.
+    #[must_use]
+    pub fn excellent_chance(&self) -> Percent {
+        self.excellent_chance
+    }
+
+    /// Chance a hit ignores the target's defense.
+    #[must_use]
+    pub fn defense_ignore_chance(&self) -> Percent {
+        self.defense_ignore_chance
+    }
+
+    /// Chance a hit deals double damage.
+    #[must_use]
+    pub fn double_damage_chance(&self) -> Percent {
+        self.double_damage_chance
+    }
+}
+
+/// A player's derived vital capacities — the maxima the class formula computes
+/// from level and stats, returned beside a character's [`CombatProfile`]. Plain
+/// data; the character carries no fabricated maxima of its own on the compute
+/// path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VitalMaxima {
+    /// Maximum health.
+    pub max_health: u32,
+    /// Maximum mana.
+    pub max_mana: u32,
+    /// Maximum ability (AG).
+    pub max_ability: u32,
+}
+
+/// A resolvable defender snapshot: its combat profile, its current health, and
+/// where it stands. The host/orchestrator pre-derives one per candidate so the
+/// cast service stays Atlas-free — it strikes what it is handed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatTarget {
+    profile: CombatProfile,
+    health: Pool,
+    placement: Placement,
+}
+
+impl CombatTarget {
+    /// Bundles a defender snapshot.
+    #[must_use]
+    pub fn new(profile: CombatProfile, health: Pool, placement: Placement) -> Self {
+        Self {
+            profile,
+            health,
+            placement,
+        }
+    }
+
+    /// The defender's combat profile.
+    #[must_use]
+    pub fn profile(&self) -> &CombatProfile {
+        &self.profile
+    }
+
+    /// The defender's current health.
+    #[must_use]
+    pub fn health(&self) -> Pool {
+        self.health
+    }
+
+    /// Where the defender stands.
+    #[must_use]
+    pub fn placement(&self) -> Placement {
+        self.placement
+    }
+
+    /// Resistance to one element — delegates to the profile.
+    #[must_use]
+    pub fn resistance(&self, element: Element) -> Resistance {
+        self.profile.resistance(element)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn zero_resistances() -> PerElement<Resistance> {
+        PerElement {
+            ice: Resistance(0),
+            poison: Resistance(0),
+            lightning: Resistance(7),
+            fire: Resistance(0),
+            earth: Resistance(0),
+            wind: Resistance(0),
+            water: Resistance(0),
+        }
+    }
+
+    fn profile() -> CombatProfile {
+        CombatProfile {
+            level: Level::new(30).unwrap(),
+            physical: Interval::new(5u16, 10u16).unwrap(),
+            wizardry: None,
+            defense: 4,
+            attack_rate: 100,
+            defense_rate: 20,
+            resistances: zero_resistances(),
+            critical_chance: Percent::ZERO,
+            excellent_chance: Percent::ZERO,
+            defense_ignore_chance: Percent::ZERO,
+            double_damage_chance: Percent::ZERO,
+        }
+    }
+
+    #[test]
+    fn resistance_delegates_the_per_element_lookup() {
+        let p = profile();
+        assert_eq!(p.resistance(Element::Lightning), Resistance(7));
+        assert_eq!(p.resistance(Element::Fire), Resistance(0));
+    }
+
+    #[test]
+    fn combat_target_bundles_and_exposes_its_parts() {
+        use crate::components::movement::Movement;
+        use crate::components::spatial::Facing;
+        use crate::components::tile::TileCoord;
+        use crate::components::units::MapNumber;
+
+        let placement = Placement {
+            position: TileCoord::new(2, 3).to_world(),
+            facing: Facing::POS_X,
+            movement: Movement::Grounded,
+            map: MapNumber(0),
+        };
+        let target = CombatTarget::new(profile(), Pool::full(60), placement);
+        assert_eq!(target.health().current(), 60);
+        assert_eq!(target.placement(), placement);
+        assert_eq!(target.resistance(Element::Lightning), Resistance(7));
+        assert_eq!(target.profile().defense(), 4);
+    }
+
+    #[test]
+    fn combat_profile_wire_round_trips() {
+        let p = profile();
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(serde_json::from_str::<CombatProfile>(&json).unwrap(), p);
+    }
+}

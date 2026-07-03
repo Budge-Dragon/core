@@ -6,7 +6,14 @@
 //! [`crate::events`] — they never log, block, or touch the host.
 
 pub mod chance;
+pub mod combat;
+pub mod experience;
 pub mod item_rules;
+pub mod kill;
+pub mod loot;
 pub mod monster_ai;
 pub mod movement;
+pub mod profile;
+pub mod ratio;
+pub mod skills;
 pub mod spawn;
