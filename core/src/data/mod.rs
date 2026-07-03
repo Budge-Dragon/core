@@ -24,3 +24,4 @@ pub mod option_roll;
 pub mod skills;
 pub mod spawns;
 pub mod special_drops;
+pub mod terrain;

@@ -8,7 +8,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::spatial::{HALF_TILE, TILE_SHIFT, UNITS_PER_TILE, WorldPos, WorldRect};
+use crate::components::spatial::{
+    Facing, HALF_TILE, TILE_SHIFT, UNITS_PER_TILE, WorldPos, WorldRect,
+};
+
+/// Bytes in one map's terrain sidecar: `256 x 256`, one attribute byte per tile.
+pub const TERRAIN_LEN: usize = 256 * 256;
 
 /// A single map tile on the 256x256 grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -202,6 +207,28 @@ pub enum TileFacing {
     NorthWest,
 }
 
+impl TileFacing {
+    /// Projects the eight-way compass facing to a continuous world [`Facing`].
+    ///
+    /// Tile-grid axis convention: `+x` runs **east**, `+y` runs **south**
+    /// (screen-down), so `South` maps to the `+y` world direction and `North`
+    /// to `-y`. Magnitude is irrelevant — the cone test is magnitude-invariant —
+    /// so unit steps are used.
+    #[must_use]
+    pub fn to_facing(self) -> Facing {
+        match self {
+            Self::East => Facing::POS_X,
+            Self::West => Facing::NEG_X,
+            Self::South => Facing::POS_Y,
+            Self::North => Facing::NEG_Y,
+            Self::SouthEast => Facing::POS_X_POS_Y,
+            Self::SouthWest => Facing::NEG_X_POS_Y,
+            Self::NorthEast => Facing::POS_X_NEG_Y,
+            Self::NorthWest => Facing::NEG_X_NEG_Y,
+        }
+    }
+}
+
 /// Rejection of malformed tile geometry at the data-load boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileError {
@@ -231,25 +258,55 @@ impl core::fmt::Display for TileError {
 impl core::error::Error for TileError {}
 
 /// A per-tile walkability bitset over the 256x256 grid — one bit per tile.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalkGrid([u64; 1024]);
 
 impl WalkGrid {
+    /// The two blocking bits of the on-disk terrain layout (documented on
+    /// [`crate::data::terrain`]): `NoMove` (`0x02`) and `NoGround` (`0x04`). A
+    /// tile is walkable iff neither is set; `SafeZone` (`0x01`) and `Water`
+    /// (`0x08`) leave a tile walkable — classic water maps such as Atlans are
+    /// fully traversable.
+    const BLOCKED_MASK: u8 = 0x06;
+
     /// Builds a walk grid from its raw 1024-word bitset.
     #[must_use]
     pub const fn from_words(words: [u64; 1024]) -> Self {
         Self(words)
     }
 
-    /// Whether a tile is walkable. Total — an out-of-word index answers `false`.
+    /// Builds the walk grid from a map's raw `256 x 256` terrain-attribute
+    /// array — one byte per tile at index `y*256 + x`, matching [`walkable`]'s
+    /// `bit = (y<<8)|x` convention. Total: the fixed array length makes a
+    /// wrong-size input unrepresentable, and a tile is walkable iff neither
+    /// blocking bit ([`WalkGrid::BLOCKED_MASK`]) is set.
+    ///
+    /// [`walkable`]: WalkGrid::walkable
     #[must_use]
-    pub fn walkable(&self, tile: TileCoord) -> bool {
-        let bit = (u32::from(tile.y) << 8) | u32::from(tile.x);
-        let word = match usize::try_from(bit >> 6) {
-            Ok(index) => index,
-            Err(_) => usize::MAX,
-        };
+    pub fn from_terrain(bytes: &[u8; TERRAIN_LEN]) -> Self {
+        let mut words = [0u64; 1024];
+        for (word, chunk) in words.iter_mut().zip(bytes.chunks_exact(64)) {
+            let mut packed = 0u64;
+            for (bit, &attr) in chunk.iter().enumerate() {
+                if (attr & Self::BLOCKED_MASK) == 0 {
+                    packed |= 1u64 << bit;
+                }
+            }
+            *word = packed;
+        }
+        Self(words)
+    }
+
+    /// Whether the tile containing a world position is walkable — the live,
+    /// world-space query. The tile grid is a private implementation detail;
+    /// callers never name a tile. Total — every in-world position resolves to a
+    /// grid cell (a position is bounded to `[0, WORLD_EXTENT]` by its type).
+    #[must_use]
+    pub fn walkable(&self, pos: WorldPos) -> bool {
+        let tile = TileCoord::from_world(pos);
+        let bit = (usize::from(tile.y) << 8) | usize::from(tile.x);
         let mask = 1u64 << (bit & 63);
-        self.0.get(word).is_some_and(|w| w & mask != 0)
+        self.0.get(bit >> 6).is_some_and(|w| w & mask != 0)
     }
 }
 
@@ -362,9 +419,39 @@ mod tests {
         // Set the bit for tile (1, 0): bit index 1.
         words[0] = 0b10;
         let grid = WalkGrid::from_words(words);
-        assert!(grid.walkable(TileCoord::new(1, 0)));
-        assert!(!grid.walkable(TileCoord::new(0, 0)));
-        assert!(!grid.walkable(TileCoord::new(255, 255)));
+        assert!(grid.walkable(TileCoord::new(1, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(0, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(255, 255).to_world()));
+    }
+
+    #[test]
+    fn walk_grid_from_terrain_applies_blocked_mask() {
+        let mut bytes = vec![0u8; TERRAIN_LEN];
+        // On-disk layout: SafeZone 0x01, NoMove 0x02, NoGround 0x04, Water 0x08.
+        // (0,0) open; (1,0) SafeZone -> walkable; (2,0) NoMove -> blocked;
+        // (3,0) NoGround -> blocked; (4,0) Water -> walkable; (5,0) both
+        // blocking bits -> blocked.
+        bytes[1] = 0x01;
+        bytes[2] = 0x02;
+        bytes[3] = 0x04;
+        bytes[4] = 0x08;
+        bytes[5] = 0x06;
+        let array: &[u8; TERRAIN_LEN] = bytes.as_slice().try_into().unwrap();
+        let grid = WalkGrid::from_terrain(array);
+        assert!(grid.walkable(TileCoord::new(0, 0).to_world()));
+        assert!(grid.walkable(TileCoord::new(1, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(2, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(3, 0).to_world()));
+        assert!(grid.walkable(TileCoord::new(4, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(5, 0).to_world()));
+    }
+
+    #[test]
+    fn tile_facing_to_facing_is_nonzero_and_axis_aligned() {
+        use crate::components::spatial::Facing;
+        assert_eq!(TileFacing::South.to_facing(), Facing::POS_Y);
+        assert_eq!(TileFacing::North.to_facing(), Facing::NEG_Y);
+        assert_eq!(TileFacing::East.to_facing(), Facing::POS_X);
     }
 
     #[test]

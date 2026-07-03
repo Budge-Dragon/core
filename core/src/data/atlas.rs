@@ -10,7 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::components::interval::Interval;
 use crate::components::levels::TransformationLevel;
-use crate::components::tile::{TileArea, TileCoord, TileFacing};
+use crate::components::spatial::{Facing, WorldPos, WorldRect};
+use crate::components::tile::{TileFacing, WalkGrid};
 
 use super::ancient_sets::{AncientRoster, AncientRosterError, AncientSet};
 use super::box_drops::BoxDrop;
@@ -27,6 +28,7 @@ use super::monster_definitions::{MonsterAttack, MonsterDefinition, MonsterRole};
 use super::skills::{Skill, SkillShape};
 use super::spawns::Spawn;
 use super::special_drops::{SpecialDrop, SpecialDropRecord};
+use super::terrain::MapTerrain;
 
 /// Respawn fallback map (Lorencia); the Atlas proves it carries a spawn gate.
 const FALLBACK_MAP: MapNumber = MapNumber(0);
@@ -60,17 +62,19 @@ pub struct StaticData {
     pub exp_tables: DataFile<ExpTable>,
     /// `game_config.json`.
     pub game_config: DataFile<GameConfig>,
+    /// The 11 `terrain/<map>.bin` walkability sidecars, one per map.
+    pub terrain: Vec<MapTerrain>,
 }
 
-/// The landing side of a resolved gate reference.
+/// The landing side of a resolved gate reference, in world space.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Landing {
     /// Map the traveler lands on.
     pub map: MapNumber,
-    /// Landing rectangle.
-    pub area: TileArea,
-    /// Facing on arrival; absent = unspecified.
-    pub facing: Option<TileFacing>,
+    /// Landing rectangle in world space.
+    pub area: WorldRect,
+    /// Facing on arrival; absent = unspecified (never fabricated).
+    pub facing: Option<Facing>,
 }
 
 /// An enter gate with its landing resolved.
@@ -80,6 +84,15 @@ pub struct EnterGateView<'a> {
     pub gate: &'a EnterGate,
     /// Where its target gate lands travelers.
     pub landing: Landing,
+}
+
+/// An enter gate with its trigger area projected to world space and its
+/// landing resolved at parse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedEnterGate {
+    gate: EnterGate,
+    trigger: WorldRect,
+    landing: Landing,
 }
 
 /// A warp entry with its landing resolved.
@@ -136,9 +149,10 @@ impl DropPool {
 pub struct Atlas {
     maps: Vec<MapDefinition>,
     spawn_gates_by_map: BTreeMap<MapNumber, Vec<SpawnGate>>,
-    enter_gates_by_map: BTreeMap<MapNumber, Vec<(EnterGate, Landing)>>,
+    enter_gates_by_map: BTreeMap<MapNumber, Vec<ResolvedEnterGate>>,
     warps: Vec<(Warp, Landing)>,
     fallback: SpawnGate,
+    walk_grids: BTreeMap<MapNumber, WalkGrid>,
     items: BTreeMap<ItemRef, ItemDefinition>,
     monsters: BTreeMap<MonsterNumber, MonsterDefinition>,
     skills: BTreeMap<SkillNumber, Skill>,
@@ -207,12 +221,15 @@ impl Atlas {
             spawn_gates_by_map.entry(gate.map).or_default().push(gate);
         }
 
+        let walk_grids = index_terrain(data.terrain, &map_numbers)?;
+
         Ok(Self {
             maps: data.maps.records,
             spawn_gates_by_map,
             enter_gates_by_map,
             warps,
             fallback,
+            walk_grids,
             items,
             monsters,
             skills,
@@ -246,16 +263,27 @@ impl Atlas {
         &self.fallback
     }
 
-    /// The enter gate covering a tile, if any. The landing was resolved at
-    /// parse, so the only optionality is whether a gate covers the tile.
+    /// The enter gate whose world trigger area covers a position, if any. The
+    /// landing was resolved at parse, so the only optionality is whether a gate
+    /// covers the position.
     #[must_use]
-    pub fn enter_gate_at(&self, map: MapNumber, tile: TileCoord) -> Option<EnterGateView<'_>> {
+    pub fn enter_gate_at(&self, map: MapNumber, pos: WorldPos) -> Option<EnterGateView<'_>> {
         let gates = self.enter_gates_by_map.get(&map)?;
-        let (gate, landing) = gates.iter().find(|(gate, _)| gate.area.contains(tile))?;
+        let resolved = gates
+            .iter()
+            .find(|resolved| resolved.trigger.contains(pos))?;
         Some(EnterGateView {
-            gate,
-            landing: *landing,
+            gate: &resolved.gate,
+            landing: resolved.landing,
         })
+    }
+
+    /// The walk grid for a map; `None` when no record carries it — genuine
+    /// optionality of an open `MapNumber` key. A number taken from a resolved
+    /// edge (spawn, gate, landing, class home) is proven present by `parse`.
+    #[must_use]
+    pub fn walk_grid(&self, map: MapNumber) -> Option<&WalkGrid> {
+        self.walk_grids.get(&map)
     }
 
     /// The warp list in index order, each with its landing resolved at parse.
@@ -426,8 +454,8 @@ impl GatePartition {
                 gate.number,
                 Landing {
                     map: gate.map,
-                    area: gate.area,
-                    facing: gate.direction,
+                    area: gate.area.to_world(),
+                    facing: gate.direction.map(TileFacing::to_facing),
                 },
             );
         }
@@ -436,8 +464,8 @@ impl GatePartition {
                 gate.number,
                 Landing {
                     map: gate.map,
-                    area: gate.area,
-                    facing: gate.direction,
+                    area: gate.area.to_world(),
+                    facing: gate.direction.map(TileFacing::to_facing),
                 },
             );
         }
@@ -483,8 +511,8 @@ fn resolve_enter_gates(
     enter_gates: Vec<EnterGate>,
     landings: &BTreeMap<GateNumber, Landing>,
     enter_gate_numbers: &BTreeSet<GateNumber>,
-) -> Result<BTreeMap<MapNumber, Vec<(EnterGate, Landing)>>, AtlasError> {
-    let mut by_map: BTreeMap<MapNumber, Vec<(EnterGate, Landing)>> = BTreeMap::new();
+) -> Result<BTreeMap<MapNumber, Vec<ResolvedEnterGate>>, AtlasError> {
+    let mut by_map: BTreeMap<MapNumber, Vec<ResolvedEnterGate>> = BTreeMap::new();
     for gate in enter_gates {
         let target = gate.target_gate;
         let landing = match landings.get(&target) {
@@ -502,7 +530,13 @@ fn resolve_enter_gates(
                 });
             }
         };
-        by_map.entry(gate.map).or_default().push((gate, landing));
+        let trigger = gate.area.to_world();
+        let map = gate.map;
+        by_map.entry(map).or_default().push(ResolvedEnterGate {
+            gate,
+            trigger,
+            landing,
+        });
     }
     Ok(by_map)
 }
@@ -536,6 +570,31 @@ fn require_map(
     } else {
         Err(AtlasError::GateOnUnknownMap { gate, map })
     }
+}
+
+/// Parses each terrain sidecar into a [`WalkGrid`] and proves a bijection with
+/// the map set: every terrain names a known map, no two share a map, and every
+/// map carries exactly one terrain — so the resulting per-map lookup is complete.
+fn index_terrain(
+    terrain: Vec<MapTerrain>,
+    map_numbers: &BTreeSet<MapNumber>,
+) -> Result<BTreeMap<MapNumber, WalkGrid>, AtlasError> {
+    let mut grids: BTreeMap<MapNumber, WalkGrid> = BTreeMap::new();
+    for entry in terrain {
+        if !map_numbers.contains(&entry.map) {
+            return Err(AtlasError::TerrainForUnknownMap { map: entry.map });
+        }
+        let grid = WalkGrid::from_terrain(entry.bytes.as_array());
+        if grids.insert(entry.map, grid).is_some() {
+            return Err(AtlasError::DuplicateTerrain { map: entry.map });
+        }
+    }
+    for &map in map_numbers {
+        if !grids.contains_key(&map) {
+            return Err(AtlasError::TerrainMissingForMap { map });
+        }
+    }
+    Ok(grids)
 }
 
 fn unique_map_numbers(maps: &[MapDefinition]) -> Result<BTreeSet<MapNumber>, AtlasError> {
@@ -944,6 +1003,21 @@ pub enum AtlasError {
         /// The number of records found.
         found: usize,
     },
+    /// A terrain sidecar names a map with no record.
+    TerrainForUnknownMap {
+        /// The unresolved map.
+        map: MapNumber,
+    },
+    /// Two terrain sidecars describe the same map.
+    DuplicateTerrain {
+        /// The repeated map.
+        map: MapNumber,
+    },
+    /// A map has no terrain sidecar.
+    TerrainMissingForMap {
+        /// The uncovered map.
+        map: MapNumber,
+    },
 }
 
 impl core::fmt::Display for AtlasError {
@@ -990,6 +1064,11 @@ impl core::fmt::Display for AtlasError {
             Self::GameConfigNotSingle { found } => {
                 write!(f, "expected exactly one game config, found {found}")
             }
+            Self::TerrainForUnknownMap { map } => {
+                write!(f, "terrain sidecar for unknown map {map:?}")
+            }
+            Self::DuplicateTerrain { map } => write!(f, "duplicate terrain for map {map:?}"),
+            Self::TerrainMissingForMap { map } => write!(f, "map {map:?} has no terrain sidecar"),
         }
     }
 }
@@ -1017,7 +1096,10 @@ impl core::error::Error for AtlasError {
             | Self::UnknownSkillRef { .. }
             | Self::UnknownItemRef { .. }
             | Self::ExpTableNotSingle { .. }
-            | Self::GameConfigNotSingle { .. } => None,
+            | Self::GameConfigNotSingle { .. }
+            | Self::TerrainForUnknownMap { .. }
+            | Self::DuplicateTerrain { .. }
+            | Self::TerrainMissingForMap { .. } => None,
         }
     }
 }

@@ -14,13 +14,14 @@ use mu_core::components::class::CharacterClass;
 use mu_core::components::interval::Interval;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
+use mu_core::components::tile::TileCoord;
 use mu_core::components::units::{ItemLevel, Level};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
 use mu_core::data::atlas::{Atlas, AtlasError, StaticData};
 use mu_core::data::box_drops::BoxDrop;
 use mu_core::data::chaos_mixes::ChaosMix;
 use mu_core::data::classes::{ClassRecord, ClassTable, ClassTableError};
-use mu_core::data::common::{DataFile, ItemRef, MonsterNumber};
+use mu_core::data::common::{DataFile, ItemRef, MapNumber, MonsterNumber};
 use mu_core::data::drop_config::DropConfig;
 use mu_core::data::exp_tables::{ExpCurve, ExpTable};
 use mu_core::data::game_config::GameConfig;
@@ -31,6 +32,7 @@ use mu_core::data::monster_definitions::MonsterDefinition;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
 use mu_core::data::special_drops::{DropBand, DropBands, SpecialDrop, SpecialDropRecord};
+use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 
 use mu_core::services::item_rules::{
     ammunition_damage_percent, armor_defense_bonus, effective_drop_level, max_durability,
@@ -44,6 +46,28 @@ fn data_path(name: &str) -> PathBuf {
     path.push("data");
     path.push(format!("{name}.json"));
     path
+}
+
+/// Loads the 11 real terrain sidecars (`data/terrain/<map>.bin`, maps `0..=10`)
+/// into the `StaticData.terrain` port. A macro like `load!`, so its `unwrap`s
+/// expand at the `#[test]` call site where `clippy.toml` permits them.
+macro_rules! load_terrain {
+    () => {{
+        (0u8..=10)
+            .map(|map| {
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.push("..");
+                path.push("data");
+                path.push("terrain");
+                path.push(format!("{map}.bin"));
+                let bytes = std::fs::read(&path).unwrap();
+                MapTerrain {
+                    map: MapNumber(map),
+                    bytes: TerrainBytes::new(bytes).unwrap(),
+                }
+            })
+            .collect::<Vec<MapTerrain>>()
+    }};
 }
 
 /// Reads and deserializes a real data file into its `DataFile<T>`, asserting the
@@ -77,6 +101,7 @@ macro_rules! static_data {
             classes: load!(ClassRecord, "classes", 8),
             exp_tables: load!(ExpTable, "exp_tables", 1),
             game_config: load!(GameConfig, "game_config", 1),
+            terrain: load_terrain!(),
         }
     };
 }
@@ -201,6 +226,50 @@ fn atlas_retains_the_resolved_dataset_for_by_id_lookup() {
     let droppable: Vec<ItemRef> = atlas.drop_pool().in_window(window).collect();
     assert!(!droppable.is_empty());
     assert!(droppable.iter().all(|&id| atlas.item(id).is_some()));
+}
+
+#[test]
+fn atlas_loads_terrain_walk_grids() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+
+    // `walk_grid` is total: parse proves every map carries exactly one sidecar.
+    let maps: Vec<MapNumber> = atlas.maps().map(|map| map.number).collect();
+    assert_eq!(maps.len(), 11);
+    for map in maps {
+        assert!(atlas.walk_grid(map).is_some());
+    }
+
+    // Lorencia (map 0) is a fully walkable town: a town tile and an open tile
+    // both walk (SafeZone `0x01` stays walkable).
+    let lorencia = atlas.walk_grid(MapNumber(0)).unwrap();
+    assert!(lorencia.walkable(TileCoord::new(135, 125).to_world()));
+    assert!(lorencia.walkable(TileCoord::new(10, 10).to_world()));
+    // (0,0) is a NoMove (`0x02`) wall tile — the exact case a mask checking only
+    // NoGround would wrongly report walkable.
+    assert!(!lorencia.walkable(TileCoord::new(0, 0).to_world()));
+
+    // Map 8 (Lost Tower) is roughly half blocked: its (0,0) corner is a
+    // NoGround (`0x04`) tile and is not walkable.
+    let lost_tower = atlas.walk_grid(MapNumber(8)).unwrap();
+    assert!(!lost_tower.walkable(TileCoord::new(0, 0).to_world()));
+}
+
+#[test]
+fn atlas_rejects_a_terrain_sidecar_for_an_unknown_map() {
+    let mut data = static_data!();
+    let stray = TerrainBytes::new(vec![0u8; 256 * 256]).unwrap();
+    data.terrain.push(MapTerrain {
+        map: MapNumber(200),
+        bytes: stray,
+    });
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(err, AtlasError::TerrainForUnknownMap { .. }));
+}
+
+#[test]
+fn terrain_bytes_reject_a_wrong_length_buffer() {
+    assert!(TerrainBytes::new(vec![0u8; 100]).is_err());
+    assert!(TerrainBytes::new(vec![0u8; 256 * 256]).is_ok());
 }
 
 // --- Negative tests: type invariants that valid on-disk data cannot exercise.

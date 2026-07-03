@@ -434,6 +434,23 @@ impl DistanceSq {
 pub struct Facing(WorldVec);
 
 impl Facing {
+    /// Unit facing along `+x`.
+    pub const POS_X: Self = Self(WorldVec::new(Fixed::from_raw(1), Fixed::from_raw(0)));
+    /// Unit facing along `-x`.
+    pub const NEG_X: Self = Self(WorldVec::new(Fixed::from_raw(-1), Fixed::from_raw(0)));
+    /// Unit facing along `+y`.
+    pub const POS_Y: Self = Self(WorldVec::new(Fixed::from_raw(0), Fixed::from_raw(1)));
+    /// Unit facing along `-y`.
+    pub const NEG_Y: Self = Self(WorldVec::new(Fixed::from_raw(0), Fixed::from_raw(-1)));
+    /// Unit facing along `+x,+y`.
+    pub const POS_X_POS_Y: Self = Self(WorldVec::new(Fixed::from_raw(1), Fixed::from_raw(1)));
+    /// Unit facing along `+x,-y`.
+    pub const POS_X_NEG_Y: Self = Self(WorldVec::new(Fixed::from_raw(1), Fixed::from_raw(-1)));
+    /// Unit facing along `-x,+y`.
+    pub const NEG_X_POS_Y: Self = Self(WorldVec::new(Fixed::from_raw(-1), Fixed::from_raw(1)));
+    /// Unit facing along `-x,-y`.
+    pub const NEG_X_NEG_Y: Self = Self(WorldVec::new(Fixed::from_raw(-1), Fixed::from_raw(-1)));
+
     /// Builds a facing, rejecting the zero vector and out-of-bounds components.
     /// The magnitude is not normalized; the cone test is magnitude-invariant.
     ///
