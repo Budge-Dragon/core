@@ -55,3 +55,30 @@ guardian review.
 entity, D1's gate and D4's spawn service become buildable; when W-MOV starts,
 D2/D3/D5 and T2/T3 are in scope. Check `docs/debt/DEBT-INDEX.md` at the start of
 any movement/entity/tile work and close the rows the wave discharges.
+
+**Closure state (as of 2026-07-03) — most of the above is now RESOLVED; do not
+re-open:**
+- **W-ENT (committed, branch `entities`)** closed **D4** (spawn/soccer world-space
+  resolution — `services/spawn.rs`) and **T4** (Atlas-minted `MapHandle` made the
+  resolved walk-grid path total). Records: `worldspace-resolution-services.md`,
+  `spatial-foundation-followups.md`.
+- **W-MOV (branch `movement`, uncommitted at review time)** closed **D1** (flight
+  FSM `apply_flight_change`/`flight_gate`/`change_flight` in `services/movement.rs`
+  — eligibility takes host-supplied `Wings`/`CombatLock` facts, so the W-ENT block
+  dissolved without reaching into a character entity), **D2** (`Fixed`
+  `mul`/`div`/`NonZeroFixed`/`isqrt` consumed by `WorldVec::normalized_to`),
+  **D3** (`commit` validates grounded steps against `WalkGrid`), **D5**
+  (`resolve_arrival` matches `Landing.facing` `Some`/`None`), and **T3**
+  (`length_sq` consumed by `normalized_to` + `seek`). 209 tests pass.
+- **Still OPEN:** **T1** and **T2** — both `tile.rs` trims for the *next `tile.rs`
+  touch*. T2's disposition is now decided = **TRIM** (W-MOV worked entirely in
+  world space via `WorldRect::contains`; `TileArea::contains` earned no consumer);
+  the trim is out of W-MOV scope (W-MOV never edits `tile.rs`). Q1–Q4 open
+  (quality, unblocked). **W-SRC** open (data provenance).
+- **New W-MOV finding: `MOB-SPD`** — `MOB_STEP_SPEED` (1 tile/step, invented, not
+  sourced) in `services/monster_ai.rs`. Provenance debt of the W-SRC species but
+  in-code, so kept as its own record `mob-step-speed-provenance.md` (owner W-SRC),
+  NOT folded into `openmu-default-values.md`. The 7-param `decide_monster_action`
+  signature is **NOT debt** (each param a distinct non-bundleable domain input;
+  the ms→Ticks "future reduction" was a scratchpad-brief note only, never a code
+  comment — no dangling forward-reference exists).

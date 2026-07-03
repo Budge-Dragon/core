@@ -8,8 +8,10 @@ metadata:
 The "pick element N from a fixed array by a drawn index" idiom in this crate is a
 linear scan that returns the matched element, ending in a genuine domain-value
 terminal (e.g. `Facing::POS_X`, `list.first()`), NOT `unreachable!`/`unwrap`/slice
-indexing. Seen in `services/spawn::draw_facing` and `services/chance::{pick_one,
-weighted_pick}`.
+indexing. Seen in `services/chance::{draw_cardinal, pick_one, weighted_pick}`.
+(W-MOV consolidated the former `spawn::draw_facing` into `chance::draw_cardinal`,
+now the single shared cardinal-heading draw for both spawn-without-authored-facing
+and monster wander drift — spawn.rs and monster_ai.rs both import it.)
 
 **Why:** Selecting by a runtime-bounded index without `v[i]` (banned indexing) or
 `.get().unwrap()` (banned unwrap) forces a scan; Rust can't prove the loop always
