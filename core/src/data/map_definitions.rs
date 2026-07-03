@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::geometry::{Point, Rect};
+use crate::components::tile::{TileArea, TileCoord};
 
 use super::common::{MapNumber, Provenance};
 
@@ -37,13 +37,13 @@ pub enum MapEnvironment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SoccerPitch {
     /// Playing field.
-    pub ground: Rect,
+    pub ground: TileArea,
     /// Left goal area.
-    pub left_goal: Rect,
+    pub left_goal: TileArea,
     /// Right goal area.
-    pub right_goal: Rect,
+    pub right_goal: TileArea,
     /// Left team spawn point.
-    pub left_spawn: Point,
+    pub left_spawn: TileCoord,
     /// Right team spawn point.
-    pub right_spawn: Point,
+    pub right_spawn: TileCoord,
 }

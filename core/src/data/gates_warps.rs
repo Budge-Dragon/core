@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::geometry::{Direction, Rect};
+use crate::components::tile::{TileArea, TileFacing};
 use crate::components::units::{Level, Zen};
 
 use super::common::{GateNumber, MapNumber, Provenance};
@@ -33,10 +33,10 @@ pub struct SpawnGate {
     /// Map the gate is on.
     pub map: MapNumber,
     /// Landing rectangle; arrival is a random tile inside it.
-    pub area: Rect,
+    pub area: TileArea,
     /// Facing on arrival; absent = unspecified (Gate.txt direction byte 0).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub direction: Option<Direction>,
+    pub direction: Option<TileFacing>,
     /// Extraction provenance: dataset era plus optional curation note.
     #[serde(flatten)]
     pub provenance: Provenance,
@@ -50,10 +50,10 @@ pub struct TargetGate {
     /// Map the gate is on.
     pub map: MapNumber,
     /// Landing rectangle; arrival is a random tile inside it.
-    pub area: Rect,
+    pub area: TileArea,
     /// Facing on arrival; absent = unspecified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub direction: Option<Direction>,
+    pub direction: Option<TileFacing>,
     /// Extraction provenance: dataset era plus optional curation note.
     #[serde(flatten)]
     pub provenance: Provenance,
@@ -67,7 +67,7 @@ pub struct EnterGate {
     /// Map the trigger area is on.
     pub map: MapNumber,
     /// Trigger rectangle.
-    pub area: Rect,
+    pub area: TileArea,
     /// Gate travelers arrive at (a spawn or target gate, never an enter gate;
     /// proven at `Atlas::parse`).
     pub target_gate: GateNumber,

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::geometry::{Direction, Point, Rect};
+use crate::components::tile::{TileArea, TileCoord, TileFacing};
 
 use super::common::{MapNumber, MonsterNumber, Provenance};
 
@@ -32,22 +32,22 @@ pub enum SpawnPlacement {
     /// guard posts, traps, the soccer ball. Always one instance.
     Fixed {
         /// The tile.
-        position: Point,
+        position: TileCoord,
         /// Facing on spawn (the trap's firing direction for
         /// `TrapTargeting::Directional`).
-        facing: Direction,
+        facing: TileFacing,
     },
     /// Mobile monsters spawned at one tile.
     Spot {
         /// The tile.
-        position: Point,
+        position: TileCoord,
         /// Instances kept alive at this spot.
         quantity: u16,
     },
     /// Mobile monsters spawned at random walkable tiles in a rectangle.
     Area {
         /// The spawn rectangle.
-        area: Rect,
+        area: TileArea,
         /// Instances kept alive inside the rectangle.
         quantity: u16,
     },

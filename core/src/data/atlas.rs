@@ -8,9 +8,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::components::geometry::{Direction, Point, Rect};
 use crate::components::interval::Interval;
 use crate::components::levels::TransformationLevel;
+use crate::components::tile::{TileArea, TileCoord, TileFacing};
 
 use super::ancient_sets::{AncientRoster, AncientRosterError, AncientSet};
 use super::box_drops::BoxDrop;
@@ -68,9 +68,9 @@ pub struct Landing {
     /// Map the traveler lands on.
     pub map: MapNumber,
     /// Landing rectangle.
-    pub area: Rect,
+    pub area: TileArea,
     /// Facing on arrival; absent = unspecified.
-    pub facing: Option<Direction>,
+    pub facing: Option<TileFacing>,
 }
 
 /// An enter gate with its landing resolved.
@@ -249,7 +249,7 @@ impl Atlas {
     /// The enter gate covering a tile, if any. The landing was resolved at
     /// parse, so the only optionality is whether a gate covers the tile.
     #[must_use]
-    pub fn enter_gate_at(&self, map: MapNumber, tile: Point) -> Option<EnterGateView<'_>> {
+    pub fn enter_gate_at(&self, map: MapNumber, tile: TileCoord) -> Option<EnterGateView<'_>> {
         let gates = self.enter_gates_by_map.get(&map)?;
         let (gate, landing) = gates.iter().find(|(gate, _)| gate.area.contains(tile))?;
         Some(EnterGateView {
