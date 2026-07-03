@@ -29,3 +29,9 @@ unimplemented = "warn"
 unreachable = "warn"
 unwrap_used = "warn"
 wildcard_enum_match_arm = "warn"
+# Determinism (CLAUDE.md: fixed-point only). Float arithmetic is
+# non-associative and rounds differently across native/wasm/FFI, breaking the
+# replay guarantee, so any float math is build-failing. (Declaring a bare float
+# type is review-enforced — a disallowed-types entry for f32/f64 would
+# false-positive on serde's derived visitors.)
+float_arithmetic = "warn"

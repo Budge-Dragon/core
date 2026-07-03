@@ -22,6 +22,11 @@ allow-panic-in-tests = true
 allow-indexing-slicing-in-tests = true
 
 disallowed-types = [
+    # f32/f64 are NOT listed here: serde's derived Deserialize visitors name
+    # visit_f32/visit_f64, so disallowed-types would false-positive on every
+    # #[derive(Deserialize)] type. Float MATH — the actual determinism hazard —
+    # is caught mechanically by clippy::float_arithmetic (workspace Cargo.toml);
+    # a bare float field declaration is review-enforced (see CLAUDE.md).
     { path = "std::time::SystemTime", reason = "no wall-clock time in core; timing is tick-based" },
     { path = "std::time::Instant", reason = "no wall-clock time in core; timing is tick-based" },
     { path = "std::collections::HashMap", reason = "RandomState is entropy-seeded — a hidden non-injected randomness source with nondeterministic, cross-target-divergent iteration order; use BTreeMap (keys are Ord newtypes)" },

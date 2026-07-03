@@ -120,6 +120,71 @@ The fix is always upstream: re-model the types, split or merge variants, move th
 
 ---
 
+## Authoritative-Server Invariants
+
+mu-core is the **authoritative simulation** for a future SpacetimeDB server: the
+client *proposes*, the server *decides*. Six determinism-and-trust invariants make
+that safe. Each is a consequence of the Iron Laws above — this section names them
+explicitly, states how each is caught, and exists so no future host ever re-derives
+them. Treat every input as if it arrived from an untrusted client: **parse it into a
+typed intent at the boundary, compute the authoritative result, return it.** Never
+`input we trust` — always `intent -> compute -> result`.
+
+1. **Fixed-point only — no float math.** `f32`/`f64` arithmetic is non-associative
+   and rounds differently across native/wasm/FFI, so it breaks replay determinism.
+   Spatial values are `Q40.24` fixed-point (`components::spatial::Fixed`, `i64`-backed);
+   fractional game quantities are carried as scaled integers (e.g. `staff_rise_x2`
+   doubles the value to hold a half-point without a fraction). *Enforcement:
+   `clippy::float_arithmetic` in `[workspace.lints.clippy]` makes any float math
+   build-failing under `-D warnings`. A bare `f32`/`f64` field declaration is
+   review-enforced — reject it (a `disallowed-types` entry can't be used: it
+   false-positives on serde's derived `visit_f64`/`visit_f32`).*
+
+2. **Injected RNG, no hidden state.** All randomness enters as `&mut impl RngCore`
+   (Iron Law 1's randomness port); the single sampling seam is `rng::uniform_below`.
+   No `thread_rng`/`rand::random`/global generator; no `static mut`, `thread_local`,
+   `OnceCell`/`OnceLock`, `lazy_static`, or interior mutability (`RefCell`/`Cell`/
+   `Mutex`) in domain types; no entropy-seeded hasher. *Enforcement: `disallowed-types`
+   (`HashMap`/`HashSet`/`RandomState`/`SystemTime`/`Instant`) and `disallowed-methods`
+   (thread family) in `clippy.toml`; the rest is review-enforced — see *No hidden state*.*
+
+3. **Pure state transitions.** Every service is a pure function
+   `(state, intent[, &mut rng]) -> (new state, events)`: a value in, a value out, no
+   buried effect. It never mutates a caller's entity in place, never logs, never does
+   I/O; advancing the injected RNG is the *only* sanctioned mutation of an argument.
+   The `&mut self` methods that exist are load-time builders of total structures, not
+   runtime transitions. *Enforcement: review + `disallowed-macros` (`print`/`dbg`
+   family) — see *Determinism* and *Events, not effects*.*
+
+4. **Entities/components are plain serializable data.** Domain state that crosses a
+   port — entities, components, events — is `serde`-serializable plain data with no
+   engine, ECS-runtime, or DB type anywhere (Iron Law 1). No Unity/Bevy/`glam`/
+   `nalgebra` handle ever appears; the only dependencies are `serde` + `rand_core`.
+   (Two justified non-serde cases: parse-boundary error enums, and load-time static
+   indices the host rebuilds from source — e.g. `WalkGrid` from terrain, held in the
+   `Atlas`, never live entity state. Live state must derive serde.) *Enforcement:
+   review + the frozen dependency set in `core/Cargo.toml`.*
+
+5. **Separate intent from result.** The typed *input* expresses what an actor wants;
+   the typed *output* expresses what the server decided happened — they are distinct
+   types, and a result type is never re-accepted as an input. `change_flight` takes a
+   `FlightChange` and returns `FlightOutcome`s; `resolve_step` takes a target and
+   returns a `StepOutcome`; `place_spawn` takes a `SpawnPlacement` and returns
+   `SpawnEvent`s. (`decide_monster_action` returns a `MonsterInstance` plus a decided
+   `MonsterIntent` — the intent is the server's *output*, forwarded to the movement
+   service, never a client claim.) *Enforcement: review.*
+
+6. **Never trust a claimed result — compute it.** A service takes intent + current
+   state and computes the authoritative outcome itself. It never accepts a
+   client-asserted *result* — a supplied new position, damage number, hit/kill flag,
+   or chosen drop — and stores or echoes it. *Parse, don't validate* supplies the
+   trust boundary: the host parses raw client bytes into a typed intent once (smart
+   constructors returning `Result`), and core computes from there. Core does not
+   re-validate a value the types already prove, and it never believes a stated
+   outcome. *Enforcement: review — see *Parse, don't validate* and Iron Law 3.*
+
+---
+
 ## Supporting Rules
 
 These follow from the four laws above.
