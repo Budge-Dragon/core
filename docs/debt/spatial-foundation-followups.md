@@ -20,23 +20,33 @@ consumer or a reshape early just to clear the flag.
 
 ## Sub-items
 
-### T1 — `narrow_u8` provably-unreachable saturation arm
+### T1 — `narrow_u8` provably-unreachable saturation arm — CLOSED (2026-07-04, W-HARDEN)
 
-- **Location:** `core/src/components/tile.rs` — `narrow_u8`, called only by
-  `TileCoord::from_world`.
-- **Symptom:** `from_world` computes `tx`/`ty` via `(raw >> TILE_SHIFT).clamp(0, 255)`,
-  so the value handed to `narrow_u8` is already in `[0, 255]`; `narrow_u8`'s
-  `Err(_) => if value < 0 { u8::MIN } else { u8::MAX }` arm is therefore
-  provably unreachable. It is a *checked* `u8::try_from` (not a banned
-  suppressor — no `as`, no `unwrap`, no `panic`), but it is dead defensive code.
-- **Root cause:** the in-range guarantee established by `clamp(0, 255)` is proven
-  at the value level, not the type level, so the narrowing conversion still has
-  to model a failure path that cannot occur.
-- **Resolution plan:** reshape so the in-range value is proven by type — e.g.
-  have `from_world` derive the tile index through a total shift-into-`u8`
-  construction (mask/clamp expressed as a total function returning `u8`
-  directly), removing the fallible `try_from` and its dead arm entirely.
-- **Owner:** next `tile.rs` touch (opportunistic). **Blocked-by:** none.
+- **Status:** CLOSED. The fallible `narrow_u8` (a `u8::try_from` whose
+  `Err(_) => …` arm was provably unreachable) is gone. `TileCoord::from_world`
+  now derives each tile index through a new total helper
+  `tile_index(raw: i64) -> u8` (`core/src/components/tile.rs`): the shifted value
+  is clamped into `0..=255`, then its low byte is read cast-free
+  (`let [index, ..] = capped.to_le_bytes()`) — the higher bytes are proven zero
+  by the clamp, mirroring the byte-decomposition narrows already in
+  `components/spatial.rs`/`rng`. No `try_from`, no dead arm, no suppressor. Proof:
+  `tile_world_round_trip_over_all_tiles` still exercises `from_world` over every
+  one of the 65,536 tiles; four gates green. T1 removed from `DEBT-INDEX.md`;
+  this closes the last open sub-item, so the record is closed.
+- **Location:** `core/src/components/tile.rs` — `narrow_u8` (removed),
+  `TileCoord::from_world`, new `tile_index`.
+- **Symptom:** `from_world` computed `tx`/`ty` via `(raw >> TILE_SHIFT).clamp(0, 255)`,
+  so the value handed to `narrow_u8` was already in `[0, 255]`; `narrow_u8`'s
+  `Err(_) => if value < 0 { u8::MIN } else { u8::MAX }` arm was therefore
+  provably unreachable — dead defensive code (a *checked* conversion, not a
+  banned suppressor).
+- **Root cause:** the in-range guarantee established by `clamp(0, 255)` was proven
+  at the value level, not the type level, so the narrowing conversion still had
+  to model a failure path that could not occur.
+- **Resolution:** reshaped so the narrow is a total function returning `u8`
+  directly (clamp + cast-free low-byte read), removing the fallible `try_from`
+  and its dead arm entirely.
+- **Owner:** W-HARDEN (opportunistic `tile.rs` touch). **Blocked-by:** none.
 
 ### T2 — `TileArea::contains` has no live consumer — CLOSED (2026-07-03, W-MOV)
 
@@ -128,8 +138,8 @@ consumer or a reshape early just to clear the flag.
 
 Each sub-item is closed independently as its owning wave touches the file: T2 and
 T3 resolved by W-MOV (T2 trimmed, T3 consumer earned), T4 by W-ENT's
-proven-present map handle. T1 remains the sole open item. Remove each ID from
-`DEBT-INDEX.md` as it closes; close this record when T1 resolves.
+proven-present map handle, T1 by W-HARDEN's total `tile_index` reshape. All four
+sub-items are now closed; this record is closed.
 
 **T4 CLOSED (2026-07-03, W-ENT)** — Atlas-minted `MapHandle` made the resolved
 walk-grid path total by type.
@@ -142,5 +152,7 @@ consumers (`normalized_to` and the arrival-clamp `seek`); removed from
 (the movement service never queries tile-space containment), so it was trimmed
 along with its lone unit test; removed from `DEBT-INDEX.md`.
 
-**T1 remains OPEN** (an opportunistic `narrow_u8` reshape on the next `tile.rs`
-edit); this record stays open until T1 resolves.
+**T1 CLOSED (2026-07-04, W-HARDEN)** — `narrow_u8`'s dead saturation arm removed
+at the root: `from_world` now narrows via the total `tile_index` (clamp +
+cast-free low-byte read), no fallible `try_from`. Removed from `DEBT-INDEX.md`.
+With T1 resolved, this record is fully discharged.
