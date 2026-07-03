@@ -68,28 +68,23 @@ impl TryFrom<RawClassRecord> for ClassRecord {
     type Error = ClassRecordError;
 
     fn try_from(raw: RawClassRecord) -> Result<Self, Self::Error> {
-        match (raw.class, raw.starting_stats) {
-            (CharacterClass::DarkLord, StartingStats::WithCommand { energy, .. }) => {
+        // Keyed off the shared `has_command` predicate so this record and the
+        // live `Character` aggregate can never diverge on which classes carry
+        // command. The error-variant names keep the data record's own
+        // "DarkLord" vocabulary — command is a Dark-Lord-only trait pre-S3.
+        match (raw.class.has_command(), raw.starting_stats) {
+            (true, StartingStats::WithCommand { energy, .. }) => {
                 if energy < COMMAND_ENERGY_FLOOR {
                     return Err(ClassRecordError::EnergyBelowCommandFloor { energy });
                 }
             }
-            (CharacterClass::DarkLord, StartingStats::Standard { .. }) => {
+            (true, StartingStats::Standard { .. }) => {
                 return Err(ClassRecordError::StandardStatsOnDarkLord);
             }
-            (other, StartingStats::WithCommand { .. }) => {
-                return Err(ClassRecordError::CommandStatsOutsideDarkLord(other));
+            (false, StartingStats::WithCommand { .. }) => {
+                return Err(ClassRecordError::CommandStatsOutsideDarkLord(raw.class));
             }
-            (
-                CharacterClass::DarkWizard
-                | CharacterClass::SoulMaster
-                | CharacterClass::DarkKnight
-                | CharacterClass::BladeKnight
-                | CharacterClass::FairyElf
-                | CharacterClass::MuseElf
-                | CharacterClass::MagicGladiator,
-                StartingStats::Standard { .. },
-            ) => {}
+            (false, StartingStats::Standard { .. }) => {}
         }
         Ok(Self {
             class: raw.class,

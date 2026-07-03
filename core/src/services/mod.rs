@@ -7,3 +7,4 @@
 
 pub mod chance;
 pub mod item_rules;
+pub mod spawn;

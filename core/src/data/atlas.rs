@@ -104,6 +104,59 @@ pub struct WarpView<'a> {
     pub landing: Landing,
 }
 
+/// A spawn record joined to the monster definition it names, retained per map
+/// at parse. The join is proven total here (the monster is looked up once,
+/// during resolution), so a consuming service reaches the definition without an
+/// `Option` — mirroring the `warps: Vec<(Warp, Landing)>` owned-join precedent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedSpawn {
+    spawn: Spawn,
+    monster: MonsterDefinition,
+}
+
+/// A spawn record borrowed with the monster definition it resolves to. The
+/// public view over a [`ResolvedSpawn`], mirroring [`WarpView`]/[`EnterGateView`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpawnEntry<'a> {
+    /// The spawn record.
+    pub spawn: &'a Spawn,
+    /// The monster definition it names — resolution proven at parse.
+    pub monster: &'a MonsterDefinition,
+}
+
+/// A proven-present view of one map: its definition, its walk grid, and its
+/// spawns joined to their monster definitions. Minted only by the [`Atlas`]
+/// from resolved state — there is no public fabricating constructor — so its
+/// walk grid and spawns are total, never `Option`.
+#[derive(Debug, Clone, Copy)]
+pub struct MapHandle<'a> {
+    definition: &'a MapDefinition,
+    walk_grid: &'a WalkGrid,
+    spawns: &'a [ResolvedSpawn],
+}
+
+impl<'a> MapHandle<'a> {
+    /// The map's definition — its environment and, on Arena, its soccer pitch.
+    #[must_use]
+    pub fn definition(&self) -> &'a MapDefinition {
+        self.definition
+    }
+
+    /// The map's walk grid. Total — presence was proven at parse.
+    #[must_use]
+    pub fn walk_grid(&self) -> &'a WalkGrid {
+        self.walk_grid
+    }
+
+    /// The map's spawn entries, each already joined to its monster definition.
+    pub fn spawns(&self) -> impl Iterator<Item = SpawnEntry<'a>> {
+        self.spawns.iter().map(|resolved| SpawnEntry {
+            spawn: &resolved.spawn,
+            monster: &resolved.monster,
+        })
+    }
+}
+
 /// Droppable items grouped by their base drop level, built once at load so drop
 /// resolution range-queries the eligible pool (`O(log n)` plus the matches)
 /// instead of linear-scanning every item definition on every kill. An item
@@ -147,7 +200,8 @@ impl DropPool {
 /// its referent exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Atlas {
-    maps: Vec<MapDefinition>,
+    maps: BTreeMap<MapNumber, MapDefinition>,
+    spawns_by_map: BTreeMap<MapNumber, Vec<ResolvedSpawn>>,
     spawn_gates_by_map: BTreeMap<MapNumber, Vec<SpawnGate>>,
     enter_gates_by_map: BTreeMap<MapNumber, Vec<ResolvedEnterGate>>,
     warps: Vec<(Warp, Landing)>,
@@ -175,7 +229,8 @@ impl Atlas {
     /// a malformed resolved structure (class table, experience curve, ancient
     /// roster), or a singleton config file that is not exactly one record.
     pub fn parse(data: StaticData) -> Result<Self, AtlasError> {
-        let map_numbers = unique_map_numbers(&data.maps.records)?;
+        let maps = index_maps(data.maps.records)?;
+        let map_numbers: BTreeSet<MapNumber> = maps.keys().copied().collect();
         let monsters = index_monsters(data.monsters.records)?;
         let skills = index_skills(data.skills.records)?;
         let items = index_items(data.items.records)?;
@@ -188,7 +243,7 @@ impl Atlas {
         let enter_gates_by_map =
             resolve_enter_gates(gates.enter_gates, &landings, &gates.enter_gate_numbers)?;
 
-        check_spawns(&data.spawns.records, &map_numbers, &monsters)?;
+        let spawns_by_map = resolve_spawns(data.spawns.records, &map_numbers, &monsters)?;
         check_monster_attacks(&monsters, &skills)?;
         check_summons(&skills, &monsters)?;
         check_items(&items, &skills, &monsters)?;
@@ -224,7 +279,8 @@ impl Atlas {
         let walk_grids = index_terrain(data.terrain, &map_numbers)?;
 
         Ok(Self {
-            maps: data.maps.records,
+            maps,
+            spawns_by_map,
             spawn_gates_by_map,
             enter_gates_by_map,
             warps,
@@ -243,9 +299,47 @@ impl Atlas {
         })
     }
 
-    /// All maps, in load order.
+    /// All maps, ordered by number.
     pub fn maps(&self) -> impl Iterator<Item = &MapDefinition> {
-        self.maps.iter()
+        self.maps.values()
+    }
+
+    /// A proven-present handle per map, ordered by number. Both `maps` and
+    /// `walk_grids` are keyed by the identical map-number set proven at parse,
+    /// so iterating them in lockstep pairs each definition with its own walk
+    /// grid — total, with no `Option` at any call site.
+    pub fn map_handles(&self) -> impl Iterator<Item = MapHandle<'_>> {
+        self.maps
+            .values()
+            .zip(self.walk_grids.values())
+            .map(move |(definition, walk_grid)| MapHandle {
+                definition,
+                walk_grid,
+                spawns: self.map_spawns(definition.number),
+            })
+    }
+
+    /// The handle for one map; `None` when no record carries it — genuine
+    /// optionality of an open `MapNumber` key. A number taken from a resolved
+    /// edge is proven present by `parse`.
+    #[must_use]
+    pub fn map_handle(&self, map: MapNumber) -> Option<MapHandle<'_>> {
+        let definition = self.maps.get(&map)?;
+        let walk_grid = self.walk_grids.get(&map)?;
+        Some(MapHandle {
+            definition,
+            walk_grid,
+            spawns: self.map_spawns(map),
+        })
+    }
+
+    /// The retained spawns for a map; the empty slice for a map with none — a
+    /// real "this map spawns nothing" answer, mirroring [`Atlas::spawn_gates`].
+    fn map_spawns(&self, map: MapNumber) -> &[ResolvedSpawn] {
+        match self.spawns_by_map.get(&map) {
+            Some(spawns) => spawns,
+            None => &[],
+        }
     }
 
     /// Spawn gates on a map; empty for maps without one.
@@ -597,14 +691,15 @@ fn index_terrain(
     Ok(grids)
 }
 
-fn unique_map_numbers(maps: &[MapDefinition]) -> Result<BTreeSet<MapNumber>, AtlasError> {
-    let mut set = BTreeSet::new();
+fn index_maps(maps: Vec<MapDefinition>) -> Result<BTreeMap<MapNumber, MapDefinition>, AtlasError> {
+    let mut by_number = BTreeMap::new();
     for map in maps {
-        if !set.insert(map.number) {
-            return Err(AtlasError::DuplicateMapNumber { number: map.number });
+        let number = map.number;
+        if by_number.insert(number, map).is_some() {
+            return Err(AtlasError::DuplicateMapNumber { number });
         }
     }
-    Ok(set)
+    Ok(by_number)
 }
 
 fn index_monsters(
@@ -644,18 +739,34 @@ fn index_items(
     Ok(by_ref)
 }
 
-fn check_spawns(
-    spawns: &[Spawn],
+/// Joins each spawn to the monster definition it names and groups the pairs by
+/// map, proving referential integrity in the same pass and RETAINING the join.
+/// A spawn on an unknown map, or naming a monster with no record, is the error;
+/// otherwise every retained [`ResolvedSpawn`] carries a definition proven present.
+fn resolve_spawns(
+    spawns: Vec<Spawn>,
     map_numbers: &BTreeSet<MapNumber>,
     monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
-) -> Result<(), AtlasError> {
+) -> Result<BTreeMap<MapNumber, Vec<ResolvedSpawn>>, AtlasError> {
+    let mut by_map: BTreeMap<MapNumber, Vec<ResolvedSpawn>> = BTreeMap::new();
     for spawn in spawns {
         if !map_numbers.contains(&spawn.map) {
             return Err(AtlasError::UnknownMapRef { map: spawn.map });
         }
-        require_monster(monsters, spawn.monster)?;
+        let monster = match monsters.get(&spawn.monster) {
+            Some(monster) => monster.clone(),
+            None => {
+                return Err(AtlasError::UnknownMonsterRef {
+                    monster: spawn.monster,
+                });
+            }
+        };
+        by_map
+            .entry(spawn.map)
+            .or_default()
+            .push(ResolvedSpawn { spawn, monster });
     }
-    Ok(())
+    Ok(by_map)
 }
 
 fn check_monster_attacks(

@@ -84,8 +84,8 @@ cargo check -p mu-core --target wasm32-unknown-unknown
 
 Verified against the repo on 2026-07-03.
 
-- **Branch:** `spatial-foundation`. Spatial work lands here; merge to `main` is a
-  separate step.
+- **Branch:** `entities` (W-ENT), off `spatial-foundation` (Waves A/B). Merge to
+  `main` is a separate step.
 - **DONE:**
   - Full static-data layer (`core/src/data/`) — monster/item/skill/map/drop/exp
     definitions, chaos mixes, ancient sets, gates/warps, classes, game-config —
@@ -96,18 +96,23 @@ Verified against the repo on 2026-07-03.
     world space, `WorldPos`/`WorldVec`/`Facing`/`Region`/`Radius`, tiles &
     `WalkGrid`, the two-state `Movement` classifier — world-space Atlas migration
     and terrain-backed walk grids loaded from `data/terrain/<map>.bin` sidecars.
-  - Green: `clippy -D warnings` clean, ~120 tests passing, wasm check OK.
+  - **W-ENT — Live Entity Aggregates + Spawn Placement** (branch `entities`): live
+    aggregates `Character`/`MonsterInstance`; new components `Pool`/`Vitals`/
+    `Stats`/`Placement`; the `Spawned` role dispatch; first events (`SpawnEvent`);
+    `core/src/services/spawn.rs` (`place_spawn` + `populate_map` +
+    `ResolvedSoccerPitch`) resolving authoring-tile spawn records to walkable
+    world positions deterministically; Atlas `MapHandle` (proven-present map
+    handle) making walk-grid access total; `WalkGrid::walkable_positions_in`.
+    Closed **D4** + **T4**. Green: `clippy -D warnings` clean, 162 tests, wasm OK.
 - **EMPTY / MINIMAL:**
-  - `core/src/entities/mod.rs` — doc-comment-only stub. **No entity types yet.**
-  - `core/src/events/mod.rs` — doc-comment-only stub. **No event enums yet.**
-  - `core/src/services/` — only `chance.rs` (pure RNG rolls: `WeightedTable`,
-    `weighted_pick`, `pick_one`, `roll_*`) and `item_rules.rs` (pure const-table
-    lookups). **No stateful/behavioral service** (nothing takes entity state and
-    returns events).
+  - `core/src/services/` — the first behavioral service (`spawn.rs`: entity state
+    + injected RNG → placed state + events) now lands alongside `chance.rs` /
+    `item_rules.rs`. Combat / movement / AI services are still to come
+    (W-CMB / W-MOV / W-AI).
   - `hosts/` — placeholder `README.md` only. **No host crate.**
-- **Backlog:** `docs/debt/DEBT-INDEX.md` — 14 open items: **W-SRC** (data
-  provenance), **D1–D5** (movement/flight + world-space resolution),
-  **T1–T4** (spatial follow-ups), **Q1–Q4** (tooling/CI quality gaps).
+- **Backlog:** `docs/debt/DEBT-INDEX.md` — 12 open items: **W-SRC** (data
+  provenance), **D1/D2/D3/D5** (movement/flight), **T1/T2/T3** (spatial
+  follow-ups), **Q1–Q4** (tooling/CI quality gaps). **D4 + T4 closed by W-ENT.**
 
 ---
 
@@ -161,7 +166,8 @@ Verified against the repo on 2026-07-03.
 
 ## W-ENT — Live Entity Aggregates + Spawn Placement
 
-- **Status:** NOT STARTED
+- **Status:** DONE (branch `entities`, 2026-07-03; four green gates, 162 tests;
+  closed D4 + T4).
 - **Goal:** Stand up the live, mutable world-presence entities every behavioral
   system acts on — `Character` and `MonsterInstance` composed from the existing
   value components plus new `Placement`/`Pool`/`Vitals`/`Stats` — and a
@@ -719,11 +725,18 @@ Verified against the repo on 2026-07-03.
     W-ENT owns `Tick(u64)` (entity timestamps) and W-MOV owns the `Ticks(u64)`
     duration + `in_ticks` conversion; if W-ENT did not define `Tick`, W-MOV adds
     it to `components/units.rs`.
-  - **Walkable-tile sampler sharing.** Warp-landing sampling ("random walkable
-    `WorldPos` in a `WorldRect`") is the same primitive D4's spawn-area sampler
-    needs. Recommend reusing the W-ENT sampler if it shipped one; otherwise W-MOV
-    introduces `sample_walkable_in(rect, grid, rng)` designed for both callers
-    (deepen, don't duplicate).
+  - **Walkable-tile sampler sharing — RESOLVED by W-ENT.** W-ENT shipped
+    `WalkGrid::walkable_positions_in(WorldRect) -> impl Iterator<Item = WorldPos>`
+    (pure, RNG-free, deterministic row-major; tiles stay private). Warp-landing
+    reuses it directly (enumerate → sample with the injected RNG via `pick_one`
+    over the non-empty set); do **not** introduce a second sampler.
+  - **Entity map membership — pin (from W-ENT forward audit).** `Placement`
+    currently carries `position`/`facing`/`movement` but no `MapNumber`; W-MOV's
+    cross-map/warp step is the first consumer. Add `map: MapNumber` to `Placement`
+    (co-located with `position`, matching the `Landing { map, .. }` precedent) so
+    a `WorldPos` never travels without its map frame; thread it through
+    `place_spawn`/`spawn_at` from `MapHandle::definition().number`. Purely
+    additive — no W-ENT shape changes.
   - **Flight eligibility surface.** The gate reads wings-equipped + combat-lock
     off the W-ENT character entity. Recommend the service takes those as an
     explicit eligibility input value the entity exposes, keeping
@@ -1232,3 +1245,8 @@ decision pinned). Most recent at the bottom.
 | Date | Wave | Event |
 |---|---|---|
 | 2026-07-03 | (foundation) | Spatial foundation Waves A + B landed on branch `spatial-foundation` (commits `61f1e37`, `5ed218e`): world-space `Fixed` Q40.24, `WorldPos`/`WorldVec`/`Facing`/`Region`, tiles + `WalkGrid`, two-state `Movement`, world-space Atlas + terrain walk-grids. clippy `-D warnings` clean, ~120 tests, wasm check OK. Deferrals recorded in DEBT-INDEX (D1–D5, T1–T4). |
+| 2026-07-03 | W-ENT | Started on branch `entities` (off `spatial-foundation`). Core Domain Feature pipeline: spec → architecture(plan) → canon(plan) → state-machine → implementation → architecture(code) → deep-module → canon(code) → debt → rules. |
+| 2026-07-03 | W-ENT | **Landed.** Live aggregates `Character`/`MonsterInstance`; components `Pool`/`Vitals`/`Stats`/`Placement`; `Spawned` role dispatch; first events `SpawnEvent::{MobSpawned, ObjectPlaced}`; `services/spawn.rs` (`place_spawn` + `populate_map` + `ResolvedSoccerPitch`); Atlas `MapHandle` + retained per-map spawn joins; `WalkGrid::walkable_positions_in`. Four green gates, 162 tests. All five guardians cleared (rules-guardian PASS); a forward-composability audit returned FUTURE-PROOF. |
+| 2026-07-03 | W-ENT | Closed **D4** (spawn + SoccerPitch world-space resolution, whole — not split) and **T4** (`walk_grid` totality via proven-present `MapHandle`). Rows removed from DEBT-INDEX; D4 record closed; T4 sub-item closed (T1/T2/T3 stay open). |
+| 2026-07-03 | W-ENT | Removed caller-less `Pool::clamped` (deep-module: unearned surface; returns with its compute-path consumer in W-CMB). |
+| 2026-07-03 | W-ENT→W-MOV | **Decision pinned:** entity map membership (`MapNumber`) lands on `Placement` (co-located with `position`, matching the `Landing { map, .. }` precedent), added by W-MOV when cross-map operations need it — a purely-additive change, correctly deferred (no consumer in W-ENT). |

@@ -38,6 +38,23 @@ impl CharacterClass {
         Self::MagicGladiator,
         Self::DarkLord,
     ];
+
+    /// Whether the class trains the command stat — true for the Dark Lord line
+    /// and no other. The single predicate every command-class pairing keys off,
+    /// so the data record and the live character can never disagree on it.
+    #[must_use]
+    pub fn has_command(self) -> bool {
+        match self {
+            Self::DarkLord => true,
+            Self::DarkWizard
+            | Self::SoulMaster
+            | Self::DarkKnight
+            | Self::BladeKnight
+            | Self::FairyElf
+            | Self::MuseElf
+            | Self::MagicGladiator => false,
+        }
+    }
 }
 
 /// Client-facing class code carried by the character-list packet
@@ -236,5 +253,13 @@ mod tests {
             serde_json::to_string(&CharacterClass::DarkKnight).unwrap(),
             r#""dark_knight""#
         );
+    }
+
+    #[test]
+    fn only_dark_lord_has_command() {
+        for class in CharacterClass::ALL {
+            let expected = class == CharacterClass::DarkLord;
+            assert_eq!(class.has_command(), expected, "{class:?}");
+        }
     }
 }

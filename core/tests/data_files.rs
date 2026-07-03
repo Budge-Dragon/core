@@ -10,11 +10,14 @@
 
 use std::path::PathBuf;
 
+use rand_core::RngCore;
+
 use mu_core::components::class::CharacterClass;
 use mu_core::components::interval::Interval;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
-use mu_core::components::tile::TileCoord;
+use mu_core::components::spatial::WorldPos;
+use mu_core::components::tile::{TileArea, TileCoord, WalkGrid};
 use mu_core::components::units::{ItemLevel, Level};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
 use mu_core::data::atlas::{Atlas, AtlasError, StaticData};
@@ -31,8 +34,11 @@ use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::MonsterDefinition;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
+use mu_core::data::spawns::{SpawnPlacement, SpawnSchedule};
 use mu_core::data::special_drops::{DropBand, DropBands, SpecialDrop, SpecialDropRecord};
 use mu_core::data::terrain::{MapTerrain, TerrainBytes};
+use mu_core::entities::spawned::Spawned;
+use mu_core::services::spawn::{place_spawn, populate_map};
 
 use mu_core::services::item_rules::{
     ammunition_damage_percent, armor_defense_bonus, effective_drop_level, max_durability,
@@ -376,4 +382,172 @@ fn ammunition_and_durability_accessors() {
         max_durability(20, EnhanceLevel::L11, ItemRarity::Excellent),
         20 + 21 + 15
     );
+}
+
+// --- Spawn placement over the real dataset (W-ENT).
+
+/// Deterministic `SplitMix64` for replayable population over real data.
+struct TestRng {
+    state: u64,
+}
+
+impl TestRng {
+    fn new(seed: u64) -> Self {
+        Self { state: seed }
+    }
+}
+
+impl RngCore for TestRng {
+    fn next_u64(&mut self) -> u64 {
+        self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        let [b0, b1, b2, b3, _, _, _, _] = self.next_u64().to_le_bytes();
+        u32::from_le_bytes([b0, b1, b2, b3])
+    }
+
+    fn fill_bytes(&mut self, dst: &mut [u8]) {
+        for chunk in dst.chunks_mut(8) {
+            let bytes = self.next_u64().to_le_bytes();
+            for (slot, byte) in chunk.iter_mut().zip(bytes.iter()) {
+                *slot = *byte;
+            }
+        }
+    }
+}
+
+fn position_of(spawned: &Spawned) -> WorldPos {
+    match spawned {
+        Spawned::Mob { instance } => instance.placement.position,
+        Spawned::Placed { placement, .. } => placement.position,
+    }
+}
+
+/// The instance count a permanent spawn contributes, computed independently of
+/// the RNG loop (Fixed → 1, Spot → quantity, Area → quantity when at least one
+/// tile in the rect is walkable, else 0).
+fn expected_instances(placement: SpawnPlacement, grid: &WalkGrid) -> usize {
+    match placement {
+        SpawnPlacement::Fixed { .. } => 1,
+        SpawnPlacement::Spot { quantity, .. } => usize::from(quantity),
+        SpawnPlacement::Area { area, quantity } => {
+            if grid.walkable_positions_in(area.to_world()).next().is_some() {
+                usize::from(quantity)
+            } else {
+                0
+            }
+        }
+    }
+}
+
+#[test]
+fn every_real_map_populates_with_full_health_mobs() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let mut rng = TestRng::new(2024);
+    let mut handles = 0;
+    for handle in atlas.map_handles() {
+        handles += 1;
+        let population = populate_map(&handle, &mut rng);
+        for spawned in &population.spawned {
+            if let Spawned::Mob { instance } = spawned {
+                assert_eq!(instance.health.current(), instance.health.max());
+                assert!(instance.health.max() > 0);
+            }
+        }
+    }
+    assert_eq!(handles, 11);
+}
+
+#[test]
+fn every_area_placed_instance_sits_on_a_walkable_tile() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let mut rng = TestRng::new(99);
+    for handle in atlas.map_handles() {
+        let grid = handle.walk_grid();
+        for entry in handle.spawns() {
+            if entry.spawn.schedule != SpawnSchedule::Permanent {
+                continue;
+            }
+            if let SpawnPlacement::Area { .. } = entry.spawn.placement {
+                let result = place_spawn(entry.monster, &entry.spawn.placement, grid, &mut rng);
+                for spawned in &result.spawned {
+                    assert!(grid.walkable(position_of(spawned)));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn wandering_spawns_are_excluded_from_initial_population() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let mut rng = TestRng::new(7);
+    for handle in atlas.map_handles() {
+        let grid = handle.walk_grid();
+        let expected: usize = handle
+            .spawns()
+            .filter(|entry| entry.spawn.schedule == SpawnSchedule::Permanent)
+            .map(|entry| expected_instances(entry.spawn.placement, grid))
+            .sum();
+        let population = populate_map(&handle, &mut rng);
+        assert_eq!(population.spawned.len(), expected);
+        assert_eq!(population.events.len(), expected);
+    }
+}
+
+#[test]
+fn arena_resolves_the_soccer_pitch_and_lorencia_has_none() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let mut rng = TestRng::new(1);
+
+    let arena = atlas.map_handle(MapNumber(6)).unwrap();
+    let pitch = populate_map(&arena, &mut rng)
+        .soccer_pitch
+        .expect("arena resolves a soccer pitch");
+    assert_eq!(
+        pitch.ground,
+        TileArea::new(55, 141, 69, 180).unwrap().to_world()
+    );
+    assert_eq!(pitch.left_spawn, TileCoord::new(60, 156).to_world());
+
+    let lorencia = atlas.map_handle(MapNumber(0)).unwrap();
+    assert!(populate_map(&lorencia, &mut rng).soccer_pitch.is_none());
+}
+
+#[test]
+fn whole_dataset_population_is_deterministic() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let populate = |seed: u64| {
+        let mut rng = TestRng::new(seed);
+        atlas
+            .map_handles()
+            .map(|handle| populate_map(&handle, &mut rng))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(populate(555), populate(555));
+}
+
+#[test]
+fn map_handles_enumerate_every_map_and_join_spawns() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    assert_eq!(atlas.map_handles().count(), 11);
+
+    // A present map yields a walk grid directly (no Option) and spawn entries
+    // joined to their monster definition.
+    let lorencia = atlas.map_handle(MapNumber(0)).unwrap();
+    let _grid: &WalkGrid = lorencia.walk_grid();
+    let mut joined = 0;
+    for entry in lorencia.spawns() {
+        assert_eq!(entry.monster.number, entry.spawn.monster);
+        joined += 1;
+    }
+    assert!(joined > 0);
+
+    // An open key that names no map yields no handle.
+    assert!(atlas.map_handle(MapNumber(200)).is_none());
 }

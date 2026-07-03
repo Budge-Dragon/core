@@ -67,7 +67,22 @@ consumer or a reshape early just to clear the flag.
   needing it, trim it then.
 - **Owner:** W-MOV. **Blocked-by:** W-MOV (normalize consumer).
 
-### T4 — `walk_grid` type-level totality (proven-present map handle)
+### T4 — `walk_grid` type-level totality (proven-present map handle) — CLOSED (2026-07-03, W-ENT)
+
+- **Status:** CLOSED. W-ENT introduced the Atlas-minted `MapHandle`
+  (`core/src/data/atlas.rs`): private fields, no public fabricating constructor,
+  minted only from resolved state by `Atlas::map_handles()` (total iterator over
+  the 11 resolved maps, no `Option`) and `Atlas::map_handle(MapNumber)` (open key
+  → `Option<MapHandle>`). `MapHandle::walk_grid()` returns `&WalkGrid` — total,
+  no `Option`, no `unwrap_or` at the call site; the spawn service reaches the
+  grid through `handle.walk_grid()` (`services/spawn.rs::populate_map`). The
+  open-key `Atlas::walk_grid(MapNumber) -> Option<&WalkGrid>` is retained for
+  untrusted numbers (the "absent map 200 → None" path), so the pattern stays
+  uniform with the other open-key accessors (`item`/`monster`/`skill`, all still
+  `Option`). Presence for the total path is backed by the parse-proven
+  map↔terrain bijection in `index_terrain`. T4 removed from `DEBT-INDEX.md`; the
+  handle bundles definition + walk grid + joined spawns (richer than a bare
+  `MapId`, same type-level-totality goal).
 
 - **Location:** `core/src/data/atlas.rs` — `Atlas::walk_grid(MapNumber) -> Option<&WalkGrid>`
   over `walk_grids: BTreeMap<MapNumber, WalkGrid>`.
@@ -95,3 +110,7 @@ Each sub-item is closed independently as its owning wave touches the file: T1 on
 the next `tile.rs` edit, T2/T3 when W-MOV resolves their consumer question, T4
 if/when W-ENT introduces the proven-present map handle. Remove each ID from
 `DEBT-INDEX.md` as it closes; close this record when all four are resolved.
+
+**T4 CLOSED (2026-07-03, W-ENT)** — Atlas-minted `MapHandle` made the resolved
+walk-grid path total by type. **T1, T2, T3 remain OPEN**; this record stays open
+until they resolve.

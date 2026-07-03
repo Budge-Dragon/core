@@ -308,6 +308,24 @@ impl WalkGrid {
         let mask = 1u64 << (bit & 63);
         self.0.get(bit >> 6).is_some_and(|w| w & mask != 0)
     }
+
+    /// The world positions of every walkable tile whose centre lies inside
+    /// `rect`, yielded in deterministic row-major (y then x) order. Pure,
+    /// RNG-free, and target-independent, so the same index maps to the same
+    /// [`WorldPos`] bit-for-bit on native, wasm, and FFI.
+    ///
+    /// The rectangle-to-tile arithmetic stays private to this module — callers
+    /// receive world positions and never name a tile — so the walk grid keeps
+    /// hiding its cells while still answering "which walkable spots are in this
+    /// area?" for spawn placement and warp landing.
+    pub fn walkable_positions_in(&self, rect: WorldRect) -> impl Iterator<Item = WorldPos> + '_ {
+        let min = TileCoord::from_world(rect.min());
+        let max = TileCoord::from_world(rect.max());
+        (min.y..=max.y)
+            .flat_map(move |y| (min.x..=max.x).map(move |x| TileCoord::new(x, y)))
+            .map(TileCoord::to_world)
+            .filter(move |&centre| rect.contains(centre) && self.walkable(centre))
+    }
 }
 
 fn narrow_u8(value: i64) -> u8 {
@@ -444,6 +462,39 @@ mod tests {
         assert!(!grid.walkable(TileCoord::new(3, 0).to_world()));
         assert!(grid.walkable(TileCoord::new(4, 0).to_world()));
         assert!(!grid.walkable(TileCoord::new(5, 0).to_world()));
+    }
+
+    #[test]
+    fn walkable_positions_in_yields_walkable_centres_row_major() {
+        let mut words = [0u64; 1024];
+        for (x, y) in [(5u8, 5u8), (6, 5), (5, 6)] {
+            let bit = (usize::from(y) << 8) | usize::from(x);
+            words[bit >> 6] |= 1u64 << (bit & 63);
+        }
+        // (6, 6) stays blocked.
+        let grid = WalkGrid::from_words(words);
+        let rect = TileArea::new(5, 5, 6, 6).unwrap().to_world();
+        let got: Vec<WorldPos> = grid.walkable_positions_in(rect).collect();
+        assert_eq!(
+            got,
+            vec![
+                TileCoord::new(5, 5).to_world(),
+                TileCoord::new(6, 5).to_world(),
+                TileCoord::new(5, 6).to_world(),
+            ]
+        );
+        // Every yielded position is walkable and sits inside the rect.
+        assert!(
+            got.iter()
+                .all(|&pos| grid.walkable(pos) && rect.contains(pos))
+        );
+    }
+
+    #[test]
+    fn walkable_positions_in_is_empty_when_nothing_walkable() {
+        let grid = WalkGrid::from_words([0u64; 1024]);
+        let rect = TileArea::new(10, 10, 20, 20).unwrap().to_world();
+        assert_eq!(grid.walkable_positions_in(rect).count(), 0);
     }
 
     #[test]

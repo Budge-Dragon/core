@@ -1,7 +1,7 @@
 # Debt record: spawn + SoccerPitch world-space resolution (D4)
 
 - **ID:** D4 (owner wave W-ENT)
-- **Status:** OPEN
+- **Status:** CLOSED (2026-07-03, discharged by W-ENT)
 - **Owner wave:** W-ENT (entities wave — spawn / soccer service)
 - **Created:** 2026-07-03, during the spatial-foundation work (Waves A + B,
   commits `61f1e37` and `5ed218e` on branch `spatial-foundation`).
@@ -70,3 +70,30 @@ Closed when the W-ENT spawn/soccer service resolves every `SpawnPlacement`
 variant and every `SoccerPitch` field to world space via `to_world` at the
 point of use, with `Area` placement using the walk grid + RNG. Then D4 leaves
 `DEBT-INDEX.md`.
+
+## Closure (2026-07-03, W-ENT)
+
+Fully discharged — whole-D4 closure, not a split. `core/src/services/spawn.rs`
+crosses to world space only at point-of-use, only through the sanctioned
+projections; the `SpawnPlacement` and `SoccerPitch` record shapes stay
+tile-space (`core/src/data/spawns.rs`, `core/src/data/map_definitions.rs`
+unchanged).
+
+- `place_spawn` (`spawn.rs`) resolves every variant:
+  - `Fixed { position, facing }` → `position.to_world()` + `facing.to_facing()`,
+    one instance, zero RNG words.
+  - `Spot { position, quantity }` → `position.to_world()`, `quantity` instances.
+  - `Area { area, quantity }` → samples walkable world tiles inside
+    `area.to_world()` via `WalkGrid::walkable_positions_in` + the injected
+    `RngCore` (`OneOrMore`/`pick_one`); a zero-walkable area folds to zero
+    instances (a genuine domain case, no unwrap/can't-happen branch).
+- `populate_map` (`spawn.rs`) resolves every `SoccerPitch` field to world space:
+  `ground`/`left_goal`/`right_goal` via `to_world()` (`WorldRect`),
+  `left_spawn`/`right_spawn` via `to_world()` (`WorldPos`) — `Some` on Arena,
+  `None` elsewhere (genuine optionality).
+
+Verified over the real dataset in `core/tests/data_files.rs`
+(`every_area_placed_instance_sits_on_a_walkable_tile`,
+`arena_resolves_the_soccer_pitch_and_lorencia_has_none`,
+`whole_dataset_population_is_deterministic`). Green gates: clippy clean under
+`-D warnings`, 162 tests pass. D4 removed from `DEBT-INDEX.md`.
