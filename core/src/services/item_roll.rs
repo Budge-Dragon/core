@@ -107,9 +107,11 @@ pub fn roll_dropped_item(
             Some(category) => RarityRoll::Excellent {
                 options: roll_excellent(category, policy, rng),
             },
-            // `loot::item_drop` may pair Excellent with a kind that has no
-            // excellent set (debt I3); until the loot pool gates on
-            // excellent-capability, degrade to Normal — total, no panic.
+            // `loot::item_drop` gates the excellent pool on excellent-capability
+            // (`is_excellent_capable`), so an authentic drop never pairs
+            // Excellent with a kind that has no excellent set: this arm is
+            // unreachable for real drops and remains only to keep the roll total
+            // over its bare `ItemRarity` input — total, no panic.
             None => RarityRoll::Normal,
         },
     };
@@ -253,6 +255,14 @@ fn excellent_category(kind: &ItemKind) -> Option<ExcellentCat> {
         | ItemKind::MixMaterial
         | ItemKind::StatFruit => None,
     }
+}
+
+/// Whether a kind can roll an excellent set at all — the capability predicate
+/// the loot pool gates on so an `Excellent` drop is only ever stamped on a kind
+/// that has an excellent set. Exposes the capability without leaking the private
+/// [`ExcellentCat`] discriminator.
+pub(crate) fn is_excellent_capable(kind: &ItemKind) -> bool {
+    excellent_category(kind).is_some()
 }
 
 /// Bridges a definition's stored [`ExcellentCategory`] (which carries the weapon

@@ -1,9 +1,14 @@
 # Debt record: inventory & item-instance wave follow-ups (I1–I3)
 
 - **ID:** I1–I3 (W-INV deferred-scope)
-- **Status:** OPEN
+- **Status:** CLOSED (all three discharged 2026-07-04)
 - **Owner wave:** per sub-item (W-EFFECT / next `game_config.rs` touch)
 - **Created:** 2026-07-04, during the inventory & item-instance work (W-INV).
+- **Resolved:** 2026-07-04. All three root fixes landed on `main`; five gates green
+  (fmt, clippy `-D warnings`, 414 tests, wasm target, xtask scan); architecture,
+  deep-module, and canon guardians PASSED. `DEBT-INDEX.md` rows removed. Close is
+  pending the orchestrator's commit (guardian does not run git). Verified against the
+  code by the debt-guardian before closing — see per-item resolutions below.
 - **Category:** code (architectural / correctness)
 - **Severity:** medium
 - **Scope:** three items in the *shipped* W-INV code where the committed code is
@@ -27,7 +32,19 @@ recorded is the violation, not the gap itself.
 
 ### I1 — two-handed weapon does not block the paired hand slot
 
-- **Status:** OPEN.
+- **Status:** RESOLVED (2026-07-04). Both demanded halves landed together — the
+  half-enforced trap the record warned against was avoided. Equip-time:
+  `services/inventory.rs::equip` calls `two_handed_conflict(&equipment,
+  hand_occupation(def_kind), slot, atlas)`, which rejects both directions (a 2H
+  weapon when the paired hand is occupied, and any item joining a hand paired with
+  a worn 2H weapon) via `EquipRejection::TwoHandedConflict`; `hand_occupation` reads
+  `WeaponHandling::TwoHanded` structurally (bows/crossbows 2H by construction).
+  Reload-time: `reconcile_equipment(&Equipment, &Atlas)` performs the
+  instance×definition cross-reference the `Equipment` component cannot hold alone
+  and rejects a 2H+offhand set with `EquipmentConflict::TwoHandedWithOffhand`. The
+  `slot_accepts` deferral note is gone — its doc now points at both enforcement
+  sites. Root eliminated: cross-slot occupancy is now a real invariant, blocked at
+  equip and re-proven at reload. **Commit pending** (orchestrator owns git).
 - **Location:** `core/src/components/equipment.rs` (independent per-slot
   `Option<ItemInstance>` model, no cross-slot invariant);
   `core/src/services/inventory.rs:194` (`slot_accepts` — doc-flagged) and
@@ -58,7 +75,14 @@ recorded is the violation, not the gap itself.
 
 ### I2 — `EquipSlot` duplicates `data::game_config::EquipmentSlot`
 
-- **Status:** OPEN.
+- **Status:** RESOLVED (2026-07-04). The `ItemRef` precedent was applied: the single
+  `EquipmentSlot` (12 variants) now lives in `components/equipment.rs`, and
+  `data/game_config.rs:7` re-exports it verbatim via
+  `pub use crate::components::equipment::EquipmentSlot;` (frozen public API,
+  byte-identical wire). The `EquipSlot` twin and the 12-arm `translate_slot` bridge
+  are both deleted (`grep` confirms zero remaining references to either). Root
+  eliminated: one slot vocabulary, no cross-layer twin, no hand-written bridge to
+  drift. **Commit pending** (orchestrator owns git).
 - **Location:** `core/src/components/equipment.rs:19` (`EquipSlot`, 12 variants)
   vs `core/src/data/game_config.rs:91` (`EquipmentSlot`, identical 12 variants);
   `core/src/services/inventory.rs:173` (`translate_slot`, the 12-arm bridge).
@@ -86,7 +110,18 @@ recorded is the violation, not the gap itself.
 
 ### I3 — excellent rarity on a non-excellent-capable kind silently degrades to Normal
 
-- **Status:** OPEN.
+- **Status:** RESOLVED (2026-07-04). The two services now share the excellent-capability
+  predicate. `item_roll.rs` exposes `pub(crate) fn is_excellent_capable(kind)` (the
+  `excellent_category(kind).is_some()` capability, without leaking the private
+  `ExcellentCat`), and `loot.rs::item_drop` filters the drop pool on it for
+  `ItemRarity::Excellent` (`.filter(|def| match rarity { Excellent =>
+  is_excellent_capable(&def.kind), Normal | Ancient => true })`). An `Excellent`
+  category roll can therefore no longer land on ammo / a consumable / pre-S3 wings /
+  a pet. The roll service's `None => RarityRoll::Normal` arm is now provably dead for
+  authentic drops; its comment is updated to say so and it remains only to keep the
+  roll total over its bare `ItemRarity` input (no panic). Root eliminated: the design
+  premise that "an excellent-rarity drop on a no-excellent kind is not producible" is
+  now true by construction of the pool. **Commit pending** (orchestrator owns git).
 - **Location:** `core/src/services/item_roll.rs:106-113`
   (`roll_dropped_item`, the `excellent_category(kind)` `None => RarityRoll::Normal`
   arm); reachable via `core/src/services/loot.rs:96-119` (`item_drop`).
@@ -119,3 +154,11 @@ Each sub-item is discharged when its root fix lands (the paired-hand invariant f
 I1, the slot-vocabulary relocation for I2, the loot-side excellent-capability
 filter for I3) and its `DEBT-INDEX.md` row is removed. The record is closed when
 all three are discharged.
+
+**Discharged 2026-07-04.** All three root fixes landed on `main` and were verified
+against the code by the debt-guardian; the I1/I2/I3 rows are removed from
+`DEBT-INDEX.md`. This record is CLOSED. One authenticity gap in the loot code the
+I3 fix touched — the excellent-drop level window — was surfaced separately during
+review; it is **pre-existing W-CMB loot behaviour, not introduced by I1–I3**, and is
+tracked on its own row (`EXC-DROP-WINDOW`, see
+[excellent-drop-level-window.md](excellent-drop-level-window.md)), not folded here.

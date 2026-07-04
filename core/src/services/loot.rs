@@ -21,6 +21,7 @@ use crate::entities::monster_instance::MonsterInstance;
 use crate::events::loot::{Drop, DropResolution};
 use crate::rng::uniform_below;
 use crate::services::chance::{pick_one, roll_per_10000};
+use crate::services::item_roll::is_excellent_capable;
 use crate::services::ratio::nonzero;
 
 // W-SRC: OpenMU drop constants hardcoded in the drop routine, not in
@@ -91,8 +92,11 @@ fn category_roll(config: &DropConfig, rng: &mut impl RngCore) -> DropCategory {
 
 /// An item drop from the monster's level pool: the window `[level - 11, level]`,
 /// a uniform pick among the droppable items in it, and a plus level of
-/// `min((level - drop_level) / 3, max_item_level)`. An empty window is a real
-/// "nothing" — matched before any table is built, never a panic.
+/// `min((level - drop_level) / 3, max_item_level)`. An `Excellent` rarity gates
+/// the pool to excellent-capable kinds so no excellent set is ever stamped on a
+/// kind that has none; `Normal` and `Ancient` draw the unrestricted pool. An
+/// empty window is a real "nothing" — matched before any table is built, never a
+/// panic.
 fn item_drop(level: Level, atlas: &Atlas, rarity: ItemRarity, rng: &mut impl RngCore) -> Drop {
     let monster_level = level.get();
     let window = Interval::spanning(
@@ -103,6 +107,10 @@ fn item_drop(level: Level, atlas: &Atlas, rarity: ItemRarity, rng: &mut impl Rng
         .drop_pool()
         .in_window(window)
         .filter_map(|id| atlas.item(id))
+        .filter(|def| match rarity {
+            ItemRarity::Excellent => is_excellent_capable(&def.kind),
+            ItemRarity::Normal | ItemRarity::Ancient => true,
+        })
         .collect();
     match OneOrMore::new(candidates) {
         Err(_) => Drop::Nothing,

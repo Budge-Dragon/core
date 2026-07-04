@@ -21,9 +21,12 @@ use std::path::PathBuf;
 use rand_core::RngCore;
 use serde::de::DeserializeOwned;
 
-use mu_core::components::equipment::{EquipSlot, Equipment};
+use mu_core::components::equipment::Equipment;
+use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
-use mu_core::components::item_instance::{ExcellentCat, ExcellentOptions, RarityRoll, SkillRoll};
+use mu_core::components::item_instance::{
+    ExcellentCat, ExcellentOptions, ItemInstance, RarityRoll, SkillRoll,
+};
 use mu_core::components::item_options::{AncientBonusLevel, ExcellentCategory};
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
@@ -42,7 +45,7 @@ use mu_core::data::common::DataFile;
 use mu_core::data::exp_tables::ExpTable;
 use mu_core::data::game_config::{EquipmentSlot, GameConfig};
 use mu_core::data::gates_warps::GateWarpRecord;
-use mu_core::data::item_definitions::{ItemDefinition, ItemKind};
+use mu_core::data::item_definitions::{ItemDefinition, ItemKind, WeaponHandling};
 use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::MonsterDefinition;
 use mu_core::data::option_roll::OptionRollPolicy;
@@ -51,8 +54,11 @@ use mu_core::data::spawns::Spawn;
 use mu_core::data::special_drops::SpecialDropRecord;
 use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 use mu_core::entities::monster_instance::MonsterInstance;
+use mu_core::events::inventory::{EquipOutcome, EquipRejection};
 use mu_core::events::loot::Drop;
-use mu_core::services::inventory::{PlaceIntent, equip, place_item};
+use mu_core::services::inventory::{
+    EquipmentConflict, PlaceIntent, equip, place_item, reconcile_equipment,
+};
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::loot::resolve_kill_drops;
 
@@ -150,6 +156,60 @@ impl RngCore for TestRng {
                 *slot = *byte;
             }
         }
+    }
+}
+
+/// A generator whose first `next_u32` is a fixed word, then a real `SplitMix`
+/// stream. The loot category roll is the first draw and uses `next_u32`, so this
+/// steers exactly that roll into a chosen category while every later draw (the
+/// item pick, the specials) stays a genuine deterministic stream — the excellent
+/// item is therefore picked from the gated pool as it is in production.
+struct ForcedCategoryRng {
+    first_u32: Option<u32>,
+    inner: TestRng,
+}
+
+impl RngCore for ForcedCategoryRng {
+    fn next_u64(&mut self) -> u64 {
+        self.inner.next_u64()
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        match self.first_u32.take() {
+            Some(word) => word,
+            None => self.inner.next_u32(),
+        }
+    }
+
+    fn fill_bytes(&mut self, dst: &mut [u8]) {
+        self.inner.fill_bytes(dst);
+    }
+}
+
+/// The mid-bucket random word that steers `uniform_below(DENOMINATOR)` to
+/// `target`. The rng seam's documented Lemire mapping is
+/// `uniform_below(d) == (word * d) >> 32`; the mid-bucket choice keeps the draw
+/// off the rejection path, so the forced category costs exactly one `next_u32`.
+fn category_word_for(target: u32) -> u32 {
+    let denom = u64::from(ChancePer10000::DENOMINATOR);
+    let word = (u64::from(2 * target + 1) << 32) / (2 * denom);
+    or_abort(u32::try_from(word))
+}
+
+/// A level-100 victim on Lorencia standing in for a real kill; only its number,
+/// map, and level drive drop resolution.
+fn drop_victim(atlas: &Atlas) -> MonsterInstance {
+    MonsterInstance {
+        number: or_abort(atlas.monsters().next().ok_or("the dataset ships monsters")).number,
+        placement: Placement {
+            position: TileCoord::new(10, 10).to_world(),
+            facing: Facing::POS_X,
+            movement: Movement::Grounded,
+            map: MapNumber(0),
+        },
+        health: Pool::full(1),
+        anchor: TileCoord::new(10, 10).to_world(),
+        next_action: Tick(0),
     }
 }
 
@@ -521,7 +581,13 @@ fn every_equippable_item_equips_into_its_slot_and_rejects_a_wrong_one() {
             &always(),
             &mut rng,
         );
-        let (equipment, outcome) = equip(Equipment::empty(), instance.clone(), &def.kind, valid);
+        let (equipment, outcome) = equip(
+            Equipment::empty(),
+            instance.clone(),
+            &def.kind,
+            valid,
+            &atlas,
+        );
         assert!(
             matches!(
                 outcome,
@@ -533,7 +599,7 @@ fn every_equippable_item_equips_into_its_slot_and_rejects_a_wrong_one() {
         // The item now occupies the translated slot.
         let worn = matches!(valid, EquipmentSlot::LeftHand | EquipmentSlot::RightHand);
         if worn {
-            assert!(equipment.get(EquipSlot::LeftHand).is_some());
+            assert!(equipment.get(EquipmentSlot::LeftHand).is_some());
         }
         // An incompatible slot is rejected.
         let wrong = if matches!(def.kind, ItemKind::Helm { .. }) {
@@ -541,7 +607,7 @@ fn every_equippable_item_equips_into_its_slot_and_rejects_a_wrong_one() {
         } else {
             EquipmentSlot::Helm
         };
-        let (_, outcome) = equip(Equipment::empty(), instance, &def.kind, wrong);
+        let (_, outcome) = equip(Equipment::empty(), instance, &def.kind, wrong, &atlas);
         assert!(
             matches!(
                 outcome,
@@ -554,4 +620,299 @@ fn every_equippable_item_equips_into_its_slot_and_rejects_a_wrong_one() {
             def.id
         );
     }
+}
+
+#[test]
+fn an_excellent_drop_only_carries_excellent_capable_kinds() {
+    // I3: the loot pool gates the excellent category on excellent-capability, so
+    // an excellent `Drop::Item` can only ever reference a kind that has an
+    // excellent set. Force the category into the excellent bucket (rate 1/10000
+    // naturally), then let the pick draw many different items across seeds; every
+    // one must be excellent-capable.
+    let atlas = real_atlas();
+    let config = atlas.drop_config();
+    let excellent_bucket_start = u32::from(config.money_roll().numerator())
+        + u32::from(config.item_roll().numerator())
+        + u32::from(config.jewel_roll().numerator());
+    let forced = category_word_for(excellent_bucket_start);
+    let victim = drop_victim(&atlas);
+    let victim_level = Level::new(100).unwrap();
+
+    let mut excellent_items = 0u32;
+    for seed in 0u64..256 {
+        let mut rng = ForcedCategoryRng {
+            first_u32: Some(forced),
+            inner: TestRng::new(seed),
+        };
+        let resolution = resolve_kill_drops(&victim, victim_level, Exp(0), &atlas, &mut rng);
+        // Only the category slot can carry an excellent item; specials and the
+        // jewel roster are always Normal.
+        if let Drop::Item {
+            item,
+            rarity: ItemRarity::Excellent,
+            ..
+        } = resolution.category
+        {
+            let def = atlas
+                .item(item)
+                .expect("an excellent drop resolves in the atlas");
+            assert!(
+                expected_excellent(&def.kind).is_some(),
+                "excellent drop {:?} must be an excellent-capable kind",
+                def.id
+            );
+            excellent_items += 1;
+        }
+    }
+    assert!(
+        excellent_items > 0,
+        "the forced excellent category yields excellent item drops over the real pool"
+    );
+}
+
+#[test]
+fn the_normal_drop_pool_still_carries_excellent_incapable_kinds() {
+    // I3 gates only the excellent category: the underlying level pool a Normal
+    // item drop draws from is unrestricted, so it still contains kinds with no
+    // excellent set (wings, pets, ammunition, jewels, consumables, ...). This is
+    // what the excellent gate deliberately excludes — proving the gate is not a
+    // no-op over the shipped data.
+    let atlas = real_atlas();
+    let mut saw_incapable_droppable = false;
+    for low in 0u8..=120 {
+        let window = Interval::spanning(low, low.saturating_add(11));
+        for id in atlas.drop_pool().in_window(window) {
+            let def = atlas.item(id).expect("a pooled drop resolves in the atlas");
+            if def.drops_from_monsters && expected_excellent(&def.kind).is_none() {
+                saw_incapable_droppable = true;
+            }
+        }
+    }
+    assert!(
+        saw_incapable_droppable,
+        "the unfiltered level pool carries excellent-incapable droppable items"
+    );
+}
+
+// --- I1: two-handed dual-hand occupancy over the real dataset. ---
+
+/// The first shipped definition whose kind matches `want`.
+fn find_kind(atlas: &Atlas, want: impl Fn(&ItemKind) -> bool) -> &ItemDefinition {
+    or_abort(
+        atlas
+            .items()
+            .find(|def| want(&def.kind))
+            .ok_or("the dataset ships the kind under test"),
+    )
+}
+
+/// A rolled instance of `def` (identity is all the equip rules read).
+fn instance_of(def: &ItemDefinition, seed: u64) -> ItemInstance {
+    roll_dropped_item(
+        def,
+        ItemLevel::ZERO,
+        ItemRarity::Normal,
+        &always(),
+        &mut TestRng::new(seed),
+    )
+}
+
+fn is_two_handed_kind(kind: &ItemKind) -> bool {
+    matches!(
+        kind,
+        ItemKind::Weapon {
+            handling: WeaponHandling::TwoHanded,
+            ..
+        } | ItemKind::Bow { .. }
+            | ItemKind::Crossbow { .. }
+    )
+}
+
+fn is_one_handed_weapon(kind: &ItemKind) -> bool {
+    matches!(
+        kind,
+        ItemKind::Weapon {
+            handling: WeaponHandling::OneHanded,
+            ..
+        }
+    )
+}
+
+#[test]
+fn a_two_handed_weapon_requires_a_free_paired_hand() {
+    let atlas = real_atlas();
+    let two_handed = find_kind(&atlas, is_two_handed_kind);
+    let one_handed = find_kind(&atlas, is_one_handed_weapon);
+
+    let (equipment, occupied) = equip(
+        Equipment::empty(),
+        instance_of(one_handed, 1),
+        &one_handed.kind,
+        EquipmentSlot::RightHand,
+        &atlas,
+    );
+    assert!(matches!(occupied, EquipOutcome::Equipped { .. }));
+
+    let (equipment, outcome) = equip(
+        equipment,
+        instance_of(two_handed, 2),
+        &two_handed.kind,
+        EquipmentSlot::LeftHand,
+        &atlas,
+    );
+    assert!(
+        matches!(
+            outcome,
+            EquipOutcome::Rejected {
+                reason: EquipRejection::TwoHandedConflict,
+                ..
+            }
+        ),
+        "a two-handed weapon needs its paired hand free"
+    );
+    assert!(equipment.get(EquipmentSlot::LeftHand).is_none());
+}
+
+#[test]
+fn a_two_handed_weapon_equips_into_a_fully_empty_pair() {
+    let atlas = real_atlas();
+    let two_handed = find_kind(&atlas, is_two_handed_kind);
+    let (equipment, outcome) = equip(
+        Equipment::empty(),
+        instance_of(two_handed, 3),
+        &two_handed.kind,
+        EquipmentSlot::LeftHand,
+        &atlas,
+    );
+    assert!(matches!(
+        outcome,
+        EquipOutcome::Equipped {
+            slot: EquipmentSlot::LeftHand
+        }
+    ));
+    assert!(equipment.get(EquipmentSlot::LeftHand).is_some());
+}
+
+#[test]
+fn an_offhand_cannot_join_a_hand_paired_with_a_two_hander() {
+    let atlas = real_atlas();
+    let two_handed = find_kind(&atlas, is_two_handed_kind);
+    let shield = find_kind(&atlas, |kind| matches!(kind, ItemKind::Shield { .. }));
+
+    let (equipment, _) = equip(
+        Equipment::empty(),
+        instance_of(two_handed, 4),
+        &two_handed.kind,
+        EquipmentSlot::LeftHand,
+        &atlas,
+    );
+    let (equipment, outcome) = equip(
+        equipment,
+        instance_of(shield, 5),
+        &shield.kind,
+        EquipmentSlot::RightHand,
+        &atlas,
+    );
+    assert!(
+        matches!(
+            outcome,
+            EquipOutcome::Rejected {
+                reason: EquipRejection::TwoHandedConflict,
+                ..
+            }
+        ),
+        "no item may share a hand pair with a worn two-handed weapon"
+    );
+    assert!(equipment.get(EquipmentSlot::RightHand).is_none());
+}
+
+#[test]
+fn two_one_handed_items_fill_both_hands() {
+    let atlas = real_atlas();
+    let one_handed = find_kind(&atlas, is_one_handed_weapon);
+    let shield = find_kind(&atlas, |kind| matches!(kind, ItemKind::Shield { .. }));
+
+    let (equipment, first) = equip(
+        Equipment::empty(),
+        instance_of(one_handed, 6),
+        &one_handed.kind,
+        EquipmentSlot::LeftHand,
+        &atlas,
+    );
+    assert!(matches!(first, EquipOutcome::Equipped { .. }));
+    let (equipment, second) = equip(
+        equipment,
+        instance_of(shield, 7),
+        &shield.kind,
+        EquipmentSlot::RightHand,
+        &atlas,
+    );
+    assert!(
+        matches!(second, EquipOutcome::Equipped { .. }),
+        "two one-handed items fill both hands"
+    );
+    assert!(equipment.get(EquipmentSlot::LeftHand).is_some());
+    assert!(equipment.get(EquipmentSlot::RightHand).is_some());
+}
+
+#[test]
+fn equipping_an_occupied_slot_is_rejected() {
+    let atlas = real_atlas();
+    let helm = find_kind(&atlas, |kind| matches!(kind, ItemKind::Helm { .. }));
+
+    let (equipment, first) = equip(
+        Equipment::empty(),
+        instance_of(helm, 8),
+        &helm.kind,
+        EquipmentSlot::Helm,
+        &atlas,
+    );
+    assert!(matches!(
+        first,
+        EquipOutcome::Equipped {
+            slot: EquipmentSlot::Helm
+        }
+    ));
+    let (equipment, second) = equip(
+        equipment,
+        instance_of(helm, 9),
+        &helm.kind,
+        EquipmentSlot::Helm,
+        &atlas,
+    );
+    assert!(matches!(
+        second,
+        EquipOutcome::Rejected {
+            reason: EquipRejection::SlotOccupied,
+            ..
+        }
+    ));
+    assert!(equipment.get(EquipmentSlot::Helm).is_some());
+}
+
+#[test]
+fn reconcile_equipment_accepts_legal_and_rejects_two_handed_with_offhand() {
+    let atlas = real_atlas();
+    let two_handed = find_kind(&atlas, is_two_handed_kind);
+    let one_handed = find_kind(&atlas, is_one_handed_weapon);
+    let shield = find_kind(&atlas, |kind| matches!(kind, ItemKind::Shield { .. }));
+
+    // A legal sword+shield set reconciles cleanly.
+    let legal = Equipment::empty()
+        .with(EquipmentSlot::LeftHand, instance_of(one_handed, 10))
+        .with(EquipmentSlot::RightHand, instance_of(shield, 11));
+    assert_eq!(reconcile_equipment(&legal, &atlas), Ok(()));
+
+    // A hand-crafted two-handed + offhand set is rejected at reload.
+    let illegal = Equipment::empty()
+        .with(EquipmentSlot::LeftHand, instance_of(two_handed, 12))
+        .with(EquipmentSlot::RightHand, instance_of(shield, 13));
+    assert_eq!(
+        reconcile_equipment(&illegal, &atlas),
+        Err(EquipmentConflict::TwoHandedWithOffhand)
+    );
+
+    // A lone two-handed weapon with its paired hand empty reconciles cleanly.
+    let lone = Equipment::empty().with(EquipmentSlot::LeftHand, instance_of(two_handed, 14));
+    assert_eq!(reconcile_equipment(&lone, &atlas), Ok(()));
 }

@@ -2,18 +2,17 @@
 //! over the [`Inventory`] and [`Equipment`] components. Each folds the
 //! component's `Result` into a per-operation outcome enum with no `unwrap` —
 //! both arms bound — and never re-implements a geometry rule. The equip service
-//! is the one place the `data` slot vocabulary crosses into the component
-//! [`EquipSlot`] and the one place item-kind/slot compatibility is decided
-//! (the component accepts any instance in any slot). Container operations draw
-//! zero RNG.
+//! is the one place item-kind/slot compatibility and two-handed dual-hand
+//! occupancy are decided (the component accepts any instance in any slot).
+//! Container operations draw zero RNG.
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::equipment::{EquipSlot, Equipment};
+use crate::components::equipment::{Equipment, EquipmentSlot};
 use crate::components::inventory::{Cell, Footprint, Inventory, PlacementRejection};
 use crate::components::item_instance::ItemInstance;
-use crate::data::game_config::EquipmentSlot;
-use crate::data::item_definitions::ItemKind;
+use crate::data::atlas::Atlas;
+use crate::data::item_definitions::{ItemKind, WeaponHandling};
 use crate::entities::world_item::WorldItem;
 use crate::events::inventory::{
     EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
@@ -125,16 +124,17 @@ pub fn pickup(
 }
 
 /// Equips an item into a slot. Capability outranks transient state: an
-/// incompatible slot is rejected before an occupied one. On rejection the item
-/// rides the outcome back.
+/// incompatible slot is rejected before an occupied one, and two-handed
+/// dual-hand occupancy is checked last against the paired hand (resolved through
+/// the atlas). On rejection the item rides the outcome back.
 #[must_use]
 pub fn equip(
     equipment: Equipment,
     item: ItemInstance,
     def_kind: &ItemKind,
     slot: EquipmentSlot,
+    atlas: &Atlas,
 ) -> (Equipment, EquipOutcome) {
-    let slot = translate_slot(slot);
     if !slot_accepts(def_kind, slot) {
         return (
             equipment,
@@ -153,6 +153,15 @@ pub fn equip(
             },
         );
     }
+    if two_handed_conflict(&equipment, hand_occupation(def_kind), slot, atlas) {
+        return (
+            equipment,
+            EquipOutcome::Rejected {
+                reason: EquipRejection::TwoHandedConflict,
+                item,
+            },
+        );
+    }
     (equipment.with(slot, item), EquipOutcome::Equipped { slot })
 }
 
@@ -160,7 +169,6 @@ pub fn equip(
 /// success the removed item rides the outcome out.
 #[must_use]
 pub fn unequip(equipment: Equipment, slot: EquipmentSlot) -> (Equipment, UnequipOutcome) {
-    let slot = translate_slot(slot);
     let (equipment, taken) = equipment.without(slot);
     match taken {
         Some(item) => (equipment, UnequipOutcome::Unequipped { slot, item }),
@@ -168,46 +176,29 @@ pub fn unequip(equipment: Equipment, slot: EquipmentSlot) -> (Equipment, Unequip
     }
 }
 
-/// The one total translation from the `data` slot vocabulary to the component
-/// [`EquipSlot`].
-fn translate_slot(slot: EquipmentSlot) -> EquipSlot {
-    match slot {
-        EquipmentSlot::LeftHand => EquipSlot::LeftHand,
-        EquipmentSlot::RightHand => EquipSlot::RightHand,
-        EquipmentSlot::Helm => EquipSlot::Helm,
-        EquipmentSlot::Armor => EquipSlot::Armor,
-        EquipmentSlot::Pants => EquipSlot::Pants,
-        EquipmentSlot::Gloves => EquipSlot::Gloves,
-        EquipmentSlot::Boots => EquipSlot::Boots,
-        EquipmentSlot::Wings => EquipSlot::Wings,
-        EquipmentSlot::Pet => EquipSlot::Pet,
-        EquipmentSlot::Pendant => EquipSlot::Pendant,
-        EquipmentSlot::Ring1 => EquipSlot::Ring1,
-        EquipmentSlot::Ring2 => EquipSlot::Ring2,
-    }
-}
-
 /// Whether an item of `kind` may be worn in `slot` — the exhaustive
-/// `(ItemKind x EquipSlot)` compatibility rule. Non-equippable kinds accept no
-/// slot. Two-handed dual-hand occupancy is deferred: a two-handed weapon in one
-/// hand does not yet block the other.
-fn slot_accepts(kind: &ItemKind, slot: EquipSlot) -> bool {
+/// `(ItemKind x EquipmentSlot)` compatibility rule. Non-equippable kinds accept
+/// no slot. Two-handed dual-hand occupancy is a separate rule, enforced by the
+/// equip service's two-handed check and by [`reconcile_equipment`] at reload.
+fn slot_accepts(kind: &ItemKind, slot: EquipmentSlot) -> bool {
     match kind {
         ItemKind::Weapon { .. }
         | ItemKind::Bow { .. }
         | ItemKind::Crossbow { .. }
         | ItemKind::Staff { .. }
-        | ItemKind::Shield { .. } => matches!(slot, EquipSlot::LeftHand | EquipSlot::RightHand),
-        ItemKind::Helm { .. } => matches!(slot, EquipSlot::Helm),
-        ItemKind::BodyArmor { .. } => matches!(slot, EquipSlot::Armor),
-        ItemKind::Pants { .. } => matches!(slot, EquipSlot::Pants),
-        ItemKind::Gloves { .. } => matches!(slot, EquipSlot::Gloves),
-        ItemKind::Boots { .. } => matches!(slot, EquipSlot::Boots),
-        ItemKind::Wings { .. } => matches!(slot, EquipSlot::Wings),
-        ItemKind::Pet { .. } => matches!(slot, EquipSlot::Pet),
-        ItemKind::Pendant { .. } => matches!(slot, EquipSlot::Pendant),
+        | ItemKind::Shield { .. } => {
+            matches!(slot, EquipmentSlot::LeftHand | EquipmentSlot::RightHand)
+        }
+        ItemKind::Helm { .. } => matches!(slot, EquipmentSlot::Helm),
+        ItemKind::BodyArmor { .. } => matches!(slot, EquipmentSlot::Armor),
+        ItemKind::Pants { .. } => matches!(slot, EquipmentSlot::Pants),
+        ItemKind::Gloves { .. } => matches!(slot, EquipmentSlot::Gloves),
+        ItemKind::Boots { .. } => matches!(slot, EquipmentSlot::Boots),
+        ItemKind::Wings { .. } => matches!(slot, EquipmentSlot::Wings),
+        ItemKind::Pet { .. } => matches!(slot, EquipmentSlot::Pet),
+        ItemKind::Pendant { .. } => matches!(slot, EquipmentSlot::Pendant),
         ItemKind::Ring { .. } | ItemKind::TransformationRing { .. } => {
-            matches!(slot, EquipSlot::Ring1 | EquipSlot::Ring2)
+            matches!(slot, EquipmentSlot::Ring1 | EquipmentSlot::Ring2)
         }
         ItemKind::Arrows { .. }
         | ItemKind::Bolts { .. }
@@ -222,16 +213,170 @@ fn slot_accepts(kind: &ItemKind, slot: EquipSlot) -> bool {
     }
 }
 
+/// How many hands a hand item claims when worn: a two-handed weapon claims both,
+/// everything else claims one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HandOccupation {
+    /// Claims a single hand; the paired hand stays free for another one-hander.
+    OneHand,
+    /// Claims both hands; the paired hand must stay empty.
+    TwoHands,
+}
+
+/// How many hands an item claims in a hand slot. Total over [`ItemKind`];
+/// non-hand kinds never reach a hand slot ([`slot_accepts`] gates them), so
+/// [`HandOccupation::OneHand`] is a harmless total answer for them.
+// W-SRC: two-handedness is structural, not a stored flag. Melee weapons carry an
+// explicit `WeaponHandling`; bows and crossbows have no handling field because
+// they are two-handed by construction (they leave no hand for a shield) — an
+// authentic game fact, not an invented column. Staves are treated one-handed for
+// want of a two-handed flag; a handling distinction for staves (and any
+// two-handed staff) is a possible future data-model refinement, deliberately not
+// fabricated here.
+fn hand_occupation(kind: &ItemKind) -> HandOccupation {
+    match kind {
+        ItemKind::Weapon {
+            handling: WeaponHandling::TwoHanded,
+            ..
+        }
+        | ItemKind::Bow { .. }
+        | ItemKind::Crossbow { .. } => HandOccupation::TwoHands,
+        ItemKind::Weapon {
+            handling: WeaponHandling::OneHanded,
+            ..
+        }
+        | ItemKind::Staff { .. }
+        | ItemKind::Shield { .. }
+        | ItemKind::Helm { .. }
+        | ItemKind::BodyArmor { .. }
+        | ItemKind::Pants { .. }
+        | ItemKind::Gloves { .. }
+        | ItemKind::Boots { .. }
+        | ItemKind::Wings { .. }
+        | ItemKind::Pet { .. }
+        | ItemKind::Ring { .. }
+        | ItemKind::Pendant { .. }
+        | ItemKind::TransformationRing { .. }
+        | ItemKind::Arrows { .. }
+        | ItemKind::Bolts { .. }
+        | ItemKind::Orb { .. }
+        | ItemKind::SkillScroll { .. }
+        | ItemKind::Jewel { .. }
+        | ItemKind::Consumable { .. }
+        | ItemKind::LuckyBox
+        | ItemKind::EventTicket { .. }
+        | ItemKind::MixMaterial
+        | ItemKind::StatFruit => HandOccupation::OneHand,
+    }
+}
+
+/// The paired hand of a hand slot; `None` for a non-hand slot. Only the two hand
+/// slots pair — every other slot is independent.
+fn paired_hand(slot: EquipmentSlot) -> Option<EquipmentSlot> {
+    match slot {
+        EquipmentSlot::LeftHand => Some(EquipmentSlot::RightHand),
+        EquipmentSlot::RightHand => Some(EquipmentSlot::LeftHand),
+        EquipmentSlot::Helm
+        | EquipmentSlot::Armor
+        | EquipmentSlot::Pants
+        | EquipmentSlot::Gloves
+        | EquipmentSlot::Boots
+        | EquipmentSlot::Wings
+        | EquipmentSlot::Pet
+        | EquipmentSlot::Pendant
+        | EquipmentSlot::Ring1
+        | EquipmentSlot::Ring2 => None,
+    }
+}
+
+/// Whether a worn hand occupant is a two-handed weapon, resolved through the
+/// atlas. An occupant the atlas cannot identify is not a known two-handed weapon
+/// — a total fold of genuine optionality, never a should-never-happen panic.
+fn is_two_handed(occupant: &ItemInstance, atlas: &Atlas) -> bool {
+    match atlas.item(occupant.item) {
+        Some(def) => hand_occupation(&def.kind) == HandOccupation::TwoHands,
+        None => false,
+    }
+}
+
+/// Whether wearing an `incoming`-occupancy item in `slot` would break two-handed
+/// dual-hand occupancy: a two-handed item needs its paired hand empty, and no
+/// item may share a hand pair with a worn two-handed weapon. A non-hand slot has
+/// no paired hand, so it never conflicts.
+fn two_handed_conflict(
+    equipment: &Equipment,
+    incoming: HandOccupation,
+    slot: EquipmentSlot,
+    atlas: &Atlas,
+) -> bool {
+    let Some(paired) = paired_hand(slot) else {
+        return false;
+    };
+    let Some(occupant) = equipment.get(paired) else {
+        return false;
+    };
+    match incoming {
+        HandOccupation::TwoHands => true,
+        HandOccupation::OneHand => is_two_handed(occupant, atlas),
+    }
+}
+
+/// Re-proves two-handed dual-hand occupancy at the reload boundary — the
+/// instance×definition cross-reference the [`Equipment`] component cannot hold
+/// alone (a slot carries an [`ItemInstance`], whose handedness lives in the
+/// definition). A hand wearing a two-handed weapon requires the other hand empty.
+///
+/// # Errors
+/// Returns [`EquipmentConflict::TwoHandedWithOffhand`] when a hand wears a
+/// two-handed weapon while the other hand is also occupied.
+pub fn reconcile_equipment(equipment: &Equipment, atlas: &Atlas) -> Result<(), EquipmentConflict> {
+    match (
+        equipment.get(EquipmentSlot::LeftHand),
+        equipment.get(EquipmentSlot::RightHand),
+    ) {
+        (Some(left), Some(right)) => {
+            if is_two_handed(left, atlas) || is_two_handed(right, atlas) {
+                Err(EquipmentConflict::TwoHandedWithOffhand)
+            } else {
+                Ok(())
+            }
+        }
+        (Some(_) | None, None) | (None, Some(_)) => Ok(()),
+    }
+}
+
+/// Why a reloaded equipment set violates two-handed dual-hand occupancy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EquipmentConflict {
+    /// A hand wears a two-handed weapon while the other hand is also occupied.
+    TwoHandedWithOffhand,
+}
+
+impl core::fmt::Display for EquipmentConflict {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TwoHandedWithOffhand => write!(
+                f,
+                "a two-handed weapon is worn while the other hand is occupied"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for EquipmentConflict {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::class::ClassSet;
     use crate::components::item_instance::{Durability, LuckRoll, RarityRoll, SkillRoll};
     use crate::components::item_ref::ItemRef;
     use crate::components::spatial::WorldPos;
     use crate::components::units::{ItemLevel, MapNumber, Tick};
-    use crate::data::common::SkillNumber;
-    use crate::data::item_definitions::{ItemKind, WeaponHandling, WearRequirements};
+
+    // The equip service now resolves a paired-hand occupant through the Atlas, so
+    // its two-handed rule and `reconcile_equipment` are exercised against the real
+    // dataset in `core/tests/item_roll_integration.rs`. These inline tests cover
+    // the Atlas-free container geometry and the unequip fold.
 
     fn item(number: u16) -> ItemInstance {
         ItemInstance {
@@ -251,40 +396,6 @@ mod tests {
 
     fn cell(row: u8, col: u8) -> Cell {
         Cell { row, col }
-    }
-
-    fn weapon_kind() -> ItemKind {
-        ItemKind::Weapon {
-            handling: WeaponHandling::OneHanded,
-            min_damage: 1,
-            max_damage: 2,
-            attack_speed: 10,
-            skill: Some(SkillNumber(19)),
-            classes: ClassSet::NONE,
-            wear: WearRequirements {
-                level: 0,
-                strength: 0,
-                agility: 0,
-                vitality: 0,
-                energy: 0,
-                command: 0,
-            },
-        }
-    }
-
-    fn helm_kind() -> ItemKind {
-        ItemKind::Helm {
-            defense: 5,
-            classes: ClassSet::NONE,
-            wear: WearRequirements {
-                level: 0,
-                strength: 0,
-                agility: 0,
-                vitality: 0,
-                energy: 0,
-                command: 0,
-            },
-        }
     }
 
     #[test]
@@ -397,81 +508,23 @@ mod tests {
     }
 
     #[test]
-    fn equip_incompatible_slot_is_rejected_before_occupancy() {
-        let equipment = Equipment::empty();
-        let (equipment, outcome) = equip(equipment, item(1), &weapon_kind(), EquipmentSlot::Helm);
-        match outcome {
-            EquipOutcome::Rejected { reason, item } => {
-                assert_eq!(reason, EquipRejection::IncompatibleSlot);
-                assert_eq!(item.item.number, 1);
-            }
-            EquipOutcome::Equipped { .. } => panic!("a weapon does not go in the helm slot"),
-        }
-        assert!(equipment.get(EquipSlot::Helm).is_none());
-    }
-
-    #[test]
-    fn equip_into_a_valid_slot_then_occupied_is_rejected() {
-        let (equipment, outcome) = equip(
-            Equipment::empty(),
-            item(1),
-            &helm_kind(),
-            EquipmentSlot::Helm,
-        );
-        assert_eq!(
-            outcome,
-            EquipOutcome::Equipped {
-                slot: EquipSlot::Helm
-            }
-        );
-        let (equipment, outcome) = equip(equipment, item(2), &helm_kind(), EquipmentSlot::Helm);
-        match outcome {
-            EquipOutcome::Rejected { reason, item } => {
-                assert_eq!(reason, EquipRejection::SlotOccupied);
-                assert_eq!(item.item.number, 2);
-            }
-            EquipOutcome::Equipped { .. } => panic!("slot already occupied"),
-        }
-        assert_eq!(
-            equipment.get(EquipSlot::Helm).map(|item| item.item.number),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn weapon_accepts_either_hand() {
-        for slot in [EquipmentSlot::LeftHand, EquipmentSlot::RightHand] {
-            let (_, outcome) = equip(Equipment::empty(), item(1), &weapon_kind(), slot);
-            match outcome {
-                EquipOutcome::Equipped { .. } => {}
-                EquipOutcome::Rejected { .. } => panic!("a weapon fits either hand"),
-            }
-        }
-    }
-
-    #[test]
     fn unequip_empty_slot_reports_slot_empty() {
         let (equipment, outcome) = unequip(Equipment::empty(), EquipmentSlot::Boots);
         assert_eq!(outcome, UnequipOutcome::SlotEmpty);
-        assert!(equipment.get(EquipSlot::Boots).is_none());
+        assert!(equipment.get(EquipmentSlot::Boots).is_none());
     }
 
     #[test]
     fn unequip_hands_the_item_out() {
-        let (equipment, _) = equip(
-            Equipment::empty(),
-            item(7),
-            &helm_kind(),
-            EquipmentSlot::Helm,
-        );
+        let equipment = Equipment::empty().with(EquipmentSlot::Helm, item(7));
         let (equipment, outcome) = unequip(equipment, EquipmentSlot::Helm);
         match outcome {
             UnequipOutcome::Unequipped { slot, item } => {
-                assert_eq!(slot, EquipSlot::Helm);
+                assert_eq!(slot, EquipmentSlot::Helm);
                 assert_eq!(item.item.number, 7);
             }
             UnequipOutcome::SlotEmpty => panic!("the slot held an item"),
         }
-        assert!(equipment.get(EquipSlot::Helm).is_none());
+        assert!(equipment.get(EquipmentSlot::Helm).is_none());
     }
 }

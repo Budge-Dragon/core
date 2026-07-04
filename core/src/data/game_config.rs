@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::components::equipment::EquipmentSlot;
+
 use crate::components::interval::Interval;
 use crate::components::units::{DurationMs, TickDuration, Zen};
 
@@ -82,35 +84,4 @@ pub struct GridSize {
     pub rows: u8,
     /// Grid columns.
     pub columns: u8,
-}
-
-/// The twelve classic equipment slots. Authentic client wire indices are
-/// documented per variant; the enum itself carries no ordinal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EquipmentSlot {
-    /// Wire index 0.
-    LeftHand,
-    /// Wire index 1.
-    RightHand,
-    /// Wire index 2.
-    Helm,
-    /// Wire index 3.
-    Armor,
-    /// Wire index 4.
-    Pants,
-    /// Wire index 5.
-    Gloves,
-    /// Wire index 6.
-    Boots,
-    /// Wire index 7.
-    Wings,
-    /// Wire index 8.
-    Pet,
-    /// Wire index 9.
-    Pendant,
-    /// Wire index 10.
-    Ring1,
-    /// Wire index 11.
-    Ring2,
 }

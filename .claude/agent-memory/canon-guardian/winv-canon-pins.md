@@ -71,6 +71,37 @@ aggregation, and the Character-merge wave will re-open when they touch item inst
   invented by W-INV; canon "full at drop" (current==max) holds. Route the rarity-bonus
   authenticity to source-guardian if it re-opens; NOT a W-INV defect.
 
+## I1/I2/I3 debt close-out (code phase) — PASS
+- **Two-handed `hand_occupation` (services/inventory.rs) authentic.** TwoHands =
+  `Weapon{TwoHanded}` | Bow | Crossbow; everything else OneHand. Bow/Crossbow carry
+  NO `handling` field (item_definitions.rs:82-114) — two-handedness is structural
+  (no shield with a bow), not a fabricated column. Melee `WeaponHandling` abstracts
+  OpenMU's width rule (facts 1:50 `IsTwoHandedWeaponEquipped=1 for 2-wide non-bow`).
+  Staff-as-one-handed is a SIMPLIFICATION honestly flagged via `// W-SRC:` (authentic
+  staves are width-based; some 2-wide = two-handed) — no data field invented. OK.
+- **Scope boundary (not a defect):** OneHand+OneHand permits any two one-handers;
+  authentic dual-wield is class-gated (`DoubleWieldWeaponCount=1` only 1-wide melee
+  groups 0-2, facts 1:50). Belongs to a future equip class-restriction wave, not I1.
+- **`is_excellent_capable` gate (I3) canonical + authentic.** Gates the candidate pool
+  at `loot::item_drop` BEFORE `OneOrMore` sampling (weighted-selection canon: constrain
+  set before sampling), derived from the single `excellent_category` oracle (no dup kind
+  list). Excellent-capable families = physical weapons + bow/crossbow + staff, armor +
+  shield + ring, pendant — matches facts 2:32,71-73 exactly; wings/pets/jewels/ammo/
+  consumables/orbs/scrolls/transformation-ring excluded (wings roll own option + Luck,
+  not excellent). `None => RarityRoll::Normal` arm honestly documented unreachable +
+  total, no stale I3 anchor. Threading an ExcellentCategory proof into the serde
+  `Drop::Item` event would denormalize a derivable fact — re-derive is correct.
+- **OPEN authenticity gap → route to source-guardian (pre-existing, NOT an I3 defect):**
+  OpenMU excellent drop requires monsterLevel>=25 AND computes the pool at
+  (monsterLevel-25) (facts 2:75,142; 5:46,168). mu-core `item_drop` draws excellent from
+  the SAME `[level-11,level]` window as Normal — no -25 shift, no >=25 gate. So excellent
+  drops still pull higher-base items than authentic. A future excellent-drop wave reopens.
+- **`reconcile_equipment` mirrors `ItemInstance::reconcile`** (item_instance.rs:63):
+  equip-time block + reload reconcile is the textbook pair for a cross-slot invariant
+  that ALSO spans instance×definition (handedness lives in the def, resolved via Atlas),
+  so it can't be a pure `Equipment` type invariant. Non-serde boundary error enum with
+  Display+Error — justified parse-boundary error type (IL4 exception). Canonical.
+
 ## Verified-clean (strengths)
 - Anti-laundering clean: no ItemOptionDefinition/ItemOptionLink/DropItemGroup/
   ItemSetGroup generic machinery; rolled facts are typed fields; ancient = per-piece

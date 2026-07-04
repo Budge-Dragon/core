@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::equipment::EquipSlot;
+use crate::components::equipment::EquipmentSlot;
 use crate::components::inventory::{Cell, PlacementRejection};
 use crate::components::item_instance::ItemInstance;
 
@@ -80,7 +80,7 @@ pub enum EquipOutcome {
     /// The item was worn in `slot`.
     Equipped {
         /// The slot the item was worn in.
-        slot: EquipSlot,
+        slot: EquipmentSlot,
     },
     /// The equip was rejected; the bounced item is handed back.
     Rejected {
@@ -99,7 +99,7 @@ pub enum UnequipOutcome {
     /// The item was taken off `slot` and handed out.
     Unequipped {
         /// The slot the item was taken off.
-        slot: EquipSlot,
+        slot: EquipmentSlot,
         /// The removed item.
         item: ItemInstance,
     },
@@ -116,6 +116,10 @@ pub enum EquipRejection {
     IncompatibleSlot,
     /// The slot already holds an item.
     SlotOccupied,
+    /// Two-handed dual-hand occupancy is broken: a two-handed weapon needs its
+    /// paired hand empty, or the item would share a hand pair with a worn
+    /// two-handed weapon.
+    TwoHandedConflict,
 }
 
 #[cfg(test)]
@@ -154,13 +158,17 @@ mod tests {
             serde_json::to_string(&EquipRejection::IncompatibleSlot).unwrap(),
             r#""incompatible_slot""#
         );
+        assert_eq!(
+            serde_json::to_string(&EquipRejection::TwoHandedConflict).unwrap(),
+            r#""two_handed_conflict""#
+        );
     }
 
     #[test]
     fn equipped_and_slot_empty_wire_pins() {
         assert_eq!(
             serde_json::to_string(&EquipOutcome::Equipped {
-                slot: EquipSlot::Helm
+                slot: EquipmentSlot::Helm
             })
             .unwrap(),
             r#"{"kind":"equipped","slot":"helm"}"#

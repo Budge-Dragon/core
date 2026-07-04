@@ -11,7 +11,7 @@
 
 use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
-use mu_core::components::equipment::EquipSlot;
+use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, PlacementRejection};
 use mu_core::components::item_instance::{
@@ -676,7 +676,7 @@ fn container_outcome_wire_shapes_are_pinned() {
     );
     assert_eq!(
         serde_json::to_string(&EquipOutcome::Equipped {
-            slot: EquipSlot::Helm
+            slot: EquipmentSlot::Helm
         })
         .unwrap(),
         r#"{"kind":"equipped","slot":"helm"}"#
@@ -688,6 +688,10 @@ fn container_outcome_wire_shapes_are_pinned() {
     assert_eq!(
         serde_json::to_string(&EquipRejection::IncompatibleSlot).unwrap(),
         r#""incompatible_slot""#
+    );
+    assert_eq!(
+        serde_json::to_string(&EquipRejection::TwoHandedConflict).unwrap(),
+        r#""two_handed_conflict""#
     );
     assert_eq!(
         serde_json::to_string(&PlacementRejection::NoItemAtCell).unwrap(),
@@ -717,7 +721,7 @@ fn container_outcome_every_kind_tag_is_pinned() {
     }
     for outcome in [
         EquipOutcome::Equipped {
-            slot: EquipSlot::Ring1,
+            slot: EquipmentSlot::Ring1,
         },
         EquipOutcome::Rejected {
             reason: EquipRejection::SlotOccupied,

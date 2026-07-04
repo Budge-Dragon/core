@@ -1,6 +1,6 @@
 ---
 name: project-winv-inventory-wave-boundaries
-description: What W-INV (inventory, item instances, drop-time roll, containers) legitimately defers vs. what got tracked as debt (I1-I3) — so future reviews treat the deferrals as planned, not fresh violations.
+description: What W-INV (inventory, item instances, drop-time roll, containers) legitimately defers vs. what got tracked as debt (I1-I3, now ALL CLOSED 2026-07-04) — so future reviews treat the deferrals as planned, not fresh violations. Excellent-drop-window gap now split out as EXC-DROP-WINDOW.
 metadata:
   type: project
 ---
@@ -12,9 +12,25 @@ events. Scope boundary: `services/loot.rs` and `data/game_config.rs` were
 FROZEN/off-limits (loot is W-EFFECT's; game_config is a data file). See also
 [[project-spatial-foundation-wave-boundaries]], [[project-wcmb-combat-wave-boundaries]].
 
-**Audited 2026-07-04 — verdict DEBT-FOUND (tracked, not blocking). Three shipped-code
-deferrals tracked as I1-I3 in `docs/debt/inventory-item-wave-followups.md` + DEBT-INDEX;
-do NOT re-flag as fresh debt:**
+**CLOSED 2026-07-04 (all three discharged).** I1/I2/I3 root fixes landed on `main`,
+verified against the code by the debt-guardian, rows removed from DEBT-INDEX, record
+`inventory-item-wave-followups.md` marked CLOSED (commit pending — orchestrator owns
+git). Resolutions: **I1** — `equip` now calls `two_handed_conflict`(bidirectional) →
+`EquipRejection::TwoHandedConflict` AND `reconcile_equipment` → `EquipmentConflict::
+TwoHandedWithOffhand` at reload (both halves, as the record demanded); `hand_occupation`
+reads `WeaponHandling::TwoHanded`; `slot_accepts` deferral note deleted. **I2** — single
+`EquipmentSlot` in `components/equipment.rs`, `pub use` re-export from `game_config.rs:7`;
+`EquipSlot` twin + `translate_slot` deleted. **I3** — `is_excellent_capable` shared;
+`loot::item_drop` filters the excellent pool on it; roll's `None => Normal` arm now
+provably dead (comment updated). A PRE-EXISTING W-CMB gap the I3 fix sat next to — the
+excellent-drop level window — was split out as its OWN row **EXC-DROP-WINDOW**
+(`excellent-drop-level-window.md`, owner W-SRC): `item_drop` draws the excellent pool
+from the same `[level-11, level]` Normal band, missing the authentic `monster_level >= 25`
+gate AND the `level - 25` pool band. NOT attributable to I1-I3/W-INV. Kept OUT of
+CMB-CONST (that record owns the *value 25's provenance*; this is the *absent mechanic*).
+
+Original audit (2026-07-04, verdict DEBT-FOUND) preserved below for context — the three
+deferrals were tracked as I1-I3, now discharged:**
 - **I1** two-handed weapon does not block the paired hand (`equipment.rs` per-slot
   model has no cross-slot invariant; `services/inventory.rs:194` `slot_accepts`
   doc-flags it). Deferred because the reload half is a cross-reference check
