@@ -266,7 +266,7 @@ pub fn simulate(
                 let (before, behavior) = *slot;
                 // The host derives the mob's movement capability from its active
                 // effects and supplies it, keeping the AI service effect-unaware.
-                let capability = mobility(&before.active_effects, ONE_TILE);
+                let capability = mobility(&before.active_effects);
                 let (after, intent) = decide_monster_action(
                     &before, &behavior, None, now, tick, grid, capability, &mut rng,
                 );

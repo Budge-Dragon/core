@@ -4,10 +4,11 @@
 //! composed pipeline resolves a finite, well-formed, bit-for-bit replayable kill
 //! against the shipped `/data`.
 //!
-//! The second half is the mutation teeth-check: for each invariant the plan
-//! guards, a runnable comparison of the correct result against the specific bug
-//! that would break it, naming the inline test that reddens. The teeth-check is
-//! real code — it computes both values and asserts they differ — not prose.
+//! The second half pins the reward services to hand-derived golden expectations:
+//! experience bands computed from the rule statement, drop windows and plus
+//! levels computed from the item dataset, and the money-drop coupling — every
+//! oracle is derived by hand from the rules and the data, never re-transcribed
+//! from a production expression.
 //!
 //! This file carries its own dataset loader rather than sharing `common` (whose
 //! ambient-simulation helpers are unused here); load failures route through
@@ -23,12 +24,15 @@ use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::collections::OneOrMore;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::element::PerElement;
+use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::movement::{Mobility, Movement};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::Facing;
 use mu_core::components::tile::TileCoord;
-use mu_core::components::units::{DurationMs, Level, MapNumber, Resistance, Tick, TickDuration};
+use mu_core::components::units::{
+    DurationMs, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
+};
 use mu_core::data::ancient_sets::AncientSet;
 use mu_core::data::atlas::{Atlas, StaticData};
 use mu_core::data::box_drops::BoxDrop;
@@ -50,14 +54,17 @@ use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::combat::AttackOutcome;
-use mu_core::events::loot::Drop;
+use mu_core::events::kill::KillResolution;
+use mu_core::events::loot::{Drop, DropResolution};
 use mu_core::events::monster_ai::MonsterIntent;
+use mu_core::events::progression::ExpAward;
 use mu_core::events::skills::SkillOutcome;
 use mu_core::services::combat::resolve_attack;
+use mu_core::services::experience::award_kill_experience;
 use mu_core::services::kill::resolve_kill;
+use mu_core::services::loot::resolve_kill_drops;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::profile::{character_profile, monster_profile};
-use mu_core::services::ratio::{floor_div_u64_to_u32, nonzero, scale_ratio};
 use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
 
 // --- Self-contained dataset harness (load failures abort, never unwrap). ---
@@ -295,32 +302,6 @@ fn beat_to_death(
     strikes
 }
 
-fn assert_item_drop_in_formula(atlas: &Atlas, drop: &Drop, level: Level) {
-    let Drop::Item {
-        item, level: plus, ..
-    } = drop
-    else {
-        return;
-    };
-    let definition = or_abort(
-        atlas
-            .item(*item)
-            .ok_or("a dropped item must resolve in the atlas"),
-    );
-    let monster_level = level.get();
-    let above_base = u32::from(monster_level.saturating_sub(u16::from(definition.drop_level)));
-    let expected = (above_base / 3).min(u32::from(definition.max_item_level.get()));
-    assert!(
-        u32::from(plus.get()) <= u32::from(definition.max_item_level.get()),
-        "plus level within the item cap"
-    );
-    assert_eq!(
-        u32::from(plus.get()),
-        expected,
-        "plus level obeys the formula"
-    );
-}
-
 // --- End-to-end kill. ---
 
 #[test]
@@ -341,26 +322,6 @@ fn a_real_character_kills_a_real_monster_and_collects_a_well_formed_reward() {
         resolution.experience.gained.0 > 0,
         "a kill grants experience"
     );
-
-    // A money drop is exactly the awarded experience plus the base money bonus.
-    if let Drop::Zen { amount } = resolution.drops.category {
-        assert_eq!(amount.0, resolution.experience.gained.0 + 7);
-    }
-
-    // An item drop's plus level obeys min((level - drop_level) / 3, max).
-    assert_item_drop_in_formula(&atlas, &resolution.drops.category, combat.level);
-    for special in &resolution.drops.specials {
-        assert_item_drop_in_formula(&atlas, special, combat.level);
-    }
-
-    // Level-ups are strictly ascending.
-    let mut previous: Option<u16> = None;
-    for level_up in &resolution.level_ups {
-        if let Some(prior) = previous {
-            assert!(level_up.level.get() > prior, "level-ups ascend");
-        }
-        previous = Some(level_up.level.get());
-    }
 }
 
 #[test]
@@ -458,58 +419,273 @@ fn a_shoved_monster_re_chases_its_attacker() {
     assert!(proved, "a shoved, in-view monster re-engages its attacker");
 }
 
-// --- Mutation teeth-check: each injected bug vs. the correct behaviour. ---
+// --- Experience contracts: hand-derived golden bands over the real curve. ---
 
 #[test]
-fn teeth_min_damage_floor_scales_with_level() {
-    // Bug: floor the minimum damage at 0 instead of max(1, level/10). At level
-    // 4 the base floor 4/10 = 0, and the correct floor lifts it to 1; the
-    // mutation leaves it 0. Named inline test:
-    // services::combat::tests::minimum_damage_floor_scales_with_level.
-    let level = 4u32;
-    let buggy = level / 10;
-    let correct = buggy.max(1);
-    assert_eq!(buggy, 0);
-    assert_eq!(correct, 1);
-    assert_ne!(correct, buggy, "the min-damage floor has teeth");
+fn exp_low_level_award_is_the_base_scaled_band() {
+    // Hand-derived from the rule statement: a level-30 victim gives base
+    // (30 + 25) * 30 / 3 = 550; a level-30 killer is within the ten-level gap
+    // (no dampening) and the victim is below 65 (no bonus); the 5/4 era factor
+    // lifts it to 687; the authored 80..=120 percent jitter bounds the award
+    // to [549, 824].
+    let atlas = real_atlas();
+    let killer = dark_knight(30, 150, TileCoord::new(10, 10));
+    let (gained, level_ups) = award_kill_experience(
+        &killer,
+        Level::new(30).unwrap(),
+        &atlas,
+        &mut TestRng::new(7),
+    );
+    assert!(
+        (549..=824).contains(&gained.0),
+        "a level-30 victim awards within the hand-derived band, got {}",
+        gained.0
+    );
+    // Level 31 requires a 351_000 total on the shipped curve — far above any
+    // single award in the band, so a level-30 killer with zero experience
+    // cannot level from this kill.
+    assert!(level_ups.is_empty());
 }
 
 #[test]
-fn teeth_excellent_is_six_fifths_of_max_not_max() {
-    // Bug: an excellent hit deals max (like a critical) instead of 6/5 * max.
-    // At max 30 the correct excellent is 36; the mutation yields 30. Named
-    // inline test: services::combat::tests::critical_uses_max_and_excellent_outranks_it.
-    let max = 30u32;
-    let correct = scale_ratio(max, 6, nonzero(5));
-    assert_eq!(correct, 36);
-    assert_ne!(correct, max, "excellent-vs-critical has teeth");
+fn exp_over_level_dampening_keeps_a_positive_award() {
+    // Hand-derived: a level-20 victim gives base (20 + 25) * 20 / 3 = 300; a
+    // level-100 killer exceeds the ten-level gap, so the award dampens to
+    // 300 * 30 / 100 = 90; the 5/4 factor lifts it to 112; jitter bounds it to
+    // [89, 134]. Load-bearing against a divide-first mutation: 30 / 100
+    // truncates to zero, collapsing the whole award to 0, below the band.
+    let atlas = real_atlas();
+    let killer = dark_knight(100, 150, TileCoord::new(10, 10));
+    let (gained, _) = award_kill_experience(
+        &killer,
+        Level::new(20).unwrap(),
+        &atlas,
+        &mut TestRng::new(7),
+    );
+    assert!(
+        (89..=134).contains(&gained.0),
+        "an over-leveled kill still awards within the dampened band, got {}",
+        gained.0
+    );
 }
 
 #[test]
-fn teeth_defense_is_subtracted_from_the_base() {
-    // Bug: skip the defense subtraction. Span 20 minus defense 5 is 15; the
-    // mutation yields 20. Named inline test:
-    // services::combat::tests::a_normal_hit_is_span_minus_defense.
-    let span = 20u32;
-    let correct = span.saturating_sub(5);
-    assert_eq!(correct, 15);
-    assert_ne!(correct, span, "defense subtraction has teeth");
+fn exp_high_level_victim_award_exercises_the_bonus_path() {
+    // Path exerciser, not a bonus-term certifier: a level-108 victim (the real
+    // monster #77's level) gives base (108 + 25) * 108 / 3 = 4788, plus the
+    // high-level bonus (108 - 64) * (108 / 4) = 1188 = 5976; no dampening
+    // (killer 108 is within the gap); the 5/4 factor lifts it to 7470; jitter
+    // bounds it to [5976, 8964]. The no-bonus band [4788, 7182] overlaps this
+    // one, so a bonus-drop mutation is NOT guaranteed to redden here — no real
+    // (<= 108) victim level separates the bands once jitter applies.
+    let atlas = real_atlas();
+    let killer = dark_knight(108, 150, TileCoord::new(10, 10));
+    let (gained, _) = award_kill_experience(
+        &killer,
+        Level::new(108).unwrap(),
+        &atlas,
+        &mut TestRng::new(7),
+    );
+    assert!(
+        (5976..=8964).contains(&gained.0),
+        "a high-level victim awards within the with-bonus band, got {}",
+        gained.0
+    );
 }
 
 #[test]
-fn teeth_exp_dampening_multiplies_then_divides() {
-    // Bug: divide before multiplying — base * ((t+10)/k) integer-truncates the
-    // ratio to 0 when k > t+10. Correct multiply-then-divide keeps the value.
-    // Named inline test: services::experience::tests::over_level_dampening_multiplies_then_divides.
-    let base = 300u32;
-    let victim_plus_ten = 30u32;
-    let killer_level = 100u32;
-    let correct = scale_ratio(base, victim_plus_ten, nonzero(killer_level)); // base * 30 / 100
-    let buggy = base * (victim_plus_ten / killer_level); // base * (30/100 = 0)
-    assert_eq!(correct, 90);
-    assert_eq!(buggy, 0);
-    assert_ne!(correct, buggy, "multiply-then-divide has teeth");
+fn a_kill_that_crosses_multiple_levels_lists_them_ascending() {
+    // Hand-derived: monster #37 is a real level-60 fighter, so a level-1 killer
+    // with zero experience gains base (60 + 25) * 60 / 3 = 1700, undampened and
+    // unbonused, scaled 5/4 to 2125, jittered to [1700, 2550]. On the shipped
+    // curve the totals to hold are L2=100, L3=440, L4=1080, L5=2080, L6=3500,
+    // so every jitter crosses levels 2, 3, and 4, at most level 5, never 6 —
+    // the level-ups list is contiguous and ascending from level 2.
+    let atlas = real_atlas();
+    let killer = dark_knight(1, 150, TileCoord::new(10, 10));
+    let victim = victim_instance(MonsterNumber(37), 5000);
+    let mut rng = TestRng::new(7);
+    let resolution = resolve_kill(&killer, &victim, &atlas, &mut rng);
+
+    let gained = resolution.experience.gained.0;
+    assert!(
+        (1700..=2550).contains(&gained),
+        "a level-60 victim awards within the hand-derived band, got {gained}"
+    );
+    assert!(
+        resolution.level_ups.len() >= 3,
+        "every jitter crosses at least levels 2, 3, and 4, got {}",
+        resolution.level_ups.len()
+    );
+    for (expected_level, level_up) in (2u16..).zip(resolution.level_ups.iter()) {
+        assert_eq!(
+            level_up.level.get(),
+            expected_level,
+            "level-ups ascend contiguously from level 2"
+        );
+    }
 }
+
+// --- Loot contracts: hand-derived goldens over the real item dataset. ---
+
+#[test]
+fn a_money_drop_is_the_awarded_experience_plus_seven() {
+    // The awarded experience is chosen by hand (1000); the base money bonus
+    // from the rule statement is 7, so a money drop carries exactly 1007 zen.
+    // Monster #24 is a real level-20 fighter; the money category is a 50%
+    // roll, so a 64-seed search always observes it.
+    let atlas = real_atlas();
+    let victim = victim_instance(MonsterNumber(24), 600);
+    let victim_level = Level::new(20).unwrap();
+
+    let mut found = false;
+    for seed in 0u64..64 {
+        let mut rng = TestRng::new(seed);
+        let resolution = resolve_kill_drops(&victim, victim_level, Exp(1000), &atlas, &mut rng);
+        if let Drop::Zen { amount } = resolution.category {
+            assert_eq!(
+                amount,
+                Zen(1007),
+                "a money drop is the awarded experience plus seven"
+            );
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "the 50% money category lands within 64 seeds");
+}
+
+#[test]
+fn resolve_kill_threads_the_awarded_experience_into_the_money_drop() {
+    // Orchestrator coupling: the money drop must ride the experience the same
+    // resolution reports as gained. Hand-derived band for victim level 20 and
+    // killer level 30: base 300, no dampening (30 does not exceed 20 + 10),
+    // scaled 375, jittered to [300, 450].
+    let atlas = real_atlas();
+    let killer = dark_knight(30, 150, TileCoord::new(10, 10));
+    let victim = victim_instance(MonsterNumber(24), 600);
+
+    let mut found = false;
+    for seed in 0u64..64 {
+        let mut rng = TestRng::new(seed);
+        let resolution = resolve_kill(&killer, &victim, &atlas, &mut rng);
+        if let Drop::Zen { amount } = resolution.drops.category {
+            let gained = resolution.experience.gained.0;
+            assert!(
+                (300..=450).contains(&gained),
+                "the gained experience sits in the hand-derived band, got {gained}"
+            );
+            assert_eq!(
+                amount.0,
+                gained + 7,
+                "the money drop is the resolution's own gained experience plus seven"
+            );
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "the 50% money category lands within 64 seeds");
+}
+
+#[test]
+fn an_item_drops_plus_level_comes_from_the_monster_level_window() {
+    // Hand-derived from the item dataset: the [89, 100] window below a
+    // level-100 monster (real monster #75) holds exactly ONE droppable item —
+    // the staff (group 5, number 8), drop level 90, max item level 11 — so the
+    // pick is seed-independent. Ten levels above its drop level thirds down to
+    // plus 3, below the cap. The item category is a 30% roll.
+    let atlas = real_atlas();
+    let victim = victim_instance(MonsterNumber(75), 50_000);
+    let victim_level = Level::new(100).unwrap();
+    let expected = Drop::Item {
+        item: ItemRef {
+            group: 5,
+            number: 8,
+        },
+        level: ItemLevel::new(3).unwrap(),
+        rarity: ItemRarity::Normal,
+    };
+
+    let mut found = false;
+    for seed in 0u64..64 {
+        let mut rng = TestRng::new(seed);
+        let resolution = resolve_kill_drops(&victim, victim_level, Exp(0), &atlas, &mut rng);
+        if let Drop::Item { .. } = resolution.category {
+            assert_eq!(
+                resolution.category, expected,
+                "the window's single droppable item falls at plus 3"
+            );
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "the 30% item category lands within 64 seeds");
+}
+
+#[test]
+fn an_item_drops_plus_is_capped_at_its_max_item_level() {
+    // Hand-derived from the item dataset: the [85, 96] window below a level-96
+    // monster (real monster #72) holds two droppable items — the skill scroll
+    // (group 15, number 13), drop level 88, max item level 0, and the staff
+    // (group 5, number 8). Eight levels above the scroll's drop level thirds
+    // to 2 uncapped, so a returned plus of 0 can only be the cap binding.
+    let atlas = real_atlas();
+    let victim = victim_instance(MonsterNumber(72), 41_000);
+    let victim_level = Level::new(96).unwrap();
+    let scroll = ItemRef {
+        group: 15,
+        number: 13,
+    };
+
+    let mut found = false;
+    for seed in 0u64..512 {
+        let mut rng = TestRng::new(seed);
+        let resolution = resolve_kill_drops(&victim, victim_level, Exp(0), &atlas, &mut rng);
+        if let Drop::Item { item, level, .. } = resolution.category {
+            if item == scroll {
+                assert_eq!(
+                    level,
+                    ItemLevel::ZERO,
+                    "the scroll's plus level clamps to its max item level"
+                );
+                found = true;
+                break;
+            }
+        }
+    }
+    assert!(found, "the scroll pick lands within 512 seeds");
+}
+
+#[test]
+fn a_passive_victim_yields_no_reward_and_draws_no_randomness() {
+    // Monster #200 is the real soccer ball and #235 a real quest NPC — neither
+    // carries a combat block, so a kill yields the zero reward and returns
+    // before any roll: the RNG stream must be untouched.
+    let atlas = real_atlas();
+    let killer = dark_knight(30, 150, TileCoord::new(10, 10));
+    let zero_reward = KillResolution {
+        drops: DropResolution {
+            category: Drop::Nothing,
+            specials: Vec::new(),
+        },
+        experience: ExpAward { gained: Exp(0) },
+        level_ups: Vec::new(),
+    };
+
+    for number in [MonsterNumber(200), MonsterNumber(235)] {
+        let victim = victim_instance(number, 1);
+        let mut rng = TestRng::new(11);
+        let resolution = resolve_kill(&killer, &victim, &atlas, &mut rng);
+        assert_eq!(resolution, zero_reward);
+        assert_eq!(
+            rng.next_u64(),
+            TestRng::new(11).next_u64(),
+            "a passive-victim kill consumes no randomness"
+        );
+    }
+}
+
+// --- Skill and drop-window guards over the shipped data. ---
 
 #[test]
 fn teeth_empty_drop_window_is_guarded_before_any_table() {
@@ -521,28 +697,10 @@ fn teeth_empty_drop_window_is_guarded_before_any_table() {
 }
 
 #[test]
-fn teeth_ability_pools_before_dividing_not_after() {
-    // Bug: sum per-term truncations instead of one pooled divide. The Magic
-    // Gladiator ability numerator 3510/100 pools to 35; per-term truncation
-    // gives 3 + 12 + 7 + 12 = 34. Named inline test:
-    // services::profile::tests::magic_gladiator_ability_pools_to_35_not_34.
-    let (e, v, a, s) = (24u64, 40, 30, 60);
-    let pooled = floor_div_u64_to_u32(15 * e + 30 * v + 25 * a + 20 * s, nonzero(100));
-    let per_term = 15 * e / 100 + 30 * v / 100 + 25 * a / 100 + 20 * s / 100;
-    assert_eq!(pooled, 35);
-    assert_eq!(per_term, 34);
-    assert_ne!(
-        u64::from(pooled),
-        per_term,
-        "the pooled single divide has teeth"
-    );
-}
-
-#[test]
-fn teeth_lightning_hit_reports_displacement() {
-    // Bug: skip the lightning/lunge knockback composition. A landed lightning
-    // strike must be able to report a displacement; the mutation would leave it
-    // forever None. Driven through the real cast service over the shipped data.
+fn a_landed_lightning_strike_reports_a_knockback() {
+    // Drives the real cast service over the shipped data: a landed lightning
+    // strike must be able to report a displacement. A mutation dropping the
+    // knockback composition would leave it forever None.
     let atlas = real_atlas();
     let (_, combat, _) = low_level_monster(&atlas, 20);
     let grid = atlas.walk_grid(MapNumber(0)).unwrap().clone();
@@ -574,6 +732,6 @@ fn teeth_lightning_hit_reports_displacement() {
     }
     assert!(
         saw_displacement,
-        "a landed lightning strike reports a knockback (displacement has teeth)"
+        "a landed lightning strike reports a knockback"
     );
 }

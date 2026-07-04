@@ -27,7 +27,7 @@ use mu_core::components::item_options::{
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
-use mu_core::components::movement::{Mobility, Movement};
+use mu_core::components::movement::{Mobility, Movement, SlowRatio};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{
@@ -790,10 +790,10 @@ fn mobility_wire_shapes_are_pinned() {
     );
     assert_eq!(
         serde_json::to_string(&Mobility::Slowed {
-            speed: Fixed::from_raw(32_768)
+            ratio: SlowRatio::HALVED
         })
         .unwrap(),
-        r#"{"kind":"slowed","speed":32768}"#
+        r#"{"kind":"slowed","ratio":{"num":1,"den":2}}"#
     );
     assert_eq!(
         serde_json::to_string(&Mobility::Immobilized).unwrap(),
@@ -920,7 +920,7 @@ fn mobility_every_kind_tag_is_pinned() {
     for mobility in [
         Mobility::Free,
         Mobility::Slowed {
-            speed: Fixed::from_raw(1),
+            ratio: SlowRatio::HALVED,
         },
         Mobility::Immobilized,
     ] {

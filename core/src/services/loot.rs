@@ -220,16 +220,4 @@ mod tests {
         assert_eq!(narrow_u8(200), 200);
         assert_eq!(narrow_u8(300), 255);
     }
-
-    #[test]
-    fn money_drop_is_experience_plus_seven() {
-        // The money category yields exp + 7; the Atlas-backed drop behaviour
-        // (window, partition, specials) is proven end-to-end over the real
-        // dataset in `core/tests/combat_simulation.rs`.
-        let awarded = Exp(100);
-        let drop = Drop::Zen {
-            amount: Zen(awarded.0.saturating_add(BASE_MONEY_DROP)),
-        };
-        assert_eq!(drop, Drop::Zen { amount: Zen(107) });
-    }
 }

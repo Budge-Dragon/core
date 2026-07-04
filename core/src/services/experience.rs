@@ -85,36 +85,3 @@ fn level_ups(killer: &Character, new_total: Exp, atlas: &Atlas) -> Vec<LevelUp> 
     }
     level_ups
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn base_award_matches_the_pooled_formula_at_low_level() {
-        // t = 30, no dampening (k close), no high-level bonus.
-        // base = (30 + 25) * 30 / 3 = 550; * 5/4 = 687; jitter later.
-        let raw = (30u32 + 25) * 30 / 3;
-        assert_eq!(raw, 550);
-        let scaled = scale_ratio(raw, 5, nonzero(4));
-        assert_eq!(scaled, 687);
-    }
-
-    #[test]
-    fn over_level_dampening_multiplies_then_divides() {
-        // t = 20, k = 100: base * (t + 10) / k = base * 30 / 100.
-        let base = (20u32 + 25) * 20 / 3;
-        let damped = scale_ratio(base, 30, nonzero(100));
-        // Multiply-then-divide keeps precision a divide-first would lose.
-        assert_eq!(damped, base * 30 / 100);
-        assert!(damped < base);
-    }
-
-    #[test]
-    fn high_level_bonus_floors_the_quarter_term_first() {
-        // t = 70: bonus = (70 - 64) * (70 / 4) = 6 * 17 = 102 (17, not 17.5).
-        let t = 70u32;
-        let bonus = (t - 64) * (t / 4);
-        assert_eq!(bonus, 102);
-    }
-}

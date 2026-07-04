@@ -15,7 +15,7 @@ use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
 use mu_core::components::element::PerElement;
-use mu_core::components::movement::{Mobility, Movement};
+use mu_core::components::movement::{Mobility, Movement, SlowRatio};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, Fixed, UNITS_PER_TILE};
@@ -35,7 +35,7 @@ use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterDefinition, MonsterRole};
-use mu_core::data::skills::{CastCost, Skill};
+use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
 use mu_core::data::special_drops::SpecialDropRecord;
 use mu_core::data::terrain::{MapTerrain, TerrainBytes};
@@ -47,7 +47,7 @@ use mu_core::services::effects::{
 };
 use mu_core::services::movement::resolve_step;
 use mu_core::services::profile::{character_profile, effective_profile};
-use mu_core::services::skills::cast_heal;
+use mu_core::services::skills::{HealRef, SkillRouting, cast_heal, route};
 
 // --- Self-contained dataset harness (load failures abort, never unwrap). ---
 
@@ -171,6 +171,15 @@ fn first_monster(atlas: &Atlas) -> (MonsterCombat, PerElement<Resistance>) {
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
         });
     or_abort(found.ok_or("the dataset ships fighting monsters"))
+}
+
+/// The first heal skill the real dataset ships, routed to a [`HealRef`].
+fn heal_skill(atlas: &Atlas) -> HealRef<'_> {
+    let found = atlas.skills().find_map(|skill| match route(skill) {
+        SkillRouting::Heal(reference) => Some(reference),
+        SkillRouting::Damaging(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => None,
+    });
+    or_abort(found.ok_or("the dataset ships a heal skill"))
 }
 
 /// The resolved per-tick poison damage a caster inflicts, read off the applied
@@ -301,18 +310,22 @@ fn a_greater_damage_buff_makes_the_effective_profile_hit_harder() {
 
 #[test]
 fn iced_halves_a_step_and_frozen_blocks_it() {
-    let base = Fixed::from_raw(UNITS_PER_TILE);
     let iced = ActiveEffects::EMPTY.with(ActiveEffect::Iced { expiry: Tick(600) });
     let frozen = ActiveEffects::EMPTY.with(ActiveEffect::Frozen { expiry: Tick(600) });
 
-    let iced_speed = match mobility(&iced, base) {
-        Mobility::Slowed { speed } => speed,
+    // Iced confers the half-speed slow ratio; Frozen immobilizes; an empty store
+    // leaves movement free.
+    assert_eq!(mobility(&ActiveEffects::EMPTY), Mobility::Free);
+    assert_eq!(mobility(&frozen), Mobility::Immobilized);
+    let ratio = match mobility(&iced) {
+        Mobility::Slowed { ratio } => ratio,
         Mobility::Free | Mobility::Immobilized => panic!("iced must slow"),
     };
-    assert_eq!(iced_speed.raw(), base.raw() / 2);
-    assert_eq!(mobility(&frozen, base), Mobility::Immobilized);
+    assert_eq!(ratio, SlowRatio::HALVED);
 
-    // The iced speed carries into the movement service: a half-tile step.
+    // The half-speed ratio applied to a one-tile base carries into the movement
+    // service as a half-tile step.
+    let iced_speed = Fixed::from_raw(UNITS_PER_TILE / 2);
     let grid = WalkGrid::from_words([u64::MAX; 1024]);
     let start = Placement {
         position: TileCoord::new(10, 10).to_world(),
@@ -354,16 +367,11 @@ fn teeth_poison_fires_seven_ticks_not_eight() {
 
 #[test]
 fn teeth_heal_is_bounded_by_max_not_a_raw_add() {
+    let atlas = real_atlas();
+    let heal = heal_skill(&atlas);
     let caster = wizard(30); // heal = 5 + 30/5 = 11
     let nearly_full = Pool::new(98, 100).unwrap();
-    let (_, outcome) = cast_heal(
-        &caster,
-        CastCost {
-            mana: 0,
-            ability: 0,
-        },
-        nearly_full,
-    );
+    let (_, outcome) = cast_heal(&caster, heal, nearly_full);
     let restored = match outcome {
         BuffCastOutcome::Healed { amount } => amount,
         BuffCastOutcome::Rejected { .. } | BuffCastOutcome::Applied { .. } => {
@@ -377,12 +385,15 @@ fn teeth_heal_is_bounded_by_max_not_a_raw_add() {
 
 #[test]
 fn teeth_iced_slows_rather_than_being_ignored() {
-    let base = Fixed::from_raw(UNITS_PER_TILE);
     let iced = ActiveEffects::EMPTY.with(ActiveEffect::Iced { expiry: Tick(600) });
     // Correct: iced slows. A bug that ignored the factor would leave it Free.
-    assert_ne!(mobility(&iced, base), Mobility::Free);
-    match mobility(&iced, base) {
-        Mobility::Slowed { speed } => assert!(speed.raw() < base.raw()),
+    assert_ne!(mobility(&iced), Mobility::Free);
+    match mobility(&iced) {
+        Mobility::Slowed { ratio } => {
+            assert_eq!(ratio, SlowRatio::HALVED);
+            // A genuine slow: the fraction is strictly below one.
+            assert!(ratio.num() < ratio.den().get());
+        }
         Mobility::Free | Mobility::Immobilized => panic!("iced must slow"),
     }
 }

@@ -352,8 +352,7 @@ pub fn cast(
         );
     }
 
-    let caster_profile =
-        effective_profile(character_profile(caster).0, &caster.active_effects());
+    let caster_profile = effective_profile(character_profile(caster).0, &caster.active_effects());
     let mut hits = Vec::with_capacity(struck.len());
     for &(index, target) in &struck {
         hits.push(resolve_target_hit(
@@ -598,6 +597,7 @@ fn spend_cost(vitals: Vitals, cost: CastCost) -> Vitals {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::active_effect::ActiveEffect;
     use crate::components::element::PerElement;
     use crate::components::movement::Movement;
     use crate::components::spatial::Facing;
@@ -696,6 +696,14 @@ mod tests {
             }
         });
         serde_json::from_value(json).unwrap()
+    }
+
+    /// The same caster carrying one active timed effect — round-tripped through
+    /// the wire so the effect lands in the character's private store.
+    fn with_effect(caster: &Character, effect: ActiveEffect) -> Character {
+        let mut value = serde_json::to_value(caster).unwrap();
+        value["active_effects"] = serde_json::to_value(ActiveEffects::EMPTY.with(effect)).unwrap();
+        serde_json::from_value(value).unwrap()
     }
 
     fn resistances(lightning: u8) -> PerElement<Resistance> {
@@ -974,6 +982,82 @@ mod tests {
         assert!(matches!(outcome, SkillOutcome::Cast { .. }));
     }
 
+    /// The damage a single-target cast dealt to its one struck target (landed or
+    /// lethal), or `None` for a miss or rejection.
+    fn landed_damage(outcome: SkillOutcome) -> Option<u32> {
+        match outcome {
+            SkillOutcome::Cast { hits, .. } => match hits.first() {
+                Some(target_hit) => match target_hit.outcome {
+                    AttackOutcome::Landed { hit } | AttackOutcome::Killed { hit } => {
+                        Some(hit.damage.0)
+                    }
+                    AttackOutcome::Missed => None,
+                },
+                None => None,
+            },
+            SkillOutcome::Rejected { .. } => None,
+        }
+    }
+
+    #[test]
+    fn an_active_greater_damage_buff_raises_the_casters_cast_damage() {
+        // The empty-effects fold is the identity: an unbuffed caster strikes with
+        // its base profile, so this wave leaves the effect-free cast byte-identical.
+        let plain = caster_at((10, 10), 100, 100);
+        let base = character_profile(&plain).0;
+        assert_eq!(effective_profile(base, &plain.active_effects()), base);
+
+        // The same caster carrying an active Greater Damage buff folds the
+        // offensive bonus into its strike profile, so its cast lands strictly more
+        // damage under an identical seed and target.
+        let buffed = with_effect(
+            &plain,
+            ActiveEffect::GreaterDamage {
+                amount: 40,
+                expiry: Tick(1000),
+            },
+        );
+        let definition = skill(SkillShape::DirectHit, None, None, 3, 0, 0);
+        let damaging = damaging_ref(&definition);
+        let targets = [target_at((11, 10), 0)];
+        let aim = TileCoord::new(11, 10).to_world();
+        let mut compared = false;
+        for seed in 0u64..8 {
+            let plain_dmg = landed_damage(
+                cast(
+                    &plain,
+                    damaging,
+                    aim,
+                    &targets,
+                    &all_walkable(),
+                    &mut TestRng::new(seed),
+                )
+                .1,
+            );
+            let buffed_dmg = landed_damage(
+                cast(
+                    &buffed,
+                    damaging,
+                    aim,
+                    &targets,
+                    &all_walkable(),
+                    &mut TestRng::new(seed),
+                )
+                .1,
+            );
+            // The hit roll is identical (the buff never touches attack rate), so a
+            // landing plain strike implies a landing buffed strike.
+            if let (Some(plain_dmg), Some(buffed_dmg)) = (plain_dmg, buffed_dmg) {
+                assert!(
+                    buffed_dmg > plain_dmg,
+                    "seed {seed}: buffed {buffed_dmg} must exceed plain {plain_dmg}"
+                );
+                compared = true;
+            }
+        }
+        assert!(compared, "at least one seed lands a comparable hit");
+    }
+
     #[test]
     fn a_non_elemental_hit_inflicts_its_ailment_and_an_elemental_hit_gates_on_resistance() {
         let caster = caster_at((10, 10), 100, 100);
@@ -1221,16 +1305,51 @@ mod tests {
     }
 
     #[test]
+    fn cast_buff_rejects_an_out_of_range_receiver_and_applies_an_in_range_one() {
+        let caster = caster_at((10, 10), 100, 100);
+        let def = skill(
+            SkillShape::BuffPlayer {
+                buff: Buff::GreaterDefense,
+            },
+            None,
+            None,
+            6,
+            20,
+            0,
+        );
+        let buff = applicable_buff(&def);
+        // A receiver 30 tiles away is beyond the skill's 6-tile range.
+        let far = TileCoord::new(40, 10).to_world();
+        let (vitals, outcome) =
+            cast_buff(&caster, buff, far, ActiveEffects::EMPTY, Tick(0), tick50());
+        assert_eq!(
+            vitals,
+            caster.vitals(),
+            "an out-of-range cast spends nothing"
+        );
+        assert_eq!(
+            outcome,
+            BuffCastOutcome::Rejected {
+                reason: CastRejection::OutOfRange
+            }
+        );
+        // A receiver within the 6-tile range applies.
+        let near = TileCoord::new(13, 10).to_world();
+        let (_, applied) = cast_buff(&caster, buff, near, ActiveEffects::EMPTY, Tick(0), tick50());
+        assert!(matches!(applied, BuffCastOutcome::Applied { .. }));
+    }
+
+    #[test]
     fn cast_heal_restores_energy_scaled_health_bounded_by_max() {
         let caster = caster_at((10, 10), 100, 100);
         let def = skill(SkillShape::Heal, None, None, 0, 10, 0);
         let heal = heal(&def);
         // 5 + 30/5 = 11 restored into the wound.
-        let (vitals, outcome) = cast_heal(&caster, heal.cost(), Pool::new(50, 100).unwrap());
+        let (vitals, outcome) = cast_heal(&caster, heal, Pool::new(50, 100).unwrap());
         assert_eq!(vitals.mana.current(), 90);
         assert_eq!(outcome, BuffCastOutcome::Healed { amount: 11 });
         // Near full, only the restorable amount is reported (2 of 11 fit).
-        let (_, capped) = cast_heal(&caster, heal.cost(), Pool::new(98, 100).unwrap());
+        let (_, capped) = cast_heal(&caster, heal, Pool::new(98, 100).unwrap());
         assert_eq!(capped, BuffCastOutcome::Healed { amount: 2 });
     }
 
@@ -1239,7 +1358,7 @@ mod tests {
         let caster = caster_at((10, 10), 3, 100);
         let def = skill(SkillShape::Heal, None, None, 0, 50, 0);
         let heal = heal(&def);
-        let (vitals, outcome) = cast_heal(&caster, heal.cost(), Pool::new(50, 100).unwrap());
+        let (vitals, outcome) = cast_heal(&caster, heal, Pool::new(50, 100).unwrap());
         assert_eq!(vitals, caster.vitals());
         assert_eq!(
             outcome,
