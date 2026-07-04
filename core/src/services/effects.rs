@@ -19,11 +19,14 @@ use crate::events::combat::Damage;
 use crate::events::effect::EffectEvent;
 use crate::services::ratio::{nonzero, scale_ratio};
 
-// W-SRC: classic status-effect durations (the SubType timers). Frozen/Ice-Arrow
-// is an S6 backport; DefenseReduction has no identified pre-S3 inflicting skill.
-/// Iced (movement-slow) duration.
+// W-SRC: status-effect durations (OpenMU SubType timers, MagicEffectDefinition
+// initializers). Iced 10s and Frozen 5s are the Ice-Arrow / freeze timers;
+// Frozen (Ice Arrow) is an S6 backport and DefenseReduction has no identified
+// pre-S3 inflicting skill — both are deliberate design inclusions, not
+// era-authentic pre-S3 mechanics.
+/// Iced (movement-slow) duration — 10s.
 const ICED_MS: DurationMs = DurationMs(10_000);
-/// Frozen (movement-stop) duration.
+/// Frozen (movement-stop) duration — 5s (S6 Ice-Arrow form).
 const FROZEN_MS: DurationMs = DurationMs(5_000);
 /// Defense-reduction ailment duration.
 const DEFENSE_REDUCTION_MS: DurationMs = DurationMs(10_000);
@@ -34,31 +37,42 @@ const GREATER_MS: DurationMs = DurationMs(60_000);
 /// Poison cadence: one damage tick every three seconds.
 const POISON_CADENCE_MS: DurationMs = DurationMs(3_000);
 
-// W-SRC: energy-scaled buff magnitudes (the Elf Greater Damage / Greater Defense
-// curves) and the Defense-buff halving.
-/// Greater Damage flat base, before the energy term.
+// W-SRC: energy-scaled buff magnitudes, source-verified against OpenMU's Elf
+// buff initializers (GreaterDamageEffectInitializer / GreaterDefenseEffect-
+// Initializer): Greater Damage +(3 + Energy/7), Greater Defense +(2 + Energy/8),
+// each 60s and StopByDeath. The DK Defense ×1/2 incoming-damage form is OpenMU's
+// S6-era model, adopted deliberately (unconfirmed pre-S3).
+/// Greater Damage flat base, before the energy term: `3 + Energy/7`.
 const GREATER_DAMAGE_BASE: u32 = 3;
 /// Greater Damage energy divisor: `+ Energy / 7`.
 const GREATER_DAMAGE_ENERGY_DEN: u32 = 7;
-/// Greater Defense flat base, before the energy term.
+/// Greater Defense flat base, before the energy term: `2 + Energy/8`.
 const GREATER_DEFENSE_BASE: u32 = 2;
 /// Greater Defense energy divisor: `+ Energy / 8`.
 const GREATER_DEFENSE_ENERGY_DEN: u32 = 8;
-/// DK Defense buff: incoming damage reduced by this percentage (×1/2).
+/// DK Defense buff: incoming damage reduced by this percentage (×1/2). S6-era
+/// form, adopted deliberately.
 const DEFENSE_INCOMING_REDUCTION_POINTS: u8 = 50;
 
-// EFF-POISON: placeholder — tune vs direct-spell DPS (see
-// docs/debt/poison-damage-balance.md). Poison damage scales off the CASTER's
-// energy (base + Energy × num/den), NOT the target's max HP, so a weak caster's
-// poison is weak and a strong caster's can kill — a deliberate modern deviation
-// from the authentic percent-of-victim-max-HP model.
-/// EFF-POISON: placeholder — poison per-tick flat base (kept ≥ 1 so every tick
-/// deals at least one damage).
-const POISON_BASE: u32 = 3;
-/// EFF-POISON: placeholder — poison energy-term numerator.
+// EFF-POISON: CALIBRATED against direct wizardry DPS. Poison damage scales off
+// the CASTER's energy (`base + Energy × num/den`), NOT the target's HP, so a weak
+// caster's poison is weak and a strong caster's can kill — a deliberate modern
+// deviation from the authentic 3%-of-current-HP model (self-limiting, never
+// kills).
+//
+// Calibration: a direct wizardry cast deals [Energy/9, Energy/4] (the wizard
+// wizardry span). Poison per tick = `1 + Energy/9` ≈ ONE direct cast's MINIMUM.
+// A poison session is 6 ticks over ~20s (3s cadence) ≈ 6·Energy/9 = 2·Energy/3
+// total — about 8/3 of a single max cast, spread over 20s. Sustained direct
+// casting lands far more than 6 hits in 20s, so poison is meaningful supplementary
+// pressure yet well below direct throughput. Remaining tuning is normal live
+// balance, not tracked debt.
+/// Poison per-tick flat base — kept ≥ 1 so every tick deals at least one damage.
+const POISON_BASE: u32 = 1;
+/// Poison energy-term numerator.
 const POISON_ENERGY_NUM: u32 = 1;
-/// EFF-POISON: placeholder — poison energy-term divisor (`+ Energy / 10`).
-const POISON_ENERGY_DEN: u32 = 10;
+/// Poison energy-term divisor (`+ Energy / 9`, ≈ a direct cast's minimum).
+const POISON_ENERGY_DEN: u32 = 9;
 
 /// The buffs this wave resolves to a timed effect — the applicable subset of
 /// [`crate::data::effects::Buff`]. The rest (Soul Barrier, Swell Life, …) are
@@ -105,7 +119,7 @@ pub fn apply_buff(
 
 /// Applies an ailment to a store, mapping the data [`Ailment`] to the
 /// component-level effect. Poison resolves its per-tick damage from the caster's
-/// energy (see EFF-POISON) and starts its seven-tick counter; the status
+/// energy (see EFF-POISON) and starts its six-tick counter; the status
 /// ailments resolve an absolute expiry from their fixed durations and ignore the
 /// energy. Iced and Frozen share the one ice slot, so applying one clears the
 /// other. Returns the updated store and the resolved [`ActiveEffect`].
@@ -230,7 +244,7 @@ fn expire_timed(
 /// turn — reducing health, then either killing (clearing every effect, no
 /// further ticks), self-terminating on the last counter tick, or advancing the
 /// counter and the next-tick schedule by the stored cadence. The loop is bounded
-/// by the counter reaching zero, so a large `now`-gap never fires an eighth
+/// by the counter reaching zero, so a large `now`-gap never fires a seventh
 /// tick.
 fn advance_poison(
     result: ActiveEffects,
@@ -275,12 +289,14 @@ fn advance_poison(
 
 /// The transient combat contribution one active effect folds into a profile, or
 /// `None` for effects that are movement, derivation, or damage-over-time rather
-/// than additive profile bonuses. This is [`CombatBonus`]'s first consumer.
+/// than additive profile bonuses.
 #[must_use]
 pub(crate) fn effect_bonus(effect: &ActiveEffect) -> Option<CombatBonus> {
     match effect {
-        // W-SRC: Greater Damage raises both physical span ends (a flat add).
-        ActiveEffect::GreaterDamage { amount, .. } => Some(CombatBonus::PhysicalDamage {
+        // W-SRC: Greater Damage (GreaterDamageEffectInitializer.cs) is a flat add
+        // applied to outgoing damage AFTER defense subtraction — CombatBonus::Damage,
+        // never a physical-span raise (which crit/excellent would then amplify).
+        ActiveEffect::GreaterDamage { amount, .. } => Some(CombatBonus::Damage {
             amount: u32::from(*amount),
         }),
         ActiveEffect::GreaterDefense { amount, .. } => Some(CombatBonus::Defense {
@@ -402,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn poison_apply_seeds_seven_ticks_at_the_cadence() {
+    fn poison_apply_seeds_six_ticks_at_the_cadence() {
         let (store, effect) = apply_ailment(
             Ailment::Poisoned,
             70,
@@ -433,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn poison_deals_exactly_seven_ticks_totaling_seven_times_per_tick() {
+    fn poison_deals_exactly_six_ticks_totaling_six_times_per_tick() {
         let energy = 70u16;
         let per_tick = poison_per_tick(energy);
         let big_pool = Pool::full(1_000_000);
@@ -450,10 +466,10 @@ mod tests {
             .iter()
             .filter(|event| matches!(event, EffectEvent::PoisonTick { .. }))
             .count();
-        assert_eq!(ticks, 7, "exactly seven ticks fire, never an eighth");
+        assert_eq!(ticks, 6, "exactly six ticks fire, never a seventh");
         assert_eq!(
             big_pool.current() - health.current(),
-            per_tick.saturating_mul(7)
+            per_tick.saturating_mul(6)
         );
         assert!(after.poison().is_none(), "poison self-terminates");
         assert!(events.iter().any(|event| matches!(
@@ -484,7 +500,7 @@ mod tests {
                 .iter()
                 .any(|event| matches!(event, EffectEvent::PoisonKilled { .. }))
         );
-        // No eighth-or-later tick: death stops the stream.
+        // No seventh-or-later tick: death stops the stream.
         let ticks = events
             .iter()
             .filter(|event| matches!(event, EffectEvent::PoisonTick { .. }))

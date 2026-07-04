@@ -37,7 +37,7 @@
     "gemstone_refinery_refine_restore": "S6 mixes #33/#34/#35: Jewel of Harmony ecosystem (S4)",
     "cherry_blossom_mix": "S6 mix #41: seasonal event (S4+)",
     "first_wings_misery_result": "S6 adds Wings of Misery (12,41) to the 1st-wings results; Summoner (S3) — 095d result list used",
-    "jewel_mixes_lahap": "Lahap jewel packing (10 S6 JewelMix records): not a chaos mix, excluded by decision (crafting.md)"
+    "jewel_mixes_lahap": "Lahap jewel packing (10 S6 JewelMix records): not a chaos mix, excluded by decision (decision 5)"
   },
   "notes": {
     "window_wire_shape": "item-level windows emit {min,max} (Interval canonical wire, shared with box_drops item_level_range) per the R3 task-brief override of the older Window note; feather/crest stay ItemAtLevel {item,level}",

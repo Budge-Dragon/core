@@ -220,6 +220,7 @@ fn skill_event_wire_shapes_are_pinned() {
                 },
             },
             health: Pool::new(20, 60).unwrap(),
+            active_effects: ActiveEffects::EMPTY,
             inflicted: None,
             displacement: None,
         }],
@@ -227,7 +228,7 @@ fn skill_event_wire_shapes_are_pinned() {
     assert_eq!(
         serde_json::to_string(&cast).unwrap(),
         format!(
-            r#"{{"kind":"cast","caster_placement":{PLACEMENT_JSON},"hits":[{{"target_index":0,"outcome":{{"kind":"landed","hit":{{"damage":7,"quality":"normal","modifiers":[]}}}},"health":{{"current":20,"max":60}},"inflicted":null,"displacement":null}}]}}"#
+            r#"{{"kind":"cast","caster_placement":{PLACEMENT_JSON},"hits":[{{"target_index":0,"outcome":{{"kind":"landed","hit":{{"damage":7,"quality":"normal","modifiers":[]}}}},"health":{{"current":20,"max":60}},"active_effects":[],"inflicted":null,"displacement":null}}]}}"#
         )
     );
 }
@@ -767,7 +768,7 @@ fn active_effect_wire_shapes_are_pinned() {
             cadence: Ticks(60),
         })
         .unwrap(),
-        r#"{"kind":"poisoned","per_tick_damage":12,"remaining":7,"next_tick":60,"cadence":60}"#
+        r#"{"kind":"poisoned","per_tick_damage":12,"remaining":6,"next_tick":60,"cadence":60}"#
     );
     assert_eq!(
         serde_json::to_string(&EffectIdentity::DefenseReduction).unwrap(),

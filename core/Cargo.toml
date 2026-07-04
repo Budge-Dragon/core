@@ -1,6 +1,7 @@
 [package]
 name = "mu-core"
 description = "Pure, host-agnostic game logic for the MU Online rewrite."
+readme = "../README.md"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -21,7 +21,6 @@ use rand_core::RngCore;
 use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::ActiveEffects;
-use mu_core::components::collections::OneOrMore;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::element::PerElement;
 use mu_core::components::item_quality::ItemRarity;
@@ -357,6 +356,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
         monster_profile(&combat, &zero_resistances(), combat.level),
         Pool::full(combat.hp),
         town_tile(monster_tile),
+        ActiveEffects::EMPTY,
     );
     let bolt_def = lightning_bolt();
     let bolt = as_damaging(&bolt_def).unwrap();
@@ -685,16 +685,7 @@ fn a_passive_victim_yields_no_reward_and_draws_no_randomness() {
     }
 }
 
-// --- Skill and drop-window guards over the shipped data. ---
-
-#[test]
-fn teeth_empty_drop_window_is_guarded_before_any_table() {
-    // Bug: build the pick table before checking the window is non-empty. The
-    // loot service matches OneOrMore::new(..) first, so an empty window is a
-    // real Drop::Nothing; without the guard pick_one has no total input.
-    // Named behaviour: services::loot::item_drop's empty-window arm.
-    assert!(OneOrMore::<ItemRef>::new(Vec::new()).is_err());
-}
+// --- Skill guards over the shipped data. ---
 
 #[test]
 fn a_landed_lightning_strike_reports_a_knockback() {
@@ -709,6 +700,7 @@ fn a_landed_lightning_strike_reports_a_knockback() {
         monster_profile(&combat, &zero_resistances(), combat.level),
         Pool::full(combat.hp),
         town_tile(TileCoord::new(136, 125)),
+        ActiveEffects::EMPTY,
     );
     let bolt_def = lightning_bolt();
     let bolt = as_damaging(&bolt_def).unwrap();

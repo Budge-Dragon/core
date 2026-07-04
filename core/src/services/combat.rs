@@ -28,8 +28,9 @@ const OVERRATE_DEN: u32 = 10;
 const MIN_DAMAGE_FLOOR_DIVISOR: u32 = 10;
 
 /// Resolves one physical strike: rolls to hit, then — on a hit — the damage
-/// span and the four special-hit rolls, applies defense, the overrate penalty,
-/// doubling, and the minimum-damage floor, and reduces the defender's health.
+/// span and the four special-hit rolls, applies defense, the attacker's flat
+/// Greater-Damage add, the minimum-damage floor, the overrate penalty, doubling,
+/// and the defender's timed %-reduction, and reduces the defender's health.
 /// Returns the defender's health after the strike and the [`AttackOutcome`].
 #[must_use]
 pub fn resolve_attack(
@@ -97,10 +98,13 @@ fn hit_chance(attacker: &CombatProfile, target: &CombatProfile) -> ChancePer1000
     ChancePer10000::clamped(u64::from(numerator))
 }
 
-/// The damage magnitude of a landed hit: the quality-selected base, minus
-/// defense unless ignored, the overrate penalty when the defender out-rates,
-/// doubled when the double roll succeeded, and finally floored at
-/// `max(1, level / 10)` — the floor applied last so it always holds.
+/// The damage magnitude of a landed hit, in the OpenMU `AttackableExtensions`
+/// fold order: the quality-selected base, minus the defender's defense (unless
+/// ignored, EARLY), plus the attacker's flat Greater-Damage add (MIDDLE), floored
+/// at `max(1, level / 10)`, then the attacker's damage multipliers (overrate
+/// penalty, doubling), then the defender's timed %-reduction (LATE). The floor is
+/// applied before the multipliers and the %-reduction and is *not* re-applied, so
+/// a ×1/2 defensive buff can push the final below it.
 fn damage_dealt(
     attacker: &CombatProfile,
     target: &CombatProfile,
@@ -125,18 +129,22 @@ fn damage_dealt(
     } else {
         base.saturating_sub(u32::from(target.defense()))
     };
+    // W-SRC: the attacker's Greater-Damage add is a FLAT add applied here, after
+    // defense and before the floor — never a raise of the physical span, since the
+    // quality base above is already fixed, so crit/excellent cannot amplify it.
+    let after_greater = after_defense.saturating_add(attacker.flat_damage_add());
+    let floor = (u32::from(attacker.level().get()) / MIN_DAMAGE_FLOOR_DIVISOR).max(1);
+    let floored = after_greater.max(floor);
     let after_overrate = if target.defense_rate() > attacker.attack_rate() {
-        scale_ratio(after_defense, OVERRATE_NUM, nonzero(OVERRATE_DEN))
+        scale_ratio(floored, OVERRATE_NUM, nonzero(OVERRATE_DEN))
     } else {
-        after_defense
+        floored
     };
     let after_double = if doubled {
         after_overrate.saturating_mul(2)
     } else {
         after_overrate
     };
-    let floor = (u32::from(attacker.level().get()) / MIN_DAMAGE_FLOOR_DIVISOR).max(1);
-    let floored = after_double.max(floor);
     // The defender's timed damage-reduction is the final step, applied after the
     // floor: `damage × (100 - reduction) / 100`. A zero reduction (the gearless
     // and effect-free case) is the identity, so this is byte-identical to a
@@ -144,7 +152,7 @@ fn damage_dealt(
     // reduction field already reflects any active defensive buff.
     let reduction = u32::from(target.incoming_damage_reduction().points());
     scale_ratio(
-        floored,
+        after_double,
         u32::from(Percent::DENOMINATOR).saturating_sub(reduction),
         nonzero(u32::from(Percent::DENOMINATOR)),
     )
@@ -227,6 +235,7 @@ mod tests {
             defense_ignore_chance: Percent::ZERO,
             double_damage_chance: Percent::ZERO,
             incoming_damage_reduction: Percent::ZERO,
+            flat_damage_add: 0,
         }
     }
 
@@ -416,6 +425,47 @@ mod tests {
         CombatProfile {
             incoming_damage_reduction: Percent::new(points).unwrap(),
             ..base
+        }
+    }
+
+    /// The base profile with a flat Greater-Damage add set.
+    fn with_flat_add(base: CombatProfile, amount: u32) -> CombatProfile {
+        CombatProfile {
+            flat_damage_add: amount,
+            ..base
+        }
+    }
+
+    #[test]
+    fn flat_damage_add_lands_after_defense_and_crit_excellent_do_not_amplify_it() {
+        // Fixed span 20, defender defense 5, level-10 attacker (floor 1).
+        let target = plain(10, 0, 0, 5, 0, 0);
+        // Normal strike: (20 - 5) + 8 flat = 23.
+        let normal = with_flat_add(plain(10, 20, 20, 0, 10_000, 0), 8);
+        let mut rng = TestRng::new(31);
+        let (_, outcome) = resolve_attack(&normal, &target, Pool::full(200), &mut rng);
+        match outcome {
+            AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(23)),
+            AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
+        }
+        // Excellent 100% forces the excellent tier (base = 6/5 × max = 24); the
+        // flat add is NOT amplified by the quality: (24 - 5) + 8 = 27, i.e. the
+        // same +8 the normal strike got, never +8 × 6/5.
+        let excellent = with_chances(
+            with_flat_add(plain(10, 20, 20, 0, 10_000, 0), 8),
+            100,
+            0,
+            0,
+            0,
+        );
+        let mut rng = TestRng::new(31);
+        let (_, outcome) = resolve_attack(&excellent, &target, Pool::full(200), &mut rng);
+        match outcome {
+            AttackOutcome::Landed { hit } => {
+                assert_eq!(hit.quality, HitQuality::Excellent);
+                assert_eq!(hit.damage, Damage(27));
+            }
+            AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
         }
     }
 

@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["core", "xtask"]
-# Future host crates live under hosts/ (see hosts/README.md) and are added
-# here when created. Hosts embed mu-core; mu-core never depends on a host.
+# Hosts (game server, clients) are separate repos that embed mu-core; this
+# workspace stays pure core and gains no host members (see hosts/README.md).
+# mu-core never depends on a host.
 #
 # `xtask` is the repo's dev-tooling binary (the `cargo xtask` pattern). It is
 # NOT part of mu-core and never enters its dependency graph: it omits
@@ -23,7 +24,7 @@ missing_docs = "warn"
 # Portability rules (no wall-clock, no threads, no logging) are enforced
 # mechanically via disallowed-types/methods/macros in clippy.toml.
 pedantic = { level = "warn", priority = -1 }
-# Iron Law 3 (CLAUDE.md): no type-system suppressors. CI runs -D warnings,
+# No type-system suppressors. CI runs -D warnings,
 # making these build-failing. Tests are exempted in clippy.toml.
 allow_attributes = "warn"
 expect_used = "warn"
@@ -34,7 +35,7 @@ unimplemented = "warn"
 unreachable = "warn"
 unwrap_used = "warn"
 wildcard_enum_match_arm = "warn"
-# Determinism (CLAUDE.md: fixed-point only). Float arithmetic is
+# Determinism: fixed-point only. Float arithmetic is
 # non-associative and rounds differently across native/wasm/FFI, breaking the
 # replay guarantee, so any float math is build-failing. (Declaring a bare float
 # type is review-enforced — a disallowed-types entry for f32/f64 would

@@ -88,16 +88,16 @@ impl IceStatus {
 
 /// The remaining poison tick counter: a positive count that governs
 /// self-termination. Zero is unrepresentable — a poison with no ticks left is
-/// removed, not held — so the counter can never gate an eighth tick. Serialized
+/// removed, not held — so the counter can never gate a seventh tick. Serialized
 /// as a bare integer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u8", into = "u8")]
 pub struct PoisonTicks(NonZeroU8);
 
 impl PoisonTicks {
-    /// The poison tick count at application: seven ticks, three seconds apart.
-    // W-SRC: classic poison lasts ~20s at a 3s cadence — 7 damage ticks.
-    pub const INITIAL: Self = match NonZeroU8::new(7) {
+    /// The poison tick count at application: six ticks, three seconds apart.
+    // W-SRC: authentic wizard Poison lasts ~20s at a 3s cadence — 6 damage ticks.
+    pub const INITIAL: Self = match NonZeroU8::new(6) {
         Some(count) => Self(count),
         None => Self(NonZeroU8::MIN),
     };
@@ -497,9 +497,9 @@ mod tests {
     }
 
     #[test]
-    fn poison_ticks_initial_is_seven_and_self_terminates() {
+    fn poison_ticks_initial_is_six_and_self_terminates() {
         let mut ticks = PoisonTicks::INITIAL;
-        assert_eq!(ticks.get(), 7);
+        assert_eq!(ticks.get(), 6);
         let mut fired = 0;
         loop {
             fired += 1;
@@ -508,7 +508,7 @@ mod tests {
                 None => break,
             }
         }
-        assert_eq!(fired, 7, "exactly seven ticks fire");
+        assert_eq!(fired, 6, "exactly six ticks fire");
     }
 
     #[test]
@@ -574,7 +574,7 @@ mod tests {
         let json = serde_json::to_string(&store).unwrap();
         assert_eq!(
             json,
-            r#"[{"kind":"defense","expiry":40},{"kind":"poisoned","per_tick_damage":12,"remaining":7,"next_tick":60,"cadence":60}]"#
+            r#"[{"kind":"defense","expiry":40},{"kind":"poisoned","per_tick_damage":12,"remaining":6,"next_tick":60,"cadence":60}]"#
         );
         assert_eq!(serde_json::from_str::<ActiveEffects>(&json).unwrap(), store);
     }

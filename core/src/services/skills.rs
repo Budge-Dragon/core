@@ -227,7 +227,7 @@ fn route_buff(skill: &Skill, buff: Buff) -> SkillRouting<'_> {
 /// discs, frontal cones, and forward line beams. Exhaustive over all eighteen
 /// patterns; a new pattern breaks the build until its region is defined.
 #[must_use]
-pub fn area_region(pattern: AreaPattern, caster: Placement, aim: WorldPos, range: u8) -> Region {
+fn area_region(pattern: AreaPattern, caster: Placement, aim: WorldPos, range: u8) -> Region {
     match pattern {
         AreaPattern::EvilSpirit
         | AreaPattern::Hellfire
@@ -507,9 +507,12 @@ fn skill_region(skill: DamagingSkillRef<'_>, caster: Placement, aim: WorldPos) -
     }
 }
 
-/// Resolves one target's hit: the strike, then — only on a landed (non-lethal)
-/// hit — the elemental ailment and the single knockback. RNG order: strike,
-/// element application roll, knockback heading.
+/// Resolves one target's hit: folds the target's own defensive effects into the
+/// profile it is struck against (so the two-sided fold is authoritative in core),
+/// then the strike, then — only on a landed (non-lethal) hit — the elemental
+/// ailment and the single knockback. A lethal strike clears the victim's whole
+/// effect store (every effect is `StopByDeath`). RNG order: strike, element
+/// application roll, knockback heading.
 fn resolve_target_hit(
     index: usize,
     caster_profile: &CombatProfile,
@@ -518,7 +521,8 @@ fn resolve_target_hit(
     grid: &WalkGrid,
     rng: &mut impl RngCore,
 ) -> TargetHit {
-    let (health, outcome) = resolve_attack(caster_profile, target.profile(), target.health(), rng);
+    let target_profile = effective_profile(*target.profile(), &target.active_effects());
+    let (health, outcome) = resolve_attack(caster_profile, &target_profile, target.health(), rng);
     let mut inflicted = None;
     let mut displacement = None;
     if let AttackOutcome::Landed { .. } = outcome {
@@ -530,10 +534,18 @@ fn resolve_target_hit(
             displacement = knockback(target.placement(), grid, rng);
         }
     }
+    // A lethal strike clears the victim's whole effect store in-core; a non-lethal
+    // strike carries it forward unchanged (a newly inflicted ailment is reported
+    // separately in `inflicted` for the host to apply).
+    let active_effects = match outcome {
+        AttackOutcome::Killed { .. } => ActiveEffects::EMPTY,
+        AttackOutcome::Landed { .. } | AttackOutcome::Missed => target.active_effects(),
+    };
     TargetHit {
         target_index: index,
         outcome,
         health,
+        active_effects,
         inflicted,
         displacement,
     }
@@ -719,12 +731,24 @@ mod tests {
     }
 
     fn target_at(tile: (u8, u8), lightning_resist: u8) -> CombatTarget {
+        target_with(tile, lightning_resist, 0, 300, ActiveEffects::EMPTY)
+    }
+
+    /// A monster target with a tunable defense, health, and carried effects — the
+    /// defensive-fold and clear-on-kill tests read these knobs.
+    fn target_with(
+        tile: (u8, u8),
+        lightning_resist: u8,
+        defense: u16,
+        hp: u32,
+        active_effects: ActiveEffects,
+    ) -> CombatTarget {
         let combat = crate::data::monster_definitions::MonsterCombat {
             level: crate::components::units::Level::new(20).unwrap(),
             hp: 300,
             min_phys_damage: 5,
             max_phys_damage: 10,
-            defense: 0,
+            defense,
             attack_rate: 10,
             defense_rate: 10,
         };
@@ -735,7 +759,7 @@ mod tests {
             movement: Movement::Grounded,
             map: MapNumber(0),
         };
-        CombatTarget::new(profile, Pool::full(300), placement)
+        CombatTarget::new(profile, Pool::full(hp), placement, active_effects)
     }
 
     /// Extracts the damaging reference the router yields, or fails the test — the
@@ -1056,6 +1080,132 @@ mod tests {
             }
         }
         assert!(compared, "at least one seed lands a comparable hit");
+    }
+
+    #[test]
+    fn a_targets_defensive_effects_change_the_damage_it_takes_through_cast() {
+        // An unbuffed caster (flat add 0) striking a monster with base defense 20,
+        // so a defensive effect folded onto the TARGET visibly moves the damage —
+        // proving the two-sided fold runs through the real cast() path, not just
+        // effective_profile in isolation.
+        let caster = caster_at((10, 10), 100, 100);
+        let definition = skill(SkillShape::DirectHit, None, None, 3, 0, 0);
+        let damaging = damaging_ref(&definition);
+        let aim = TileCoord::new(11, 10).to_world();
+
+        let plain = [target_with((11, 10), 0, 20, 300, ActiveEffects::EMPTY)];
+        let greater_defense = [target_with(
+            (11, 10),
+            0,
+            20,
+            300,
+            ActiveEffects::EMPTY.with(ActiveEffect::GreaterDefense {
+                amount: 30,
+                expiry: Tick(1000),
+            }),
+        )];
+        let defense_reduction = [target_with(
+            (11, 10),
+            0,
+            20,
+            300,
+            ActiveEffects::EMPTY.with(ActiveEffect::DefenseReduction { expiry: Tick(1000) }),
+        )];
+        let dk_defense = [target_with(
+            (11, 10),
+            0,
+            20,
+            300,
+            ActiveEffects::EMPTY.with(ActiveEffect::Defense { expiry: Tick(1000) }),
+        )];
+
+        let cast_dmg = |targets: &[CombatTarget], seed: u64| {
+            landed_damage(
+                cast(
+                    &caster,
+                    damaging,
+                    aim,
+                    targets,
+                    &all_walkable(),
+                    &mut TestRng::new(seed),
+                )
+                .1,
+            )
+        };
+
+        let mut compared = false;
+        for seed in 0u64..16 {
+            let (Some(base), Some(gd), Some(dr), Some(dk)) = (
+                cast_dmg(&plain, seed),
+                cast_dmg(&greater_defense, seed),
+                cast_dmg(&defense_reduction, seed),
+                cast_dmg(&dk_defense, seed),
+            ) else {
+                continue;
+            };
+            // Greater Defense raises defense -> less damage; Defense-reduction
+            // lowers it -> more damage; DK Defense halves incoming -> less damage.
+            assert!(
+                gd < base,
+                "seed {seed}: greater defense {gd} vs base {base}"
+            );
+            assert!(
+                dr > base,
+                "seed {seed}: defense-reduction {dr} vs base {base}"
+            );
+            assert!(dk < base, "seed {seed}: dk defense {dk} vs base {base}");
+            compared = true;
+        }
+        assert!(compared, "at least one seed lands on every variant");
+    }
+
+    #[test]
+    fn a_lethal_strike_clears_the_victims_active_effects() {
+        // A frail (1 HP) monster carrying poison + ice is one-shot; the kill clears
+        // its whole effect store in-core (every W-EFFECT effect is StopByDeath).
+        let caster = caster_at((10, 10), 100, 100);
+        let definition = skill(SkillShape::DirectHit, None, None, 3, 0, 0);
+        let damaging = damaging_ref(&definition);
+        let aim = TileCoord::new(11, 10).to_world();
+        let afflicted = ActiveEffects::EMPTY
+            .with(ActiveEffect::Poisoned {
+                per_tick_damage: 5,
+                remaining: crate::components::active_effect::PoisonTicks::INITIAL,
+                next_tick: Tick(60),
+                cadence: crate::components::units::Ticks(60),
+            })
+            .with(ActiveEffect::Iced { expiry: Tick(600) });
+        let targets = [target_with((11, 10), 0, 0, 1, afflicted)];
+
+        let mut saw_kill = false;
+        for seed in 0u64..16 {
+            let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                damaging,
+                aim,
+                &targets,
+                &all_walkable(),
+                &mut TestRng::new(seed),
+            )
+            .1
+            else {
+                continue;
+            };
+            let Some(hit) = hits.first() else { continue };
+            match hit.outcome {
+                AttackOutcome::Killed { .. } => {
+                    assert_eq!(
+                        hit.active_effects,
+                        ActiveEffects::EMPTY,
+                        "a lethal strike clears every effect"
+                    );
+                    saw_kill = true;
+                    break;
+                }
+                AttackOutcome::Landed { .. } | AttackOutcome::Missed => {}
+            }
+        }
+        assert!(saw_kill, "a landing strike kills the 1-HP victim");
     }
 
     #[test]

@@ -13,7 +13,7 @@ use core::ops::{Add, Div, Mul, Sub};
 
 use serde::{Deserialize, Serialize};
 
-/// Fractional bits per classic tile: the `Q40.24` split in `i64`.
+/// Fractional bits per classic tile: the `Q48.16` split in `i64`.
 pub const TILE_SHIFT: u32 = 16;
 /// Sub-units per classic tile (`2^TILE_SHIFT`).
 pub const UNITS_PER_TILE: i64 = 1 << TILE_SHIFT;
@@ -101,7 +101,7 @@ impl core::fmt::Display for SpatialError {
 
 impl core::error::Error for SpatialError {}
 
-/// A fixed-point scalar in `Q40.24` (`2^16` sub-units per tile). The wire form
+/// A fixed-point scalar in `Q48.16` (`2^16` sub-units per tile). The wire form
 /// is a bare integer; the value itself is unbounded — bounds live on the
 /// position types that embed it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -164,7 +164,7 @@ impl NonZeroFixed {
 impl Mul for Fixed {
     type Output = Fixed;
 
-    /// Fixed-point multiply in `Q40.24`: round-nearest with ties away from zero,
+    /// Fixed-point multiply in `Q48.16`: round-nearest with ties away from zero,
     /// saturating on narrow. The exact product forms in `i128`, is rounded down
     /// by [`TILE_SHIFT`] fractional bits, then narrows back to sub-units.
     fn mul(self, other: Fixed) -> Fixed {
@@ -843,7 +843,7 @@ fn facing_in_bounds(value: i64) -> bool {
     (-WORLD_EXTENT..=WORLD_EXTENT).contains(&value)
 }
 
-/// The fixed-point quotient `numerator / divisor` in `Q40.24` — round-nearest,
+/// The fixed-point quotient `numerator / divisor` in `Q48.16` — round-nearest,
 /// ties away from zero, saturating narrow. A free function so the `TILE_SHIFT`
 /// scale-up does not sit inside the [`Div`] impl (which reads as expecting `/`).
 fn fixed_div(numerator: Fixed, divisor: NonZeroFixed) -> Fixed {

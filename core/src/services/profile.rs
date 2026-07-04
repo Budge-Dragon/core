@@ -66,10 +66,14 @@ pub fn monster_profile(
         defense_ignore_chance: Percent::ZERO,
         double_damage_chance: Percent::ZERO,
         incoming_damage_reduction: Percent::ZERO,
+        flat_damage_add: 0,
     }
 }
 
-// W-SRC: the Defense-reduction ailment scales defense to ×9/10.
+// W-SRC: the Defense-reduction ailment scales defense to ×9/10. OpenMU inflicts
+// it via DefenseReductionEffectInitializer; no pre-S3 skill or monster applies it
+// (Fire Slash / Beast Uppercut are S4+), so we include it as a deliberate design
+// choice, not an era-authentic mechanic.
 /// Defense-reduction numerator.
 const DEFENSE_REDUCTION_NUM: u32 = 9;
 /// Defense-reduction denominator.
@@ -95,16 +99,17 @@ pub fn effective_profile(base: CombatProfile, effects: &ActiveEffects) -> Combat
     }
 }
 
-/// Folds one resolved [`CombatBonus`] into a profile — this is `CombatBonus`'s
-/// first consumer. Only the three contributions W-EFFECT emits map to a profile
-/// field; every other variant is a documented no-op (no profile field to fold
-/// into, or no W-EFFECT effect emits it — a future stat-aggregation wave extends
-/// this fold), enumerated as an explicit or-pattern so a new variant breaks the build.
+/// Folds one resolved [`CombatBonus`] into a profile. Only the three effect
+/// contributions that map to a profile field fold in; every other variant is a
+/// no-op — a future stat-aggregation wave extends this fold — enumerated as an
+/// explicit or-pattern so a new variant breaks the build.
 fn fold_profile_bonus(profile: CombatProfile, bonus: CombatBonus) -> CombatProfile {
     match bonus {
-        // W-SRC: Greater Damage raises both physical span ends (a flat add).
-        CombatBonus::PhysicalDamage { amount } => CombatProfile {
-            physical: raise_span(profile.physical, amount),
+        // W-SRC: Greater Damage (GreaterDamageEffectInitializer.cs) is a flat add
+        // folded onto the outgoing damage AFTER defense subtraction — never a raise
+        // of the physical span, which crit/excellent would then amplify.
+        CombatBonus::Damage { amount } => CombatProfile {
+            flat_damage_add: profile.flat_damage_add.saturating_add(amount),
             ..profile
         },
         CombatBonus::Defense { amount } => CombatProfile {
@@ -118,7 +123,8 @@ fn fold_profile_bonus(profile: CombatProfile, bonus: CombatBonus) -> CombatProfi
             ),
             ..profile
         },
-        CombatBonus::Strength { .. }
+        CombatBonus::PhysicalDamage { .. }
+        | CombatBonus::Strength { .. }
         | CombatBonus::Agility { .. }
         | CombatBonus::Vitality { .. }
         | CombatBonus::Energy { .. }
@@ -141,7 +147,6 @@ fn fold_profile_bonus(profile: CombatProfile, bonus: CombatBonus) -> CombatProfi
         | CombatBonus::WizardryDamage { .. }
         | CombatBonus::WizardryDamagePct { .. }
         | CombatBonus::SkillDamage { .. }
-        | CombatBonus::Damage { .. }
         | CombatBonus::TwoHandedWeaponDamagePct { .. }
         | CombatBonus::DamagePct { .. }
         | CombatBonus::CriticalChancePct { .. }
@@ -171,16 +176,6 @@ fn reduce_defense(profile: CombatProfile) -> CombatProfile {
         )),
         ..profile
     }
-}
-
-/// A physical span with both ends raised by `amount`, saturating at the `u16`
-/// ceiling.
-fn raise_span(span: Interval<u16>, amount: u32) -> Interval<u16> {
-    let add = narrow_u16(amount);
-    Interval::spanning(
-        span.min().saturating_add(add),
-        span.max().saturating_add(add),
-    )
 }
 
 /// Two damage-reduction percentages combined multiplicatively: the fractions of
@@ -271,6 +266,7 @@ fn gearless_profile(
         defense_ignore_chance: Percent::ZERO,
         double_damage_chance: Percent::ZERO,
         incoming_damage_reduction: Percent::ZERO,
+        flat_damage_add: 0,
     }
 }
 
@@ -640,16 +636,19 @@ mod tests {
     }
 
     #[test]
-    fn greater_damage_raises_both_physical_span_ends() {
+    fn greater_damage_folds_into_a_flat_add_not_the_physical_span() {
         use crate::components::active_effect::{ActiveEffect, ActiveEffects};
         use crate::components::units::Tick;
+        let base = base_profile();
         let effects = ActiveEffects::EMPTY.with(ActiveEffect::GreaterDamage {
             amount: 5,
             expiry: Tick(100),
         });
-        let profile = effective_profile(base_profile(), &effects);
-        assert_eq!(profile.physical().min(), 15);
-        assert_eq!(profile.physical().max(), 25);
+        let profile = effective_profile(base, &effects);
+        // The buff is a flat post-defense add; the physical span is untouched, so
+        // crit/excellent (which read the span's max) cannot amplify it.
+        assert_eq!(profile.flat_damage_add(), 5);
+        assert_eq!(profile.physical(), base.physical());
     }
 
     #[test]

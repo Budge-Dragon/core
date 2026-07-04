@@ -271,7 +271,7 @@ impl WalkGrid {
     /// array — one byte per tile at index `y*256 + x`, matching [`walkable`]'s
     /// `bit = (y<<8)|x` convention. Total: the fixed array length makes a
     /// wrong-size input unrepresentable, and a tile is walkable iff neither
-    /// blocking bit ([`WalkGrid::BLOCKED_MASK`]) is set.
+    /// blocking bit (`NoMove`, `NoGround`) is set.
     ///
     /// [`walkable`]: WalkGrid::walkable
     #[must_use]

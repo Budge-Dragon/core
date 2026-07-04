@@ -61,8 +61,9 @@ pub(super) struct ResolvedSpawn {
     pub(super) monster: MonsterDefinition,
 }
 
-/// A spawn record borrowed with the monster definition it resolves to. The
-/// public view over a [`ResolvedSpawn`], mirroring [`WarpView`]/[`EnterGateView`].
+/// A spawn record borrowed with the monster definition it resolves to — the
+/// public view over the atlas's owned spawn-to-monster join, mirroring
+/// [`WarpView`]/[`EnterGateView`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpawnEntry<'a> {
     /// The spawn record.

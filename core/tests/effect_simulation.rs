@@ -227,7 +227,7 @@ fn poison_drops_a_real_monster_monotonically_by_exactly_per_tick() {
 
     let mut fired = 0;
     let mut prev = health.current();
-    for step in 1..=7u64 {
+    for step in 1..=6u64 {
         let now = Tick(POISON_CADENCE_TICKS * step);
         let (next_store, next_health, events) = advance_effects(store, health, now);
         let ticks = events
@@ -245,8 +245,8 @@ fn poison_drops_a_real_monster_monotonically_by_exactly_per_tick() {
         store = next_store;
         health = next_health;
     }
-    assert_eq!(fired, 7, "seven ticks total, never an eighth");
-    assert_eq!(start - health.current(), per_tick.saturating_mul(7));
+    assert_eq!(fired, 6, "six ticks total, never a seventh");
+    assert_eq!(start - health.current(), per_tick.saturating_mul(6));
     assert!(store.poison().is_none(), "poison self-terminates");
 }
 
@@ -302,8 +302,10 @@ fn a_greater_damage_buff_makes_the_effective_profile_hit_harder() {
         tick(),
     );
     let buffed = effective_profile(base, &store);
-    assert!(buffed.physical().min() > base.physical().min());
-    assert!(buffed.physical().max() > base.physical().max());
+    // Greater Damage folds a flat post-defense add and leaves the physical span
+    // untouched, so crit/excellent (which read the span) never amplify the buff.
+    assert!(buffed.flat_damage_add() > base.flat_damage_add());
+    assert_eq!(buffed.physical(), base.physical());
     // An unaffected profile is byte-identical to the base (empty fold identity).
     assert_eq!(effective_profile(base, &ActiveEffects::EMPTY), base);
 }
@@ -347,7 +349,7 @@ fn iced_halves_a_step_and_frozen_blocks_it() {
 // --- Mutation teeth-check: each injected bug vs. the correct behaviour. ---
 
 #[test]
-fn teeth_poison_fires_seven_ticks_not_eight() {
+fn teeth_poison_fires_six_ticks_not_seven() {
     let caster = wizard(120);
     let per_tick = poison_per_tick(&caster);
     let (store, _) = apply_ailment(
@@ -360,9 +362,9 @@ fn teeth_poison_fires_seven_ticks_not_eight() {
     let pool = Pool::full(per_tick.saturating_mul(50));
     let (_, health, _) = advance_effects(store, pool, Tick(100_000));
     let total = pool.current() - health.current();
-    // Correct: 7 ticks. The off-by-one bug (an eighth tick) would be 8×per_tick.
-    assert_eq!(total, per_tick.saturating_mul(7));
-    assert_ne!(total, per_tick.saturating_mul(8));
+    // Correct: 6 ticks. The off-by-one bug (a seventh tick) would be 7×per_tick.
+    assert_eq!(total, per_tick.saturating_mul(6));
+    assert_ne!(total, per_tick.saturating_mul(7));
 }
 
 #[test]
@@ -416,14 +418,13 @@ fn teeth_reapplying_a_buff_refreshes_rather_than_doubling_the_fold() {
         Tick(100),
         tick(),
     );
-    let single = effective_profile(base, &once).physical().max();
-    let reapplied = effective_profile(base, &twice).physical().max();
+    let single = effective_profile(base, &once).flat_damage_add();
+    let reapplied = effective_profile(base, &twice).flat_damage_add();
     // Correct: one slot, one fold — reapplying does not stack. An appended
-    // duplicate would fold the magnitude twice.
+    // duplicate would fold the flat add twice.
     assert_eq!(single, reapplied);
-    let raise = single - base.physical().max();
-    let doubled_bug = base.physical().max() + raise.saturating_mul(2);
-    assert_ne!(reapplied, doubled_bug);
+    assert!(single > 0, "the buff folds a positive flat add");
+    assert_ne!(reapplied, single.saturating_mul(2));
 }
 
 #[test]

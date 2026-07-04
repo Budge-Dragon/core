@@ -743,7 +743,7 @@
       "min_level": 50,
       "target_gate": 50,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -752,7 +752,7 @@
       "min_level": 10,
       "target_gate": 17,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -761,7 +761,7 @@
       "min_level": 10,
       "target_gate": 27,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -770,7 +770,7 @@
       "min_level": 20,
       "target_gate": 22,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -779,7 +779,7 @@
       "min_level": 30,
       "target_gate": 2,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -788,7 +788,7 @@
       "min_level": 40,
       "target_gate": 6,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -797,7 +797,7 @@
       "min_level": 50,
       "target_gate": 10,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -806,7 +806,7 @@
       "min_level": 50,
       "target_gate": 42,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -815,7 +815,7 @@
       "min_level": 50,
       "target_gate": 31,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -824,7 +824,7 @@
       "min_level": 50,
       "target_gate": 33,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -833,7 +833,7 @@
       "min_level": 60,
       "target_gate": 35,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -842,7 +842,7 @@
       "min_level": 60,
       "target_gate": 37,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -851,7 +851,7 @@
       "min_level": 70,
       "target_gate": 39,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     },
     {
       "kind": "warp",
@@ -860,7 +860,7 @@
       "min_level": 70,
       "target_gate": 41,
       "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     }
   ]
 }

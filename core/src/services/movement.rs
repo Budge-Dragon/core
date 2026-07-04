@@ -35,10 +35,7 @@ enum FlightGate {
 /// change that would not alter the mode is an idempotent no-op that emits
 /// nothing. Eligibility is decided separately, before this runs.
 #[must_use]
-pub fn apply_flight_change(
-    movement: Movement,
-    change: FlightChange,
-) -> (Movement, Vec<FlightOutcome>) {
+fn apply_flight_change(movement: Movement, change: FlightChange) -> (Movement, Vec<FlightOutcome>) {
     match (movement, change) {
         (Movement::Grounded, FlightChange::EnableFlight) => (
             Movement::Flying,
@@ -100,7 +97,8 @@ fn flight_gate(
 
 /// A voluntary flight change: gate on eligibility first, then transition. A
 /// denied change leaves the mode unchanged and reports the reason; a permitted
-/// change runs [`apply_flight_change`].
+/// change transitions the mode, an idempotent no-op that emits nothing when the
+/// mode would not change.
 #[must_use]
 pub fn change_flight(
     movement: Movement,

@@ -1,10 +1,10 @@
-//! End-to-end, multi-tick simulation of the W-MOV wave against the real
+//! End-to-end, multi-tick simulation of the movement services against the real
 //! dataset. Where `data_files.rs` proves each movement service in isolation,
 //! this suite drives them *composed* — population, monster AI, flight, warp
 //! arrival, and grounded stepping — over whole runs and asserts invariants that
 //! only a running world can exhibit.
 //!
-//! The invariants are labelled I1..I12 after the test-design doc:
+//! The invariants are labelled I1..I12:
 //! - I1/I1b delta walkability, I3 determinism, I4a/I4b cadence, I5 identity —
 //!   over the whole-world ambient simulation (Group A).
 //! - I6/I6' chase convergence and no-regression, I7 leash, I8 attack intent —

@@ -1,15 +1,14 @@
 # Coverage Report — mu-core v2 data extraction
 
 Assembled 2026-07-03 from `data/_coverage/*.json` and the regenerated `/data`.
-Contract: `docs/specs/2026-07-03-data-schemas-v2.md` (the v2 schema spec; supersedes the
-v1 `docs/specs/2026-07-02-data-schemas.md`), as accepted verbatim by the R2 Rust serde
+Contract: the v2 data schema (supersedes v1), as accepted verbatim by the R2 Rust serde
 types in `core/src/data/*.rs` and `core/src/components/*.rs` — the authoritative shape.
-Debt: `docs/debt/openmu-default-values.md`.
+Review-flagged values are inventoried in section 2.
 
 Baseline: full 0.95d dataset plus curated 1.0-era backports from the Season 6 dataset.
 Version policy: `075` = value ships in a Version075 initializer (reused by 0.95d),
 `095d` = 0.95d-specific, `s6` = 1.0-era backport. Every `s6` record carries a `review`,
-as do OpenMU-default and era-doubtful values in the older tiers (see the debt record).
+as do OpenMU-default and era-doubtful values in the older tiers (see section 2).
 
 The v2 dataset is purely numeric-identity: the v1 slug vocabulary
 (stat / option / set / bonus_table / effect / drop_group / class slugs, the `global`
@@ -53,11 +52,11 @@ Structural breakdowns:
 
 ## 2. Review-flagged values (185 review strings total)
 
-Every OpenMU-default / OpenMU-modeling / era-doubtful value carries a `review` string.
-These are enumerated as one debt record with a per-family W-SRC re-sourcing plan in
-`docs/debt/openmu-default-values.md`. Counts per file:
+Every OpenMU-default / OpenMU-modeling / era-doubtful value carries a `review` string,
+grouped into named families, each slated for independent re-sourcing against on-era
+references. Counts per file:
 
-| File | review strings | families (see debt record) |
+| File | review strings | families |
 |---|---:|---|
 | `monster_definitions.json` | 48 | water→lightning remap (48); phantom skill-150 (14 ⊂); golden-era doubt (2 ⊂) |
 | `item_definitions.json` | 41 | 33 S6 backports + 8 durability-3 potions |
@@ -88,7 +87,7 @@ The same proof runs in Rust via `Atlas::parse` over the real data in
 Deferred by the R2 contract, consumed by later waves — no data shipped, by design:
 - **WalkableGrid / TileTerrain** — host-parsed 256×256 runtime grid from the `terrain/*.bin`
   sidecars; no JSON record references a terrain path.
-- **drop-resolution pools** (`drop_pools.rs`) and combat/craft/option/set resolvers —
+- **drop-resolution pools** (`drop_pool.rs`) and combat/craft/option/set resolvers —
   W-CMB / W-ENT; the drops *data* records (`DropConfig`, `SpecialDropRecord`, `BoxDrop`)
   ship and are Atlas-checked.
 - Values re-homed to Rust: level-bonus curves, generic armor-set ×1.1/×1.05 constants,
@@ -98,7 +97,7 @@ Deferred by the R2 contract, consumed by later waves — no data shipped, by des
 ## 5. Category gaps
 
 Per-category `data/_coverage/*.json` records the detailed gap lists. Recurring era-scope
-gaps: Devil Square wave rows (map 9, owned by W-EVT), Box of Kundun +1..+5 and seasonal
+gaps: Devil Square wave rows (map 9, owned by W-DS), Box of Kundun +1..+5 and seasonal
 boxes (need an excellent/normal box discriminator), Kalima / castle-siege / post-S3
 content, quest and event-reward drops, and the Summoner class line (Red Wing gear ships
 as ancient-set pieces only, `classes` empty / unequippable).

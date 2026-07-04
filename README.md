@@ -25,15 +25,13 @@ The same crate must compile and behave identically everywhere it is embedded:
    never a global generator. Deterministic given a seed.
 6. **Static game data is defined as structs here.** The core defines the
    shapes and the rules that read them; hosts load the data.
-7. **No float math.** All arithmetic is integer or `Q40.24` fixed-point
-   (`components::spatial::Fixed`). `f32`/`f64` round differently across
-   native/wasm/FFI and break replay determinism.
+7. **No float math.** All arithmetic is integer or `Q48.16` fixed-point
+   (`components::spatial::Fixed`, `i64` with `2^16` sub-units per tile).
+   `f32`/`f64` round differently across native/wasm/FFI and break replay
+   determinism.
 8. **Client proposes, server decides.** Every service takes a typed *intent*
    plus current state and computes the authoritative *result*; it never trusts a
    client-claimed outcome. Intent types in, distinct result/event types out.
-
-Architecture and coding laws live in [`CLAUDE.md`](./CLAUDE.md) — required
-reading before writing any code.
 
 Mechanical enforcement (build-failing under `cargo clippy -- -D warnings`):
 `clippy.toml` disallows `SystemTime`/`Instant` (rule 1),
@@ -42,8 +40,7 @@ macro family (rule 3), and entropy-seeded `HashMap`/`HashSet`/`RandomState`
 (rule 5 — nondeterministic iteration order); `[workspace.lints.clippy]` sets
 `float_arithmetic` (rule 7). Async, engine/DB types, injected RNG, and the
 authoritative intent→result flow (rule 8) are convention, enforced by code
-review. The full architectural laws — including the six authoritative-server
-invariants — live in [`CLAUDE.md`](./CLAUDE.md).
+review.
 
 ## Dependencies
 
@@ -58,13 +55,12 @@ invariants — live in [`CLAUDE.md`](./CLAUDE.md).
   - `src/events/` — outcomes returned instead of side effects
   - `src/rng/` — injected-randomness plumbing
   - `src/data/` — static game data struct definitions
-- `hosts/` — future host crates (placeholders, see `hosts/README.md`)
+- `hosts/` — no crates; hosts (server, clients) are separate repos that
+  consume `mu-core` (see `hosts/README.md`)
 
 One concept per file; a file grows to a directory module (`foo/{mod.rs, …}`)
 only when it holds separable concerns, never for line count. Unit tests live
-inline; cross-file/dataset contracts live in `core/tests/`. The full
-file-organization rule is in [`CLAUDE.md`](./CLAUDE.md) ("File & module
-organization").
+inline; cross-file/dataset contracts live in `core/tests/`.
 
 ## Development
 
@@ -85,7 +81,7 @@ cargo check -p mu-core --target aarch64-linux-android       # Unity Android
 
 ### Review-enforced ban scanner
 
-Some Iron-Law bans have no clippy lint (`CLAUDE.md`, Iron Law 3): lookup-shaped
+Some review-enforced bans have no clippy lint: lookup-shaped
 `unwrap_or`, inline `#[expect(..)]`, `#[non_exhaustive]` on an enum, and a
 fabricated `Default`. The `xtask` dev tool scans `core/src` for them and exits
 non-zero with `file:line` on any hit:

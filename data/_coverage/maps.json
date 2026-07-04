@@ -45,7 +45,7 @@
       "file": "gates_warps.json",
       "kind": "warp",
       "records": 14,
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced — W-SRC re-sourcing family in docs/debt/openmu-default-values.md"
+      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
     }
   ],
   "gaps": [

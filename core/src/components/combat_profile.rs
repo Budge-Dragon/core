@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::active_effect::ActiveEffects;
 use crate::components::element::{Element, PerElement};
 use crate::components::interval::Interval;
 use crate::components::placement::Placement;
@@ -31,6 +32,7 @@ pub struct CombatProfile {
     pub(crate) defense_ignore_chance: Percent,
     pub(crate) double_damage_chance: Percent,
     pub(crate) incoming_damage_reduction: Percent,
+    pub(crate) flat_damage_add: u32,
 }
 
 impl CombatProfile {
@@ -107,6 +109,16 @@ impl CombatProfile {
     pub fn incoming_damage_reduction(&self) -> Percent {
         self.incoming_damage_reduction
     }
+
+    /// Flat damage the attacker adds after defense subtraction and before the
+    /// min-damage floor — the transient contribution a Greater Damage buff folds
+    /// in (gearless zero). Unlike a physical-span raise, the quality-selected
+    /// base (which crit/excellent set) is fixed before this add, so crit and
+    /// excellent never amplify it.
+    #[must_use]
+    pub fn flat_damage_add(&self) -> u32 {
+        self.flat_damage_add
+    }
 }
 
 /// A player's derived vital capacities — the maxima the class formula computes
@@ -123,24 +135,37 @@ pub struct VitalMaxima {
     pub max_ability: u32,
 }
 
-/// A resolvable defender snapshot: its combat profile, its current health, and
-/// where it stands. The host/orchestrator pre-derives one per candidate so the
-/// cast service stays Atlas-free — it strikes what it is handed.
+/// A resolvable defender snapshot: its combat profile, its current health, where
+/// it stands, and its live timed effects. The host/orchestrator pre-derives one
+/// per candidate so the cast service stays Atlas-free — it strikes what it is
+/// handed and folds the defender's own effects (Greater Defense, DK Defense,
+/// Defense-reduction) into the profile it strikes against, so the whole two-sided
+/// fold is authoritative in core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatTarget {
     profile: CombatProfile,
     health: Pool,
     placement: Placement,
+    /// The defender's live timed effects. A candidate a host builds without an
+    /// effect array carries none — the real "no active effects" value.
+    #[serde(default = "ActiveEffects::empty")]
+    active_effects: ActiveEffects,
 }
 
 impl CombatTarget {
-    /// Bundles a defender snapshot.
+    /// Bundles a defender snapshot with its live timed effects.
     #[must_use]
-    pub fn new(profile: CombatProfile, health: Pool, placement: Placement) -> Self {
+    pub fn new(
+        profile: CombatProfile,
+        health: Pool,
+        placement: Placement,
+        active_effects: ActiveEffects,
+    ) -> Self {
         Self {
             profile,
             health,
             placement,
+            active_effects,
         }
     }
 
@@ -154,6 +179,13 @@ impl CombatTarget {
     #[must_use]
     pub fn health(&self) -> Pool {
         self.health
+    }
+
+    /// The defender's live timed effects — folded into the profile it is struck
+    /// against, and cleared to [`ActiveEffects::EMPTY`] when the strike kills it.
+    #[must_use]
+    pub fn active_effects(&self) -> ActiveEffects {
+        self.active_effects
     }
 
     /// Where the defender stands.
@@ -199,6 +231,7 @@ mod tests {
             defense_ignore_chance: Percent::ZERO,
             double_damage_chance: Percent::ZERO,
             incoming_damage_reduction: Percent::ZERO,
+            flat_damage_add: 0,
         }
     }
 
@@ -222,7 +255,7 @@ mod tests {
             movement: Movement::Grounded,
             map: MapNumber(0),
         };
-        let target = CombatTarget::new(profile(), Pool::full(60), placement);
+        let target = CombatTarget::new(profile(), Pool::full(60), placement, ActiveEffects::EMPTY);
         assert_eq!(target.health().current(), 60);
         assert_eq!(target.placement(), placement);
         assert_eq!(target.resistance(Element::Lightning), Resistance(7));

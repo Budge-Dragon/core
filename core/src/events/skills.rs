@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::active_effect::ActiveEffects;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::data::effects::Ailment;
@@ -58,6 +59,11 @@ pub struct TargetHit {
     pub outcome: AttackOutcome,
     /// The target's health after the strike.
     pub health: Pool,
+    /// The target's timed effects after the strike — the authoritative store the
+    /// host persists. A lethal strike clears it to [`ActiveEffects::EMPTY`] (every
+    /// effect is `StopByDeath`); a non-lethal strike leaves it unchanged, and any
+    /// newly inflicted ailment is reported separately in `inflicted`.
+    pub active_effects: ActiveEffects,
     /// The ailment inflicted, if any.
     pub inflicted: Option<Ailment>,
     /// The target's new placement, if the hit displaced it (knockback).
@@ -116,6 +122,7 @@ mod tests {
                     },
                 },
                 health: Pool::new(20, 60).unwrap(),
+                active_effects: crate::components::active_effect::ActiveEffects::EMPTY,
                 inflicted: Some(Ailment::Frozen),
                 displacement: Some(placement()),
             }],
