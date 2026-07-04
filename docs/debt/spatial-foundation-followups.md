@@ -1,7 +1,9 @@
 # Debt record: spatial-foundation tech-debt follow-ups (T1–T4)
 
 - **ID:** T1–T4 (spatial-foundation tech debt)
-- **Status:** OPEN
+- **Status:** CLOSED (2026-07-04) — all four sub-items discharged (T1 W-HARDEN,
+  T2/T3 W-MOV, T4 W-ENT); rows already removed from `DEBT-INDEX.md` as each
+  closed. Header flipped to match the sub-item states.
 - **Owner wave:** per sub-item (next `tile.rs` touch / W-MOV / W-ENT)
 - **Created:** 2026-07-03, during the spatial-foundation work (Waves A + B,
   commits `61f1e37` and `5ed218e` on branch `spatial-foundation`).

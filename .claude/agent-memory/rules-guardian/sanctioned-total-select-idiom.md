@@ -26,3 +26,14 @@ suppressor in future reviews. It passes Rule 3/Rule 4. The banned alternatives i
 replaces are `CARDINALS[target]`, `.get(target).unwrap()`, wildcard-arm match, and
 `unreachable!()`. Only flag if the terminal is a zero/`Default::default()` papering
 over a real absence that should be an enum variant.
+
+**W-INV instances (2026-07-04, reviewed ACCEPT):** the idiom also covers a
+fallible-constructor terminal, not just index-select. `item_instance::slot_bit`
+does `match NonZeroU8::new(1u8 << slot_index.saturating_sub(1)) { Some(bit)=>bit,
+None => NonZeroU8::MIN }` — the `None` arm is a valid domain value (bit for slot
+1), and `slot_index()` is a `const fn` provably `1..=6` (item_options.rs), so the
+shift is `0..=5` and never overflows/panics. Same shape as `draw_option_level`
+(terminal `OptionLevel::L1`) and `draw_ancient_bonus` (terminal
+`AncientBonusLevel::One`) in `services/item_roll`. The doc-comment phrase
+"unreachable zero input, never a panic" is honest idiom documentation, NOT a
+banned "should never happen" branch (no assert/unwrap/panic). Passes.

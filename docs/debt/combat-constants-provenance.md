@@ -20,6 +20,9 @@
   - `core/src/services/skills.rs:37` — `ONE_TILE_SPEED = 1 tile`
   - `core/src/services/skills.rs:39` — `DASH_SPEED = 8 tiles`
   - `core/src/services/skills.rs:42` — `SINGLE_TARGET_RADIUS_TILES = 1`
+  - `core/src/services/item_rules.rs:146` — `DURABILITY_BONUS_BY_LEVEL` table (per-enhance-level durability adds)
+  - `core/src/services/item_rules.rs:148` — `EXCELLENT_DURABILITY_BONUS = 15`
+  - `core/src/services/item_rules.rs:150` — `ANCIENT_DURABILITY_BONUS = 20`
 
 ## Symptom
 
@@ -125,6 +128,7 @@ W-SRC discharge.
 | Money = exp + 7 (`BASE_MONEY_DROP = 7`) | ACCEPTED as OpenMU (partial) | The exp-basis IS independently confirmed; the `+7` offset is OpenMU — accepted-default. |
 | Drop-level window gap 11 (`DROP_LEVEL_WINDOW_GAP = 11`) | ACCEPTED as OpenMU (partial) | The plus-level `= (mobLevel − dropLevel)/3` rule IS independently confirmed; the gap `11` is OpenMU — accepted-default. |
 | Excellent-drop delta 25 (`EXCELLENT_DROP_LEVEL_BONUS`) | ACCEPTED as OpenMU | No independent source found or contradiction — accepted-default. |
+| Durability per-level table + rarity bonuses (`DURABILITY_BONUS_BY_LEVEL`, `EXCELLENT_DURABILITY_BONUS = 15`, `ANCIENT_DURABILITY_BONUS = 20`) | PENDING W-SRC | Added 2026-07-04. Prior-wave `item_rules.rs` math **surfaced (not authored) by W-INV** — `services/item_roll::roll_durability` consumes `max_durability` unchanged. The excellent/ancient durability adds are not explicitly carried by the sourced durability facts (5:45/46); same OpenMU-derived-magnitude class as the drop-level bonuses above. Not diffed against an authentic classic source. |
 | Overrate penalty (`OVERRATE 3/10` = 0.3) | FLAGGED for user decision | Our 0.3 (keep 30%) vs a community-cited ~0.2; the ~0.2 is anecdotal and era-ambiguous. |
 | Fixed global drop-group partition (money .5 / item .3 / jewel .001 / exc .0001) | FLAGGED for user decision | Classic MU had NO fixed global partition; this is an OpenMU/modernized model. |
 | Monster movement grain (uniform 1-tile step) | FLAGGED for user decision | Classic `Monster.txt` carries a PER-MONSTER move speed; we use a uniform 1-tile step. Ties to the `MOB-SPD` debt. |

@@ -134,3 +134,85 @@ fn draw_cardinal_sequence_is_identical_across_targets() {
         ]
     );
 }
+
+// -- W-INV: a fixed item roll serializes identically on native and wasm. -------
+
+use mu_core::components::class::ClassSet;
+use mu_core::components::item_quality::ItemRarity;
+use mu_core::components::item_ref::ItemRef;
+use mu_core::components::levels::OptionLevel;
+use mu_core::components::units::{ChancePer10000, ItemLevel};
+use mu_core::data::common::{Provenance, SkillNumber, SourceVersion};
+use mu_core::data::item_definitions::{
+    ItemDefinition, ItemKind, ItemPrice, WeaponHandling, WearRequirements,
+};
+use mu_core::data::option_roll::OptionRollPolicy;
+use mu_core::services::item_roll::roll_dropped_item;
+
+/// A fixed weapon definition — the roll target. Hand-built so the test needs no
+/// filesystem (it runs under wasmtime).
+fn fixed_weapon() -> ItemDefinition {
+    ItemDefinition {
+        id: ItemRef {
+            group: 0,
+            number: 3,
+        },
+        provenance: Provenance {
+            source_version: SourceVersion::V075,
+            review: None,
+        },
+        width: 1,
+        height: 3,
+        drops_from_monsters: true,
+        drop_level: 10,
+        max_item_level: or_abort(ItemLevel::new(15)),
+        durability: 20,
+        price: ItemPrice::Formula,
+        kind: ItemKind::Weapon {
+            handling: WeaponHandling::OneHanded,
+            min_damage: 5,
+            max_damage: 12,
+            attack_speed: 30,
+            skill: Some(SkillNumber(19)),
+            classes: ClassSet::NONE,
+            wear: WearRequirements {
+                level: 0,
+                strength: 0,
+                agility: 0,
+                vitality: 0,
+                energy: 0,
+                command: 0,
+            },
+        },
+    }
+}
+
+fn always() -> OptionRollPolicy {
+    OptionRollPolicy {
+        item_option_roll_per_10000: ChancePer10000::ALWAYS,
+        luck_roll_per_10000: ChancePer10000::ALWAYS,
+        extra_excellent_option_roll_per_10000: ChancePer10000::ALWAYS,
+        second_wing_bonus_roll_per_10000: ChancePer10000::ALWAYS,
+        dinorant_option_roll_per_10000: ChancePer10000::ALWAYS,
+        max_excellent_options_per_drop: 3,
+        max_dropped_option_level: OptionLevel::L4,
+        review: None,
+    }
+}
+
+#[test]
+fn a_fixed_item_roll_serializes_identically_across_targets() {
+    let mut rng = SplitMix64::new(SEED);
+    let instance = roll_dropped_item(
+        &fixed_weapon(),
+        or_abort(ItemLevel::new(9)),
+        ItemRarity::Excellent,
+        &always(),
+        &mut rng,
+    );
+    let serialized = or_abort(serde_json::to_string(&instance));
+    assert_eq!(
+        serialized,
+        r#"{"item":{"group":0,"number":3},"level":9,"roll":{"kind":"excellent","options":{"set":"weapon","options":["health_after_kill","damage_per_level","excellent_damage_chance"]}},"normal_option":{"option":"physical_damage","level":3},"luck":"lucky","skill":"with_skill","durability":{"current":49,"max":49}}"#
+    );
+}

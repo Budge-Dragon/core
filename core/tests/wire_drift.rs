@@ -11,8 +11,18 @@
 
 use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
+use mu_core::components::equipment::EquipSlot;
 use mu_core::components::interval::Interval;
+use mu_core::components::inventory::{Cell, PlacementRejection};
+use mu_core::components::item_instance::{
+    Durability, ExcellentArmorSet, ExcellentOptions, ExcellentWeaponSet, ItemInstance, LuckRoll,
+    RarityRoll, RolledNormalOption, SkillRoll,
+};
+use mu_core::components::item_options::{
+    AncientBonusLevel, ExcellentArmorOption, ExcellentWeaponOption, NormalOption,
+};
 use mu_core::components::item_quality::ItemRarity;
+use mu_core::components::levels::OptionLevel;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
 use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
@@ -21,10 +31,14 @@ use mu_core::components::spatial::{
     ConeHalfWidth, Facing, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
 use mu_core::components::tile::TileCoord;
-use mu_core::components::units::{Exp, ItemLevel, Level, MapNumber, Zen};
+use mu_core::components::units::{Exp, ItemLevel, Level, MapNumber, Tick, Zen};
 use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::special_drops::SpecialDrop;
+use mu_core::entities::world_item::WorldItem;
 use mu_core::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
+use mu_core::events::inventory::{
+    EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
+};
 use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::{Drop, DropResolution};
 use mu_core::events::monster_ai::MonsterIntent;
@@ -532,6 +546,190 @@ fn spawn_event_every_kind_tag_is_pinned() {
         };
         assert_eq!(
             kind_tag(&serde_json::to_value(event).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+// -- W-INV item-instance, container, and world-item wire pins. ----------------
+
+/// A bare normal instance of item (0, 3) at +0, full durability 30.
+fn normal_instance() -> ItemInstance {
+    ItemInstance {
+        item: ItemRef {
+            group: 0,
+            number: 3,
+        },
+        level: ItemLevel::ZERO,
+        roll: RarityRoll::Normal,
+        normal_option: None,
+        luck: LuckRoll::Plain,
+        skill: SkillRoll::NoSkill,
+        durability: Durability::full(30),
+    }
+}
+
+#[test]
+fn normal_item_instance_wire_is_pinned() {
+    assert_eq!(
+        serde_json::to_string(&normal_instance()).unwrap(),
+        r#"{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}}"#
+    );
+}
+
+#[test]
+fn excellent_item_instance_wire_is_pinned() {
+    let mut instance = normal_instance();
+    instance.level = ItemLevel::new(9).unwrap();
+    instance.roll = RarityRoll::Excellent {
+        options: ExcellentOptions::Weapon {
+            options: ExcellentWeaponSet::with_first(
+                ExcellentWeaponOption::ManaAfterKill,
+                [ExcellentWeaponOption::AttackSpeed],
+            ),
+        },
+    };
+    instance.luck = LuckRoll::Lucky;
+    instance.skill = SkillRoll::WithSkill;
+    instance.durability = Durability::full(35);
+    assert_eq!(
+        serde_json::to_string(&instance).unwrap(),
+        r#"{"item":{"group":0,"number":3},"level":9,"roll":{"kind":"excellent","options":{"set":"weapon","options":["mana_after_kill","attack_speed"]}},"normal_option":null,"luck":"lucky","skill":"with_skill","durability":{"current":35,"max":35}}"#
+    );
+}
+
+#[test]
+fn ancient_item_instance_wire_is_pinned() {
+    let instance = ItemInstance {
+        item: ItemRef {
+            group: 7,
+            number: 0,
+        },
+        level: ItemLevel::new(5).unwrap(),
+        roll: RarityRoll::Ancient {
+            bonus: AncientBonusLevel::Two,
+        },
+        normal_option: Some(RolledNormalOption {
+            option: NormalOption::Defense,
+            level: OptionLevel::L4,
+        }),
+        luck: LuckRoll::Plain,
+        skill: SkillRoll::NoSkill,
+        durability: Durability::full(40),
+    };
+    assert_eq!(
+        serde_json::to_string(&instance).unwrap(),
+        r#"{"item":{"group":7,"number":0},"level":5,"roll":{"kind":"ancient","bonus":2},"normal_option":{"option":"defense","level":4},"luck":"plain","skill":"no_skill","durability":{"current":40,"max":40}}"#
+    );
+}
+
+#[test]
+fn excellent_armor_set_wire_is_a_slot_sorted_name_array() {
+    let set = ExcellentArmorSet::with_first(
+        ExcellentArmorOption::MaxHealth,
+        [ExcellentArmorOption::ZenGain],
+    );
+    assert_eq!(
+        serde_json::to_string(&set).unwrap(),
+        r#"["zen_gain","max_health"]"#
+    );
+}
+
+#[test]
+fn world_item_wire_is_pinned() {
+    let world_item = WorldItem {
+        instance: normal_instance(),
+        position: WorldPos::clamped(163_840, 229_376),
+        map: MapNumber(0),
+        despawn: Tick(1200),
+    };
+    assert_eq!(
+        serde_json::to_string(&world_item).unwrap(),
+        r#"{"instance":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}},"position":{"x":163840,"y":229376},"map":0,"despawn":1200}"#
+    );
+}
+
+#[test]
+fn container_outcome_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&PlaceOutcome::Placed {
+            at: Cell { row: 1, col: 2 }
+        })
+        .unwrap(),
+        r#"{"kind":"placed","at":{"row":1,"col":2}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&PlaceOutcome::Rejected {
+            reason: PlacementRejection::CellsOccupied,
+            item: normal_instance(),
+        })
+        .unwrap(),
+        r#"{"kind":"rejected","reason":{"kind":"cells_occupied"},"item":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MoveOutcome::Moved {
+            from: Cell { row: 0, col: 0 },
+            to: Cell { row: 3, col: 4 }
+        })
+        .unwrap(),
+        r#"{"kind":"moved","from":{"row":0,"col":0},"to":{"row":3,"col":4}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EquipOutcome::Equipped {
+            slot: EquipSlot::Helm
+        })
+        .unwrap(),
+        r#"{"kind":"equipped","slot":"helm"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&UnequipOutcome::SlotEmpty).unwrap(),
+        r#"{"kind":"slot_empty"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EquipRejection::IncompatibleSlot).unwrap(),
+        r#""incompatible_slot""#
+    );
+    assert_eq!(
+        serde_json::to_string(&PlacementRejection::NoItemAtCell).unwrap(),
+        r#"{"kind":"no_item_at_cell"}"#
+    );
+}
+
+#[test]
+fn container_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        RemoveOutcome::Removed {
+            at: Cell { row: 0, col: 0 },
+            item: normal_instance(),
+        },
+        RemoveOutcome::Rejected {
+            reason: PlacementRejection::NoItemAtCell,
+        },
+    ] {
+        let expected = match &outcome {
+            RemoveOutcome::Removed { .. } => "removed",
+            RemoveOutcome::Rejected { .. } => "rejected",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+    for outcome in [
+        EquipOutcome::Equipped {
+            slot: EquipSlot::Ring1,
+        },
+        EquipOutcome::Rejected {
+            reason: EquipRejection::SlotOccupied,
+            item: normal_instance(),
+        },
+    ] {
+        let expected = match &outcome {
+            EquipOutcome::Equipped { .. } => "equipped",
+            EquipOutcome::Rejected { .. } => "rejected",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
             Some(expected)
         );
     }

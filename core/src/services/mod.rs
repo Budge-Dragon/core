@@ -8,6 +8,8 @@
 pub mod chance;
 pub mod combat;
 pub mod experience;
+pub mod inventory;
+pub mod item_roll;
 pub mod item_rules;
 pub mod kill;
 pub mod loot;

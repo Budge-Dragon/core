@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::components::item_ref::ItemRef;
 pub use crate::components::units::MapNumber;
 
 /// Envelope of every `/data/*.json` file: the file's records.
@@ -35,16 +36,6 @@ pub struct Provenance {
     /// Curation doubt: why this value needs an authentic source before trust.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<String>,
-}
-
-/// Item identity as the game knows it: `ItemList` group section plus index
-/// (client wire `group * 512 + number`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ItemRef {
-    /// Item group (weapon, armor, jewel, ...).
-    pub group: u8,
-    /// Item number within its group.
-    pub number: u16,
 }
 
 /// Monster or NPC number: Monster.txt's first column, referenced by

@@ -70,11 +70,15 @@ re-open:**
   **D3** (`commit` validates grounded steps against `WalkGrid`), **D5**
   (`resolve_arrival` matches `Landing.facing` `Some`/`None`), and **T3**
   (`length_sq` consumed by `normalized_to` + `seek`). 209 tests pass.
-- **Still OPEN:** **T1** and **T2** — both `tile.rs` trims for the *next `tile.rs`
-  touch*. T2's disposition is now decided = **TRIM** (W-MOV worked entirely in
-  world space via `WorldRect::contains`; `TileArea::contains` earned no consumer);
-  the trim is out of W-MOV scope (W-MOV never edits `tile.rs`). Q1–Q4 open
-  (quality, unblocked). **W-SRC** open (data provenance).
+- **Fully CLOSED as of 2026-07-04:** all of **T1–T4** are discharged (T1 by
+  W-HARDEN's `tile_index` reshape; T2 by trim; T3/T4 by W-MOV/W-ENT), so
+  `spatial-foundation-followups.md` is CLOSED (its header was flipped 2026-07-04 —
+  it had been left OPEN despite every sub-item closing). **Q1–Q4** are CLOSED
+  (`practices-transfer-quality.md`, W-HARDEN). **MOB-SPD** CLOSED (W-SRC,
+  confirm-and-keep). So the DEBT-INDEX no longer carries any spatial/T/Q/MOB row
+  — do NOT expect to find them there. **Still OPEN in the index:** only **W-SRC**
+  and **CMB-CONST** (both W-SRC provenance), plus the new **I1–I3** (W-INV) — see
+  [[project-winv-inventory-wave-boundaries]].
 - **New W-MOV finding: `MOB-SPD`** — `MOB_STEP_SPEED` (1 tile/step, invented, not
   sourced) in `services/monster_ai.rs`. Provenance debt of the W-SRC species but
   in-code, so kept as its own record `mob-step-speed-provenance.md` (owner W-SRC),
