@@ -54,7 +54,7 @@ const GREATER_DEFENSE_ENERGY_DEN: u32 = 8;
 /// form, adopted deliberately.
 const DEFENSE_INCOMING_REDUCTION_POINTS: u8 = 50;
 
-// EFF-POISON: CALIBRATED against direct wizardry DPS. Poison damage scales off
+// Poison per-tick damage is CALIBRATED against direct wizardry DPS. It scales off
 // the CASTER's energy (`base + Energy × num/den`), NOT the target's HP, so a weak
 // caster's poison is weak and a strong caster's can kill — a deliberate modern
 // deviation from the authentic 3%-of-current-HP model (self-limiting, never
@@ -65,8 +65,8 @@ const DEFENSE_INCOMING_REDUCTION_POINTS: u8 = 50;
 // A poison session is 6 ticks over ~20s (3s cadence) ≈ 6·Energy/9 = 2·Energy/3
 // total — about 8/3 of a single max cast, spread over 20s. Sustained direct
 // casting lands far more than 6 hits in 20s, so poison is meaningful supplementary
-// pressure yet well below direct throughput. Remaining tuning is normal live
-// balance, not tracked debt.
+// pressure yet well below direct throughput. These numbers are calibrated, not
+// playtested — further tuning is normal live-balance work.
 /// Poison per-tick flat base — kept ≥ 1 so every tick deals at least one damage.
 const POISON_BASE: u32 = 1;
 /// Poison energy-term numerator.
@@ -119,10 +119,10 @@ pub fn apply_buff(
 
 /// Applies an ailment to a store, mapping the data [`Ailment`] to the
 /// component-level effect. Poison resolves its per-tick damage from the caster's
-/// energy (see EFF-POISON) and starts its six-tick counter; the status
-/// ailments resolve an absolute expiry from their fixed durations and ignore the
-/// energy. Iced and Frozen share the one ice slot, so applying one clears the
-/// other. Returns the updated store and the resolved [`ActiveEffect`].
+/// energy (`1 + Energy/9`, caster-scaled) and starts its six-tick counter; the
+/// status ailments resolve an absolute expiry from their fixed durations and
+/// ignore the energy. Iced and Frozen share the one ice slot, so applying one
+/// clears the other. Returns the updated store and the resolved [`ActiveEffect`].
 #[must_use]
 pub fn apply_ailment(
     ailment: Ailment,
@@ -344,8 +344,9 @@ fn greater_defense_magnitude(energy: u16) -> u16 {
     )))
 }
 
-/// EFF-POISON: per-tick poison damage from the caster's energy — `base + Energy ×
-/// num/den`. Base is kept ≥ 1 so every tick deals at least one damage.
+/// Per-tick poison damage from the caster's energy — `base + Energy × num/den`
+/// (`1 + Energy/9`, calibrated against direct wizardry DPS). Base is kept ≥ 1 so
+/// every tick deals at least one damage.
 fn poison_per_tick(energy: u16) -> u32 {
     POISON_BASE.saturating_add(scale_ratio(
         u32::from(energy),

@@ -135,7 +135,7 @@ fn draw_cardinal_sequence_is_identical_across_targets() {
     );
 }
 
-// -- W-INV: a fixed item roll serializes identically on native and wasm. -------
+// -- A fixed item roll serializes identically on native and wasm. -------------
 
 use mu_core::components::class::ClassSet;
 use mu_core::components::item_quality::ItemRarity;

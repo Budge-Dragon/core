@@ -1,4 +1,4 @@
-//! Shared plumbing for the W-MOV end-to-end simulation suite.
+//! Shared plumbing for the end-to-end movement simulation suite.
 //!
 //! `core/tests/` files are separate test-crate binaries, so they cannot reach
 //! the private helpers in `data_files.rs`. This module — a `mod.rs` in a

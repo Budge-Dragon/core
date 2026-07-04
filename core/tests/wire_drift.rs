@@ -556,7 +556,7 @@ fn spawn_event_every_kind_tag_is_pinned() {
     }
 }
 
-// -- W-INV item-instance, container, and world-item wire pins. ----------------
+// -- Item-instance, container, and world-item wire pins. ----------------------
 
 /// A bare normal instance of item (0, 3) at +0, full durability 30.
 fn normal_instance() -> ItemInstance {
@@ -744,7 +744,7 @@ fn container_outcome_every_kind_tag_is_pinned() {
     }
 }
 
-// -- W-EFFECT timed-effect, mobility, and effect-event wire pins. --------------
+// -- Timed-effect, mobility, and effect-event wire pins. ----------------------
 
 #[test]
 fn active_effect_wire_shapes_are_pinned() {

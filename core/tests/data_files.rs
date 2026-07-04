@@ -388,7 +388,7 @@ fn ammunition_and_durability_accessors() {
     );
 }
 
-// --- Spawn placement over the real dataset (W-ENT).
+// --- Spawn placement over the real dataset.
 
 /// Deterministic `SplitMix64` for replayable population over real data.
 struct TestRng {
@@ -562,7 +562,7 @@ fn map_handles_enumerate_every_map_and_join_spawns() {
     assert!(atlas.map_handle(MapNumber(200)).is_none());
 }
 
-// --- Movement and flight over the real Atlas (W-MOV).
+// --- Movement and flight over the real Atlas.
 
 /// A one-tile step in sub-units — the mob movement grain.
 const ONE_TILE: Fixed = Fixed::from_raw(65_536);

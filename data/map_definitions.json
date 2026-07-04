@@ -84,7 +84,7 @@
       "number": 9,
       "environment": "ground",
       "source_version": "095d",
-      "review": "collapsed from OpenMU's four discriminator records (one client map; the four squares are event brackets, owned by W-EVT); the four OpenMU terrain blobs were verified byte-identical before collapsing"
+      "review": "collapsed from OpenMU's four discriminator records (one client map; the four squares are event brackets, owned by W-DS); the four OpenMU terrain blobs were verified byte-identical before collapsing"
     }
   ]
 }

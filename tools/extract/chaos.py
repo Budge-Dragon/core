@@ -384,7 +384,8 @@ def main():
                 "the 1st-wings results; Summoner (S3) — 095d result list "
                 "used",
             "jewel_mixes_lahap": "Lahap jewel packing (10 S6 JewelMix "
-                "records): not a chaos mix, excluded by decision (crafting.md)",
+                "records): excluded — jewel packing/unpacking is not a "
+                "chaos mix",
         },
         "notes": {
             "window_wire_shape": "item-level windows emit {min,max} (Interval "

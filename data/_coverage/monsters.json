@@ -283,12 +283,12 @@
     ]
   },
   "gaps": [
-    "Devil Square wave spawns (28 rows on map 9) omitted from spawns.json -> W-EVT event configs; residue (four square rectangles, per-wave participant monster numbers, boss) recorded in the monsters_spawns v2 section, flagged as OpenMU 0.95d tuning to re-source under W-SRC",
+    "Devil Square wave spawns (28 rows on map 9) omitted from spawns.json -> W-DS event configs; residue (four square rectangles, per-wave participant monster numbers, boss) recorded in the monsters_spawns v2 section, flagged as OpenMU 0.95d tuning to re-source under W-SRC",
     "merchant store contents deferred (merchant_stores.json, follow-up wave); merchant NPCs here carry only role/window",
     "quests startable at NPCs (Sevina #235, window=quest) deferred to quests.json (follow-up wave)",
     "MP / MagicDefense Monster.txt columns: OpenMU never modeled them, so no values ship; they enter MonsterCombat when an authentic Monster.txt source is wired in (W-SRC), never as fabricated zeros",
     "no s6 monster backports this wave: none in the approved source list; known 1.0-era candidates (Blood Castle mobs, Archangel Messenger NPC, higher golden-invasion tiers) left out by that decision",
-    "the wandering-merchant rotation rule (one active at a time; timing unsourced) is W-EVT, not static spawn data; the two wandering rows (#248, #250 on Lorencia) carry schedule=wandering only"
+    "the wandering-merchant rotation rule (one active at a time; timing unsourced) belongs to a future event/NPC wave, not static spawn data; the two wandering rows (#248, #250 on Lorencia) carry schedule=wandering only"
   ],
   "notes": [
     "the v1 stat slug-list is gone: combat columns are typed MonsterCombat (level/hp/min+max_phys_damage/defense/attack_rate/defense_rate) and MobBehavior (move/attack/view ranges + move/attack/respawn delays_ms) on the fighting role variants; no f64 survives",

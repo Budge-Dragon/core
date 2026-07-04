@@ -10,7 +10,7 @@ Sources (approved): Version075 map files' CreateMonsters + NpcInitialization
 + the Bali summon (#150) in SkillsInitializer; Version095d map additions
 (Tarkan, Icarus), invasion mobs (#43/#44/#53/#54) and NPCs (#235-237).
 Spawns come from every map file's CreateMonsterSpawns; the Devil Square wave
-rows leave this file entirely (scope boundary -> W-EVT).
+rows leave this file entirely (scope boundary -> W-DS).
 
 v2 shape:
   * The v1 stat slug-list dies. Combat columns become the typed MonsterCombat /
@@ -570,7 +570,7 @@ def main():
         },
         "gaps": [
             "Devil Square wave spawns (28 rows on map 9) omitted from spawns.json "
-            "-> W-EVT event configs; residue (four square rectangles, per-wave "
+            "-> W-DS event configs; residue (four square rectangles, per-wave "
             "participant monster numbers, boss) recorded in the monsters_spawns v2 "
             "section, flagged as OpenMU 0.95d tuning to re-source under W-SRC",
             "merchant store contents deferred (merchant_stores.json, follow-up "
@@ -584,8 +584,9 @@ def main():
             "known 1.0-era candidates (Blood Castle mobs, Archangel Messenger NPC, "
             "higher golden-invasion tiers) left out by that decision",
             "the wandering-merchant rotation rule (one active at a time; timing "
-            "unsourced) is W-EVT, not static spawn data; the two wandering rows "
-            "(#248, #250 on Lorencia) carry schedule=wandering only",
+            "unsourced) belongs to a future event/NPC wave, not static spawn "
+            "data; the two wandering rows (#248, #250 on Lorencia) carry "
+            "schedule=wandering only",
         ],
         "notes": [
             "the v1 stat slug-list is gone: combat columns are typed MonsterCombat "

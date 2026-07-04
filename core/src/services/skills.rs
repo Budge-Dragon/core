@@ -1162,7 +1162,7 @@ mod tests {
     #[test]
     fn a_lethal_strike_clears_the_victims_active_effects() {
         // A frail (1 HP) monster carrying poison + ice is one-shot; the kill clears
-        // its whole effect store in-core (every W-EFFECT effect is StopByDeath).
+        // its whole effect store in-core (every timed effect is StopByDeath).
         let caster = caster_at((10, 10), 100, 100);
         let definition = skill(SkillShape::DirectHit, None, None, 3, 0, 0);
         let damaging = damaging_ref(&definition);

@@ -1,4 +1,4 @@
-//! W-INV end-to-end over the real regenerated `/data`.
+//! Item-instance drop rolls end-to-end over the real regenerated `/data`.
 //!
 //! Rolls every droppable equippable item against injected policy extremes and
 //! proves the drop-time contract holds on the shipped item definitions: rarity

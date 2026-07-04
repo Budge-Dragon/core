@@ -213,7 +213,7 @@ fn poison_drops_a_real_monster_monotonically_by_exactly_per_tick() {
     let caster = wizard(120);
     let per_tick = poison_per_tick(&caster);
 
-    // A pool large enough to survive the whole seven-tick stream.
+    // A pool large enough to survive the whole six-tick stream.
     let max_health = per_tick.saturating_mul(20).max(combat.hp);
     let (mut store, _) = apply_ailment(
         Ailment::Poisoned,
@@ -285,7 +285,7 @@ fn a_strong_casters_poison_kills_where_a_weak_casters_does_less() {
         Tick(0),
         tick(),
     );
-    let survivor = Pool::full(weak_tick.saturating_mul(7) + 1);
+    let survivor = Pool::full(weak_tick.saturating_mul(6) + 1);
     let (_, weak_health, _) = advance_effects(weak_store, survivor, Tick(10_000));
     assert!(weak_health.current() > 0, "a weak caster's poison is weak");
 }

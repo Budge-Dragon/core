@@ -92,7 +92,7 @@ MAPS = [
     {"number": 9, "version": "095d", "att": "Terrain10_1.att",
      "name": "Devil Square",
      "review": "collapsed from OpenMU's four discriminator records (one client "
-               "map; the four squares are event brackets, owned by W-EVT); the "
+               "map; the four squares are event brackets, owned by W-DS); the "
                "four OpenMU terrain blobs were verified byte-identical before "
                "collapsing",
      "files": [("Version095d/Maps/DevilSquare1.cs", "095d"),
@@ -106,8 +106,7 @@ MAPS = [
 WARP_REVIEW = (
     "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its "
     "initializer carries a todo to update it); no authentic 0.95 fee/level "
-    "table has been sourced — W-SRC re-sourcing family in "
-    "docs/debt/openmu-default-values.md")
+    "table has been sourced")
 
 
 def read(rel_path):
@@ -419,7 +418,7 @@ def main():
             "Devil Square mini-game event config (per-square entry level "
             "brackets, waves, rewards, timers, in-event death, ticket item, "
             "max 10 players; Version095d/Events/DevilSquareInitializer.cs) is "
-            "W-EVT scope, not maps data; the single collapsed map-9 record and "
+            "W-DS scope, not maps data; the single collapsed map-9 record and "
             "its four arrival gates (spawn gates 58-61) ARE extracted",
             "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 "
             "warp list verbatim with a 'todo: update for 0.95d'; adopted as-is, "
