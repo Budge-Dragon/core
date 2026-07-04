@@ -5,6 +5,8 @@
 //! monsters carry zero special-hit chances; equipment feeds them in a later
 //! wave.
 
+use crate::components::active_effect::ActiveEffects;
+use crate::components::bonus::CombatBonus;
 use crate::components::class::CharacterClass;
 use crate::components::combat_profile::{CombatProfile, VitalMaxima};
 use crate::components::element::PerElement;
@@ -13,7 +15,8 @@ use crate::components::stats::Stats;
 use crate::components::units::{Level, Percent, Resistance};
 use crate::data::monster_definitions::MonsterCombat;
 use crate::entities::character::Character;
-use crate::services::ratio::{floor_div_u64_to_u32, nonzero};
+use crate::services::effects::effect_bonus;
+use crate::services::ratio::{floor_div_u64_to_u32, nonzero, scale_ratio};
 
 /// The five trainable stats a character folds to, widened for pooled
 /// arithmetic. Command is zero for the four non-command classes.
@@ -62,7 +65,144 @@ pub fn monster_profile(
         excellent_chance: Percent::ZERO,
         defense_ignore_chance: Percent::ZERO,
         double_damage_chance: Percent::ZERO,
+        incoming_damage_reduction: Percent::ZERO,
     }
+}
+
+// W-SRC: the Defense-reduction ailment scales defense to ×9/10.
+/// Defense-reduction numerator.
+const DEFENSE_REDUCTION_NUM: u32 = 9;
+/// Defense-reduction denominator.
+const DEFENSE_REDUCTION_DEN: u32 = 10;
+
+/// The transient combat profile a strike reads once the entity's active effects
+/// are folded in — never persisted; re-derived every strike from
+/// `(base, effects)` so an effect reverts exactly on expiry. Folds each active
+/// effect's [`CombatBonus`] contribution into `base`, then applies the
+/// Defense-reduction ailment as a named ×9/10 derivation against the
+/// possibly-folded defense. An entity with no effects yields `base` unchanged
+/// (the empty fold is the identity).
+#[must_use]
+pub fn effective_profile(base: CombatProfile, effects: &ActiveEffects) -> CombatProfile {
+    let folded = effects
+        .active()
+        .into_iter()
+        .filter_map(|effect| effect_bonus(&effect))
+        .fold(base, fold_profile_bonus);
+    match effects.defense_reduction() {
+        Some(_) => reduce_defense(folded),
+        None => folded,
+    }
+}
+
+/// Folds one resolved [`CombatBonus`] into a profile — this is `CombatBonus`'s
+/// first consumer. Only the three contributions W-EFFECT emits map to a profile
+/// field; every other variant is a documented no-op (no profile field to fold
+/// into, or no W-EFFECT effect emits it — a future stat-aggregation wave extends
+/// this fold), enumerated as an explicit or-pattern so a new variant breaks the build.
+fn fold_profile_bonus(profile: CombatProfile, bonus: CombatBonus) -> CombatProfile {
+    match bonus {
+        // W-SRC: Greater Damage raises both physical span ends (a flat add).
+        CombatBonus::PhysicalDamage { amount } => CombatProfile {
+            physical: raise_span(profile.physical, amount),
+            ..profile
+        },
+        CombatBonus::Defense { amount } => CombatProfile {
+            defense: profile.defense.saturating_add(narrow_u16(amount)),
+            ..profile
+        },
+        CombatBonus::IncomingDamagePct { percent } => CombatProfile {
+            incoming_damage_reduction: combine_reduction(
+                profile.incoming_damage_reduction,
+                percent,
+            ),
+            ..profile
+        },
+        CombatBonus::Strength { .. }
+        | CombatBonus::Agility { .. }
+        | CombatBonus::Vitality { .. }
+        | CombatBonus::Energy { .. }
+        | CombatBonus::Command { .. }
+        | CombatBonus::MaxHealth { .. }
+        | CombatBonus::MaxHealthPct { .. }
+        | CombatBonus::MaxMana { .. }
+        | CombatBonus::MaxManaPct { .. }
+        | CombatBonus::MaxAbility { .. }
+        | CombatBonus::MaxAbilityPct { .. }
+        | CombatBonus::HealthRecoveryPct { .. }
+        | CombatBonus::AbilityRecovery { .. }
+        | CombatBonus::DefensePct { .. }
+        | CombatBonus::DefenseRate { .. }
+        | CombatBonus::DefenseRatePct { .. }
+        | CombatBonus::AttackRate { .. }
+        | CombatBonus::AttackSpeed { .. }
+        | CombatBonus::MinPhysicalDamage { .. }
+        | CombatBonus::MaxPhysicalDamage { .. }
+        | CombatBonus::WizardryDamage { .. }
+        | CombatBonus::WizardryDamagePct { .. }
+        | CombatBonus::SkillDamage { .. }
+        | CombatBonus::Damage { .. }
+        | CombatBonus::TwoHandedWeaponDamagePct { .. }
+        | CombatBonus::DamagePct { .. }
+        | CombatBonus::CriticalChancePct { .. }
+        | CombatBonus::CriticalDamage { .. }
+        | CombatBonus::ExcellentChancePct { .. }
+        | CombatBonus::ExcellentDamage { .. }
+        | CombatBonus::DoubleDamageChancePct { .. }
+        | CombatBonus::DefenseIgnoreChancePct { .. }
+        | CombatBonus::DamageReflectPct { .. }
+        | CombatBonus::HealthPerKill
+        | CombatBonus::ManaPerKill
+        | CombatBonus::ZenDropPct { .. }
+        | CombatBonus::ElementalResistance { .. }
+        | CombatBonus::ElementalDamage { .. } => profile,
+    }
+}
+
+/// The profile with its defense scaled to ×9/10 — the Defense-reduction ailment
+/// derivation. Percent cannot express a ×9/10 *decrease* (it models an increase),
+/// so this is a named ratio step, not an additive bonus.
+fn reduce_defense(profile: CombatProfile) -> CombatProfile {
+    CombatProfile {
+        defense: narrow_u16(scale_ratio(
+            u32::from(profile.defense),
+            DEFENSE_REDUCTION_NUM,
+            nonzero(DEFENSE_REDUCTION_DEN),
+        )),
+        ..profile
+    }
+}
+
+/// A physical span with both ends raised by `amount`, saturating at the `u16`
+/// ceiling.
+fn raise_span(span: Interval<u16>, amount: u32) -> Interval<u16> {
+    let add = narrow_u16(amount);
+    Interval::spanning(
+        span.min().saturating_add(add),
+        span.max().saturating_add(add),
+    )
+}
+
+/// Two damage-reduction percentages combined multiplicatively: the fractions of
+/// damage each lets through are multiplied, and the combined reduction is the
+/// complement. Folding one reduction into a zero base is the identity.
+fn combine_reduction(existing: Percent, add: Percent) -> Percent {
+    let kept_existing = u32::from(Percent::DENOMINATOR - existing.points());
+    let kept_add = u32::from(Percent::DENOMINATOR - add.points());
+    let kept = scale_ratio(
+        kept_existing,
+        kept_add,
+        nonzero(u32::from(Percent::DENOMINATOR)),
+    );
+    Percent::clamped(u64::from(
+        u32::from(Percent::DENOMINATOR).saturating_sub(kept),
+    ))
+}
+
+/// Saturating narrow of a resolved contribution to the `u16` a profile field
+/// stores.
+fn narrow_u16(value: u32) -> u16 {
+    u16::try_from(value).unwrap_or(u16::MAX)
 }
 
 fn attributes_of(level: Level, stats: Stats) -> Attributes {
@@ -130,6 +270,7 @@ fn gearless_profile(
         excellent_chance: Percent::ZERO,
         defense_ignore_chance: Percent::ZERO,
         double_damage_chance: Percent::ZERO,
+        incoming_damage_reduction: Percent::ZERO,
     }
 }
 
@@ -476,5 +617,74 @@ mod tests {
         assert_eq!(profile.defense_rate(), 25);
         assert_eq!(profile.resistance(Element::Lightning), Resistance(50));
         assert_eq!(profile.excellent_chance(), Percent::ZERO);
+    }
+
+    fn base_profile() -> CombatProfile {
+        let combat = MonsterCombat {
+            level: Level::new(20).unwrap(),
+            hp: 100,
+            min_phys_damage: 10,
+            max_phys_damage: 20,
+            defense: 100,
+            attack_rate: 50,
+            defense_rate: 50,
+        };
+        monster_profile(&combat, &gearless_resistances(), combat.level)
+    }
+
+    #[test]
+    fn effective_profile_of_no_effects_is_the_base() {
+        use crate::components::active_effect::ActiveEffects;
+        let base = base_profile();
+        assert_eq!(effective_profile(base, &ActiveEffects::EMPTY), base);
+    }
+
+    #[test]
+    fn greater_damage_raises_both_physical_span_ends() {
+        use crate::components::active_effect::{ActiveEffect, ActiveEffects};
+        use crate::components::units::Tick;
+        let effects = ActiveEffects::EMPTY.with(ActiveEffect::GreaterDamage {
+            amount: 5,
+            expiry: Tick(100),
+        });
+        let profile = effective_profile(base_profile(), &effects);
+        assert_eq!(profile.physical().min(), 15);
+        assert_eq!(profile.physical().max(), 25);
+    }
+
+    #[test]
+    fn defense_buff_folds_into_incoming_reduction() {
+        use crate::components::active_effect::{ActiveEffect, ActiveEffects};
+        use crate::components::units::Tick;
+        let effects = ActiveEffects::EMPTY.with(ActiveEffect::Defense { expiry: Tick(80) });
+        let profile = effective_profile(base_profile(), &effects);
+        assert_eq!(
+            profile.incoming_damage_reduction(),
+            Percent::new(50).unwrap()
+        );
+    }
+
+    #[test]
+    fn defense_reduction_scales_defense_to_nine_tenths() {
+        use crate::components::active_effect::{ActiveEffect, ActiveEffects};
+        use crate::components::units::Tick;
+        let effects =
+            ActiveEffects::EMPTY.with(ActiveEffect::DefenseReduction { expiry: Tick(80) });
+        // 100 × 9/10 = 90.
+        assert_eq!(effective_profile(base_profile(), &effects).defense(), 90);
+    }
+
+    #[test]
+    fn greater_defense_folds_before_the_reduction_derivation() {
+        use crate::components::active_effect::{ActiveEffect, ActiveEffects};
+        use crate::components::units::Tick;
+        let effects = ActiveEffects::EMPTY
+            .with(ActiveEffect::GreaterDefense {
+                amount: 10,
+                expiry: Tick(100),
+            })
+            .with(ActiveEffect::DefenseReduction { expiry: Tick(80) });
+        // (100 + 10) × 9/10 = 99: the ×9/10 derivation applies to the folded defense.
+        assert_eq!(effective_profile(base_profile(), &effects).defense(), 99);
     }
 }

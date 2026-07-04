@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
 use crate::components::placement::Placement;
 use crate::components::stats::Stats;
@@ -26,6 +27,7 @@ pub struct Character {
     unspent_points: u16,
     placement: Placement,
     vitals: Vitals,
+    active_effects: ActiveEffects,
 }
 
 /// Wire mirror of [`Character`]. The invariant gate re-proves on the way in,
@@ -39,6 +41,11 @@ struct RawCharacter {
     unspent_points: u16,
     placement: Placement,
     vitals: Vitals,
+    /// A record that predates timed effects, or a freshly created character,
+    /// carries none — the real "no active effects" value, not a fabricated
+    /// default.
+    #[serde(default = "ActiveEffects::empty")]
+    active_effects: ActiveEffects,
 }
 
 impl TryFrom<RawCharacter> for Character {
@@ -54,6 +61,7 @@ impl TryFrom<RawCharacter> for Character {
                 unspent_points: raw.unspent_points,
                 placement: raw.placement,
                 vitals: raw.vitals,
+                active_effects: raw.active_effects,
             }),
             (true, Stats::Standard { .. }) => {
                 Err(CharacterError::StandardStatsOnCommandClass(raw.class))
@@ -75,6 +83,7 @@ impl From<Character> for RawCharacter {
             unspent_points: character.unspent_points,
             placement: character.placement,
             vitals: character.vitals,
+            active_effects: character.active_effects,
         }
     }
 }
@@ -120,6 +129,12 @@ impl Character {
     #[must_use]
     pub fn vitals(&self) -> Vitals {
         self.vitals
+    }
+
+    /// The character's live timed effects.
+    #[must_use]
+    pub fn active_effects(&self) -> ActiveEffects {
+        self.active_effects
     }
 }
 
@@ -183,6 +198,7 @@ mod tests {
             unspent_points: 15,
             placement: placement(),
             vitals: vitals(),
+            active_effects: ActiveEffects::EMPTY,
         }
     }
 
@@ -213,6 +229,37 @@ mod tests {
         assert_eq!(character.stats(), standard());
         let json = serde_json::to_string(&character).unwrap();
         assert_eq!(serde_json::from_str::<Character>(&json).unwrap(), character);
+    }
+
+    #[test]
+    fn active_effects_seed_empty_and_round_trip() {
+        use crate::components::active_effect::{ActiveEffect, ActiveEffects};
+        use crate::components::units::Tick;
+
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        // A fresh character seeds no active effects.
+        assert_eq!(character.active_effects(), ActiveEffects::EMPTY);
+
+        // A persisted record that omits the field still parses (defaults empty).
+        let value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+        let mut object = value.as_object().unwrap().clone();
+        object.remove("active_effects");
+        let legacy: Character = serde_json::from_value(serde_json::Value::Object(object)).unwrap();
+        assert_eq!(legacy.active_effects(), ActiveEffects::EMPTY);
+
+        // A character carrying an effect round-trips through the wire unchanged.
+        let mut with_effect = value;
+        with_effect["active_effects"] = serde_json::to_value(
+            ActiveEffects::EMPTY.with(ActiveEffect::Defense { expiry: Tick(80) }),
+        )
+        .unwrap();
+        let loaded: Character = serde_json::from_value(with_effect).unwrap();
+        assert_eq!(loaded.active_effects().defense(), Some(Tick(80)));
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(&loaded).unwrap()).unwrap(),
+            loaded
+        );
     }
 
     #[test]

@@ -9,6 +9,9 @@
 //! The canonical strings are derived from the real `serde_json` output — this
 //! file asserts the shape does not drift, it does not invent one.
 
+use mu_core::components::active_effect::{
+    ActiveEffect, ActiveEffects, EffectIdentity, PoisonTicks,
+};
 use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
 use mu_core::components::equipment::EquipmentSlot;
@@ -24,18 +27,19 @@ use mu_core::components::item_options::{
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
-use mu_core::components::movement::Movement;
+use mu_core::components::movement::{Mobility, Movement};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{
     ConeHalfWidth, Facing, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
 use mu_core::components::tile::TileCoord;
-use mu_core::components::units::{Exp, ItemLevel, Level, MapNumber, Tick, Zen};
+use mu_core::components::units::{Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
 use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::special_drops::SpecialDrop;
 use mu_core::entities::world_item::WorldItem;
 use mu_core::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
+use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::inventory::{
     EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
 };
@@ -734,6 +738,199 @@ fn container_outcome_every_kind_tag_is_pinned() {
         };
         assert_eq!(
             kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+// -- W-EFFECT timed-effect, mobility, and effect-event wire pins. --------------
+
+#[test]
+fn active_effect_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&ActiveEffect::Defense { expiry: Tick(80) }).unwrap(),
+        r#"{"kind":"defense","expiry":80}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ActiveEffect::GreaterDamage {
+            amount: 13,
+            expiry: Tick(1200)
+        })
+        .unwrap(),
+        r#"{"kind":"greater_damage","amount":13,"expiry":1200}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ActiveEffect::Poisoned {
+            per_tick_damage: 12,
+            remaining: PoisonTicks::INITIAL,
+            next_tick: Tick(60),
+            cadence: Ticks(60),
+        })
+        .unwrap(),
+        r#"{"kind":"poisoned","per_tick_damage":12,"remaining":7,"next_tick":60,"cadence":60}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EffectIdentity::DefenseReduction).unwrap(),
+        r#""defense_reduction""#
+    );
+    // ActiveEffects is a Vec<ActiveEffect> on the wire; empty is the empty array.
+    let store = ActiveEffects::EMPTY.with(ActiveEffect::Iced { expiry: Tick(40) });
+    assert_eq!(
+        serde_json::to_string(&store).unwrap(),
+        r#"[{"kind":"iced","expiry":40}]"#
+    );
+    assert_eq!(serde_json::to_string(&ActiveEffects::EMPTY).unwrap(), "[]");
+}
+
+#[test]
+fn mobility_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&Mobility::Free).unwrap(),
+        r#"{"kind":"free"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Mobility::Slowed {
+            speed: Fixed::from_raw(32_768)
+        })
+        .unwrap(),
+        r#"{"kind":"slowed","speed":32768}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Mobility::Immobilized).unwrap(),
+        r#"{"kind":"immobilized"}"#
+    );
+}
+
+#[test]
+fn effect_event_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&EffectEvent::EffectApplied {
+            effect: ActiveEffect::Defense { expiry: Tick(80) }
+        })
+        .unwrap(),
+        r#"{"kind":"effect_applied","effect":{"kind":"defense","expiry":80}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EffectEvent::PoisonTick { damage: Damage(9) }).unwrap(),
+        r#"{"kind":"poison_tick","damage":9}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EffectEvent::EffectExpired {
+            effect: EffectIdentity::Poisoned
+        })
+        .unwrap(),
+        r#"{"kind":"effect_expired","effect":"poisoned"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&BuffCastOutcome::Healed { amount: 20 }).unwrap(),
+        r#"{"kind":"healed","amount":20}"#
+    );
+}
+
+#[test]
+fn active_effect_every_kind_tag_is_pinned() {
+    for effect in [
+        ActiveEffect::Defense { expiry: Tick(1) },
+        ActiveEffect::GreaterDamage {
+            amount: 1,
+            expiry: Tick(1),
+        },
+        ActiveEffect::GreaterDefense {
+            amount: 1,
+            expiry: Tick(1),
+        },
+        ActiveEffect::Poisoned {
+            per_tick_damage: 1,
+            remaining: PoisonTicks::INITIAL,
+            next_tick: Tick(1),
+            cadence: Ticks(1),
+        },
+        ActiveEffect::Iced { expiry: Tick(1) },
+        ActiveEffect::Frozen { expiry: Tick(1) },
+        ActiveEffect::DefenseReduction { expiry: Tick(1) },
+    ] {
+        let expected = match &effect {
+            ActiveEffect::Defense { .. } => "defense",
+            ActiveEffect::GreaterDamage { .. } => "greater_damage",
+            ActiveEffect::GreaterDefense { .. } => "greater_defense",
+            ActiveEffect::Poisoned { .. } => "poisoned",
+            ActiveEffect::Iced { .. } => "iced",
+            ActiveEffect::Frozen { .. } => "frozen",
+            ActiveEffect::DefenseReduction { .. } => "defense_reduction",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(effect).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn effect_event_every_kind_tag_is_pinned() {
+    for event in [
+        EffectEvent::EffectApplied {
+            effect: ActiveEffect::Defense { expiry: Tick(1) },
+        },
+        EffectEvent::PoisonTick { damage: Damage(1) },
+        EffectEvent::PoisonKilled { damage: Damage(1) },
+        EffectEvent::EffectExpired {
+            effect: EffectIdentity::Iced,
+        },
+        EffectEvent::Healed { amount: 1 },
+    ] {
+        let expected = match &event {
+            EffectEvent::EffectApplied { .. } => "effect_applied",
+            EffectEvent::PoisonTick { .. } => "poison_tick",
+            EffectEvent::PoisonKilled { .. } => "poison_killed",
+            EffectEvent::EffectExpired { .. } => "effect_expired",
+            EffectEvent::Healed { .. } => "healed",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(event).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn buff_cast_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        BuffCastOutcome::Rejected {
+            reason: CastRejection::OutOfRange,
+        },
+        BuffCastOutcome::Applied {
+            effect: ActiveEffect::Defense { expiry: Tick(1) },
+        },
+        BuffCastOutcome::Healed { amount: 1 },
+    ] {
+        let expected = match &outcome {
+            BuffCastOutcome::Rejected { .. } => "rejected",
+            BuffCastOutcome::Applied { .. } => "applied",
+            BuffCastOutcome::Healed { .. } => "healed",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn mobility_every_kind_tag_is_pinned() {
+    for mobility in [
+        Mobility::Free,
+        Mobility::Slowed {
+            speed: Fixed::from_raw(1),
+        },
+        Mobility::Immobilized,
+    ] {
+        let expected = match &mobility {
+            Mobility::Free => "free",
+            Mobility::Slowed { .. } => "slowed",
+            Mobility::Immobilized => "immobilized",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(mobility).unwrap()),
             Some(expected)
         );
     }

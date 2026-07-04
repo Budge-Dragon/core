@@ -7,6 +7,7 @@
 
 pub mod chance;
 pub mod combat;
+pub mod effects;
 pub mod experience;
 pub mod inventory;
 pub mod item_roll;

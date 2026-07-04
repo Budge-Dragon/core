@@ -12,6 +12,7 @@
 
 use rand_core::RngCore;
 
+use crate::components::active_effect::ActiveEffects;
 use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::movement::Movement;
 use crate::components::placement::Placement;
@@ -94,6 +95,7 @@ fn spawn_at(
                 health: Pool::full(combat.hp),
                 anchor: position,
                 next_action: Tick(0),
+                active_effects: ActiveEffects::EMPTY,
             };
             let event = SpawnEvent::MobSpawned {
                 number: monster.number,

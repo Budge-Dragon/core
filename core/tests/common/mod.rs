@@ -44,6 +44,7 @@ use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::entities::spawned::Spawned;
 use mu_core::events::monster_ai::MonsterIntent;
+use mu_core::services::effects::mobility;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::spawn::populate_map;
 
@@ -263,8 +264,12 @@ pub fn simulate(
             let LiveMap { grid, mobs } = map;
             for (index, slot) in mobs.iter_mut().enumerate() {
                 let (before, behavior) = *slot;
-                let (after, intent) =
-                    decide_monster_action(&before, &behavior, None, now, tick, grid, &mut rng);
+                // The host derives the mob's movement capability from its active
+                // effects and supplies it, keeping the AI service effect-unaware.
+                let capability = mobility(&before.active_effects, ONE_TILE);
+                let (after, intent) = decide_monster_action(
+                    &before, &behavior, None, now, tick, grid, capability, &mut rng,
+                );
                 frames.push(Frame {
                     tick: t,
                     mob_index: index,

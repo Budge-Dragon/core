@@ -19,10 +19,11 @@ use std::path::PathBuf;
 use rand_core::RngCore;
 use serde::de::DeserializeOwned;
 
+use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::collections::OneOrMore;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::element::PerElement;
-use mu_core::components::movement::Movement;
+use mu_core::components::movement::{Mobility, Movement};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::Facing;
@@ -57,7 +58,7 @@ use mu_core::services::kill::resolve_kill;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::profile::{character_profile, monster_profile};
 use mu_core::services::ratio::{floor_div_u64_to_u32, nonzero, scale_ratio};
-use mu_core::services::skills::{cast, classify};
+use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
 
 // --- Self-contained dataset harness (load failures abort, never unwrap). ---
 
@@ -231,6 +232,15 @@ fn victim_instance(number: MonsterNumber, hp: u32) -> MonsterInstance {
         health: Pool::full(hp),
         anchor: TileCoord::new(20, 20).to_world(),
         next_action: Tick(0),
+        active_effects: ActiveEffects::EMPTY,
+    }
+}
+
+/// The damaging reference the router yields, or `None` for a non-damaging skill.
+fn as_damaging(skill: &Skill) -> Option<DamagingSkillRef<'_>> {
+    match route(skill) {
+        SkillRouting::Damaging(reference) => Some(reference),
+        SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
     }
 }
 
@@ -388,7 +398,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
         town_tile(monster_tile),
     );
     let bolt_def = lightning_bolt();
-    let bolt = classify(&bolt_def).expect("a direct-hit skill is damaging");
+    let bolt = as_damaging(&bolt_def).unwrap();
     let targets = [target];
     let aim = monster_tile.to_world();
 
@@ -423,6 +433,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
             health: Pool::full(combat.hp),
             anchor: monster_tile.to_world(),
             next_action: Tick(0),
+            active_effects: ActiveEffects::EMPTY,
         };
         let (_, intent) = decide_monster_action(
             &mob,
@@ -431,6 +442,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
             Tick(0),
             tick,
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         match intent {
@@ -541,7 +553,7 @@ fn teeth_lightning_hit_reports_displacement() {
         town_tile(TileCoord::new(136, 125)),
     );
     let bolt_def = lightning_bolt();
-    let bolt = classify(&bolt_def).unwrap();
+    let bolt = as_damaging(&bolt_def).unwrap();
     let targets = [target];
     let aim = TileCoord::new(136, 125).to_world();
 

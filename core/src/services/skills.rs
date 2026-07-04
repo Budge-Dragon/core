@@ -10,25 +10,32 @@
 
 use rand_core::RngCore;
 
+use crate::components::active_effect::ActiveEffects;
 use crate::components::combat_profile::{CombatProfile, CombatTarget};
 use crate::components::element::Element;
 use crate::components::placement::Placement;
+use crate::components::pool::Pool;
 use crate::components::spatial::{
     ConeHalfWidth, Displacement, Fixed, HALF_TILE, Radius, Region, UNITS_PER_TILE, WorldPos,
     WorldRect, WorldVec,
 };
+use crate::components::stats::Stats;
 use crate::components::tile::WalkGrid;
+use crate::components::units::{Tick, TickDuration};
 use crate::components::vitals::Vitals;
-use crate::data::effects::Ailment;
+use crate::data::effects::{Ailment, Buff};
 use crate::data::skills::{AreaPattern, CastCost, Skill, SkillShape};
 use crate::entities::character::Character;
 use crate::events::combat::AttackOutcome;
+use crate::events::effect::BuffCastOutcome;
 use crate::events::movement::StepOutcome;
 use crate::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use crate::services::chance::{draw_cardinal, roll_apply_elemental};
 use crate::services::combat::resolve_attack;
+use crate::services::effects::{ApplicableBuff, apply_buff};
 use crate::services::movement::{resolve_drift, resolve_step};
-use crate::services::profile::character_profile;
+use crate::services::profile::{character_profile, effective_profile};
+use crate::services::ratio::{nonzero, scale_ratio};
 
 // W-SRC: invented movement grains — no data file carries a skill knockback or
 // dash distance. One tile is the knockback grain (mirrors monster_ai's step);
@@ -41,8 +48,14 @@ const DASH_SPEED: Fixed = Fixed::from_raw(8 * UNITS_PER_TILE);
 /// clicked target's cell.
 const SINGLE_TARGET_RADIUS_TILES: u8 = 1;
 
+// W-SRC: Heal restores 5 + Energy/5 health, applied instantly (no timed effect).
+/// Heal flat base, before the energy term.
+const HEAL_BASE: u32 = 5;
+/// Heal energy divisor: `+ Energy / 5`.
+const HEAL_ENERGY_DEN: u32 = 5;
+
 /// A damaging skill's spatial shape — the closed set the cast resolver handles.
-/// Non-damaging skill shapes never reach here; [`classify`] filters them out.
+/// Non-damaging skill shapes never reach here; [`route`] sorts them out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DamagingSkill {
     /// A single-target strike on the aimed cell.
@@ -58,7 +71,7 @@ pub enum DamagingSkill {
 }
 
 /// A skill proven damaging: its definition plus its resolved damaging shape.
-/// Minted only by [`classify`], so a held value is always a damaging skill.
+/// Minted only by [`route`], so a held value is always a damaging skill.
 #[derive(Debug, Clone, Copy)]
 pub struct DamagingSkillRef<'a> {
     skill: &'a Skill,
@@ -97,26 +110,117 @@ impl DamagingSkillRef<'_> {
     }
 }
 
-/// Classifies a skill as damaging, or `None` for the nine non-damaging shapes.
-/// The non-damaging shapes are an explicit or-pattern, never a wildcard, so a new
-/// skill shape breaks the build until its damage disposition is decided.
+/// A skill proven an applicable buff: its definition plus which of the three
+/// applicable buffs it grants. Minted only by [`route`].
+#[derive(Debug, Clone, Copy)]
+pub struct ApplicableBuffRef<'a> {
+    skill: &'a Skill,
+    buff: ApplicableBuff,
+}
+
+impl ApplicableBuffRef<'_> {
+    /// Which applicable buff this skill grants.
+    #[must_use]
+    pub fn buff(self) -> ApplicableBuff {
+        self.buff
+    }
+
+    /// The skill's maximum cast range in tiles.
+    #[must_use]
+    pub fn range(self) -> u8 {
+        self.skill.range
+    }
+
+    /// The skill's per-cast resource cost.
+    #[must_use]
+    pub fn cost(self) -> CastCost {
+        self.skill.cost
+    }
+}
+
+/// A skill proven a heal: its definition. Minted only by [`route`].
+#[derive(Debug, Clone, Copy)]
+pub struct HealRef<'a> {
+    skill: &'a Skill,
+}
+
+impl HealRef<'_> {
+    /// The skill's per-cast resource cost.
+    #[must_use]
+    pub fn cost(self) -> CastCost {
+        self.skill.cost
+    }
+}
+
+/// How a skill is resolved this wave: a damaging strike, an applicable buff, a
+/// heal, or deferred to a future wave. The single total router over
+/// [`SkillShape`] — a new shape (or a newly applicable buff) breaks the build
+/// until its routing is decided.
+#[derive(Debug, Clone, Copy)]
+pub enum SkillRouting<'a> {
+    /// A damaging skill — resolve with [`cast`].
+    Damaging(DamagingSkillRef<'a>),
+    /// An applicable buff — resolve with [`cast_buff`].
+    Buff(ApplicableBuffRef<'a>),
+    /// A heal — resolve with [`cast_heal`].
+    Heal(HealRef<'a>),
+    /// A shape (or buff) this wave does not yet resolve.
+    Deferred,
+}
+
+/// Routes a skill to how it is resolved this wave. Exhaustive over every skill
+/// shape, and over every buff for the two buff shapes it applies — the
+/// applicable buffs become [`SkillRouting::Buff`], the rest defer. Every
+/// non-damaging, non-buff, non-heal shape is an explicit or-pattern, never a
+/// wildcard, so a new shape breaks the build until its routing is decided.
 #[must_use]
-pub fn classify(skill: &Skill) -> Option<DamagingSkillRef<'_>> {
-    let shape = match skill.shape {
-        SkillShape::DirectHit => DamagingSkill::DirectHit,
-        SkillShape::Lunge => DamagingSkill::Lunge,
-        SkillShape::Area { pattern } => DamagingSkill::Area { pattern },
-        SkillShape::BuffSelf { .. }
-        | SkillShape::BuffPlayer { .. }
-        | SkillShape::BuffPartyMember { .. }
+pub fn route(skill: &Skill) -> SkillRouting<'_> {
+    match skill.shape {
+        SkillShape::DirectHit => SkillRouting::Damaging(DamagingSkillRef {
+            skill,
+            shape: DamagingSkill::DirectHit,
+        }),
+        SkillShape::Lunge => SkillRouting::Damaging(DamagingSkillRef {
+            skill,
+            shape: DamagingSkill::Lunge,
+        }),
+        SkillShape::Area { pattern } => SkillRouting::Damaging(DamagingSkillRef {
+            skill,
+            shape: DamagingSkill::Area { pattern },
+        }),
+        SkillShape::BuffSelf { buff } | SkillShape::BuffPlayer { buff } => route_buff(skill, buff),
+        SkillShape::Heal => SkillRouting::Heal(HealRef { skill }),
+        SkillShape::BuffPartyMember { .. }
         | SkillShape::BuffParty { .. }
-        | SkillShape::Heal
         | SkillShape::Summon { .. }
         | SkillShape::Teleport
         | SkillShape::NovaCharge
-        | SkillShape::RecallParty => return None,
-    };
-    Some(DamagingSkillRef { skill, shape })
+        | SkillShape::RecallParty => SkillRouting::Deferred,
+    }
+}
+
+/// Routes a single-target buff skill by its buff: the three applicable buffs
+/// resolve to [`SkillRouting::Buff`]; the rest defer. Exhaustive over [`Buff`].
+fn route_buff(skill: &Skill, buff: Buff) -> SkillRouting<'_> {
+    match buff {
+        Buff::Defense => SkillRouting::Buff(ApplicableBuffRef {
+            skill,
+            buff: ApplicableBuff::Defense,
+        }),
+        Buff::GreaterDamage => SkillRouting::Buff(ApplicableBuffRef {
+            skill,
+            buff: ApplicableBuff::GreaterDamage,
+        }),
+        Buff::GreaterDefense => SkillRouting::Buff(ApplicableBuffRef {
+            skill,
+            buff: ApplicableBuff::GreaterDefense,
+        }),
+        Buff::SoulBarrier
+        | Buff::SwellLife
+        | Buff::CriticalDamageIncrease
+        | Buff::InfiniteArrow
+        | Buff::Alcohol => SkillRouting::Deferred,
+    }
 }
 
 /// The region an area pattern covers: caster-centered discs, target-centered
@@ -248,7 +352,8 @@ pub fn cast(
         );
     }
 
-    let caster_profile = character_profile(caster).0;
+    let caster_profile =
+        effective_profile(character_profile(caster).0, &caster.active_effects());
     let mut hits = Vec::with_capacity(struck.len());
     for &(index, target) in &struck {
         hits.push(resolve_target_hit(
@@ -282,12 +387,8 @@ fn cast_rejection(
     skill: DamagingSkillRef<'_>,
     aim: WorldPos,
 ) -> Option<CastRejection> {
-    let cost = skill.cost();
-    if caster.vitals().mana.current() < u32::from(cost.mana) {
-        return Some(CastRejection::InsufficientMana);
-    }
-    if caster.vitals().ability.current() < u32::from(cost.ability) {
-        return Some(CastRejection::InsufficientAbility);
+    if let Some(reason) = affordability(&caster.vitals(), skill.cost()) {
+        return Some(reason);
     }
     let out_of_range = !caster
         .placement()
@@ -297,6 +398,97 @@ fn cast_rejection(
         return Some(CastRejection::OutOfRange);
     }
     None
+}
+
+/// The affordability precondition shared by every cast: insufficient mana, then
+/// insufficient ability, or `None` when the cost is affordable. Nothing is spent.
+fn affordability(vitals: &Vitals, cost: CastCost) -> Option<CastRejection> {
+    if vitals.mana.current() < u32::from(cost.mana) {
+        return Some(CastRejection::InsufficientMana);
+    }
+    if vitals.ability.current() < u32::from(cost.ability) {
+        return Some(CastRejection::InsufficientAbility);
+    }
+    None
+}
+
+/// Casts an applicable buff onto a supplied receiver's effect store: rejects on
+/// unaffordable cost or an out-of-range receiver (spending nothing), else spends
+/// the cost, resolves the buff's magnitude from the caster's energy, and applies
+/// it. Returns the caster's spent vitals and the resolved effect the host stores
+/// on the receiver (self or ally). The merged store is the caller's to persist
+/// via `receiver_effects.with(effect)`; this reports the resolved effect as the
+/// authoritative decision. `receiver_pos` is where the receiver stands — for a
+/// self-cast the caller passes the caster's own position, which is always in
+/// range. Which entity receives the buff stays a host targeting decision; the
+/// range rule is core's to compute and enforce.
+#[must_use]
+pub fn cast_buff(
+    caster: &Character,
+    buff: ApplicableBuffRef<'_>,
+    receiver_pos: WorldPos,
+    receiver_effects: ActiveEffects,
+    now: Tick,
+    tick: TickDuration,
+) -> (Vitals, BuffCastOutcome) {
+    let vitals = caster.vitals();
+    if let Some(reason) = affordability(&vitals, buff.cost()) {
+        return (vitals, BuffCastOutcome::Rejected { reason });
+    }
+    if !caster
+        .placement()
+        .position
+        .within_range(receiver_pos, Radius::from_tiles(buff.range()))
+    {
+        return (
+            vitals,
+            BuffCastOutcome::Rejected {
+                reason: CastRejection::OutOfRange,
+            },
+        );
+    }
+    let spent = spend_cost(vitals, buff.cost());
+    let (_merged, effect) = apply_buff(
+        buff.buff(),
+        caster_energy(caster),
+        receiver_effects,
+        now,
+        tick,
+    );
+    (spent, BuffCastOutcome::Applied { effect })
+}
+
+/// Casts a heal onto a supplied receiver's health: rejects on unaffordable cost
+/// (spending nothing), else spends the cost, restores `5 + Energy/5` to the
+/// receiver's pool (clamped at its maximum), and reports the health actually
+/// restored. Instant — stores no timed effect, so it reads no clock.
+#[must_use]
+pub fn cast_heal(
+    caster: &Character,
+    heal: HealRef<'_>,
+    receiver_health: Pool,
+) -> (Vitals, BuffCastOutcome) {
+    let vitals = caster.vitals();
+    if let Some(reason) = affordability(&vitals, heal.cost()) {
+        return (vitals, BuffCastOutcome::Rejected { reason });
+    }
+    let spent = spend_cost(vitals, heal.cost());
+    let healed = HEAL_BASE.saturating_add(scale_ratio(
+        u32::from(caster_energy(caster)),
+        1,
+        nonzero(HEAL_ENERGY_DEN),
+    ));
+    let restored = receiver_health.restored(healed);
+    let amount = restored.current().saturating_sub(receiver_health.current());
+    (spent, BuffCastOutcome::Healed { amount })
+}
+
+/// The caster's energy — the wizardry stat the buff and heal magnitudes scale
+/// off, on either stat shape.
+fn caster_energy(caster: &Character) -> u16 {
+    match caster.stats() {
+        Stats::Standard { energy, .. } | Stats::WithCommand { energy, .. } => energy,
+    }
 }
 
 fn is_single_target(shape: DamagingSkill) -> bool {
@@ -408,7 +600,6 @@ mod tests {
     use super::*;
     use crate::components::element::PerElement;
     use crate::components::movement::Movement;
-    use crate::components::pool::Pool;
     use crate::components::spatial::Facing;
     use crate::components::tile::TileCoord;
     use crate::components::units::{MapNumber, Resistance};
@@ -539,12 +730,29 @@ mod tests {
         CombatTarget::new(profile, Pool::full(300), placement)
     }
 
+    /// Extracts the damaging reference the router yields, or fails the test — the
+    /// test-side unwrap now that [`route`] is the single classifier.
+    fn damaging_ref(skill: &Skill) -> DamagingSkillRef<'_> {
+        match route(skill) {
+            SkillRouting::Damaging(reference) => reference,
+            SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
+                panic!("expected a damaging skill")
+            }
+        }
+    }
+
     #[test]
-    fn classify_accepts_exactly_the_three_damaging_shapes() {
-        assert!(classify(&skill(SkillShape::DirectHit, None, None, 3, 0, 0)).is_some());
-        assert!(classify(&skill(SkillShape::Lunge, None, None, 2, 0, 0)).is_some());
-        assert!(
-            classify(&skill(
+    fn route_sorts_every_shape_into_its_disposition() {
+        assert!(matches!(
+            route(&skill(SkillShape::DirectHit, None, None, 3, 0, 0)),
+            SkillRouting::Damaging(_)
+        ));
+        assert!(matches!(
+            route(&skill(SkillShape::Lunge, None, None, 2, 0, 0)),
+            SkillRouting::Damaging(_)
+        ));
+        assert!(matches!(
+            route(&skill(
                 SkillShape::Area {
                     pattern: AreaPattern::Nova
                 },
@@ -553,11 +761,57 @@ mod tests {
                 4,
                 0,
                 0
-            ))
-            .is_some()
-        );
-        assert!(classify(&skill(SkillShape::Heal, None, None, 0, 0, 0)).is_none());
-        assert!(classify(&skill(SkillShape::Teleport, None, None, 0, 0, 0)).is_none());
+            )),
+            SkillRouting::Damaging(_)
+        ));
+        assert!(matches!(
+            route(&skill(
+                SkillShape::BuffSelf {
+                    buff: Buff::Defense
+                },
+                None,
+                None,
+                0,
+                0,
+                0
+            )),
+            SkillRouting::Buff(_)
+        ));
+        assert!(matches!(
+            route(&skill(
+                SkillShape::BuffPlayer {
+                    buff: Buff::GreaterDamage
+                },
+                None,
+                None,
+                6,
+                0,
+                0
+            )),
+            SkillRouting::Buff(_)
+        ));
+        assert!(matches!(
+            route(&skill(SkillShape::Heal, None, None, 0, 0, 0)),
+            SkillRouting::Heal(_)
+        ));
+        // A buff this wave does not resolve, and a non-buff deferred shape.
+        assert!(matches!(
+            route(&skill(
+                SkillShape::BuffSelf {
+                    buff: Buff::SoulBarrier
+                },
+                None,
+                None,
+                0,
+                0,
+                0
+            )),
+            SkillRouting::Deferred
+        ));
+        assert!(matches!(
+            route(&skill(SkillShape::Teleport, None, None, 0, 0, 0)),
+            SkillRouting::Deferred
+        ));
     }
 
     #[test]
@@ -628,7 +882,7 @@ mod tests {
     fn insufficient_mana_rejects_and_spends_nothing() {
         let caster = caster_at((10, 10), 5, 100);
         let definition = skill(SkillShape::DirectHit, None, None, 3, 50, 0);
-        let damaging = classify(&definition).unwrap();
+        let damaging = damaging_ref(&definition);
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(1);
@@ -646,7 +900,7 @@ mod tests {
     fn insufficient_ability_rejects_before_range() {
         let caster = caster_at((10, 10), 100, 5);
         let definition = skill(SkillShape::DirectHit, None, None, 3, 0, 50);
-        let damaging = classify(&definition).unwrap();
+        let damaging = damaging_ref(&definition);
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(1);
@@ -663,7 +917,7 @@ mod tests {
     fn aim_beyond_range_rejects_out_of_range() {
         let caster = caster_at((10, 10), 100, 100);
         let definition = skill(SkillShape::DirectHit, None, None, 2, 0, 0);
-        let damaging = classify(&definition).unwrap();
+        let damaging = damaging_ref(&definition);
         let targets = [target_at((30, 10), 0)];
         let aim = TileCoord::new(30, 10).to_world();
         let mut rng = TestRng::new(1);
@@ -690,7 +944,7 @@ mod tests {
             10,
             0,
         );
-        let damaging = classify(&definition).unwrap();
+        let damaging = damaging_ref(&definition);
         // Target far outside the caster-centred nova radius.
         let targets = [target_at((40, 40), 0)];
         let aim = TileCoord::new(10, 10).to_world();
@@ -709,7 +963,7 @@ mod tests {
     fn a_successful_cast_spends_the_cost() {
         let caster = caster_at((10, 10), 100, 40);
         let definition = skill(SkillShape::DirectHit, None, None, 3, 30, 10);
-        let damaging = classify(&definition).unwrap();
+        let damaging = damaging_ref(&definition);
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(2);
@@ -725,7 +979,7 @@ mod tests {
         let caster = caster_at((10, 10), 100, 100);
         // Non-elemental: always inflicts.
         let plain_def = skill(SkillShape::DirectHit, None, Some(Ailment::Frozen), 3, 0, 0);
-        let plain = classify(&plain_def).unwrap();
+        let plain = damaging_ref(&plain_def);
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(3);
@@ -745,7 +999,7 @@ mod tests {
             0,
             0,
         );
-        let icy = classify(&icy_def).unwrap();
+        let icy = damaging_ref(&icy_def);
         let immune = [target_at((11, 10), 255)];
         let mut rng = TestRng::new(3);
         if let SkillOutcome::Cast { hits, .. } =
@@ -766,7 +1020,7 @@ mod tests {
             0,
             0,
         );
-        let bolt = classify(&bolt_def).unwrap();
+        let bolt = damaging_ref(&bolt_def);
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(4);
@@ -787,7 +1041,7 @@ mod tests {
     fn a_lunge_knocks_the_target_back_and_dashes_the_caster_in() {
         let caster = caster_at((10, 10), 100, 100);
         let lunge_def = skill(SkillShape::Lunge, None, None, 4, 0, 0);
-        let lunge = classify(&lunge_def).unwrap();
+        let lunge = damaging_ref(&lunge_def);
         let targets = [target_at((13, 10), 0)];
         let aim = TileCoord::new(13, 10).to_world();
         let mut rng = TestRng::new(5);
@@ -831,7 +1085,7 @@ mod tests {
             0,
             0,
         );
-        let bolt = classify(&bolt_def).unwrap();
+        let bolt = damaging_ref(&bolt_def);
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         // Seeds whose heading draws off-row must report no displacement.
@@ -861,7 +1115,7 @@ mod tests {
             10,
             5,
         );
-        let lunge = classify(&lunge_def).unwrap();
+        let lunge = damaging_ref(&lunge_def);
         let targets = [target_at((12, 10), 30)];
         let aim = TileCoord::new(12, 10).to_world();
         let run = |seed: u64| {
@@ -869,5 +1123,129 @@ mod tests {
             cast(&caster, lunge, aim, &targets, &all_walkable(), &mut rng)
         };
         assert_eq!(run(9), run(9));
+    }
+
+    fn tick50() -> TickDuration {
+        TickDuration::new(50).unwrap()
+    }
+
+    fn applicable_buff(skill: &Skill) -> ApplicableBuffRef<'_> {
+        match route(skill) {
+            SkillRouting::Buff(reference) => reference,
+            SkillRouting::Damaging(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
+                panic!("expected an applicable buff")
+            }
+        }
+    }
+
+    fn heal(skill: &Skill) -> HealRef<'_> {
+        match route(skill) {
+            SkillRouting::Heal(reference) => reference,
+            SkillRouting::Damaging(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => {
+                panic!("expected a heal")
+            }
+        }
+    }
+
+    #[test]
+    fn cast_buff_spends_and_reports_the_energy_scaled_effect() {
+        use crate::components::active_effect::{ActiveEffect, ActiveEffects};
+        // caster_at seeds energy 30.
+        let caster = caster_at((10, 10), 100, 100);
+        let def = skill(
+            SkillShape::BuffSelf {
+                buff: Buff::GreaterDamage,
+            },
+            None,
+            None,
+            0,
+            20,
+            5,
+        );
+        let buff = applicable_buff(&def);
+        let (vitals, outcome) = cast_buff(
+            &caster,
+            buff,
+            caster.placement().position,
+            ActiveEffects::EMPTY,
+            Tick(0),
+            tick50(),
+        );
+        assert_eq!(vitals.mana.current(), 80);
+        assert_eq!(vitals.ability.current(), 95);
+        match outcome {
+            // 3 + 30/7 = 7; 60_000ms / 50ms = 1200 ticks.
+            BuffCastOutcome::Applied { effect } => assert_eq!(
+                effect,
+                ActiveEffect::GreaterDamage {
+                    amount: 7,
+                    expiry: Tick(1200),
+                }
+            ),
+            BuffCastOutcome::Rejected { .. } | BuffCastOutcome::Healed { .. } => {
+                panic!("expected an applied buff")
+            }
+        }
+    }
+
+    #[test]
+    fn cast_buff_rejects_when_mana_is_short_and_spends_nothing() {
+        use crate::components::active_effect::ActiveEffects;
+        let caster = caster_at((10, 10), 5, 100);
+        let def = skill(
+            SkillShape::BuffSelf {
+                buff: Buff::Defense,
+            },
+            None,
+            None,
+            0,
+            50,
+            0,
+        );
+        let buff = applicable_buff(&def);
+        let (vitals, outcome) = cast_buff(
+            &caster,
+            buff,
+            caster.placement().position,
+            ActiveEffects::EMPTY,
+            Tick(0),
+            tick50(),
+        );
+        assert_eq!(vitals, caster.vitals());
+        assert_eq!(
+            outcome,
+            BuffCastOutcome::Rejected {
+                reason: CastRejection::InsufficientMana
+            }
+        );
+    }
+
+    #[test]
+    fn cast_heal_restores_energy_scaled_health_bounded_by_max() {
+        let caster = caster_at((10, 10), 100, 100);
+        let def = skill(SkillShape::Heal, None, None, 0, 10, 0);
+        let heal = heal(&def);
+        // 5 + 30/5 = 11 restored into the wound.
+        let (vitals, outcome) = cast_heal(&caster, heal.cost(), Pool::new(50, 100).unwrap());
+        assert_eq!(vitals.mana.current(), 90);
+        assert_eq!(outcome, BuffCastOutcome::Healed { amount: 11 });
+        // Near full, only the restorable amount is reported (2 of 11 fit).
+        let (_, capped) = cast_heal(&caster, heal.cost(), Pool::new(98, 100).unwrap());
+        assert_eq!(capped, BuffCastOutcome::Healed { amount: 2 });
+    }
+
+    #[test]
+    fn cast_heal_rejects_when_unaffordable() {
+        let caster = caster_at((10, 10), 3, 100);
+        let def = skill(SkillShape::Heal, None, None, 0, 50, 0);
+        let heal = heal(&def);
+        let (vitals, outcome) = cast_heal(&caster, heal.cost(), Pool::new(50, 100).unwrap());
+        assert_eq!(vitals, caster.vitals());
+        assert_eq!(
+            outcome,
+            BuffCastOutcome::Rejected {
+                reason: CastRejection::InsufficientMana
+            }
+        );
     }
 }

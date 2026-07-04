@@ -2,6 +2,8 @@
 //! ground plane. Its only rule is whether the tile walk-grid check applies —
 //! no altitude, no air combat, no anti-air.
 
+use core::num::NonZeroU32;
+
 use serde::{Deserialize, Serialize};
 
 /// How an entity traverses the ground plane.
@@ -57,6 +59,58 @@ pub enum CombatLock {
     Locked,
     /// Free of combat.
     Free,
+}
+
+/// An entity's per-step movement capability — the transient, effect-modulated
+/// classification of how far it may step this action. Derived each tick from an
+/// entity's active effects (in [`crate::services::effects`]) and supplied to the
+/// movement decision as a plain input, so the movement and AI services stay
+/// effect-unaware. A pure movement-capability vocabulary; no effect knowledge
+/// leaks into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Mobility {
+    /// Unhindered — steps at the base speed.
+    Free,
+    /// Slowed — steps at the base speed scaled down by `ratio`.
+    Slowed {
+        /// The fraction of the base step speed a step is scaled to.
+        ratio: SlowRatio,
+    },
+    /// Immobilized — no step is taken at all.
+    Immobilized,
+}
+
+/// A movement slow as an exact integer ratio of a base step speed —
+/// `num`/`den`, held with a non-zero denominator so a zero-division slow is
+/// unrepresentable and no float ever enters. The single slow this wave carries
+/// is the Iced half-speed [`SlowRatio::HALVED`]; a movement service applies it
+/// to the base speed *it* owns (via the shared integer-ratio primitive), so this
+/// carries the fraction and never the base magnitude.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlowRatio {
+    num: u32,
+    den: NonZeroU32,
+}
+
+impl SlowRatio {
+    /// The Iced slow: movement at ×1/2 the base step speed.
+    pub const HALVED: Self = Self {
+        num: 1,
+        den: NonZeroU32::MIN.saturating_add(1),
+    };
+
+    /// The ratio numerator.
+    #[must_use]
+    pub fn num(self) -> u32 {
+        self.num
+    }
+
+    /// The ratio denominator — non-zero by construction.
+    #[must_use]
+    pub fn den(self) -> NonZeroU32 {
+        self.den
+    }
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@
 //! inventories, buffs) that entities compose. They hold data and invariants
 //! only; behavior lives in [`crate::services`].
 
+pub mod active_effect;
 pub mod bonus;
 pub mod class;
 pub mod collections;

@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::active_effect::ActiveEffects;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::WorldPos;
@@ -26,6 +27,10 @@ pub struct MonsterInstance {
     pub anchor: WorldPos,
     /// The next tick at which it may act — its cadence clock.
     pub next_action: Tick,
+    /// Its live timed effects; seeded empty at spawn. A record that predates
+    /// timed effects carries none — the real "no active effects" value.
+    #[serde(default = "ActiveEffects::empty")]
+    pub active_effects: ActiveEffects,
 }
 
 #[cfg(test)]
@@ -53,6 +58,7 @@ mod tests {
             health: Pool::full(60),
             anchor: placement().position,
             next_action: Tick(0),
+            active_effects: ActiveEffects::EMPTY,
         };
         assert_eq!(instance.health.current(), 60);
         assert_eq!(instance.health.max(), 60);
@@ -70,6 +76,7 @@ mod tests {
             health: Pool::full(1),
             anchor: placement().position,
             next_action: Tick(0),
+            active_effects: ActiveEffects::EMPTY,
         };
         assert_eq!(instance.health.current(), 1);
         assert_eq!(instance.health.max(), 1);
@@ -83,11 +90,20 @@ mod tests {
             health: Pool::full(60),
             anchor: placement().position,
             next_action: Tick(9),
+            active_effects: ActiveEffects::EMPTY,
         };
         let json = serde_json::to_string(&instance).unwrap();
         assert_eq!(
             serde_json::from_str::<MonsterInstance>(&json).unwrap(),
             instance
+        );
+        // A record predating timed effects (no field) still parses, empty.
+        let legacy = r#"{"number":7,"placement":{"position":{"x":163840,"y":229376},"facing":{"x":0,"y":1},"movement":"grounded","map":0},"health":{"current":60,"max":60},"anchor":{"x":163840,"y":229376},"next_action":9}"#;
+        assert_eq!(
+            serde_json::from_str::<MonsterInstance>(legacy)
+                .unwrap()
+                .active_effects,
+            ActiveEffects::EMPTY
         );
     }
 }

@@ -64,6 +64,19 @@ impl Pool {
             max: self.max,
         }
     }
+
+    /// This pool with `amount` added to `current`, clamped at the maximum; the
+    /// maximum is unchanged. The shared recovery path for a heal or a
+    /// resource regeneration — an over-heal saturates at full, never above.
+    #[must_use]
+    pub const fn restored(self, amount: u32) -> Pool {
+        let raised = self.current.saturating_add(amount);
+        let current = if raised > self.max { self.max } else { raised };
+        Pool {
+            current,
+            max: self.max,
+        }
+    }
 }
 
 impl TryFrom<PoolWire> for Pool {
@@ -154,6 +167,18 @@ mod tests {
         assert_eq!(drained.max(), 60);
         // Reducing by zero is the identity.
         assert_eq!(pool.reduced(0), pool);
+    }
+
+    #[test]
+    fn restored_clamps_at_max_and_keeps_max() {
+        let pool = Pool::new(30, 60).unwrap();
+        assert_eq!(pool.restored(10), Pool::new(40, 60).unwrap());
+        // Over-heal clamps the current value at the maximum.
+        let full = pool.restored(1000);
+        assert_eq!(full.current(), 60);
+        assert_eq!(full.max(), 60);
+        // Restoring by zero is the identity.
+        assert_eq!(pool.restored(0), pool);
     }
 
     #[test]

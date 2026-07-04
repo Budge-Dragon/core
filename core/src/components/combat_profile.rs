@@ -30,6 +30,7 @@ pub struct CombatProfile {
     pub(crate) excellent_chance: Percent,
     pub(crate) defense_ignore_chance: Percent,
     pub(crate) double_damage_chance: Percent,
+    pub(crate) incoming_damage_reduction: Percent,
 }
 
 impl CombatProfile {
@@ -97,6 +98,14 @@ impl CombatProfile {
     #[must_use]
     pub fn double_damage_chance(&self) -> Percent {
         self.double_damage_chance
+    }
+
+    /// Percentage the defender reduces incoming damage by — the transient
+    /// contribution timed defensive buffs fold in (gearless zero). Applied as
+    /// the final defender-side step of a strike.
+    #[must_use]
+    pub fn incoming_damage_reduction(&self) -> Percent {
+        self.incoming_damage_reduction
     }
 }
 
@@ -189,6 +198,7 @@ mod tests {
             excellent_chance: Percent::ZERO,
             defense_ignore_chance: Percent::ZERO,
             double_damage_chance: Percent::ZERO,
+            incoming_damage_reduction: Percent::ZERO,
         }
     }
 
@@ -222,7 +232,9 @@ mod tests {
     #[test]
     fn combat_profile_wire_round_trips() {
         let p = profile();
+        assert_eq!(p.incoming_damage_reduction(), Percent::ZERO);
         let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains(r#""incoming_damage_reduction":0"#));
         assert_eq!(serde_json::from_str::<CombatProfile>(&json).unwrap(), p);
     }
 }

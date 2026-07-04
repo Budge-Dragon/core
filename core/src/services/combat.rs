@@ -9,7 +9,7 @@ use rand_core::RngCore;
 
 use crate::components::combat_profile::CombatProfile;
 use crate::components::pool::Pool;
-use crate::components::units::ChancePer10000;
+use crate::components::units::{ChancePer10000, Percent};
 use crate::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
 use crate::services::chance::{roll_per_10000, roll_percent, uniform_in_inclusive};
 use crate::services::ratio::{nonzero, scale_ratio};
@@ -136,7 +136,18 @@ fn damage_dealt(
         after_overrate
     };
     let floor = (u32::from(attacker.level().get()) / MIN_DAMAGE_FLOOR_DIVISOR).max(1);
-    after_double.max(floor)
+    let floored = after_double.max(floor);
+    // The defender's timed damage-reduction is the final step, applied after the
+    // floor: `damage × (100 - reduction) / 100`. A zero reduction (the gearless
+    // and effect-free case) is the identity, so this is byte-identical to a
+    // reduction-free strike. The caller passes the effect-folded profile, so the
+    // reduction field already reflects any active defensive buff.
+    let reduction = u32::from(target.incoming_damage_reduction().points());
+    scale_ratio(
+        floored,
+        u32::from(Percent::DENOMINATOR).saturating_sub(reduction),
+        nonzero(u32::from(Percent::DENOMINATOR)),
+    )
 }
 
 #[cfg(test)]
@@ -144,7 +155,7 @@ mod tests {
     use super::*;
     use crate::components::element::PerElement;
     use crate::components::interval::Interval;
-    use crate::components::units::{Level, Percent, Resistance};
+    use crate::components::units::{Level, Resistance};
 
     /// Deterministic `SplitMix64` for replayable tests.
     struct TestRng {
@@ -215,6 +226,7 @@ mod tests {
             excellent_chance: Percent::ZERO,
             defense_ignore_chance: Percent::ZERO,
             double_damage_chance: Percent::ZERO,
+            incoming_damage_reduction: Percent::ZERO,
         }
     }
 
@@ -397,6 +409,35 @@ mod tests {
         let (health, outcome) = resolve_attack(&attacker, &target, Pool::full(10), &mut rng);
         assert_eq!(health.current(), 0);
         assert!(matches!(outcome, AttackOutcome::Killed { .. }));
+    }
+
+    /// The base profile with a timed incoming-damage reduction set.
+    fn with_reduction(base: CombatProfile, points: u8) -> CombatProfile {
+        CombatProfile {
+            incoming_damage_reduction: Percent::new(points).unwrap(),
+            ..base
+        }
+    }
+
+    #[test]
+    fn incoming_reduction_zero_is_byte_identical_and_fifty_percent_halves() {
+        // Fixed span 20, no defense/specials/overrate: the base damage is 20.
+        let attacker = plain(10, 20, 20, 0, 10_000, 0);
+        let plain_target = plain(10, 0, 0, 0, 0, 0);
+        let mut rng = TestRng::new(21);
+        let (_, outcome) = resolve_attack(&attacker, &plain_target, Pool::full(100), &mut rng);
+        match outcome {
+            AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(20)),
+            AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
+        }
+        // The same strike against a defender reducing incoming damage 50%: 20 → 10.
+        let halved = with_reduction(plain(10, 0, 0, 0, 0, 0), 50);
+        let mut rng = TestRng::new(21);
+        let (_, outcome) = resolve_attack(&attacker, &halved, Pool::full(100), &mut rng);
+        match outcome {
+            AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(10)),
+            AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
+        }
     }
 
     #[test]

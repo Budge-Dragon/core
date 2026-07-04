@@ -1,1 +1,12 @@
 /target
+
+# Local-only workspace material — kept on disk, never published with the crate:
+# Claude instructions/agents, planning & reference docs, and the OpenMU
+# reference clone (read-only domain reference; see docs/openmu-reference.md).
+CLAUDE.md
+/.claude/
+/docs/
+/Expansions.md
+/Ideas.md
+/Preserve.md
+/reference/

@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use rand_core::RngCore;
 use serde::de::DeserializeOwned;
 
+use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::equipment::Equipment;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
@@ -210,6 +211,7 @@ fn drop_victim(atlas: &Atlas) -> MonsterInstance {
         health: Pool::full(1),
         anchor: TileCoord::new(10, 10).to_world(),
         next_action: Tick(0),
+        active_effects: ActiveEffects::EMPTY,
     }
 }
 
@@ -497,6 +499,7 @@ fn loot_drop_item_bridges_into_the_roll() {
         health: Pool::full(1),
         anchor: TileCoord::new(10, 10).to_world(),
         next_action: Tick(0),
+        active_effects: ActiveEffects::EMPTY,
     };
     let victim_level = Level::new(80).unwrap();
     let mut bridged = 0u32;

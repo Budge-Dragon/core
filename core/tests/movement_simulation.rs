@@ -23,7 +23,8 @@ use std::collections::BTreeMap;
 use proptest::prelude::*;
 use proptest::test_runner::TestRunner;
 
-use mu_core::components::movement::{CombatLock, FlightChange, Movement, Wings};
+use mu_core::components::active_effect::ActiveEffects;
+use mu_core::components::movement::{CombatLock, FlightChange, Mobility, Movement, Wings};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, Radius, UNITS_PER_TILE, WorldPos};
@@ -196,6 +197,7 @@ fn mob_from(position: WorldPos, anchor: WorldPos, map: MapNumber) -> MonsterInst
         health: Pool::full(60),
         anchor,
         next_action: Tick(0),
+        active_effects: ActiveEffects::EMPTY,
     }
 }
 
@@ -248,6 +250,7 @@ fn decide(
         now,
         tick(),
         grid,
+        Mobility::Free,
         rng,
     )
 }

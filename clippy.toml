@@ -7,6 +7,15 @@
 # ".." keeps clippy's built-in defaults.
 doc-valid-idents = ["SpacetimeDB", "NPCs", "OpenMU", "MonsterSetBase", ".."]
 
+# services::monster_ai::decide_monster_action takes eight distinct, non-bundleable
+# domain inputs (the mob and its behavior, the optional target, the clock and tick
+# length, the walk grid, the movement capability, and the injected RNG). The
+# movement-capability input is supplied so the AI stays effect-unaware; bundling
+# any of these into a config struct is the banned Extract-Parameter-Object patch
+# (CLAUDE.md, "Deep modules, not shallow ones"), so the threshold is raised at the
+# config layer rather than suppressed at the call site.
+too-many-arguments-threshold = 8
+
 # components::class::ClassSet is the total membership structure over the
 # eight-class roster: eight named bools whose exhaustive `allows` match makes
 # an out-of-roster query unrepresentable (the spec's total-structure pattern).

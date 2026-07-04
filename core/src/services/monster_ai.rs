@@ -12,6 +12,7 @@
 
 use rand_core::RngCore;
 
+use crate::components::movement::{Mobility, SlowRatio};
 use crate::components::placement::Placement;
 use crate::components::spatial::{Facing, Fixed, Radius, UNITS_PER_TILE, WorldPos};
 use crate::components::tile::WalkGrid;
@@ -22,6 +23,7 @@ use crate::events::monster_ai::MonsterIntent;
 use crate::events::movement::StepOutcome;
 use crate::services::chance::draw_cardinal;
 use crate::services::movement::{resolve_drift, resolve_step};
+use crate::services::ratio::scale_ratio;
 
 /// A monster's per-action step distance: one whole tile. Authentic: classic MU
 /// is tile-grid, so a mob advances exactly one tile per move action — one tile
@@ -56,7 +58,28 @@ fn rescheduled(mob: &MonsterInstance, placement: Placement, delay: Ticks) -> Mon
         health: mob.health,
         anchor: mob.anchor,
         next_action: mob.next_action + delay,
+        active_effects: mob.active_effects,
     }
+}
+
+/// The per-step speed a mobility confers, or `None` when the mob is
+/// immobilized (no leash/chase/wander step is taken). `Free` moves at the base
+/// mob step speed; `Slowed` scales that same base by the effect's slow ratio —
+/// so [`MOB_STEP_SPEED`] is decided in this one module and nowhere else.
+fn step_speed(mobility: Mobility) -> Option<Fixed> {
+    match mobility {
+        Mobility::Free => Some(MOB_STEP_SPEED),
+        Mobility::Slowed { ratio } => Some(slowed_step(ratio)),
+        Mobility::Immobilized => None,
+    }
+}
+
+/// The base mob step speed scaled down by a slow ratio, via the shared
+/// integer-ratio primitive (no float). The one-tile base fits `u32` (`2^24`), so
+/// the narrow is a boundary clamp of a spatial magnitude, never a masked lookup.
+fn slowed_step(ratio: SlowRatio) -> Fixed {
+    let base = u32::try_from(MOB_STEP_SPEED.raw()).unwrap_or(u32::MAX);
+    Fixed::from_raw(i64::from(scale_ratio(base, ratio.num(), ratio.den())))
 }
 
 /// Applies a resolved movement step and advances the cadence by `delay`. A
@@ -77,9 +100,14 @@ fn advance_after_step(
 }
 
 /// Decides one action for a mob and returns the advanced mob state with the
-/// chosen intent. The seven parameters are each a distinct domain input at the
+/// chosen intent. The eight parameters are each a distinct domain input at the
 /// right layer — the mob and its behavior, the optional target, the clock and
-/// tick length, the walk grid, and the RNG — so none can be dropped or bundled.
+/// tick length, the walk grid, the movement capability, and the RNG — so none
+/// can be dropped or bundled. `mobility` is supplied by the caller (derived from
+/// the mob's active effects via [`crate::services::effects::mobility`]) so this
+/// service stays effect-unaware: it only gates movement. An immobilized mob
+/// takes no leash/chase/wander step (each resolves to an in-place idle), but an
+/// in-range attack still fires — immobilization is a movement-only gate.
 #[must_use]
 pub fn decide_monster_action(
     mob: &MonsterInstance,
@@ -88,6 +116,7 @@ pub fn decide_monster_action(
     now: Tick,
     tick: TickDuration,
     grid: &WalkGrid,
+    mobility: Mobility,
     rng: &mut impl RngCore,
 ) -> (MonsterInstance, MonsterIntent) {
     if !mob.next_action.reached(now) {
@@ -96,11 +125,16 @@ pub fn decide_monster_action(
 
     let pos = mob.placement.position;
     let move_delay = behavior.move_delay_ms.in_ticks(tick);
+    let speed = step_speed(mobility);
 
-    if !pos.within_range(mob.anchor, leash_radius(behavior)) {
-        let step = resolve_step(mob.placement, mob.anchor, MOB_STEP_SPEED, grid);
-        let (instance, to, facing) = advance_after_step(mob, step, move_delay);
-        return (instance, MonsterIntent::LeashReturn { to, facing });
+    // Leash-return is a movement branch: only a mob able to step returns, and it
+    // still outranks aggro (an immobilized stray skips straight to combat).
+    if let Some(speed) = speed {
+        if !pos.within_range(mob.anchor, leash_radius(behavior)) {
+            let step = resolve_step(mob.placement, mob.anchor, speed, grid);
+            let (instance, to, facing) = advance_after_step(mob, step, move_delay);
+            return (instance, MonsterIntent::LeashReturn { to, facing });
+        }
     }
 
     if let Some(target) = target {
@@ -114,22 +148,28 @@ pub fn decide_monster_action(
             let instance = rescheduled(mob, placement, attack_delay);
             return (instance, MonsterIntent::Attack { target });
         }
-        if pos.within_range(target, Radius::from_tiles(behavior.view_range)) {
-            let step = resolve_step(mob.placement, target, MOB_STEP_SPEED, grid);
-            let (instance, to, facing) = advance_after_step(mob, step, move_delay);
-            return (instance, MonsterIntent::Chase { to, facing });
+        if let Some(speed) = speed {
+            if pos.within_range(target, Radius::from_tiles(behavior.view_range)) {
+                let step = resolve_step(mob.placement, target, speed, grid);
+                let (instance, to, facing) = advance_after_step(mob, step, move_delay);
+                return (instance, MonsterIntent::Chase { to, facing });
+            }
         }
     }
 
-    if behavior.move_range == 0 {
-        let instance = rescheduled(mob, mob.placement, move_delay);
-        return (instance, MonsterIntent::Idle);
+    // Wander is a movement branch; an immobilized or territory-bound mob idles.
+    match speed {
+        Some(speed) if behavior.move_range > 0 => {
+            let drift = draw_cardinal(rng);
+            let step = resolve_drift(mob.placement, drift, speed, grid);
+            let (instance, to, facing) = advance_after_step(mob, step, move_delay);
+            (instance, MonsterIntent::Wander { to, facing })
+        }
+        Some(_) | None => {
+            let instance = rescheduled(mob, mob.placement, move_delay);
+            (instance, MonsterIntent::Idle)
+        }
     }
-
-    let drift = draw_cardinal(rng);
-    let step = resolve_drift(mob.placement, drift, MOB_STEP_SPEED, grid);
-    let (instance, to, facing) = advance_after_step(mob, step, move_delay);
-    (instance, MonsterIntent::Wander { to, facing })
 }
 
 #[cfg(test)]
@@ -207,6 +247,7 @@ mod tests {
             health: Pool::full(60),
             anchor: TileCoord::new(anchor.0, anchor.1).to_world(),
             next_action,
+            active_effects: crate::components::active_effect::ActiveEffects::EMPTY,
         }
     }
 
@@ -222,6 +263,7 @@ mod tests {
             Tick(50),
             tick50(),
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         assert_eq!(intent, MonsterIntent::Idle);
@@ -244,6 +286,7 @@ mod tests {
             Tick(0),
             tick50(),
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         let MonsterIntent::LeashReturn { to, .. } = intent else {
@@ -267,6 +310,7 @@ mod tests {
             Tick(0),
             tick50(),
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         assert_eq!(intent, MonsterIntent::Attack { target });
@@ -290,6 +334,7 @@ mod tests {
             Tick(0),
             tick50(),
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         let MonsterIntent::Chase { to, .. } = intent else {
@@ -311,6 +356,7 @@ mod tests {
             Tick(0),
             tick50(),
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         assert_eq!(intent, MonsterIntent::Idle);
@@ -331,6 +377,7 @@ mod tests {
             Tick(0),
             tick50(),
             &grid,
+            Mobility::Free,
             &mut rng,
         );
         assert!(matches!(intent, MonsterIntent::Wander { .. }));
@@ -338,6 +385,74 @@ mod tests {
         let mut probe = TestRng::new(5);
         probe.next_u64();
         assert_eq!(rng.next_u64(), probe.next_u64());
+    }
+
+    #[test]
+    fn immobilized_mob_cannot_step_but_still_attacks_in_range() {
+        let grid = all_walkable();
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(11, 10).to_world();
+        let mut rng = TestRng::new(1);
+        // In attack range: the movement gate does not bar an attack.
+        let (_, intent) = decide_monster_action(
+            &mob,
+            &behavior(1, 2, 5),
+            Some(target),
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Immobilized,
+            &mut rng,
+        );
+        assert_eq!(intent, MonsterIntent::Attack { target });
+    }
+
+    #[test]
+    fn immobilized_mob_out_of_view_idles_in_place() {
+        let grid = all_walkable();
+        // A stray far from its anchor would leash-return if it could step.
+        let mob = mob_at((20, 10), (10, 10), Tick(0));
+        let mut rng = TestRng::new(1);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &behavior(3, 1, 3),
+            None,
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Immobilized,
+            &mut rng,
+        );
+        assert_eq!(intent, MonsterIntent::Idle);
+        assert_eq!(after.placement.position, mob.placement.position);
+        // Reschedules by the move delay and draws no wander word.
+        assert_eq!(after.next_action, Tick(0) + Ticks(8));
+        let mut fresh = TestRng::new(1);
+        assert_eq!(rng.next_u64(), fresh.next_u64());
+    }
+
+    #[test]
+    fn slowed_mob_chases_at_the_reduced_speed() {
+        let grid = all_walkable();
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(20, 10).to_world();
+        let mut rng = TestRng::new(1);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &behavior(1, 1, 15),
+            Some(target),
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Slowed {
+                ratio: SlowRatio::HALVED,
+            },
+            &mut rng,
+        );
+        assert!(matches!(intent, MonsterIntent::Chase { .. }));
+        // A half-tile step east lands short of the full-tile chase position.
+        let stepped = after.placement.position.x().raw() - mob.placement.position.x().raw();
+        assert_eq!(stepped, UNITS_PER_TILE / 2);
     }
 
     #[test]
@@ -353,6 +468,7 @@ mod tests {
                 Tick(0),
                 tick50(),
                 &grid,
+                Mobility::Free,
                 &mut rng,
             )
         };

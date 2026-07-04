@@ -57,6 +57,7 @@ mod tests {
                 health: Pool::full(60),
                 anchor: placement().position,
                 next_action: Tick(0),
+                active_effects: crate::components::active_effect::ActiveEffects::EMPTY,
             },
         };
         let json = serde_json::to_string(&mob).unwrap();
