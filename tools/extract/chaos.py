@@ -139,8 +139,12 @@ RECORDS = [
     }, review=(
         "Cape of Lord is the 1.0-era Dark Lord wing but this crafting "
         "(Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; "
-        "value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are "
-        "OpenMU defaults pending classic sourcing")),
+        "OpenMU's S6 result is Any-of-two, uniform 1/2 (Cape of Lord 13/30 "
+        "+ Cape of Fighter 12/49) — Cape of Fighter is Rage Fighter gear "
+        "(post-pre-S3 class), era-cut, so this record ships the single "
+        "Cape of Lord result; value-per-percent 4,000,000/40,000 and "
+        "luck/excellent 20/20 are OpenMU defaults pending classic "
+        "sourcing")),
 
     mix("+10 Item Combination", "095d", {
         "kind": "item_upgrade",
@@ -183,7 +187,7 @@ RECORDS = [
     }, review=(
         "stat fruits are 1.0-era, data only in S6; the created fruit's stat "
         "kind is a weighted services roll (weights are OpenMU defaults, see "
-        "FRUIT_STAT_WEIGHTS), not data")),
+        "FRUIT_LEVEL_WEIGHTS), not data")),
 
     mix("Devil's Square Ticket", "095d", {
         "kind": "devil_square_ticket",
@@ -360,7 +364,7 @@ def main():
                 "8-level breadth come from OpenMU's version-shared handler "
                 "tables; pre-S3 level counts pending era verification",
             "fruit_stat_weights": "the created fruit's stat kind is a "
-                "weighted services roll (FRUIT_STAT_WEIGHTS 30/25/20/20/5); "
+                "weighted services roll (FRUIT_LEVEL_WEIGHTS 30/25/20/20/5); "
                 "weights are OpenMU code constants, live in services not data",
         },
         "gaps": {

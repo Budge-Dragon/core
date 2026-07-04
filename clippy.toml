@@ -16,6 +16,15 @@ doc-valid-idents = ["SpacetimeDB", "NPCs", "OpenMU", "MonsterSetBase", ".."]
 # config layer rather than suppressed at the call site.
 too-many-arguments-threshold = 8
 
+# data::atlas::resolve::resolve_chaos_recipe is the total record-to-resolved
+# join over the nine-family chaos-recipe catalog: one match arm per family,
+# each a field-for-field carry-over plus its output join. Its length is the
+# catalog's vocabulary breadth (nine variants, ~50 fields), not a second
+# concern — any further split is the temporal decomposition CLAUDE.md bans, so
+# the pedantic default (100) is raised here at the config layer, never at the
+# call site.
+too-many-lines-threshold = 130
+
 # components::class::ClassSet is the total membership structure over the
 # eight-class roster: eight named bools whose exhaustive `allows` match makes
 # an out-of-roster query unrepresentable (the spec's total-structure pattern).

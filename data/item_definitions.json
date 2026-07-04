@@ -6088,6 +6088,7 @@
         "number": 15
       },
       "source_version": "075",
+      "review": "price 810,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -6095,7 +6096,8 @@
       "max_item_level": 0,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "fixed",
+        "zen": 810000
       },
       "kind": "jewel",
       "jewel": "chaos"
@@ -6473,7 +6475,7 @@
         "number": 14
       },
       "source_version": "s6",
-      "review": "1.0-era 2nd-wings mix ingredient from S6 Wings.cs; source sets drops_from_monsters=false and max_item_level=1",
+      "review": "1.0-era 2nd-wings mix ingredient from S6 Wings.cs; source sets drops_from_monsters=false and max_item_level=1; per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) -- level 1 (the Monarch's Crest) 7,500,000, else 180,000",
       "width": 1,
       "height": 2,
       "drops_from_monsters": false,
@@ -6481,7 +6483,11 @@
       "max_item_level": 1,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          180000,
+          7500000
+        ]
       },
       "kind": "mix_material"
     },
@@ -6491,7 +6497,7 @@
         "number": 15
       },
       "source_version": "s6",
-      "review": "1.0-era stat fruit backported from S6 dataset (fruits chaos-mix result); item level 0-4 encodes the fruit's stat kind; consume behavior (stat point add/remove) is a rule, not data",
+      "review": "1.0-era stat fruit backported from S6 dataset (fruits chaos-mix result); item level 0-4 encodes the fruit's stat kind; consume behavior (stat point add/remove) is a rule, not data; price 33,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -6499,7 +6505,8 @@
       "max_item_level": 4,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "fixed",
+        "zen": 33000000
       },
       "kind": "stat_fruit"
     },
@@ -6509,7 +6516,7 @@
         "number": 16
       },
       "source_version": "s6",
-      "review": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3)",
+      "review": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3); per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) (level 0 = the 10,000 default arm, rows 1-8)",
       "width": 1,
       "height": 2,
       "drops_from_monsters": false,
@@ -6517,7 +6524,18 @@
       "max_item_level": 8,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          10000,
+          10000,
+          50000,
+          100000,
+          300000,
+          500000,
+          800000,
+          1000000,
+          1200000
+        ]
       },
       "kind": "mix_material"
     },
@@ -6527,7 +6545,7 @@
         "number": 17
       },
       "source_version": "s6",
-      "review": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3)",
+      "review": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3); per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) (level 0 = the 10,000 default arm, rows 1-8)",
       "width": 1,
       "height": 2,
       "drops_from_monsters": false,
@@ -6535,7 +6553,18 @@
       "max_item_level": 8,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          10000,
+          10000,
+          50000,
+          100000,
+          300000,
+          500000,
+          800000,
+          1000000,
+          1200000
+        ]
       },
       "kind": "mix_material"
     },
@@ -6545,7 +6574,7 @@
         "number": 18
       },
       "source_version": "s6",
-      "review": "Blood Castle entry ticket (blood_castle_ticket mix result), approved 1.0-era backport from S6 dataset; level gates 7/8 as above",
+      "review": "Blood Castle entry ticket (blood_castle_ticket mix result), approved 1.0-era backport from S6 dataset; level gates 7/8 as above; per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) -- level != 1 is the lambda 600,000+(level-1)*60,000 (literal 540,000 at level 0), level 1 is the 150,000 special row",
       "width": 2,
       "height": 2,
       "drops_from_monsters": false,
@@ -6553,7 +6582,18 @@
       "max_item_level": 8,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          540000,
+          150000,
+          660000,
+          720000,
+          780000,
+          840000,
+          900000,
+          960000,
+          1020000
+        ]
       },
       "kind": "event_ticket",
       "event": "blood_castle"
@@ -6882,7 +6922,7 @@
         "number": 30
       },
       "source_version": "s6",
-      "review": "1.0-era Dark Lord wing backported from S6 Wings.cs (cape_of_lord chaos-mix result); max_item_level clamped 15->11; dmg +20%/abs 10%, +2%/level (wing_damage_first); its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys dmg) are S6-only option data and NOT backported -- only luck referenced, matching the 2nd-wing option gap in options_sets",
+      "review": "1.0-era Dark Lord wing backported from S6 Wings.cs (cape_of_lord chaos-mix result); max_item_level clamped 15->11; dmg +20%/abs 10%, +2%/level (wing_damage_first); jol_options physical_damage is s6-sourced — the S6 Cape of Lord Options definition's only Option-type entry (consult C.4), pending classic corroboration; the cape's 4-value wing-bonus pool (2nd-wing bonuses + Command) is the crafted-augment axis rolled by the craft service, not option data",
       "width": 2,
       "height": 3,
       "drops_from_monsters": false,
@@ -6897,7 +6937,9 @@
       "defense": 15,
       "absorb_percent": 10,
       "damage_percent": 20,
-      "jol_options": [],
+      "jol_options": [
+        "physical_damage"
+      ],
       "classes": [
         "dark_lord"
       ],
@@ -6925,7 +6967,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 5
+        "zen": 20
       },
       "kind": "consumable",
       "effect": {
@@ -6948,7 +6990,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 10
+        "zen": 83
       },
       "kind": "consumable",
       "effect": {
@@ -6971,7 +7013,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 20
+        "zen": 333
       },
       "kind": "consumable",
       "effect": {
@@ -6994,7 +7036,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 30
+        "zen": 750
       },
       "kind": "consumable",
       "effect": {
@@ -7017,7 +7059,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 10
+        "zen": 83
       },
       "kind": "consumable",
       "effect": {
@@ -7040,7 +7082,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 20
+        "zen": 333
       },
       "kind": "consumable",
       "effect": {
@@ -7063,7 +7105,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 30
+        "zen": 750
       },
       "kind": "consumable",
       "effect": {
@@ -7086,7 +7128,7 @@
       "durability": 3,
       "price": {
         "kind": "fixed",
-        "zen": 10
+        "zen": 83
       },
       "kind": "consumable",
       "effect": {
@@ -7107,7 +7149,7 @@
       "durability": 1,
       "price": {
         "kind": "fixed",
-        "zen": 30
+        "zen": 750
       },
       "kind": "consumable",
       "effect": {
@@ -7128,7 +7170,7 @@
       "durability": 1,
       "price": {
         "kind": "fixed",
-        "zen": 30
+        "zen": 750
       },
       "kind": "consumable",
       "effect": {
@@ -7158,6 +7200,7 @@
         "number": 13
       },
       "source_version": "075",
+      "review": "price 9,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4), replacing the wrongly-extracted raw Item.txt Value 150 (not a price)",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7166,7 +7209,7 @@
       "durability": 1,
       "price": {
         "kind": "fixed",
-        "zen": 150
+        "zen": 9000000
       },
       "kind": "jewel",
       "jewel": "bless"
@@ -7177,6 +7220,7 @@
         "number": 14
       },
       "source_version": "075",
+      "review": "price 6,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4), replacing the wrongly-extracted raw Item.txt Value 150 (not a price)",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7185,7 +7229,7 @@
       "durability": 1,
       "price": {
         "kind": "fixed",
-        "zen": 150
+        "zen": 6000000
       },
       "kind": "jewel",
       "jewel": "soul"
@@ -7196,6 +7240,7 @@
         "number": 16
       },
       "source_version": "095d",
+      "review": "price 45,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7203,7 +7248,8 @@
       "max_item_level": 0,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "fixed",
+        "zen": 45000000
       },
       "kind": "jewel",
       "jewel": "life"
@@ -7214,6 +7260,7 @@
         "number": 17
       },
       "source_version": "095d",
+      "review": "per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4); level 0 is the dictionary's 10,000 default arm, rows 1-4 through the shipped max_item_level 4",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7221,7 +7268,14 @@
       "max_item_level": 4,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          10000,
+          10000,
+          50000,
+          100000,
+          300000
+        ]
       },
       "kind": "mix_material"
     },
@@ -7231,6 +7285,7 @@
         "number": 18
       },
       "source_version": "095d",
+      "review": "per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4); level 0 is the dictionary's 15,000 default arm, rows 1-4 through the shipped max_item_level 4",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7238,7 +7293,14 @@
       "max_item_level": 4,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          15000,
+          15000,
+          75000,
+          150000,
+          450000
+        ]
       },
       "kind": "mix_material"
     },
@@ -7248,6 +7310,7 @@
         "number": 19
       },
       "source_version": "095d",
+      "review": "per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4); the level-0 entry 60,000 is OUR clamp -- OpenMU's else-arm (level-1)*60,000 goes negative at level 0",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7255,7 +7318,14 @@
       "max_item_level": 4,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "per_level",
+        "zen_by_level": [
+          60000,
+          60000,
+          84000,
+          120000,
+          180000
+        ]
       },
       "kind": "event_ticket",
       "event": "devil_square"
@@ -7266,7 +7336,7 @@
         "number": 22
       },
       "source_version": "s6",
-      "review": "0.97d-era jewel (Version097d dataset is the oldest pre-S3 source; tagged s6 because source_version has no 097d value); backported as the fruits chaos-mix ingredient",
+      "review": "0.97d-era jewel (Version097d dataset is the oldest pre-S3 source; tagged s6 because source_version has no 097d value); backported as the fruits chaos-mix ingredient; price 36,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
       "width": 1,
       "height": 1,
       "drops_from_monsters": false,
@@ -7274,7 +7344,8 @@
       "max_item_level": 0,
       "durability": 1,
       "price": {
-        "kind": "formula"
+        "kind": "fixed",
+        "zen": 36000000
       },
       "kind": "jewel",
       "jewel": "creation"

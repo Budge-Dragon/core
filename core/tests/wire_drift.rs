@@ -18,11 +18,12 @@ use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, PlacementRejection};
 use mu_core::components::item_instance::{
-    Durability, ExcellentArmorSet, ExcellentOptions, ExcellentWeaponSet, ItemInstance, LuckRoll,
-    RarityRoll, RolledNormalOption, SkillRoll,
+    CraftedAugment, DinorantOptionSet, Durability, ExcellentArmorSet, ExcellentOptions,
+    ExcellentWeaponSet, ItemInstance, LuckRoll, RarityRoll, RolledNormalOption, SkillRoll,
 };
 use mu_core::components::item_options::{
-    AncientBonusLevel, ExcellentArmorOption, ExcellentWeaponOption, NormalOption,
+    AncientBonusLevel, DinorantOption, ExcellentArmorOption, ExcellentWeaponOption, NormalOption,
+    SecondWingBonus,
 };
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
@@ -36,9 +37,12 @@ use mu_core::components::spatial::{
 use mu_core::components::tile::TileCoord;
 use mu_core::components::units::{Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
 use mu_core::data::common::{ItemRef, MonsterNumber};
+use mu_core::data::item_definitions::{ItemPrice, PerLevelPrice};
 use mu_core::data::special_drops::SpecialDrop;
+use mu_core::entities::character::Character;
 use mu_core::entities::world_item::WorldItem;
 use mu_core::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
+use mu_core::events::craft::{Casualty, MixOutcome, RejectReason};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::inventory::{
     EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
@@ -571,6 +575,7 @@ fn normal_instance() -> ItemInstance {
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
         durability: Durability::full(30),
+        augment: CraftedAugment::None,
     }
 }
 
@@ -578,7 +583,7 @@ fn normal_instance() -> ItemInstance {
 fn normal_item_instance_wire_is_pinned() {
     assert_eq!(
         serde_json::to_string(&normal_instance()).unwrap(),
-        r#"{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}}"#
+        r#"{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}}"#
     );
 }
 
@@ -599,7 +604,7 @@ fn excellent_item_instance_wire_is_pinned() {
     instance.durability = Durability::full(35);
     assert_eq!(
         serde_json::to_string(&instance).unwrap(),
-        r#"{"item":{"group":0,"number":3},"level":9,"roll":{"kind":"excellent","options":{"set":"weapon","options":["mana_after_kill","attack_speed"]}},"normal_option":null,"luck":"lucky","skill":"with_skill","durability":{"current":35,"max":35}}"#
+        r#"{"item":{"group":0,"number":3},"level":9,"roll":{"kind":"excellent","options":{"set":"weapon","options":["mana_after_kill","attack_speed"]}},"normal_option":null,"luck":"lucky","skill":"with_skill","durability":{"current":35,"max":35},"augment":{"kind":"none"}}"#
     );
 }
 
@@ -621,10 +626,104 @@ fn ancient_item_instance_wire_is_pinned() {
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
         durability: Durability::full(40),
+        augment: CraftedAugment::None,
     };
     assert_eq!(
         serde_json::to_string(&instance).unwrap(),
-        r#"{"item":{"group":7,"number":0},"level":5,"roll":{"kind":"ancient","bonus":2},"normal_option":{"option":"defense","level":4},"luck":"plain","skill":"no_skill","durability":{"current":40,"max":40}}"#
+        r#"{"item":{"group":7,"number":0},"level":5,"roll":{"kind":"ancient","bonus":2},"normal_option":{"option":"defense","level":4},"luck":"plain","skill":"no_skill","durability":{"current":40,"max":40},"augment":{"kind":"none"}}"#
+    );
+}
+
+#[test]
+fn crafted_augment_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&CraftedAugment::None).unwrap(),
+        r#"{"kind":"none"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&CraftedAugment::Dinorant {
+            options: DinorantOptionSet::with_first(
+                DinorantOption::DamageAbsorb,
+                [DinorantOption::AttackSpeed],
+            ),
+        })
+        .unwrap(),
+        r#"{"kind":"dinorant","options":["damage_absorb","attack_speed"]}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&CraftedAugment::WingBonus {
+            bonus: SecondWingBonus::Command,
+        })
+        .unwrap(),
+        r#"{"kind":"wing_bonus","bonus":"command"}"#
+    );
+}
+
+#[test]
+fn crafted_augment_every_kind_tag_is_pinned() {
+    for augment in [
+        CraftedAugment::None,
+        CraftedAugment::Dinorant {
+            options: DinorantOptionSet::with_first(DinorantOption::MaxAbility, []),
+        },
+        CraftedAugment::WingBonus {
+            bonus: SecondWingBonus::MaxHealth,
+        },
+    ] {
+        let expected = match &augment {
+            CraftedAugment::None => "none",
+            CraftedAugment::Dinorant { .. } => "dinorant",
+            CraftedAugment::WingBonus { .. } => "wing_bonus",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(augment).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn character_wire_is_pinned() {
+    let character: Character = serde_json::from_value(serde_json::json!({
+        "class": "dark_knight",
+        "level": 42,
+        "experience": 1234,
+        "stats": {"kind": "standard", "strength": 60, "agility": 40, "vitality": 50, "energy": 30},
+        "unspent_points": 15,
+        "zen": 250_000,
+        "placement": serde_json::from_str::<serde_json::Value>(PLACEMENT_JSON).unwrap(),
+        "vitals": {
+            "health": {"current": 500, "max": 500},
+            "mana": {"current": 200, "max": 200},
+            "ability": {"current": 1, "max": 1}
+        },
+        "active_effects": []
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_string(&character).unwrap(),
+        format!(
+            r#"{{"class":"dark_knight","level":42,"experience":1234,"stats":{{"kind":"standard","strength":60,"agility":40,"vitality":50,"energy":30}},"unspent_points":15,"zen":250000,"placement":{PLACEMENT_JSON},"vitals":{{"health":{{"current":500,"max":500}},"mana":{{"current":200,"max":200}},"ability":{{"current":1,"max":1}}}},"active_effects":[]}}"#
+        )
+    );
+}
+
+#[test]
+fn item_price_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&ItemPrice::Fixed { zen: Zen(810_000) }).unwrap(),
+        r#"{"kind":"fixed","zen":810000}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ItemPrice::PerLevel {
+            zen_by_level: PerLevelPrice::try_from(vec![Zen(180_000), Zen(7_500_000)]).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"per_level","zen_by_level":[180000,7500000]}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ItemPrice::Formula).unwrap(),
+        r#"{"kind":"formula"}"#
     );
 }
 
@@ -650,7 +749,7 @@ fn world_item_wire_is_pinned() {
     };
     assert_eq!(
         serde_json::to_string(&world_item).unwrap(),
-        r#"{"instance":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}},"position":{"x":163840,"y":229376},"map":0,"despawn":1200}"#
+        r#"{"instance":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}},"position":{"x":163840,"y":229376},"map":0,"despawn":1200}"#
     );
 }
 
@@ -669,7 +768,7 @@ fn container_outcome_wire_shapes_are_pinned() {
             item: normal_instance(),
         })
         .unwrap(),
-        r#"{"kind":"rejected","reason":{"kind":"cells_occupied"},"item":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}}}"#
+        r#"{"kind":"rejected","reason":{"kind":"cells_occupied"},"item":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}}}"#
     );
     assert_eq!(
         serde_json::to_string(&MoveOutcome::Moved {
@@ -739,6 +838,115 @@ fn container_outcome_every_kind_tag_is_pinned() {
         };
         assert_eq!(
             kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+// -- Chaos-machine mix outcome wire pins. --------------------------------------
+
+#[test]
+fn mix_outcome_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&MixOutcome::Rejected {
+            reason: RejectReason::InsufficientZen,
+            items: vec![normal_instance()],
+        })
+        .unwrap(),
+        r#"{"kind":"rejected","reason":"insufficient_zen","items":[{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}}]}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MixOutcome::Failed {
+            fee: Zen(250_000),
+            zen: Zen(750_000),
+            casualties: vec![Casualty::Destroyed {
+                item: ItemRef {
+                    group: 12,
+                    number: 15,
+                },
+            }],
+        })
+        .unwrap(),
+        r#"{"kind":"failed","fee":250000,"zen":750000,"casualties":[{"kind":"destroyed","item":{"group":12,"number":15}}]}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MixOutcome::Success {
+            fee: Zen(5_000_000),
+            zen: Zen(0),
+            created: normal_instance(),
+            returned: Vec::new(),
+        })
+        .unwrap(),
+        r#"{"kind":"success","fee":5000000,"zen":0,"created":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}},"returned":[]}"#
+    );
+}
+
+#[test]
+fn mix_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        MixOutcome::Rejected {
+            reason: RejectReason::NoRecipeMatch,
+            items: Vec::new(),
+        },
+        MixOutcome::Failed {
+            fee: Zen(1),
+            zen: Zen(0),
+            casualties: Vec::new(),
+        },
+        MixOutcome::Success {
+            fee: Zen(1),
+            zen: Zen(0),
+            created: normal_instance(),
+            returned: Vec::new(),
+        },
+    ] {
+        let expected = match &outcome {
+            MixOutcome::Rejected { .. } => "rejected",
+            MixOutcome::Failed { .. } => "failed",
+            MixOutcome::Success { .. } => "success",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn reject_reason_every_wire_string_is_pinned() {
+    for reason in [RejectReason::NoRecipeMatch, RejectReason::InsufficientZen] {
+        let actual = serde_json::to_string(&reason).unwrap();
+        let expected = match &reason {
+            RejectReason::NoRecipeMatch => r#""no_recipe_match""#,
+            RejectReason::InsufficientZen => r#""insufficient_zen""#,
+        };
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn casualty_every_kind_tag_is_pinned() {
+    for casualty in [
+        Casualty::Destroyed {
+            item: ItemRef {
+                group: 12,
+                number: 15,
+            },
+        },
+        Casualty::Downgraded {
+            item: normal_instance(),
+        },
+        Casualty::Returned {
+            item: normal_instance(),
+        },
+    ] {
+        let expected = match &casualty {
+            Casualty::Destroyed { .. } => "destroyed",
+            Casualty::Downgraded { .. } => "downgraded",
+            Casualty::Returned { .. } => "returned",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(casualty).unwrap()),
             Some(expected)
         );
     }

@@ -7,6 +7,7 @@
 
 pub mod chance;
 pub mod combat;
+pub mod craft;
 pub mod effects;
 pub mod experience;
 pub mod inventory;
@@ -16,6 +17,7 @@ pub mod kill;
 pub mod loot;
 pub mod monster_ai;
 pub mod movement;
+pub mod price;
 pub mod profile;
 pub mod ratio;
 pub mod skills;

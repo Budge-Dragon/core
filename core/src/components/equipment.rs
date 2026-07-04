@@ -160,7 +160,9 @@ impl Equipment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::item_instance::{Durability, LuckRoll, RarityRoll, SkillRoll};
+    use crate::components::item_instance::{
+        CraftedAugment, Durability, LuckRoll, RarityRoll, SkillRoll,
+    };
     use crate::components::item_ref::ItemRef;
     use crate::components::units::ItemLevel;
 
@@ -188,6 +190,7 @@ mod tests {
             luck: LuckRoll::Plain,
             skill: SkillRoll::NoSkill,
             durability: Durability::full(30),
+            augment: CraftedAugment::None,
         }
     }
 

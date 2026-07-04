@@ -194,3 +194,75 @@ pub enum ChaosRecipe {
         success_percent_by_level: [Percent; 8],
     },
 }
+
+/// The total clamped read over a ticket fee/success array: `want` is the
+/// 0-based row index (the caller keys ticket level 1..=N with
+/// `saturating_sub(1)`, so a level-0 pair reads the level-1 row); an index past
+/// the array saturates to the last row. The caller destructures the fixed
+/// `[T; N]` as `[first, rest @ ..]` — irrefutable, so nonemptiness is proven by
+/// the type and the walk needs no runtime indexing.
+#[must_use]
+pub(crate) fn row_at<T: Copy>(first: T, rest: &[T], want: usize) -> T {
+    if want == 0 {
+        return first;
+    }
+    let mut position = 1usize;
+    let mut last = first;
+    for &row in rest {
+        if position == want {
+            return row;
+        }
+        last = row;
+        position = position.saturating_add(1);
+    }
+    last
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The DS fee table shape: rows keyed by ticket level 1..=7.
+    const FEES: [Zen; 7] = [
+        Zen(100_000),
+        Zen(200_000),
+        Zen(400_000),
+        Zen(700_000),
+        Zen(1_100_000),
+        Zen(1_600_000),
+        Zen(2_200_000),
+    ];
+
+    fn fee_at_level(level: usize) -> Zen {
+        let [first, rest @ ..] = &FEES;
+        row_at(*first, rest, level.saturating_sub(1))
+    }
+
+    #[test]
+    fn row_at_reads_each_row_by_index() {
+        let [first, rest @ ..] = &FEES;
+        assert_eq!(row_at(*first, rest, 0), Zen(100_000));
+        assert_eq!(row_at(*first, rest, 3), Zen(700_000));
+        assert_eq!(row_at(*first, rest, 6), Zen(2_200_000));
+    }
+
+    #[test]
+    fn level_zero_reads_the_level_one_row() {
+        // The kept OpenMU accident (K1): the saturating_sub(1) key folds
+        // level 0 and level 1 onto row 0.
+        assert_eq!(fee_at_level(0), Zen(100_000));
+        assert_eq!(fee_at_level(1), Zen(100_000));
+    }
+
+    #[test]
+    fn a_level_past_the_table_saturates_to_the_last_row() {
+        assert_eq!(fee_at_level(8), Zen(2_200_000));
+        assert_eq!(fee_at_level(15), Zen(2_200_000));
+    }
+
+    #[test]
+    fn a_single_row_table_is_that_row_everywhere() {
+        assert_eq!(row_at(Zen(5), &[], 0), Zen(5));
+        assert_eq!(row_at(Zen(5), &[], 9), Zen(5));
+    }
+}

@@ -12,7 +12,7 @@ use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
 use crate::components::placement::Placement;
 use crate::components::stats::Stats;
-use crate::components::units::{Exp, Level};
+use crate::components::units::{Exp, Level, Zen};
 use crate::components::vitals::Vitals;
 
 /// A live player character. Private fields: construction (serde or otherwise)
@@ -25,6 +25,7 @@ pub struct Character {
     experience: Exp,
     stats: Stats,
     unspent_points: u16,
+    zen: Zen,
     placement: Placement,
     vitals: Vitals,
     active_effects: ActiveEffects,
@@ -39,6 +40,7 @@ struct RawCharacter {
     experience: Exp,
     stats: Stats,
     unspent_points: u16,
+    zen: Zen,
     placement: Placement,
     vitals: Vitals,
     /// A record that predates timed effects, or a freshly created character,
@@ -59,6 +61,7 @@ impl TryFrom<RawCharacter> for Character {
                 experience: raw.experience,
                 stats: raw.stats,
                 unspent_points: raw.unspent_points,
+                zen: raw.zen,
                 placement: raw.placement,
                 vitals: raw.vitals,
                 active_effects: raw.active_effects,
@@ -81,6 +84,7 @@ impl From<Character> for RawCharacter {
             experience: character.experience,
             stats: character.stats,
             unspent_points: character.unspent_points,
+            zen: character.zen,
             placement: character.placement,
             vitals: character.vitals,
             active_effects: character.active_effects,
@@ -117,6 +121,12 @@ impl Character {
     #[must_use]
     pub fn unspent_points(&self) -> u16 {
         self.unspent_points
+    }
+
+    /// The zen the character carries.
+    #[must_use]
+    pub fn zen(&self) -> Zen {
+        self.zen
     }
 
     /// Where the character stands and which way it faces.
@@ -196,6 +206,7 @@ mod tests {
             experience: Exp(1_234_567),
             stats,
             unspent_points: 15,
+            zen: Zen(250_000),
             placement: placement(),
             vitals: vitals(),
             active_effects: ActiveEffects::EMPTY,
@@ -227,8 +238,19 @@ mod tests {
         assert_eq!(character.class(), CharacterClass::DarkKnight);
         assert_eq!(character.level().get(), 42);
         assert_eq!(character.stats(), standard());
+        assert_eq!(character.zen(), Zen(250_000));
         let json = serde_json::to_string(&character).unwrap();
         assert_eq!(serde_json::from_str::<Character>(&json).unwrap(), character);
+    }
+
+    #[test]
+    fn zen_is_a_required_wire_field() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("zen");
+        assert!(serde_json::from_value::<Character>(value).is_err());
     }
 
     #[test]

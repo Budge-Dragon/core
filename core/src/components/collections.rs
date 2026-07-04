@@ -38,6 +38,13 @@ impl<T> OneOrMore<T> {
         }
     }
 
+    /// Builds a non-empty list from a guaranteed head plus any tail — total,
+    /// since the head proves non-emptiness by construction.
+    #[must_use]
+    pub fn with_head(head: T, tail: Vec<T>) -> Self {
+        Self { head, tail }
+    }
+
     /// The first element — always present.
     pub fn first(&self) -> &T {
         &self.head
@@ -52,6 +59,15 @@ impl<T> OneOrMore<T> {
     #[must_use]
     pub fn count(&self) -> NonZeroUsize {
         NonZeroUsize::MIN.saturating_add(self.tail.len())
+    }
+
+    /// Transforms every element in order, carrying the non-emptiness proof
+    /// through: the head maps to the new head, so the result is total.
+    #[must_use]
+    pub fn map<U>(self, mut transform: impl FnMut(T) -> U) -> OneOrMore<U> {
+        let head = transform(self.head);
+        let tail = self.tail.into_iter().map(transform).collect();
+        OneOrMore { head, tail }
     }
 }
 
@@ -125,6 +141,25 @@ mod tests {
         assert_eq!(*list.first(), 1);
         assert_eq!(list.count().get(), 4);
         assert_eq!(list.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn with_head_is_total_and_orders_head_first() {
+        let list = OneOrMore::with_head(1u16, vec![2, 3]);
+        assert_eq!(*list.first(), 1);
+        assert_eq!(list.count().get(), 3);
+        assert_eq!(list.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+        let single = OneOrMore::with_head(9u16, Vec::new());
+        assert_eq!(single.count().get(), 1);
+    }
+
+    #[test]
+    fn map_transforms_in_order_and_stays_non_empty() {
+        let list = OneOrMore::new(vec![1u16, 2, 3]).unwrap();
+        let doubled = list.map(|value| value * 2);
+        assert_eq!(*doubled.first(), 2);
+        assert_eq!(doubled.count().get(), 3);
+        assert_eq!(doubled.iter().copied().collect::<Vec<_>>(), vec![2, 4, 6]);
     }
 
     #[test]

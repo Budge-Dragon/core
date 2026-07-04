@@ -139,8 +139,15 @@ ALL_CLASSES = list(CLASS_ORDER)  # jewelry / transformation ring: every class
 
 def item(group, number, name, version, *, width, height, drops=False,
          drop_level=0, max_item_level=0, durability, value=0, kind,
-         review=None):
-    """Assemble one ItemDefinition: shared columns + flattened ItemKind."""
+         review=None, price=None):
+    """Assemble one ItemDefinition: shared columns + flattened ItemKind.
+
+    Price semantics (W-CRAFT): `fixed` zen is the item's base NPC price (the
+    number services/price.rs scales), never the raw Item.txt Value column.
+    Orb/scroll source Values ARE final prices (the classic group-12/15
+    Value-verbatim branch), so their default value>0 -> fixed mapping stands;
+    every other priced record passes an explicit `price`.
+    """
     rec = {"id": {"group": int(group), "number": int(number)},
            "name": name,
            "source_version": version}
@@ -152,10 +159,36 @@ def item(group, number, name, version, *, width, height, drops=False,
     rec["drop_level"] = drop_level
     rec["max_item_level"] = max_item_level
     rec["durability"] = durability
-    rec["price"] = ({"kind": "fixed", "zen": value} if value > 0
-                    else {"kind": "formula"})
+    rec["price"] = price if price is not None else (
+        {"kind": "fixed", "zen": value} if value > 0 else {"kind": "formula"})
     rec.update(kind)  # flatten kind tag + variant fields inline
     return rec
+
+
+def fixed_price(zen):
+    """A fixed base NPC price."""
+    return {"kind": "fixed", "zen": zen}
+
+
+def per_level_price(*zen_by_level):
+    """A classic per-level price table (PerLevelPrice wire form): a non-empty
+    JSON array indexed by instance item level, clamped to the last entry."""
+    return {"kind": "per_level", "zen_by_level": list(zen_by_level)}
+
+
+def value_branch_price(value):
+    """W-SRC: the classic Value-branch base price floor(Value^2 * 10 / 12)
+    (OpenMU ItemPriceCalculator.CalculateBuyingPrice, Value>0 branch; consult
+    D.3). Consumable `fixed` prices carry this base-price semantic — the raw
+    Item.txt Value column stays in the source tuples as provenance only."""
+    return fixed_price(value * value * 10 // 12)
+
+
+# The classic current NPC prices for items OpenMU prices via its special-item
+# dictionary (ItemPriceCalculator.cs:54-217; consult D.4). One citation string
+# shared by every review flag that carries a dictionary value.
+PRICE_DICT_SRC = ("OpenMU's special-item price dictionary "
+                  "(ItemPriceCalculator.cs, consult D.4)")
 
 
 def wear(level=0, strength=0, agility=0, vitality=0, energy=0, command=0):
@@ -451,21 +484,27 @@ def build_wings():
             max_item_level=ITEM_LEVEL_CAP, durability=200, kind=kind))
 
     # Cape of Lord (group overridden to 13 in the source): 1.0-era Dark Lord
-    # wing. First-wings damage table (+20/abs10, +2%/level). Its S6 option
-    # definitions (Cape of Lord Options) are NOT backported -> jol_options [].
+    # wing. First-wings damage table (+20/abs10, +2%/level). Its normal
+    # (Jewel-of-Life) option is physical_damage — the S6 Cape of Lord Options
+    # definition's only Option-type entry (consult C.4); the cape's 4-value
+    # wing-bonus pool (2nd-wing bonuses + Command) is the crafted-augment
+    # axis rolled by services, not option data.
     cape_kind = {"kind": "wings", "tier": "first", "defense": 15,
                  "absorb_percent": 10, "damage_percent": 20,
-                 "jol_options": [], "classes": classes_from_levels(dl=1),
+                 "jol_options": ["physical_damage"],
+                 "classes": classes_from_levels(dl=1),
                  "wear": wear(level=180)}
     records.append(item(
         13, 30, "Cape of Lord", "s6",
         review="1.0-era Dark Lord wing backported from S6 Wings.cs "
                "(cape_of_lord chaos-mix result); max_item_level clamped "
                "15->11; dmg +20%/abs 10%, +2%/level (wing_damage_first); "
-               "its S6 option definitions (Cape of Lord Options = 2nd-wing "
-               "options + Command wing option, per-item random phys dmg) "
-               "are S6-only option data and NOT backported -- only luck "
-               "referenced, matching the 2nd-wing option gap in options_sets",
+               "jol_options physical_damage is s6-sourced — the S6 Cape of "
+               "Lord Options definition's only Option-type entry (consult "
+               "C.4), pending classic corroboration; the cape's 4-value "
+               "wing-bonus pool (2nd-wing bonuses + Command) is the "
+               "crafted-augment axis rolled by the craft service, not "
+               "option data",
         width=2, height=3, drops=False, drop_level=180,
         max_item_level=ITEM_LEVEL_CAP, durability=200, kind=cape_kind))
 
@@ -639,25 +678,41 @@ def build_scrolls():
 # ---------------------------------------------------------------------------
 
 def build_jewels():
-    def jewel(group, number, name, version, drop_level, jewel_kind, value=0,
-              review=None):
+    # Every jewel prices `fixed` at its classic current NPC value from the
+    # OpenMU special-item price dictionary; the OLD jewel values crafting's
+    # divisor consumes (Bless 100k / Soul 70k / Chaos 40k / Life+Creation
+    # 450k) are a services table, not data.
+    def jewel(group, number, name, version, drop_level, jewel_kind, zen,
+              review):
         return item(group, number, name, version, width=1, height=1,
                     drops=False, drop_level=drop_level, max_item_level=0,
-                    durability=1, value=value, review=review,
+                    durability=1, price=fixed_price(zen), review=review,
                     kind={"kind": "jewel", "jewel": jewel_kind})
 
+    def price_review(zen, note=""):
+        return ("price %s is the classic current NPC value from %s%s"
+                % ("{:,}".format(zen), PRICE_DICT_SRC, note))
+
     return [
-        jewel(14, 13, "Jewel of Bless", "075", 25, "bless", value=150),
-        jewel(14, 14, "Jewel of Soul", "075", 30, "soul", value=150),
-        jewel(12, 15, "Jewel of Chaos", "075", 12, "chaos"),
-        jewel(14, 16, "Jewel of Life", "095d", 72, "life"),
+        jewel(14, 13, "Jewel of Bless", "075", 25, "bless", 9_000_000,
+              review=price_review(9_000_000,
+                                  ", replacing the wrongly-extracted raw "
+                                  "Item.txt Value 150 (not a price)")),
+        jewel(14, 14, "Jewel of Soul", "075", 30, "soul", 6_000_000,
+              review=price_review(6_000_000,
+                                  ", replacing the wrongly-extracted raw "
+                                  "Item.txt Value 150 (not a price)")),
+        jewel(12, 15, "Jewel of Chaos", "075", 12, "chaos", 810_000,
+              review=price_review(810_000)),
+        jewel(14, 16, "Jewel of Life", "095d", 72, "life", 45_000_000,
+              review=price_review(45_000_000)),
         # Version097d/Items/Jewels.cs -- oldest pre-S3 dataset shipping it, but
         # source_version has no 097d value, so tagged s6 + review.
-        jewel(14, 22, "Jewel of Creation", "s6", 72, "creation",
+        jewel(14, 22, "Jewel of Creation", "s6", 72, "creation", 36_000_000,
               review="0.97d-era jewel (Version097d dataset is the oldest "
                      "pre-S3 source; tagged s6 because source_version has "
                      "no 097d value); backported as the fruits chaos-mix "
-                     "ingredient"),
+                     "ingredient; " + price_review(36_000_000)),
     ]
 
 
@@ -689,7 +744,7 @@ def build_consumables():
         records.append(item(
             14, number, name, "075", review=review, width=1, height=height,
             drops=True, drop_level=drop_level, max_item_level=0,
-            durability=durability, value=value,
+            durability=durability, price=value_branch_price(value),
             kind={"kind": "consumable", "effect": effect}))
     return records
 
@@ -703,55 +758,84 @@ def build_box_of_luck():
 
 
 def build_tickets_and_materials():
-    """Event-entry tickets, inert chaos-machine ingredients, stat fruit."""
+    """Event-entry tickets, inert chaos-machine ingredients, stat fruit.
+
+    Every record here prices per_level (or fixed, for the fruit) from the
+    OpenMU special-item price dictionary; index 0 of each table is the
+    dictionary's default arm (the row an out-of-band level falls to), the
+    remaining entries are its level rows through the shipped max_item_level.
+    """
     records = []
 
     def mix_material(group, number, name, version, *, width, height,
-                     drop_level=0, max_item_level, review=None):
+                     drop_level=0, max_item_level, price, review=None):
         return item(group, number, name, version, review=review, width=width,
                     height=height, drops=False, drop_level=drop_level,
-                    max_item_level=max_item_level, durability=1,
+                    max_item_level=max_item_level, durability=1, price=price,
                     kind={"kind": "mix_material"})
 
     def event_ticket(group, number, name, version, *, width, height,
-                     event, max_item_level, review=None):
+                     event, max_item_level, price, review=None):
         return item(group, number, name, version, review=review, width=width,
                     height=height, drops=False, drop_level=0,
-                    max_item_level=max_item_level, durability=1,
+                    max_item_level=max_item_level, durability=1, price=price,
                     kind={"kind": "event_ticket", "event": event})
 
+    dict_rows = "per-level price rows from " + PRICE_DICT_SRC
+
     # Version095d/Items/EventTicketItems.cs (Devil Square).
-    records.append(mix_material(14, 17, "Devil's Eye", "095d",
-                                width=1, height=1, max_item_level=4))
-    records.append(mix_material(14, 18, "Devil's Key", "095d",
-                                width=1, height=1, max_item_level=4))
-    records.append(event_ticket(14, 19, "Devil's Invitation", "095d",
-                                 width=1, height=1, event="devil_square",
-                                 max_item_level=4))
+    records.append(mix_material(
+        14, 17, "Devil's Eye", "095d", width=1, height=1, max_item_level=4,
+        price=per_level_price(10_000, 10_000, 50_000, 100_000, 300_000),
+        review=dict_rows + "; level 0 is the dictionary's 10,000 default "
+               "arm, rows 1-4 through the shipped max_item_level 4"))
+    records.append(mix_material(
+        14, 18, "Devil's Key", "095d", width=1, height=1, max_item_level=4,
+        price=per_level_price(15_000, 15_000, 75_000, 150_000, 450_000),
+        review=dict_rows + "; level 0 is the dictionary's 15,000 default "
+               "arm, rows 1-4 through the shipped max_item_level 4"))
+    records.append(event_ticket(
+        14, 19, "Devil's Invitation", "095d", width=1, height=1,
+        event="devil_square", max_item_level=4,
+        price=per_level_price(60_000, 60_000, 84_000, 120_000, 180_000),
+        review=dict_rows + "; the level-0 entry 60,000 is OUR clamp -- "
+               "OpenMU's else-arm (level-1)*60,000 goes negative at level 0"))
 
     # VersionSeasonSix Blood Castle ticket items + entry ticket.
     bc_review = ("Blood Castle ticket item, approved 1.0-era backport from "
                  "S6 dataset; gates 7/8 of max_item_level are arguably "
                  "later-era (7: S1+, 8: S3)")
+    bc_rows = per_level_price(10_000, 10_000, 50_000, 100_000, 300_000,
+                              500_000, 800_000, 1_000_000, 1_200_000)
+    bc_price_note = ("; " + dict_rows + " (level 0 = the 10,000 default "
+                     "arm, rows 1-8)")
     records.append(mix_material(13, 16, "Scroll of Archangel", "s6",
                                 width=1, height=2, max_item_level=8,
-                                review=bc_review))
+                                price=bc_rows,
+                                review=bc_review + bc_price_note))
     records.append(mix_material(13, 17, "Blood Bone", "s6",
                                 width=1, height=2, max_item_level=8,
-                                review=bc_review))
+                                price=bc_rows,
+                                review=bc_review + bc_price_note))
     records.append(event_ticket(
         13, 18, "Invisibility Cloak", "s6", width=2, height=2,
         event="blood_castle", max_item_level=8,
+        price=per_level_price(540_000, 150_000, 660_000, 720_000, 780_000,
+                              840_000, 900_000, 960_000, 1_020_000),
         review="Blood Castle entry ticket (blood_castle_ticket mix result), "
                "approved 1.0-era backport from S6 dataset; level gates 7/8 "
-               "as above"))
+               "as above; " + dict_rows + " -- level != 1 is the lambda "
+               "600,000+(level-1)*60,000 (literal 540,000 at level 0), "
+               "level 1 is the 150,000 special row"))
 
     # Loch's Feather: 2nd-wings mix ingredient (S6 Wings.cs).
     records.append(mix_material(
         13, 14, "Loch's Feather", "s6", width=1, height=2, drop_level=78,
         max_item_level=1,
+        price=per_level_price(180_000, 7_500_000),
         review="1.0-era 2nd-wings mix ingredient from S6 Wings.cs; source sets "
-               "drops_from_monsters=false and max_item_level=1"))
+               "drops_from_monsters=false and max_item_level=1; " + dict_rows
+               + " -- level 1 (the Monarch's Crest) 7,500,000, else 180,000"))
 
     # Stat fruit (S6 Potions.cs CreateFruits): item level 0-4 encodes the stat.
     records.append(item(
@@ -759,9 +843,11 @@ def build_tickets_and_materials():
         review="1.0-era stat fruit backported from S6 dataset (fruits "
                "chaos-mix result); item level 0-4 encodes the fruit's stat "
                "kind; consume behavior (stat point add/remove) is a rule, "
-               "not data",
+               "not data; price 33,000,000 is the classic current NPC value "
+               "from " + PRICE_DICT_SRC,
         width=1, height=1, drops=False, drop_level=0, max_item_level=4,
-        durability=1, kind={"kind": "stat_fruit"}))
+        durability=1, price=fixed_price(33_000_000),
+        kind={"kind": "stat_fruit"}))
 
     return records
 
@@ -828,7 +914,7 @@ def main():
             "S6-only event items NOT backported: Invisibility Cloak's S6 siblings Armor of Guardsman (13/29, Chaos Castle), Illusion Temple items (13/49-51), Imperial Guardian items (14/101-109) -- events are post-S3 or not in the backport list",
             "Box of Luck higher kinds (+1 Star of the Sacred Birth ... +11 Box of Kundun+4) are named in a 095d source comment but ship no drop data pre-S6; not backported",
             "2nd-wings chaos mix (and its use of Loch's Feather 13/14) -> chaos_mixes.json extractor",
-            "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it) but its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys-dmg options) are S6-only option data and are NOT -- jol_options is empty; see the 2nd-wing option gap in options_sets coverage",
+            "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it); its jol_options carry physical_damage, the S6 Cape of Lord Options definition's only Option-type entry (s6-sourced, review-flagged); the rest of that S6 option data (the 4-value wing-bonus pool = 2nd-wing bonuses + Command) is the crafted-augment axis rolled by the craft service, not option data -- see the 2nd-wing option gap in options_sets coverage",
             "dark lord scepters not backported in this wave; DL items are Cape of Lord 13/30 (chaos-mix result) and the Adamantine armor pieces (ancient-set dependency), otherwise dark_lord appears only in all-classes qualification lists",
             "summoner class is not in the baseline: the Red Wing pieces (7-11/40, ancient-set dependency) ship with empty classes lists -> unequippable; see their review flags",
             "Wings of Despair (12/42, summoner) and all 3rd wings/capes: post-S3 or excluded classes, skipped",
@@ -842,10 +928,11 @@ def main():
             "kind is data (set by extraction), never derived from group: group 12 = wings(0-6)+orbs(7-11)+jewel(15); group 13 = pets+jewelry+wings(cape)+tickets+materials+fruit; group 14 = potions+jewels+box+tickets; group 15 = scrolls",
             "weapon handling: two_handed when the melee weapon occupies 2 inventory columns (width==2, groups 0-3), else one_handed; bows/crossbows/staffs carry no handling",
             "group 4 split: bow = numbers 0-6, crossbow = 8-16 (CreateWeapon), bolts = 4/7, arrows = 4/15 (CreateAmmunition)",
-            "wing jol_options are the BuildOptions normal (Jewel-of-Life) option kinds as NormalOption: Elf health_recovery_pct, Heaven wizardry_damage, Satan physical_damage, Spirits [health_recovery_pct, physical_damage], Soul [health_recovery_pct, wizardry_damage], Dragon [health_recovery_pct, physical_damage], Darkness [wizardry_damage, physical_damage]; Cape of Lord [] (S6 option data not backported)",
+            "wing jol_options are the BuildOptions normal (Jewel-of-Life) option kinds as NormalOption: Elf health_recovery_pct, Heaven wizardry_damage, Satan physical_damage, Spirits [health_recovery_pct, physical_damage], Soul [health_recovery_pct, wizardry_damage], Dragon [health_recovery_pct, physical_damage], Darkness [wizardry_damage, physical_damage]; Cape of Lord [physical_damage] (s6-sourced, review-flagged)",
             "pendant excellent is the ExcellentCategory object {set:weapon, damage:physical|wizardry} (Fire/Wind/Ability -> physical, Lighting/Ice/Water -> wizardry); pets serialize CombatBonus inline (absorb -> incoming_damage_pct, attack increase -> damage_pct, health -> max_health); movement-speed power-ups deleted -> Horn of Uniria carries no bonuses (ground_mount) and the mount fact rides PetRide",
             "requirements split: equipment carries WearRequirements (raw Item.txt columns, scaled at equip by services), orbs/scrolls carry LearnRequirements (absolute consumption minima, no vitality column)",
-            "price is kind-tagged: source value>0 -> {fixed, zen}, 0 -> {formula}; equipment/jewels(Chaos/Life/Creation)/box/tickets/fruit are formula, orbs/scrolls/potions/(Bless/Soul) are fixed",
+            "price is kind-tagged three ways (W-CRAFT): {fixed, zen} = the item's base NPC price -- orbs/scrolls verbatim (the classic group-12/15 Value-verbatim branch), consumables floor(Value^2*10/12) (the classic Value-branch base, W-SRC), the five jewels and the stat fruit from the OpenMU special-item price dictionary (ItemPriceCalculator.cs, consult D.4); {per_level, zen_by_level} = the dictionary's classic per-level tables on mix materials and event tickets (non-empty array indexed by item level, clamped to the last entry; index 0 = the dictionary's default arm; Devil's Invitation level-0 is our clamp, review-flagged); {formula} = priced entirely by the services price rule (equipment, wings, jewelry, pets, lucky box, transformation ring -- box/ring cross-checked against the full special dictionary: no classic special value)",
+            "W-SRC: consumable fixed prices changed semantics this wave -- previously the raw Item.txt Value column (5/10/20/30), now the classic Value-branch base price floor(Value^2*10/12) (20/83/333/750), so {fixed, zen} means one thing everywhere: the base the services consumable branch scales (x2^level, tens-truncate, x piece count)",
             "potion durability=3 is OpenMU stack-size modeling (invented value): the 8 durability-3 consumables (Apple, healing x3, mana x3, Antidote) carry the review flag; Ale/Town Portal (durability 1) do not; stacking itself is a W-ENT inventory rule",
             "transformation ring skins [2, 7, 14, 8, 9, 41] are MonsterNumbers (Atlas-proven); weapon/shield/pet skills and orb/scroll teaches are SkillNumbers (Atlas-proven)",
         ],

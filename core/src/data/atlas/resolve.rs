@@ -4,10 +4,12 @@
 //! record set into a by-id lookup with its identity uniqueness proven in the
 //! same pass. Every helper returns the first [`AtlasError`] it finds.
 
+use core::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::components::collections::OneOrMore;
 use crate::components::tile::{TileFacing, WalkGrid};
-use crate::data::chaos_mixes::ChaosRecipe;
+use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe, UpgradeTarget};
 use crate::data::common::{GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::gates_warps::{EnterGate, GateWarpRecord, SpawnGate, TargetGate, Warp};
 use crate::data::item_definitions::ItemDefinition;
@@ -18,7 +20,7 @@ use crate::data::spawns::Spawn;
 use crate::data::terrain::MapTerrain;
 
 use super::AtlasError;
-use super::views::{Landing, ResolvedEnterGate, ResolvedSpawn};
+use super::views::{Landing, ResolvedEnterGate, ResolvedOutput, ResolvedRecipe, ResolvedSpawn};
 
 /// The gate records partitioned by kind, with per-file identity sets proven
 /// unique.
@@ -319,51 +321,216 @@ pub(super) fn resolve_spawns(
     Ok(by_map)
 }
 
-pub(super) fn recipe_item_refs(recipe: &ChaosRecipe) -> Vec<ItemRef> {
+/// The authentic descending crafting-number scan order — a total match over
+/// the recipe families ([`ChaosRecipe::ItemUpgrade`] split by target), never a
+/// drift-prone data field. [`resolve_chaos_recipes`] sorts the catalog by this
+/// once at parse, so [`Atlas::chaos_recipes`](super::Atlas::chaos_recipes)
+/// needs no per-call sort.
+fn crafting_number(recipe: &ChaosRecipe) -> u8 {
     match recipe {
-        ChaosRecipe::ChaosWeapon { weapons, .. } => weapons.to_vec(),
+        ChaosRecipe::CapeOfLord { .. } => 24,
+        ChaosRecipe::FirstWings { .. } => 11,
+        ChaosRecipe::BloodCastleTicket { .. } => 8,
+        ChaosRecipe::SecondWings { .. } => 7,
+        ChaosRecipe::Fruits { .. } => 6,
+        ChaosRecipe::Dinorant { .. } => 5,
+        ChaosRecipe::ItemUpgrade {
+            target: UpgradeTarget::PlusEleven,
+            ..
+        } => 4,
+        ChaosRecipe::ItemUpgrade {
+            target: UpgradeTarget::PlusTen,
+            ..
+        } => 3,
+        ChaosRecipe::DevilSquareTicket { .. } => 2,
+        ChaosRecipe::ChaosWeapon { .. } => 1,
+    }
+}
+
+/// Joins one output ref to its owned definition, proving it resolves.
+fn joined_item(
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    item: ItemRef,
+) -> Result<ItemDefinition, AtlasError> {
+    items
+        .get(&item)
+        .cloned()
+        .ok_or(AtlasError::UnknownItemRef { item })
+}
+
+/// Joins a multi-candidate output — a proven-present head plus its tail, so
+/// the non-empty pick pool builds totally (no fallible conversion downstream).
+fn joined_choice(
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    first: ItemRef,
+    rest: &[ItemRef],
+) -> Result<ResolvedOutput, AtlasError> {
+    let tail: Vec<ItemDefinition> = rest
+        .iter()
+        .map(|&item| joined_item(items, item))
+        .collect::<Result<_, _>>()?;
+    Ok(ResolvedOutput::Choice(OneOrMore::with_head(
+        joined_item(items, first)?,
+        tail,
+    )))
+}
+
+/// Joins a deterministic single output — no pick draw exists for it.
+fn joined_single(
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    item: ItemRef,
+) -> Result<ResolvedOutput, AtlasError> {
+    Ok(ResolvedOutput::Single(joined_item(items, item)?))
+}
+
+/// Joins each chaos recipe's output refs to their definitions and sorts the
+/// catalog into descending authentic crafting-number scan order, proving the
+/// output refs resolve and RETAINING the proof as the join (the
+/// [`resolve_spawns`] precedent; ingredient refs are proven by the check
+/// module and stay refs on the resolved record).
+pub(super) fn resolve_chaos_recipes(
+    mixes: Vec<ChaosMix>,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<Vec<ResolvedRecipe>, AtlasError> {
+    let mut recipes: Vec<ChaosRecipe> = mixes.into_iter().map(|mix| mix.recipe).collect();
+    recipes.sort_by_key(|recipe| Reverse(crafting_number(recipe)));
+
+    let mut resolved = Vec::with_capacity(recipes.len());
+    for recipe in recipes {
+        resolved.push(resolve_chaos_recipe(&recipe, items)?);
+    }
+    Ok(resolved)
+}
+
+/// Joins one recipe's outputs: [`ResolvedOutput::Choice`] over the fixed
+/// multi-candidate arrays (head split off, so `OneOrMore` builds totally),
+/// [`ResolvedOutput::Single`] for the deterministic outputs; every other field
+/// carries over verbatim. One arm per family — the function's length is the
+/// nine-family catalog's vocabulary breadth, not a second concern.
+fn resolve_chaos_recipe(
+    recipe: &ChaosRecipe,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<ResolvedRecipe, AtlasError> {
+    match *recipe {
+        ChaosRecipe::ChaosWeapon {
+            sacrifice_levels,
+            weapons,
+        } => {
+            let [first, rest @ ..] = weapons;
+            Ok(ResolvedRecipe::ChaosWeapon {
+                sacrifice_levels,
+                weapons: joined_choice(items, first, &rest)?,
+            })
+        }
         ChaosRecipe::FirstWings {
             chaos_weapons,
+            chaos_weapon_levels,
+            extra_sacrifice_levels,
             wings,
-            ..
-        } => chaos_weapons.iter().chain(wings.iter()).copied().collect(),
+        } => {
+            let [first, rest @ ..] = wings;
+            Ok(ResolvedRecipe::FirstWings {
+                chaos_weapons,
+                chaos_weapon_levels,
+                extra_sacrifice_levels,
+                wings: joined_choice(items, first, &rest)?,
+            })
+        }
         ChaosRecipe::SecondWings {
             first_wings,
+            wing_levels,
+            excellent_levels,
             feather,
+            economics,
             wings,
-            ..
-        } => first_wings
-            .iter()
-            .copied()
-            .chain(core::iter::once(feather.item))
-            .chain(wings.iter().copied())
-            .collect(),
+        } => {
+            let [first, rest @ ..] = wings;
+            Ok(ResolvedRecipe::SecondWings {
+                first_wings,
+                wing_levels,
+                excellent_levels,
+                feather,
+                economics,
+                wings: joined_choice(items, first, &rest)?,
+            })
+        }
         ChaosRecipe::CapeOfLord {
             first_wings,
+            wing_levels,
+            excellent_levels,
             crest,
+            economics,
             cape,
-            ..
-        } => first_wings
-            .iter()
-            .copied()
-            .chain([crest.item, *cape])
-            .collect(),
-        ChaosRecipe::ItemUpgrade { .. } => Vec::new(),
-        ChaosRecipe::Dinorant { horn, dinorant, .. } => vec![*horn, *dinorant],
+        } => Ok(ResolvedRecipe::CapeOfLord {
+            first_wings,
+            wing_levels,
+            excellent_levels,
+            crest,
+            economics,
+            cape: joined_single(items, cape)?,
+        }),
+        ChaosRecipe::ItemUpgrade {
+            target,
+            bless,
+            soul,
+            base_success_percent,
+            fee_zen,
+        } => Ok(ResolvedRecipe::ItemUpgrade {
+            target,
+            bless,
+            soul,
+            base_success_percent,
+            fee_zen,
+        }),
+        ChaosRecipe::Dinorant {
+            horn,
+            horn_count,
+            success_percent,
+            fee_zen,
+            dinorant,
+        } => Ok(ResolvedRecipe::Dinorant {
+            horn,
+            horn_count,
+            success_percent,
+            fee_zen,
+            dinorant: joined_single(items, dinorant)?,
+        }),
         ChaosRecipe::Fruits {
-            catalyst, fruit, ..
-        } => vec![*catalyst, *fruit],
+            catalyst,
+            success_percent,
+            fee_zen,
+            fruit,
+        } => Ok(ResolvedRecipe::Fruits {
+            catalyst,
+            success_percent,
+            fee_zen,
+            fruit: joined_single(items, fruit)?,
+        }),
         ChaosRecipe::DevilSquareTicket {
             eye,
             key,
             invitation,
-            ..
-        } => vec![*eye, *key, *invitation],
+            fee_zen_by_level,
+            success_percent_by_level,
+        } => Ok(ResolvedRecipe::DevilSquareTicket {
+            eye,
+            key,
+            invitation: joined_single(items, invitation)?,
+            fee_zen_by_level,
+            success_percent_by_level,
+        }),
         ChaosRecipe::BloodCastleTicket {
             scroll,
             bone,
             cloak,
-            ..
-        } => vec![*scroll, *bone, *cloak],
+            fee_zen_by_level,
+            success_percent_by_level,
+        } => Ok(ResolvedRecipe::BloodCastleTicket {
+            scroll,
+            bone,
+            cloak: joined_single(items, cloak)?,
+            fee_zen_by_level,
+            success_percent_by_level,
+        }),
     }
 }

@@ -8,9 +8,9 @@
   "review_count": 6,
   "reviews": {
     "2nd Level Wings": "2nd wings are 1.0-era, data only in S6 (Summoner input/result removed, level caps clamped 15->11); wing_value_zen_per_percent 4,000,000 and excellent_value_zen_per_percent 40,000 exist only as OpenMU divisor encodings, and luck/excellent 20/20 only in OpenMU's S6 initializer — all four are OpenMU defaults pending classic sourcing",
-    "Cape of Lord": "Cape of Lord is the 1.0-era Dark Lord wing but this crafting (Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are OpenMU defaults pending classic sourcing",
+    "Cape of Lord": "Cape of Lord is the 1.0-era Dark Lord wing but this crafting (Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; OpenMU's S6 result is Any-of-two, uniform 1/2 (Cape of Lord 13/30 + Cape of Fighter 12/49) — Cape of Fighter is Rage Fighter gear (post-pre-S3 class), era-cut, so this record ships the single Cape of Lord result; value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are OpenMU defaults pending classic sourcing",
     "Dinorant": "horn_count 3 and fee 250,000 exist only in OpenMU's 095d dataset; every classic source (and OpenMU's own S6 data) documents 10 full-durability Horns of Uniria for 500,000 zen — OpenMU defaults pending catalog decision; 70% and the full-durability horn rule are authentic",
-    "Fruits": "stat fruits are 1.0-era, data only in S6; the created fruit's stat kind is a weighted services roll (weights are OpenMU defaults, see FRUIT_STAT_WEIGHTS), not data",
+    "Fruits": "stat fruits are 1.0-era, data only in S6; the created fruit's stat kind is a weighted services roll (weights are OpenMU defaults, see FRUIT_LEVEL_WEIGHTS), not data",
     "Devil's Square Ticket": "fee band and 7-level breadth come from OpenMU's version-shared handler table (classic-documented fees; pre-S3 Devil's Square level count pending era verification); the 80/70 success split at level 5 is an OpenMU handler constant pending classic sourcing",
     "Blood Castle Ticket": "Blood Castle is 0.97/1.0-era; fee band is the documented classic recipe, 8-level breadth pending era verification; flat 80% success is an OpenMU handler constant pending classic sourcing"
   },
@@ -21,7 +21,7 @@
     "devil_square_success_split": "80/70 success split at level 5 is an OpenMU handler constant pending classic sourcing",
     "blood_castle_flat_success": "flat 80% success is an OpenMU handler constant pending classic sourcing",
     "ticket_level_breadth": "Devil's Square 7-level and Blood Castle 8-level breadth come from OpenMU's version-shared handler tables; pre-S3 level counts pending era verification",
-    "fruit_stat_weights": "the created fruit's stat kind is a weighted services roll (FRUIT_STAT_WEIGHTS 30/25/20/20/5); weights are OpenMU code constants, live in services not data"
+    "fruit_stat_weights": "the created fruit's stat kind is a weighted services roll (FRUIT_LEVEL_WEIGHTS 30/25/20/20/5); weights are OpenMU code constants, live in services not data"
   },
   "gaps": {
     "item_upgrade_12_to_15": "S6 mixes #22/#23/#49/#50: item level cap is 11 (approved decision 2)",

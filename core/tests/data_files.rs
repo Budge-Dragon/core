@@ -22,9 +22,11 @@ use mu_core::components::spatial::{Facing, Fixed, WorldPos};
 use mu_core::components::tile::{TileArea, TileCoord, WalkGrid};
 use mu_core::components::units::{ItemLevel, Level};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
-use mu_core::data::atlas::{Atlas, AtlasError, Landing, StaticData};
+use mu_core::data::atlas::{
+    Atlas, AtlasError, Landing, ResolvedOutput, ResolvedRecipe, StaticData,
+};
 use mu_core::data::box_drops::BoxDrop;
-use mu_core::data::chaos_mixes::ChaosMix;
+use mu_core::data::chaos_mixes::{ChaosMix, UpgradeTarget};
 use mu_core::data::classes::{ClassRecord, ClassTable, ClassTableError};
 use mu_core::data::common::{DataFile, ItemRef, MapNumber, MonsterNumber};
 use mu_core::data::drop_config::DropConfig;
@@ -195,6 +197,73 @@ fn atlas_resolves_the_whole_real_dataset() {
     // Lorencia's spawn gate is proven present by construction.
     let fallback = atlas.fallback_spawn_gate();
     assert_eq!(fallback.map.0, 0);
+}
+
+#[test]
+fn atlas_retains_the_chaos_recipe_catalog_joined_in_scan_order() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let recipes: Vec<&ResolvedRecipe> = atlas.chaos_recipes().collect();
+    assert_eq!(recipes.len(), 10);
+
+    // Descending authentic crafting-number order: Cape (24) first, Chaos
+    // Weapon (1) last, +11 (4) strictly before +10 (3).
+    assert!(matches!(
+        recipes.first(),
+        Some(ResolvedRecipe::CapeOfLord { .. })
+    ));
+    assert!(matches!(
+        recipes.last(),
+        Some(ResolvedRecipe::ChaosWeapon { .. })
+    ));
+    let upgrade_targets: Vec<UpgradeTarget> = recipes
+        .iter()
+        .filter_map(|recipe| match recipe {
+            ResolvedRecipe::ItemUpgrade { target, .. } => Some(*target),
+            ResolvedRecipe::ChaosWeapon { .. }
+            | ResolvedRecipe::FirstWings { .. }
+            | ResolvedRecipe::SecondWings { .. }
+            | ResolvedRecipe::CapeOfLord { .. }
+            | ResolvedRecipe::Dinorant { .. }
+            | ResolvedRecipe::Fruits { .. }
+            | ResolvedRecipe::DevilSquareTicket { .. }
+            | ResolvedRecipe::BloodCastleTicket { .. } => None,
+        })
+        .collect();
+    assert_eq!(
+        upgrade_targets,
+        vec![UpgradeTarget::PlusEleven, UpgradeTarget::PlusTen]
+    );
+
+    // The join carries real definitions: multi-candidate families hold a
+    // Choice pool of the record's size, single-output families a Single.
+    for recipe in &recipes {
+        match recipe {
+            ResolvedRecipe::ChaosWeapon {
+                weapons: output, ..
+            }
+            | ResolvedRecipe::FirstWings { wings: output, .. } => match output {
+                ResolvedOutput::Choice(pool) => assert_eq!(pool.count().get(), 3),
+                ResolvedOutput::Single(_) => panic!("a 3-weapon family joins a Choice"),
+            },
+            ResolvedRecipe::SecondWings { wings: output, .. } => match output {
+                ResolvedOutput::Choice(pool) => assert_eq!(pool.count().get(), 4),
+                ResolvedOutput::Single(_) => panic!("second wings join a 4-wing Choice"),
+            },
+            ResolvedRecipe::CapeOfLord { cape: output, .. }
+            | ResolvedRecipe::Dinorant {
+                dinorant: output, ..
+            }
+            | ResolvedRecipe::Fruits { fruit: output, .. }
+            | ResolvedRecipe::DevilSquareTicket {
+                invitation: output, ..
+            }
+            | ResolvedRecipe::BloodCastleTicket { cloak: output, .. } => match output {
+                ResolvedOutput::Single(_) => {}
+                ResolvedOutput::Choice(_) => panic!("a single-output family joins a Single"),
+            },
+            ResolvedRecipe::ItemUpgrade { .. } => {}
+        }
+    }
 }
 
 #[test]

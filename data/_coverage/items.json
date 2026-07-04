@@ -36,7 +36,7 @@
       }
     }
   },
-  "review_count": 41,
+  "review_count": 48,
   "reviews": {
     "7/26": "1.0-era Dark Lord (Adamantine) piece backported from the S6 dataset for the agnis/broy ancient sets; other DL gear is not backported this wave",
     "7/40": "Red Wing is Summoner (post-pre-S3 class) gear, not 1.0-era; backported only as a piece of the approved chrono/semeden ancient-set backports; classes empty -> unequippable in baseline",
@@ -56,11 +56,12 @@
     "12/4": "1.0-era 2nd wing backported from S6 dataset; soul_master only (source class value 2); max_item_level clamped 15->11; dmg +32%/abs 25%, +1%/level (wing_damage_second)",
     "12/5": "1.0-era 2nd wing backported from S6 dataset; blade_knight only (source class value 2); fast wing speed 16; max_item_level clamped 15->11; dmg +32%/abs 25%, +1%/level (wing_damage_second)",
     "12/6": "1.0-era 2nd wing backported from S6 dataset; magic_gladiator (source class value 1); max_item_level clamped 15->11; dmg +32%/abs 25%, +1%/level (wing_damage_second)",
-    "13/14": "1.0-era 2nd-wings mix ingredient from S6 Wings.cs; source sets drops_from_monsters=false and max_item_level=1",
-    "13/15": "1.0-era stat fruit backported from S6 dataset (fruits chaos-mix result); item level 0-4 encodes the fruit's stat kind; consume behavior (stat point add/remove) is a rule, not data",
-    "13/16": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3)",
-    "13/17": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3)",
-    "13/18": "Blood Castle entry ticket (blood_castle_ticket mix result), approved 1.0-era backport from S6 dataset; level gates 7/8 as above",
+    "12/15": "price 810,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
+    "13/14": "1.0-era 2nd-wings mix ingredient from S6 Wings.cs; source sets drops_from_monsters=false and max_item_level=1; per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) -- level 1 (the Monarch's Crest) 7,500,000, else 180,000",
+    "13/15": "1.0-era stat fruit backported from S6 dataset (fruits chaos-mix result); item level 0-4 encodes the fruit's stat kind; consume behavior (stat point add/remove) is a rule, not data; price 33,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
+    "13/16": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3); per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) (level 0 = the 10,000 default arm, rows 1-8)",
+    "13/17": "Blood Castle ticket item, approved 1.0-era backport from S6 dataset; gates 7/8 of max_item_level are arguably later-era (7: S1+, 8: S3); per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) (level 0 = the 10,000 default arm, rows 1-8)",
+    "13/18": "Blood Castle entry ticket (blood_castle_ticket mix result), approved 1.0-era backport from S6 dataset; level gates 7/8 as above; per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4) -- level != 1 is the lambda 600,000+(level-1)*60,000 (literal 540,000 at level 0), level 1 is the 150,000 special row",
     "13/21": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); fire resistance",
     "13/22": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); earth resistance",
     "13/23": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); wind resistance",
@@ -69,7 +70,7 @@
     "13/26": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); wind resistance",
     "13/27": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); water resistance",
     "13/28": "1.0-era jewelry backported from the S6 dataset (piece of the backported ancient jewelry sets); no resistance; S6-only +1%/level maximum_ability option",
-    "13/30": "1.0-era Dark Lord wing backported from S6 Wings.cs (cape_of_lord chaos-mix result); max_item_level clamped 15->11; dmg +20%/abs 10%, +2%/level (wing_damage_first); its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys dmg) are S6-only option data and NOT backported -- only luck referenced, matching the 2nd-wing option gap in options_sets",
+    "13/30": "1.0-era Dark Lord wing backported from S6 Wings.cs (cape_of_lord chaos-mix result); max_item_level clamped 15->11; dmg +20%/abs 10%, +2%/level (wing_damage_first); jol_options physical_damage is s6-sourced — the S6 Cape of Lord Options definition's only Option-type entry (consult C.4), pending classic corroboration; the cape's 4-value wing-bonus pool (2nd-wing bonuses + Command) is the crafted-augment axis rolled by the craft service, not option data",
     "14/0": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
     "14/1": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
     "14/2": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
@@ -78,7 +79,13 @@
     "14/5": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
     "14/6": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
     "14/8": "durability 3 is OpenMU stack-size modeling; classic pre-S3 potions were single items",
-    "14/22": "0.97d-era jewel (Version097d dataset is the oldest pre-S3 source; tagged s6 because source_version has no 097d value); backported as the fruits chaos-mix ingredient"
+    "14/13": "price 9,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4), replacing the wrongly-extracted raw Item.txt Value 150 (not a price)",
+    "14/14": "price 6,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4), replacing the wrongly-extracted raw Item.txt Value 150 (not a price)",
+    "14/16": "price 45,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)",
+    "14/17": "per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4); level 0 is the dictionary's 10,000 default arm, rows 1-4 through the shipped max_item_level 4",
+    "14/18": "per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4); level 0 is the dictionary's 15,000 default arm, rows 1-4 through the shipped max_item_level 4",
+    "14/19": "per-level price rows from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4); the level-0 entry 60,000 is OUR clamp -- OpenMU's else-arm (level-1)*60,000 goes negative at level 0",
+    "14/22": "0.97d-era jewel (Version097d dataset is the oldest pre-S3 source; tagged s6 because source_version has no 097d value); backported as the fruits chaos-mix ingredient; price 36,000,000 is the classic current NPC value from OpenMU's special-item price dictionary (ItemPriceCalculator.cs, consult D.4)"
   },
   "gaps": [
     "Devil's Eye/Key +1..+4 monster-level drop tables (Version095d EventTicketItems.cs) are global drop groups -> drops domain, not carried on the item record",
@@ -86,7 +93,7 @@
     "S6-only event items NOT backported: Invisibility Cloak's S6 siblings Armor of Guardsman (13/29, Chaos Castle), Illusion Temple items (13/49-51), Imperial Guardian items (14/101-109) -- events are post-S3 or not in the backport list",
     "Box of Luck higher kinds (+1 Star of the Sacred Birth ... +11 Box of Kundun+4) are named in a 095d source comment but ship no drop data pre-S6; not backported",
     "2nd-wings chaos mix (and its use of Loch's Feather 13/14) -> chaos_mixes.json extractor",
-    "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it) but its S6 option definitions (Cape of Lord Options = 2nd-wing options + Command wing option, per-item random phys-dmg options) are S6-only option data and are NOT -- jol_options is empty; see the 2nd-wing option gap in options_sets coverage",
+    "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it); its jol_options carry physical_damage, the S6 Cape of Lord Options definition's only Option-type entry (s6-sourced, review-flagged); the rest of that S6 option data (the 4-value wing-bonus pool = 2nd-wing bonuses + Command) is the crafted-augment axis rolled by the craft service, not option data -- see the 2nd-wing option gap in options_sets coverage",
     "dark lord scepters not backported in this wave; DL items are Cape of Lord 13/30 (chaos-mix result) and the Adamantine armor pieces (ancient-set dependency), otherwise dark_lord appears only in all-classes qualification lists",
     "summoner class is not in the baseline: the Red Wing pieces (7-11/40, ancient-set dependency) ship with empty classes lists -> unequippable; see their review flags",
     "Wings of Despair (12/42, summoner) and all 3rd wings/capes: post-S3 or excluded classes, skipped"
@@ -100,10 +107,11 @@
     "kind is data (set by extraction), never derived from group: group 12 = wings(0-6)+orbs(7-11)+jewel(15); group 13 = pets+jewelry+wings(cape)+tickets+materials+fruit; group 14 = potions+jewels+box+tickets; group 15 = scrolls",
     "weapon handling: two_handed when the melee weapon occupies 2 inventory columns (width==2, groups 0-3), else one_handed; bows/crossbows/staffs carry no handling",
     "group 4 split: bow = numbers 0-6, crossbow = 8-16 (CreateWeapon), bolts = 4/7, arrows = 4/15 (CreateAmmunition)",
-    "wing jol_options are the BuildOptions normal (Jewel-of-Life) option kinds as NormalOption: Elf health_recovery_pct, Heaven wizardry_damage, Satan physical_damage, Spirits [health_recovery_pct, physical_damage], Soul [health_recovery_pct, wizardry_damage], Dragon [health_recovery_pct, physical_damage], Darkness [wizardry_damage, physical_damage]; Cape of Lord [] (S6 option data not backported)",
+    "wing jol_options are the BuildOptions normal (Jewel-of-Life) option kinds as NormalOption: Elf health_recovery_pct, Heaven wizardry_damage, Satan physical_damage, Spirits [health_recovery_pct, physical_damage], Soul [health_recovery_pct, wizardry_damage], Dragon [health_recovery_pct, physical_damage], Darkness [wizardry_damage, physical_damage]; Cape of Lord [physical_damage] (s6-sourced, review-flagged)",
     "pendant excellent is the ExcellentCategory object {set:weapon, damage:physical|wizardry} (Fire/Wind/Ability -> physical, Lighting/Ice/Water -> wizardry); pets serialize CombatBonus inline (absorb -> incoming_damage_pct, attack increase -> damage_pct, health -> max_health); movement-speed power-ups deleted -> Horn of Uniria carries no bonuses (ground_mount) and the mount fact rides PetRide",
     "requirements split: equipment carries WearRequirements (raw Item.txt columns, scaled at equip by services), orbs/scrolls carry LearnRequirements (absolute consumption minima, no vitality column)",
-    "price is kind-tagged: source value>0 -> {fixed, zen}, 0 -> {formula}; equipment/jewels(Chaos/Life/Creation)/box/tickets/fruit are formula, orbs/scrolls/potions/(Bless/Soul) are fixed",
+    "price is kind-tagged three ways (W-CRAFT): {fixed, zen} = the item's base NPC price -- orbs/scrolls verbatim (the classic group-12/15 Value-verbatim branch), consumables floor(Value^2*10/12) (the classic Value-branch base, W-SRC), the five jewels and the stat fruit from the OpenMU special-item price dictionary (ItemPriceCalculator.cs, consult D.4); {per_level, zen_by_level} = the dictionary's classic per-level tables on mix materials and event tickets (non-empty array indexed by item level, clamped to the last entry; index 0 = the dictionary's default arm; Devil's Invitation level-0 is our clamp, review-flagged); {formula} = priced entirely by the services price rule (equipment, wings, jewelry, pets, lucky box, transformation ring -- box/ring cross-checked against the full special dictionary: no classic special value)",
+    "W-SRC: consumable fixed prices changed semantics this wave -- previously the raw Item.txt Value column (5/10/20/30), now the classic Value-branch base price floor(Value^2*10/12) (20/83/333/750), so {fixed, zen} means one thing everywhere: the base the services consumable branch scales (x2^level, tens-truncate, x piece count)",
     "potion durability=3 is OpenMU stack-size modeling (invented value): the 8 durability-3 consumables (Apple, healing x3, mana x3, Antidote) carry the review flag; Ale/Town Portal (durability 1) do not; stacking itself is a W-ENT inventory rule",
     "transformation ring skins [2, 7, 14, 8, 9, 41] are MonsterNumbers (Atlas-proven); weapon/shield/pet skills and orb/scroll teaches are SkillNumbers (Atlas-proven)"
   ]

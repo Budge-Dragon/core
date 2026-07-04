@@ -26,7 +26,7 @@ use mu_core::components::equipment::Equipment;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
 use mu_core::components::item_instance::{
-    ExcellentCat, ExcellentOptions, ItemInstance, RarityRoll, SkillRoll,
+    AugmentSlot, ExcellentCat, ExcellentOptions, ItemInstance, RarityRoll, SkillRoll,
 };
 use mu_core::components::item_options::{AncientBonusLevel, ExcellentCategory};
 use mu_core::components::item_quality::ItemRarity;
@@ -222,8 +222,6 @@ fn always() -> OptionRollPolicy {
         item_option_roll_per_10000: ChancePer10000::ALWAYS,
         luck_roll_per_10000: ChancePer10000::ALWAYS,
         extra_excellent_option_roll_per_10000: ChancePer10000::ALWAYS,
-        second_wing_bonus_roll_per_10000: ChancePer10000::ALWAYS,
-        dinorant_option_roll_per_10000: ChancePer10000::ALWAYS,
         max_excellent_options_per_drop: 3,
         max_dropped_option_level: OptionLevel::L4,
         review: None,
@@ -394,7 +392,10 @@ fn every_excellent_capable_item_rolls_a_matching_distinct_set() {
                     assert_excellent_well_formed(*options, expected, cap);
                     // The set is internally consistent with its own category and
                     // fails a reconcile against the opposite one.
-                    assert_eq!(instance.reconcile(Some(expected)), Ok(()));
+                    assert_eq!(
+                        instance.reconcile(Some(expected), AugmentSlot::None),
+                        Ok(())
+                    );
                 }
                 RarityRoll::Normal | RarityRoll::Ancient { .. } => {
                     panic!("an excellent-capable item must roll excellent")

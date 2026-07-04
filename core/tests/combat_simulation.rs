@@ -174,6 +174,7 @@ fn dark_knight(level: u16, strength: u16, tile: TileCoord) -> Character {
         "experience": 0,
         "stats": {"kind": "standard", "strength": strength, "agility": 120, "vitality": 100, "energy": 30},
         "unspent_points": 0,
+        "zen": 0,
         "placement": {"position": position, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
         "vitals": {
             "health": {"current": 500, "max": 500},

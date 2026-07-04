@@ -1,14 +1,16 @@
 //! The referential-integrity checks [`Atlas::parse`](super::Atlas::parse) runs
 //! over the already-indexed lookups: every monster attack, summon, item skill,
-//! ancient piece, chaos-mix material, special/box drop, and class home resolves
-//! to a record that exists. Each returns the first [`AtlasError`] it finds.
+//! ancient piece, chaos-recipe ingredient, special/box drop, and class home
+//! resolves to a record that exists. Each returns the first [`AtlasError`] it
+//! finds. (Chaos-recipe *output* refs are proven by the resolve module's
+//! catalog join, which retains the proof as the definition-joined catalog.)
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::components::levels::TransformationLevel;
 use crate::data::ancient_sets::AncientSet;
 use crate::data::box_drops::BoxDrop;
-use crate::data::chaos_mixes::ChaosMix;
+use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe};
 use crate::data::classes::ClassRecord;
 use crate::data::common::{ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::item_definitions::{ItemDefinition, ItemKind};
@@ -17,7 +19,6 @@ use crate::data::skills::{Skill, SkillShape};
 use crate::data::special_drops::{SpecialDrop, SpecialDropRecord};
 
 use super::AtlasError;
-use super::resolve::recipe_item_refs;
 
 pub(super) fn check_monster_attacks(
     monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
@@ -107,16 +108,41 @@ pub(super) fn check_ancient_sets(
     Ok(())
 }
 
+/// Proves every chaos-recipe *ingredient* ref resolves. Output refs are
+/// deliberately absent here: the resolve module's catalog join proves them by
+/// joining each to its definition, retaining the proof instead of discarding
+/// it.
 pub(super) fn check_chaos_mixes(
     mixes: &[ChaosMix],
     items: &BTreeMap<ItemRef, ItemDefinition>,
 ) -> Result<(), AtlasError> {
     for mix in mixes {
-        for item in recipe_item_refs(&mix.recipe) {
+        for item in ingredient_refs(&mix.recipe) {
             require_item(items, item)?;
         }
     }
     Ok(())
+}
+
+/// A recipe's ingredient refs — every `ItemRef` matched against placed items,
+/// never the outputs. Total over [`ChaosRecipe`].
+fn ingredient_refs(recipe: &ChaosRecipe) -> Vec<ItemRef> {
+    match recipe {
+        ChaosRecipe::ChaosWeapon { .. } | ChaosRecipe::ItemUpgrade { .. } => Vec::new(),
+        ChaosRecipe::FirstWings { chaos_weapons, .. } => chaos_weapons.to_vec(),
+        ChaosRecipe::SecondWings {
+            first_wings,
+            feather,
+            ..
+        } => first_wings.iter().copied().chain([feather.item]).collect(),
+        ChaosRecipe::CapeOfLord {
+            first_wings, crest, ..
+        } => first_wings.iter().copied().chain([crest.item]).collect(),
+        ChaosRecipe::Dinorant { horn, .. } => vec![*horn],
+        ChaosRecipe::Fruits { catalyst, .. } => vec![*catalyst],
+        ChaosRecipe::DevilSquareTicket { eye, key, .. } => vec![*eye, *key],
+        ChaosRecipe::BloodCastleTicket { scroll, bone, .. } => vec![*scroll, *bone],
+    }
 }
 
 pub(super) fn check_special_drops(

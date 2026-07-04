@@ -19,10 +19,6 @@ pub struct OptionRollPolicy {
     /// Chance of each additional excellent option beyond the guaranteed first,
     /// rolled per remaining slot.
     pub extra_excellent_option_roll_per_10000: ChancePer10000,
-    /// 2nd-wing bonus option roll at chaos-machine creation.
-    pub second_wing_bonus_roll_per_10000: ChancePer10000,
-    /// Dinorant option roll at chaos-machine creation.
-    pub dinorant_option_roll_per_10000: ChancePer10000,
     /// Cap on excellent options rolled onto one drop.
     pub max_excellent_options_per_drop: u8,
     /// Highest normal option level a drop can carry. Typed `OptionLevel`: the

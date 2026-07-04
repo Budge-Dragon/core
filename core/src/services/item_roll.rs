@@ -13,8 +13,8 @@ use core::num::NonZeroUsize;
 use rand_core::RngCore;
 
 use crate::components::item_instance::{
-    Durability, ExcellentArmorSet, ExcellentCat, ExcellentOptions, ExcellentWeaponSet,
-    ItemInstance, LuckRoll, RarityRoll, RolledNormalOption, SkillRoll,
+    CraftedAugment, Durability, ExcellentArmorSet, ExcellentCat, ExcellentOptions,
+    ExcellentWeaponSet, ItemInstance, LuckRoll, RarityRoll, RolledNormalOption, SkillRoll,
 };
 use crate::components::item_options::{AncientBonusLevel, ExcellentCategory, NormalOption};
 use crate::components::item_quality::ItemRarity;
@@ -126,11 +126,16 @@ pub fn roll_dropped_item(
         luck,
         skill,
         durability,
+        // A monster drop never carries a crafted augment — that axis is minted
+        // only by the chaos machine.
+        augment: CraftedAugment::None,
     }
 }
 
 /// The single normal option a kind may roll, if any. Total over [`ItemKind`].
-fn eligible_normal_option(kind: &ItemKind) -> Option<NormalOption> {
+/// Shared with the crafting service's bonus rolls — the one kind-to-option
+/// table.
+pub(crate) fn eligible_normal_option(kind: &ItemKind) -> Option<NormalOption> {
     match kind {
         ItemKind::Weapon { .. } | ItemKind::Bow { .. } | ItemKind::Crossbow { .. } => {
             Some(NormalOption::PhysicalDamage)
@@ -552,8 +557,6 @@ mod tests {
             item_option_roll_per_10000: ChancePer10000::ALWAYS,
             luck_roll_per_10000: ChancePer10000::ALWAYS,
             extra_excellent_option_roll_per_10000: ChancePer10000::ALWAYS,
-            second_wing_bonus_roll_per_10000: ChancePer10000::ALWAYS,
-            dinorant_option_roll_per_10000: ChancePer10000::ALWAYS,
             max_excellent_options_per_drop: 3,
             max_dropped_option_level: OptionLevel::L4,
             review: None,
@@ -565,8 +568,6 @@ mod tests {
             item_option_roll_per_10000: ChancePer10000::NEVER,
             luck_roll_per_10000: ChancePer10000::NEVER,
             extra_excellent_option_roll_per_10000: ChancePer10000::NEVER,
-            second_wing_bonus_roll_per_10000: ChancePer10000::NEVER,
-            dinorant_option_roll_per_10000: ChancePer10000::NEVER,
             max_excellent_options_per_drop: 3,
             max_dropped_option_level: OptionLevel::L4,
             review: None,

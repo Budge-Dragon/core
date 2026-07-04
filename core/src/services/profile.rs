@@ -444,6 +444,7 @@ mod tests {
             "experience": 0,
             "stats": serde_json::to_value(stats).unwrap(),
             "unspent_points": 0,
+            "zen": 0,
             "placement": serde_json::to_value(placement()).unwrap(),
             "vitals": serde_json::to_value(vitals()).unwrap(),
         });

@@ -695,6 +695,7 @@ mod tests {
             "experience": 0,
             "stats": {"kind": "standard", "strength": 200, "agility": 100, "vitality": 100, "energy": 30},
             "unspent_points": 0,
+            "zen": 0,
             "placement": {
                 "position": serde_json::to_value(TileCoord::new(tile.0, tile.1).to_world()).unwrap(),
                 "facing": {"x": 1, "y": 0},

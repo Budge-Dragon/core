@@ -4,7 +4,7 @@
 //! duplicate the widen/divide/narrow dance, and never sum per-term truncations
 //! where a single pooled divide is correct.
 
-use core::num::NonZeroU32;
+use core::num::{NonZeroU32, NonZeroU64};
 
 /// A non-zero denominator from a known-positive value, built through the
 /// saturating-add idiom (never `NonZeroU32::new(..).unwrap()`). A zero argument
@@ -13,6 +13,12 @@ use core::num::NonZeroU32;
 #[must_use]
 pub const fn nonzero(value: u32) -> NonZeroU32 {
     NonZeroU32::MIN.saturating_add(value.saturating_sub(1))
+}
+
+/// The [`nonzero`] twin for the `u64` ratio home.
+#[must_use]
+pub const fn nonzero_u64(value: u64) -> NonZeroU64 {
+    NonZeroU64::MIN.saturating_add(value.saturating_sub(1))
 }
 
 /// `value * num / den` as a pooled integer ratio: widen to `u64`, saturating
@@ -33,6 +39,26 @@ pub fn floor_div_u64_to_u32(numerator: u64, den: NonZeroU32) -> u32 {
     // The saturating narrow of a proven-integer quotient — the `u32::MAX`
     // fallback is a boundary saturation, not a masked lookup absence.
     u32::try_from(numerator / u64::from(den.get())).unwrap_or(u32::MAX)
+}
+
+/// `value * num / den` as a pooled integer ratio over the `u64` domain: widen
+/// to `u128`, saturating multiply, floor-divide by the non-zero denominator,
+/// narrow back. The [`scale_ratio`] twin for zen-denominated magnitudes, whose
+/// values reachably exceed the `u32` home — the single `u64` scaling
+/// primitive, so no parallel ratio fork exists anywhere else.
+#[must_use]
+pub fn scale_ratio_u64(value: u64, num: u64, den: NonZeroU64) -> u64 {
+    floor_div_u128_to_u64(u128::from(value).saturating_mul(u128::from(num)), den)
+}
+
+/// Floor-divides a widened `u128` numerator by a non-zero denominator and
+/// narrows the quotient into `u64`, saturating rather than truncating on
+/// overflow — the [`floor_div_u64_to_u32`] twin for the `u64` ratio home.
+#[must_use]
+pub fn floor_div_u128_to_u64(numerator: u128, den: NonZeroU64) -> u64 {
+    // The saturating narrow of a proven-integer quotient — the `u64::MAX`
+    // fallback is a boundary saturation, not a masked lookup absence.
+    u64::try_from(numerator / u128::from(den.get())).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
@@ -68,5 +94,32 @@ mod tests {
         assert_eq!(floor_div_u64_to_u32(0, nonzero(3)), 0);
         // A quotient beyond u32::MAX saturates.
         assert_eq!(floor_div_u64_to_u32(u64::MAX, nonzero(1)), u32::MAX);
+    }
+
+    #[test]
+    fn nonzero_u64_maps_positive_values_and_folds_zero_to_one() {
+        assert_eq!(nonzero_u64(4_000_000).get(), 4_000_000);
+        assert_eq!(nonzero_u64(1).get(), 1);
+        assert_eq!(nonzero_u64(0).get(), 1);
+    }
+
+    #[test]
+    fn scale_ratio_u64_is_a_pooled_floor_divide_beyond_the_u32_home() {
+        // A loaded excellent price beyond u32::MAX still scales exactly.
+        assert_eq!(
+            scale_ratio_u64(6_000_000_000, 25, nonzero_u64(100)),
+            1_500_000_000
+        );
+        // Floor, not round.
+        assert_eq!(scale_ratio_u64(7, 1, nonzero_u64(2)), 3);
+        // u64::MAX * 2 overflows u64 but is held in u128 before the divide.
+        assert_eq!(scale_ratio_u64(u64::MAX, 2, nonzero_u64(2)), u64::MAX);
+    }
+
+    #[test]
+    fn floor_div_u128_narrows_and_saturates() {
+        assert_eq!(floor_div_u128_to_u64(3070, nonzero_u64(100)), 30);
+        // A quotient beyond u64::MAX saturates.
+        assert_eq!(floor_div_u128_to_u64(u128::MAX, nonzero_u64(1)), u64::MAX);
     }
 }

@@ -137,9 +137,24 @@ pub enum DinorantOption {
     AttackSpeed,
 }
 
-/// The three 2nd-wing bonus options ("excellent wing options"). Review:
-/// 1.0-era content shipped only in OpenMU's s6 dataset. HP/mana values follow
-/// the wing's +level by formula, not a per-level table.
+impl DinorantOption {
+    /// Bitmask position `1..=3` — the augment-set encoding fact, the
+    /// [`ExcellentArmorOption::slot_index`] grain.
+    #[must_use]
+    pub const fn slot_index(self) -> u8 {
+        match self {
+            Self::DamageAbsorb => 1,
+            Self::MaxAbility => 2,
+            Self::AttackSpeed => 3,
+        }
+    }
+}
+
+/// The 2nd-wing / cape bonus options ("excellent wing options"). Which values a
+/// crafted item draws from is the chaos-machine service's fact: second wings
+/// draw the three non-[`Command`](Self::Command) values, the Cape of Lord all
+/// four. Review: 1.0-era content shipped only in OpenMU's s6 dataset. HP/mana
+/// values follow the wing's +level by formula, not a per-level table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SecondWingBonus {
@@ -149,6 +164,9 @@ pub enum SecondWingBonus {
     MaxMana,
     /// Ignore defense with 3% chance.
     IgnoreDefenseChance,
+    /// Command +10 (the cape-only fourth option). Review: 1.0-era content
+    /// shipped only in OpenMU's s6 dataset, like its siblings.
+    Command,
 }
 
 /// The two per-piece bonus tiers an ancient item rolls at creation — the
@@ -250,6 +268,25 @@ mod tests {
     fn weapon_slot_indices_are_the_client_bitmask_positions() {
         assert_eq!(ExcellentWeaponOption::ManaAfterKill.slot_index(), 1);
         assert_eq!(ExcellentWeaponOption::ExcellentDamageChance.slot_index(), 6);
+    }
+
+    #[test]
+    fn dinorant_slot_indices_are_the_augment_set_positions() {
+        assert_eq!(DinorantOption::DamageAbsorb.slot_index(), 1);
+        assert_eq!(DinorantOption::MaxAbility.slot_index(), 2);
+        assert_eq!(DinorantOption::AttackSpeed.slot_index(), 3);
+    }
+
+    #[test]
+    fn second_wing_bonus_serializes_snake_case_including_command() {
+        assert_eq!(
+            serde_json::to_string(&SecondWingBonus::Command).unwrap(),
+            r#""command""#
+        );
+        assert_eq!(
+            serde_json::from_str::<SecondWingBonus>(r#""ignore_defense_chance""#).unwrap(),
+            SecondWingBonus::IgnoreDefenseChance
+        );
     }
 
     #[test]

@@ -32,7 +32,9 @@ use crate::data::special_drops::SpecialDropRecord;
 use crate::data::terrain::MapTerrain;
 
 pub use crate::data::drop_pool::DropPool;
-pub use views::{EnterGateView, Landing, MapHandle, SpawnEntry, WarpView};
+pub use views::{
+    EnterGateView, Landing, MapHandle, ResolvedOutput, ResolvedRecipe, SpawnEntry, WarpView,
+};
 
 use check::{
     check_ancient_sets, check_box_drops, check_chaos_mixes, check_classes, check_items,
@@ -40,7 +42,7 @@ use check::{
 };
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
-    resolve_enter_gates, resolve_spawns, resolve_warps, take_single,
+    resolve_chaos_recipes, resolve_enter_gates, resolve_spawns, resolve_warps, take_single,
 };
 use views::{ResolvedEnterGate, ResolvedSpawn};
 
@@ -105,6 +107,7 @@ pub struct Atlas {
     special_drops: Vec<SpecialDropRecord>,
     box_drops: Vec<BoxDrop>,
     drop_pool: DropPool,
+    chaos_recipes: Vec<ResolvedRecipe>,
 }
 
 impl Atlas {
@@ -137,6 +140,7 @@ impl Atlas {
         check_items(&items, &skills, &monsters)?;
         check_ancient_sets(&data.ancient_sets.records, &items)?;
         check_chaos_mixes(&data.chaos_mixes.records, &items)?;
+        let chaos_recipes = resolve_chaos_recipes(data.chaos_mixes.records, &items)?;
         check_special_drops(&data.special_drops.records, &items, &monsters, &map_numbers)?;
         check_box_drops(&data.box_drops.records, &items)?;
         check_classes(&data.classes.records, &map_numbers)?;
@@ -186,6 +190,7 @@ impl Atlas {
             special_drops: data.special_drops.records,
             box_drops: data.box_drops.records,
             drop_pool,
+            chaos_recipes,
         })
     }
 
@@ -369,6 +374,13 @@ impl Atlas {
     #[must_use]
     pub fn drop_pool(&self) -> &DropPool {
         &self.drop_pool
+    }
+
+    /// The chaos-recipe catalog, definition-joined at parse, in descending
+    /// authentic crafting-number scan order — the order the mix service
+    /// attempts recipes in.
+    pub fn chaos_recipes(&self) -> impl Iterator<Item = &ResolvedRecipe> {
+        self.chaos_recipes.iter()
     }
 }
 

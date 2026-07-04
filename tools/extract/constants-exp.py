@@ -9,10 +9,8 @@ Sources (all numbers verified against /tmp/openmu-ref):
       the item-option AddChance default.
   GameLogic/DefaultDropGenerator.cs        SkillDropChancePercent.
   DataModel/InventoryConstants.cs          storage-grid geometry (rows x cols).
-  Version095d/Items/Pets.cs                dinorant option AddChance.
   Items/ExcellentOptions.cs                extra-excellent-slot AddChance.
   Version075/Items/Jewelery.cs             luck AddChance.
-  VersionSeasonSix/Items/Wings.cs          2nd-wing bonus AddChance.
 
 v2 shape (locked by the R2 Rust serde types; see R3-json-contract.md and the
 constants_exp / drops / options design sections):
@@ -33,10 +31,16 @@ relabeled authentic):
 
 OpenMU-invented values survive verbatim but every one carries a `review` string
 naming it an OpenMU default pending an authentic source: the four drop category
-rates + skill roll (drops section review), the five option-roll rates + the
-2-excellent cap (option_roll section review), and the exp jitter range +
-personal-store grid (record review). The exp curve's flat 400 cap over the
-0.75/0.95d eras carries its own review on the exp record.
+rates + skill roll (drops section review), the three drop-time option-roll
+rates + the 2-excellent cap (option_roll section review), and the exp jitter
+range + personal-store grid (record review). The exp curve's flat 400 cap over
+the 0.75/0.95d eras carries its own review on the exp record.
+
+The two chaos-machine chances this section once carried
+(second_wing_bonus_roll_per_10000, dinorant_option_roll_per_10000) are retired
+(W-CRAFT): both were consumer-less and shadowed their authoritative homes —
+the chaos_mixes WingEconomics record's luck/excellent chances and the dinorant
+family facts in the craft service. One number, one home.
 
 All base-initializer values are identical across Version075/095d/S6 (shared
 base initializer, no per-version override) -> source_version "075" on both.
@@ -55,10 +59,8 @@ OPENMU = "/tmp/openmu-ref/src"
 GAME_CFG = "Persistence/Initialization/GameConfigurationInitializerBase.cs"
 DROP_GEN = "GameLogic/DefaultDropGenerator.cs"
 INVENTORY = "DataModel/InventoryConstants.cs"
-DINO_OPTS = "Persistence/Initialization/Version095d/Items/Pets.cs"
 EXC_OPTS = "Persistence/Initialization/Items/ExcellentOptions.cs"
 LUCK_OPTS = "Persistence/Initialization/Version075/Items/Jewelery.cs"
-WING_OPTS = "Persistence/Initialization/VersionSeasonSix/Items/Wings.cs"
 
 
 def read(rel):
@@ -189,29 +191,26 @@ def build_drops_section(cfg_text, drop):
 
 
 def build_option_roll_section(cfg_text, cfg):
-    """OptionRollPolicy — options-owned shape; every option roll + both caps.
+    """OptionRollPolicy — options-owned shape; the drop-time option rolls +
+    both caps. Chaos-machine chances do NOT live here (retired, W-CRAFT):
+    their homes are the chaos_mixes WingEconomics record and the dinorant
+    family facts in the craft service.
 
-    Chances are scattered per-item AddChance defaults across several
-    initializers; each source fraction is verified present in its cited file,
-    then converted exactly. Nested section carries review only.
+    Chances are per-item AddChance defaults; each source fraction is verified
+    present in its cited file, then converted exactly. Nested section carries
+    review only.
     """
     item_option = per_10000(0.25, "item option AddChance")   # GameConfigInit:115
     luck = per_10000(0.25, "luck AddChance")                 # 075 Jewelery:125
     extra_excellent = per_10000(0.001, "excellent AddChance")  # ExcellentOptions:66
-    second_wing = per_10000(0.1, "2nd-wing AddChance")       # s6 Wings:260
-    dinorant = per_10000(0.3, "dinorant AddChance")          # 095d Pets:89
 
     expect_literal("AddChance = 0.25f", cfg_text, "item option AddChance in GameConfigInit")
     expect_literal("AddChance = 0.25f", read(LUCK_OPTS), "luck AddChance in 075 Jewelery")
     expect_literal("AddChance = 0.001f", read(EXC_OPTS), "excellent AddChance in ExcellentOptions")
-    expect_literal("AddChance = 0.1f", read(WING_OPTS), "2nd-wing AddChance in s6 Wings")
-    expect_literal("AddChance = 0.3f", read(DINO_OPTS), "dinorant AddChance in 095d Pets")
 
     expect(item_option, 2500, "item_option_roll_per_10000")
     expect(luck, 2500, "luck_roll_per_10000")
     expect(extra_excellent, 10, "extra_excellent_option_roll_per_10000")
-    expect(second_wing, 1000, "second_wing_bonus_roll_per_10000")
-    expect(dinorant, 3000, "dinorant_option_roll_per_10000")
 
     # max_dropped_option_level: authentic (cross-checked against the config
     # scalar); knob framing killed, cap kept as OptionLevel policy.
@@ -222,15 +221,14 @@ def build_option_roll_section(cfg_text, cfg):
         "item_option_roll_per_10000": item_option,
         "luck_roll_per_10000": luck,
         "extra_excellent_option_roll_per_10000": extra_excellent,
-        "second_wing_bonus_roll_per_10000": second_wing,
-        "dinorant_option_roll_per_10000": dinorant,
         # OpenMU excellent-option MaximumOptionsPerItem = 2.
         "max_excellent_options_per_drop": 2,
         "max_dropped_option_level": max_option_level,
         "review": (
-            "chances and the 2-excellent cap are OpenMU initializer defaults "
-            "pending authentic classic sources; max_dropped_option_level 3 is "
-            "commonly held classic knowledge stated here as policy"),
+            "the three drop-time chances and the 2-excellent cap are OpenMU "
+            "initializer defaults pending authentic classic sources; "
+            "max_dropped_option_level 3 is commonly held classic knowledge "
+            "stated here as policy"),
     }
 
 
@@ -352,6 +350,11 @@ def main():
         "(provenance is the enclosing record's source_version)",
         "option_roll shape is options-owned, drops shape is drops-owned; this "
         "extractor owns the game_config.json envelope/record around them",
+        "second_wing_bonus_roll_per_10000 and dinorant_option_roll_per_10000 "
+        "retired (W-CRAFT): both were consumer-less chaos-machine chances "
+        "shadowing their authoritative homes — the chaos_mixes WingEconomics "
+        "record's luck/excellent chances and the dinorant family facts in the "
+        "craft service; one number, one home",
     ]
     cov = {
         "files": [exp_path, cfg_path],

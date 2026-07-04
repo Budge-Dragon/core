@@ -131,6 +131,7 @@ fn wizard(energy: u16) -> Character {
         "experience": 0,
         "stats": {"kind": "standard", "strength": 40, "agility": 40, "vitality": 40, "energy": energy},
         "unspent_points": 0,
+        "zen": 0,
         "placement": {"position": {"x": 163_840, "y": 229_376}, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
         "vitals": {
             "health": {"current": 400, "max": 400},

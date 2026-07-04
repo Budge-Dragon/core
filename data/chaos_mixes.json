@@ -130,7 +130,7 @@
     },
     {
       "source_version": "s6",
-      "review": "Cape of Lord is the 1.0-era Dark Lord wing but this crafting (Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are OpenMU defaults pending classic sourcing",
+      "review": "Cape of Lord is the 1.0-era Dark Lord wing but this crafting (Monarch's Crest = Loch's Feather +1 recipe) may postdate 1.0; OpenMU's S6 result is Any-of-two, uniform 1/2 (Cape of Lord 13/30 + Cape of Fighter 12/49) — Cape of Fighter is Rage Fighter gear (post-pre-S3 class), era-cut, so this record ships the single Cape of Lord result; value-per-percent 4,000,000/40,000 and luck/excellent 20/20 are OpenMU defaults pending classic sourcing",
       "recipe": {
         "kind": "cape_of_lord",
         "first_wings": [
@@ -218,7 +218,7 @@
     },
     {
       "source_version": "s6",
-      "review": "stat fruits are 1.0-era, data only in S6; the created fruit's stat kind is a weighted services roll (weights are OpenMU defaults, see FRUIT_STAT_WEIGHTS), not data",
+      "review": "stat fruits are 1.0-era, data only in S6; the created fruit's stat kind is a weighted services roll (weights are OpenMU defaults, see FRUIT_LEVEL_WEIGHTS), not data",
       "recipe": {
         "kind": "fruits",
         "catalyst": {

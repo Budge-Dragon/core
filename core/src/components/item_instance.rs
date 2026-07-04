@@ -1,21 +1,24 @@
 //! A rolled item instance — the unique economy asset an item becomes once it
 //! drops: its identity, plus-level, rarity payload, orthogonal normal option,
-//! luck, skill, and durability. Every field type self-validates on parse, so
-//! the aggregate needs no wire mirror of its own; the one cross-*reference*
-//! invariant (excellent set matches the item's category) is re-proven at reload
-//! by [`ItemInstance::reconcile`] once the definition is in hand.
+//! luck, skill, durability, and crafted-augment axis. Every field type
+//! self-validates on parse, so the aggregate needs no wire mirror of its own;
+//! the cross-*reference* invariants (excellent set matches the item's
+//! category, crafted augment matches the item's augment capability) are
+//! re-proven at reload by [`ItemInstance::reconcile`] once the definition is
+//! in hand.
 //!
 //! [`ItemInstance`] is deliberately **not** `Copy`: an item is a unique asset,
 //! and move-only semantics make accidental duplication a compile error rather
 //! than a silent dupe. A rejected operation must therefore hand the item back
 //! through its outcome, never drop it.
 
-use core::num::NonZeroU8;
+use core::num::{NonZeroU8, NonZeroU16};
 
 use serde::{Deserialize, Serialize};
 
 use crate::components::item_options::{
-    AncientBonusLevel, ExcellentArmorOption, ExcellentWeaponOption, NormalOption,
+    AncientBonusLevel, DinorantOption, ExcellentArmorOption, ExcellentWeaponOption, NormalOption,
+    SecondWingBonus,
 };
 use crate::components::item_quality::ItemRarity;
 use crate::components::item_ref::ItemRef;
@@ -46,29 +49,86 @@ pub struct ItemInstance {
     pub skill: SkillRoll,
     /// The wear gauge — `current <= max` proven by [`Durability`].
     pub durability: Durability,
+    /// The chaos-machine crafted-augment axis, orthogonal to `roll`.
+    pub augment: CraftedAugment,
 }
 
 impl ItemInstance {
-    /// Re-proves the one cross-*reference* invariant at the reload boundary: an
-    /// excellent set must match *this item's* excellent category (which lives
-    /// in the definition, not the instance, so no field can hold it). `Normal`
-    /// and `Ancient` rolls carry no set, so the category is irrelevant to them.
-    /// `category` is genuine optionality — the item may have no excellent
-    /// category at all.
+    /// Re-proves the cross-*reference* invariants at the reload boundary: an
+    /// excellent set must match *this item's* excellent category, and a crafted
+    /// augment must match *this item's* augment capability — both live in the
+    /// definition, not the instance, so no field can hold them. `Normal` and
+    /// `Ancient` rolls carry no set, so the category is irrelevant to them;
+    /// [`CraftedAugment::None`] carries no augment, so the slot is irrelevant
+    /// to it. `excellent_category` is genuine optionality — the item may have
+    /// no excellent category at all.
     ///
     /// # Errors
     /// Returns [`ItemInstanceError::ExcellentSetCategoryMismatch`] when the roll
-    /// is excellent and the set's category differs from `category` (or the kind
-    /// has no excellent category).
-    pub fn reconcile(&self, category: Option<ExcellentCat>) -> Result<(), ItemInstanceError> {
+    /// is excellent and the set's category differs from `excellent_category`
+    /// (or the kind has no excellent category), and
+    /// [`ItemInstanceError::AugmentSlotMismatch`] when a carried augment does
+    /// not match `augment_slot`.
+    pub fn reconcile(
+        &self,
+        excellent_category: Option<ExcellentCat>,
+        augment_slot: AugmentSlot,
+    ) -> Result<(), ItemInstanceError> {
         match &self.roll {
-            RarityRoll::Excellent { options } => match category {
-                Some(category) if options.category() == category => Ok(()),
-                Some(_) | None => Err(ItemInstanceError::ExcellentSetCategoryMismatch),
+            RarityRoll::Excellent { options } => match excellent_category {
+                Some(category) if options.category() == category => {}
+                Some(_) | None => return Err(ItemInstanceError::ExcellentSetCategoryMismatch),
             },
-            RarityRoll::Normal | RarityRoll::Ancient { .. } => Ok(()),
+            RarityRoll::Normal | RarityRoll::Ancient { .. } => {}
+        }
+        match (self.augment, augment_slot) {
+            (
+                CraftedAugment::None,
+                AugmentSlot::None | AugmentSlot::Dinorant | AugmentSlot::WingBonus,
+            )
+            | (CraftedAugment::Dinorant { .. }, AugmentSlot::Dinorant)
+            | (CraftedAugment::WingBonus { .. }, AugmentSlot::WingBonus) => Ok(()),
+            (
+                CraftedAugment::Dinorant { .. } | CraftedAugment::WingBonus { .. },
+                AugmentSlot::None | AugmentSlot::Dinorant | AugmentSlot::WingBonus,
+            ) => Err(ItemInstanceError::AugmentSlotMismatch),
         }
     }
+}
+
+/// The chaos-machine crafted-augment axis. One kind-tagged enum, not two
+/// `Option` fields, so "a dinorant option AND a wing bonus on one item" is
+/// unrepresentable — an item is a dinorant XOR a second-wing/cape XOR neither.
+/// Pool membership is the crafting service's fact, not this type's: any of the
+/// four [`SecondWingBonus`] values fits [`Self::WingBonus`]; which values a
+/// wing or the cape draws is enforced by the roll.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CraftedAugment {
+    /// No crafted augment — a variant, never an `Option` flag.
+    None,
+    /// A crafted Dinorant carrying 1–2 distinct dinorant options.
+    Dinorant {
+        /// The rolled dinorant options.
+        options: DinorantOptionSet,
+    },
+    /// A crafted second wing or cape carrying exactly one bonus option.
+    WingBonus {
+        /// The rolled bonus.
+        bonus: SecondWingBonus,
+    },
+}
+
+/// The bare augment-capability discriminator, derived from the item's kind at
+/// the reload boundary — the [`ExcellentCat`] sibling for the augment axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AugmentSlot {
+    /// The kind carries no crafted augment.
+    None,
+    /// The kind carries dinorant options (Horn of Dinorant).
+    Dinorant,
+    /// The kind carries a wing bonus (second wings, Cape of Lord).
+    WingBonus,
 }
 
 /// A rolled normal option: which effect, at which Jewel-of-Life level. Both
@@ -398,6 +458,133 @@ impl core::fmt::Display for ExcellentSetError {
 
 impl core::error::Error for ExcellentSetError {}
 
+/// 1–2 distinct dinorant options as a [`NonZeroU8`] bitmask (bit
+/// `slot_index()-1` set = option present) — the [`ExcellentArmorSet`] precedent
+/// narrowed to three slots with a population cap of two. `NonZero` proves the
+/// set non-empty (zero options is [`CraftedAugment::None`], not this); one bit
+/// per slot forbids duplicates structurally; the parse boundary re-proves
+/// `count <= 2`. Wire form: a slot-index-sorted array of the option names,
+/// re-proven non-empty, duplicate-free, and within the cap on parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<DinorantOption>", into = "Vec<DinorantOption>")]
+pub struct DinorantOptionSet(NonZeroU8);
+
+impl DinorantOptionSet {
+    /// The three dinorant options in slot-index order — the draw pool and the
+    /// decode order.
+    pub const OPTIONS: [DinorantOption; 3] = [
+        DinorantOption::DamageAbsorb,
+        DinorantOption::MaxAbility,
+        DinorantOption::AttackSpeed,
+    ];
+
+    /// The population cap a crafted set never exceeds.
+    pub const MAX_OPTIONS: u8 = 2;
+
+    /// Builds the set from a guaranteed first option plus any extras — total,
+    /// since the first option's bit proves the mask nonzero (the roll path,
+    /// infallible by construction).
+    #[must_use]
+    pub fn with_first(
+        first: DinorantOption,
+        rest: impl IntoIterator<Item = DinorantOption>,
+    ) -> Self {
+        let mut mask = slot_bit(first.slot_index());
+        for option in rest {
+            mask |= slot_bit(option.slot_index());
+        }
+        Self(mask)
+    }
+
+    /// Builds the set from an iterator of options, OR-ing each slot bit. The
+    /// reload/parse constructor.
+    ///
+    /// # Errors
+    /// Returns [`DinorantOptionSetError::Empty`] when no option is given.
+    pub fn from_options(
+        options: impl IntoIterator<Item = DinorantOption>,
+    ) -> Result<Self, DinorantOptionSetError> {
+        let mut mask = 0u8;
+        for option in options {
+            mask |= slot_bit(option.slot_index()).get();
+        }
+        match NonZeroU8::new(mask) {
+            Some(mask) => Ok(Self(mask)),
+            None => Err(DinorantOptionSetError::Empty),
+        }
+    }
+
+    /// The present options in slot-index ascending order.
+    pub fn iter(self) -> impl Iterator<Item = DinorantOption> {
+        let mask = self.0.get();
+        Self::OPTIONS
+            .into_iter()
+            .filter(move |option| mask & slot_bit(option.slot_index()).get() != 0)
+    }
+
+    /// The number of present options — `1..=2` for any parsed or crafted set.
+    #[must_use]
+    pub fn count(self) -> u8 {
+        let mask = self.0.get();
+        let mut count = 0u8;
+        for option in Self::OPTIONS {
+            if mask & slot_bit(option.slot_index()).get() != 0 {
+                count = count.saturating_add(1);
+            }
+        }
+        count
+    }
+}
+
+impl TryFrom<Vec<DinorantOption>> for DinorantOptionSet {
+    type Error = DinorantOptionSetError;
+
+    fn try_from(options: Vec<DinorantOption>) -> Result<Self, Self::Error> {
+        let given = options.len();
+        let set = Self::from_options(options)?;
+        if usize::from(set.count()) != given {
+            return Err(DinorantOptionSetError::Duplicate);
+        }
+        if set.count() > Self::MAX_OPTIONS {
+            return Err(DinorantOptionSetError::TooMany);
+        }
+        Ok(set)
+    }
+}
+
+impl From<DinorantOptionSet> for Vec<DinorantOption> {
+    fn from(set: DinorantOptionSet) -> Self {
+        set.iter().collect()
+    }
+}
+
+/// Rejection of a malformed dinorant-option wire array at the parse boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DinorantOptionSetError {
+    /// The array was empty — an absent augment is [`CraftedAugment::None`].
+    Empty,
+    /// The array carried the same option twice.
+    Duplicate,
+    /// The array carried more options than the crafted cap of two.
+    TooMany,
+}
+
+impl core::fmt::Display for DinorantOptionSetError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "a dinorant option set must have at least one option"),
+            Self::Duplicate => write!(f, "a dinorant option set lists an option more than once"),
+            Self::TooMany => write!(
+                f,
+                "a dinorant option set carries at most {} options",
+                DinorantOptionSet::MAX_OPTIONS
+            ),
+        }
+    }
+}
+
+impl core::error::Error for DinorantOptionSetError {}
+
 /// Wire mirror of [`Durability`]; `current <= max` is re-proven on the way in,
 /// since a persisted value loaded from a host is untrusted.
 #[derive(Serialize, Deserialize)]
@@ -446,6 +633,27 @@ impl Durability {
     pub const fn max(self) -> u8 {
         self.max
     }
+
+    /// Rescales the gauge onto a new maximum, preserving the worn fraction:
+    /// `new_max * current / old_max`, integer floor. Total by construction:
+    /// `current <= max` bounds the quotient by `new_max`, so the result is a
+    /// valid gauge on every path, and the zero-max gauge (`0/0`, trivially
+    /// full) rescales to full.
+    #[must_use]
+    pub fn rescaled(self, new_max: u8) -> Self {
+        let Some(old_max) = NonZeroU16::new(u16::from(self.max)) else {
+            return Self::full(new_max);
+        };
+        let scaled = u16::from(new_max).saturating_mul(u16::from(self.current)) / old_max;
+        // The saturating narrow of a quotient bounded by `new_max` — saturating
+        // to the bound itself keeps `current <= max` structural, never a masked
+        // lookup absence.
+        let current = u8::try_from(scaled).unwrap_or(new_max);
+        Self {
+            current,
+            max: new_max,
+        }
+    }
 }
 
 impl TryFrom<DurabilityWire> for Durability {
@@ -490,15 +698,18 @@ impl core::fmt::Display for DurabilityError {
 
 impl core::error::Error for DurabilityError {}
 
-/// Rejection of an item instance whose excellent set does not match its item's
-/// excellent category, checked at the reload boundary. The intra-instance
-/// invariants (durability, set shape, level bounds) are re-proven by each
-/// field's own deserialize, so this holds only the residual cross-reference.
+/// Rejection of an item instance whose excellent set or crafted augment does
+/// not match its item's capabilities, checked at the reload boundary. The
+/// intra-instance invariants (durability, set shape, level bounds) are
+/// re-proven by each field's own deserialize, so this holds only the residual
+/// cross-references.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemInstanceError {
     /// The excellent set's category differs from the item's, or the item has no
     /// excellent category at all.
     ExcellentSetCategoryMismatch,
+    /// The carried crafted augment differs from the item's augment capability.
+    AugmentSlotMismatch,
 }
 
 impl core::fmt::Display for ItemInstanceError {
@@ -508,6 +719,12 @@ impl core::fmt::Display for ItemInstanceError {
                 write!(
                     f,
                     "excellent set does not match the item's excellent category"
+                )
+            }
+            Self::AugmentSlotMismatch => {
+                write!(
+                    f,
+                    "crafted augment does not match the item's augment capability"
                 )
             }
         }
@@ -536,6 +753,7 @@ mod tests {
             luck: LuckRoll::Plain,
             skill: SkillRoll::NoSkill,
             durability: Durability::full(30),
+            augment: CraftedAugment::None,
         }
     }
 
@@ -552,6 +770,32 @@ mod tests {
         assert_eq!(full.current(), 30);
         assert_eq!(full.max(), 30);
         assert_eq!(Durability::new(0, 0).unwrap().max(), 0);
+    }
+
+    #[test]
+    fn durability_rescale_floors_the_worn_fraction() {
+        // Shrinking: 20 * 22 / 30 = 14.67 floors to 14.
+        let gauge = Durability::new(22, 30).unwrap();
+        assert_eq!(gauge.rescaled(20), Durability::new(14, 20).unwrap());
+        // Widening: 30 * 15 / 20 = 22.5 floors to 22.
+        let gauge = Durability::new(15, 20).unwrap();
+        assert_eq!(gauge.rescaled(30), Durability::new(22, 30).unwrap());
+    }
+
+    #[test]
+    fn durability_rescale_keeps_full_full_and_empty_empty() {
+        assert_eq!(Durability::full(30).rescaled(41), Durability::full(41));
+        let empty = Durability::new(0, 30).unwrap();
+        assert_eq!(empty.rescaled(41), Durability::new(0, 41).unwrap());
+    }
+
+    #[test]
+    fn durability_rescale_folds_the_zero_max_gauge_to_full() {
+        // A 0/0 gauge is trivially full, so it rescales to full.
+        let gauge = Durability::new(0, 0).unwrap();
+        assert_eq!(gauge.rescaled(25), Durability::full(25));
+        // Rescaling onto a zero maximum lands on the 0/0 gauge.
+        assert_eq!(Durability::full(30).rescaled(0), Durability::full(0));
     }
 
     #[test]
@@ -674,13 +918,16 @@ mod tests {
                 options: armor_set(&[ExcellentArmorOption::ZenGain]),
             },
         };
-        assert_eq!(instance.reconcile(Some(ExcellentCat::Armor)), Ok(()));
         assert_eq!(
-            instance.reconcile(Some(ExcellentCat::Weapon)),
+            instance.reconcile(Some(ExcellentCat::Armor), AugmentSlot::None),
+            Ok(())
+        );
+        assert_eq!(
+            instance.reconcile(Some(ExcellentCat::Weapon), AugmentSlot::None),
             Err(ItemInstanceError::ExcellentSetCategoryMismatch)
         );
         assert_eq!(
-            instance.reconcile(None),
+            instance.reconcile(None, AugmentSlot::None),
             Err(ItemInstanceError::ExcellentSetCategoryMismatch)
         );
     }
@@ -688,13 +935,141 @@ mod tests {
     #[test]
     fn reconcile_ignores_category_for_normal_and_ancient() {
         let normal = normal_instance();
-        assert_eq!(normal.reconcile(None), Ok(()));
-        assert_eq!(normal.reconcile(Some(ExcellentCat::Weapon)), Ok(()));
+        assert_eq!(normal.reconcile(None, AugmentSlot::None), Ok(()));
+        assert_eq!(
+            normal.reconcile(Some(ExcellentCat::Weapon), AugmentSlot::None),
+            Ok(())
+        );
         let mut ancient = normal_instance();
         ancient.roll = RarityRoll::Ancient {
             bonus: AncientBonusLevel::Two,
         };
-        assert_eq!(ancient.reconcile(None), Ok(()));
+        assert_eq!(ancient.reconcile(None, AugmentSlot::None), Ok(()));
+    }
+
+    #[test]
+    fn reconcile_matches_augment_slot_and_rejects_mismatch() {
+        let mut dinorant = normal_instance();
+        dinorant.augment = CraftedAugment::Dinorant {
+            options: DinorantOptionSet::with_first(DinorantOption::DamageAbsorb, []),
+        };
+        assert_eq!(dinorant.reconcile(None, AugmentSlot::Dinorant), Ok(()));
+        assert_eq!(
+            dinorant.reconcile(None, AugmentSlot::None),
+            Err(ItemInstanceError::AugmentSlotMismatch)
+        );
+        assert_eq!(
+            dinorant.reconcile(None, AugmentSlot::WingBonus),
+            Err(ItemInstanceError::AugmentSlotMismatch)
+        );
+
+        let mut wing = normal_instance();
+        wing.augment = CraftedAugment::WingBonus {
+            bonus: SecondWingBonus::Command,
+        };
+        assert_eq!(wing.reconcile(None, AugmentSlot::WingBonus), Ok(()));
+        assert_eq!(
+            wing.reconcile(None, AugmentSlot::Dinorant),
+            Err(ItemInstanceError::AugmentSlotMismatch)
+        );
+    }
+
+    #[test]
+    fn reconcile_accepts_no_augment_on_any_slot() {
+        let bare = normal_instance();
+        assert_eq!(bare.reconcile(None, AugmentSlot::None), Ok(()));
+        assert_eq!(bare.reconcile(None, AugmentSlot::Dinorant), Ok(()));
+        assert_eq!(bare.reconcile(None, AugmentSlot::WingBonus), Ok(()));
+    }
+
+    #[test]
+    fn dinorant_set_iterates_in_slot_order_and_counts() {
+        let set = DinorantOptionSet::with_first(
+            DinorantOption::AttackSpeed,
+            [DinorantOption::DamageAbsorb],
+        );
+        assert_eq!(set.count(), 2);
+        assert_eq!(
+            set.iter().collect::<Vec<_>>(),
+            vec![DinorantOption::DamageAbsorb, DinorantOption::AttackSpeed]
+        );
+        let single = DinorantOptionSet::with_first(DinorantOption::MaxAbility, []);
+        assert_eq!(single.count(), 1);
+    }
+
+    #[test]
+    fn dinorant_set_wire_rejects_empty_duplicate_and_too_many() {
+        assert!(serde_json::from_str::<DinorantOptionSet>("[]").is_err());
+        assert!(
+            serde_json::from_str::<DinorantOptionSet>(r#"["max_ability","max_ability"]"#).is_err()
+        );
+        assert!(
+            serde_json::from_str::<DinorantOptionSet>(
+                r#"["damage_absorb","max_ability","attack_speed"]"#
+            )
+            .is_err()
+        );
+        assert_eq!(
+            DinorantOptionSet::try_from(vec![
+                DinorantOption::DamageAbsorb,
+                DinorantOption::MaxAbility,
+                DinorantOption::AttackSpeed,
+            ]),
+            Err(DinorantOptionSetError::TooMany)
+        );
+    }
+
+    #[test]
+    fn dinorant_set_wire_is_a_slot_sorted_name_array() {
+        let set = DinorantOptionSet::with_first(
+            DinorantOption::AttackSpeed,
+            [DinorantOption::DamageAbsorb],
+        );
+        let json = serde_json::to_string(&set).unwrap();
+        assert_eq!(json, r#"["damage_absorb","attack_speed"]"#);
+        assert_eq!(
+            serde_json::from_str::<DinorantOptionSet>(&json).unwrap(),
+            set
+        );
+    }
+
+    #[test]
+    fn crafted_augment_wire_round_trips_every_kind() {
+        let none = CraftedAugment::None;
+        assert_eq!(serde_json::to_string(&none).unwrap(), r#"{"kind":"none"}"#);
+        let dinorant = CraftedAugment::Dinorant {
+            options: DinorantOptionSet::with_first(
+                DinorantOption::DamageAbsorb,
+                [DinorantOption::AttackSpeed],
+            ),
+        };
+        let dinorant_json = serde_json::to_string(&dinorant).unwrap();
+        assert_eq!(
+            dinorant_json,
+            r#"{"kind":"dinorant","options":["damage_absorb","attack_speed"]}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<CraftedAugment>(&dinorant_json).unwrap(),
+            dinorant
+        );
+        let wing = CraftedAugment::WingBonus {
+            bonus: SecondWingBonus::Command,
+        };
+        let wing_json = serde_json::to_string(&wing).unwrap();
+        assert_eq!(wing_json, r#"{"kind":"wing_bonus","bonus":"command"}"#);
+        assert_eq!(
+            serde_json::from_str::<CraftedAugment>(&wing_json).unwrap(),
+            wing
+        );
+    }
+
+    #[test]
+    fn augment_is_a_required_instance_field() {
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&normal_instance()).unwrap()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("augment");
+        assert!(serde_json::from_value::<ItemInstance>(value).is_err());
     }
 
     #[test]
@@ -703,8 +1078,21 @@ mod tests {
         let json = serde_json::to_string(&instance).unwrap();
         assert_eq!(
             json,
-            r#"{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30}}"#
+            r#"{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}}"#
         );
+        assert_eq!(
+            serde_json::from_str::<ItemInstance>(&json).unwrap(),
+            instance
+        );
+    }
+
+    #[test]
+    fn augmented_instance_wire_round_trips() {
+        let mut instance = normal_instance();
+        instance.augment = CraftedAugment::Dinorant {
+            options: DinorantOptionSet::with_first(DinorantOption::MaxAbility, []),
+        };
+        let json = serde_json::to_string(&instance).unwrap();
         assert_eq!(
             serde_json::from_str::<ItemInstance>(&json).unwrap(),
             instance

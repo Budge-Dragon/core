@@ -43,7 +43,7 @@ pub struct ItemDefinition {
 }
 
 /// NPC pricing, kind-tagged.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ItemPrice {
     /// Fixed zen worth (consumables, scrolls, orbs, jewels).
@@ -51,10 +51,82 @@ pub enum ItemPrice {
         /// The fixed NPC value.
         zen: Zen,
     },
+    /// Priced per instance item level by a classic per-level table
+    /// (mix materials, event tickets).
+    PerLevel {
+        /// The per-level price table, clamped to its last entry.
+        zen_by_level: PerLevelPrice,
+    },
     /// Computed from drop level plus item level by the classic price formula
     /// (services rule).
     Formula,
 }
+
+/// A per-level price table in the classic held-apart-last shape: `last` is
+/// proven present at parse, so [`PerLevelPrice::at`] past the leading run is
+/// total by construction — no runtime indexing, no lookup-shaped fallback.
+/// Wire form: a non-empty JSON array of zen values in item-level order
+/// (level 0 first); an empty array is a parse error.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<Zen>", into = "Vec<Zen>")]
+pub struct PerLevelPrice {
+    leading: Vec<Zen>,
+    last: Zen,
+}
+
+impl PerLevelPrice {
+    /// The price at an instance item level — total: walks `leading` to the
+    /// 0-based level and saturates to `last` past it.
+    #[must_use]
+    pub fn at(&self, level: ItemLevel) -> Zen {
+        let target = usize::from(u8::from(level));
+        let mut position = 0usize;
+        for &zen in &self.leading {
+            if position == target {
+                return zen;
+            }
+            position = position.saturating_add(1);
+        }
+        self.last
+    }
+}
+
+impl TryFrom<Vec<Zen>> for PerLevelPrice {
+    type Error = PerLevelPriceError;
+
+    fn try_from(mut rows: Vec<Zen>) -> Result<Self, Self::Error> {
+        let last = rows.pop().ok_or(PerLevelPriceError::Empty)?;
+        Ok(Self {
+            leading: rows,
+            last,
+        })
+    }
+}
+
+impl From<PerLevelPrice> for Vec<Zen> {
+    fn from(table: PerLevelPrice) -> Self {
+        let mut rows = table.leading;
+        rows.push(table.last);
+        rows
+    }
+}
+
+/// Parse failure: a per-level price table with no entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerLevelPriceError {
+    /// The wire array was empty — every table carries at least one price.
+    Empty,
+}
+
+impl core::fmt::Display for PerLevelPriceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "a per-level price table must have at least one entry"),
+        }
+    }
+}
+
+impl core::error::Error for PerLevelPriceError {}
 
 /// What an item is. Closed pre-S3 set derived from the shipped records. Each
 /// variant carries exactly the columns its family has in Item.txt.
@@ -316,6 +388,41 @@ pub enum ItemKind {
     StatFruit,
 }
 
+impl ItemKind {
+    /// The weapon-skill column of the kind, when its family carries one.
+    /// Total over every variant: a family without the column is `None`.
+    #[must_use]
+    pub fn skill(&self) -> Option<SkillNumber> {
+        match self {
+            Self::Weapon { skill, .. }
+            | Self::Bow { skill, .. }
+            | Self::Crossbow { skill, .. }
+            | Self::Staff { skill, .. }
+            | Self::Shield { skill, .. }
+            | Self::Pet { skill, .. } => *skill,
+            Self::Arrows { .. }
+            | Self::Bolts { .. }
+            | Self::Helm { .. }
+            | Self::BodyArmor { .. }
+            | Self::Pants { .. }
+            | Self::Gloves { .. }
+            | Self::Boots { .. }
+            | Self::Wings { .. }
+            | Self::Ring { .. }
+            | Self::Pendant { .. }
+            | Self::TransformationRing { .. }
+            | Self::Orb { .. }
+            | Self::SkillScroll { .. }
+            | Self::Jewel { .. }
+            | Self::Consumable { .. }
+            | Self::LuckyBox
+            | Self::EventTicket { .. }
+            | Self::MixMaterial
+            | Self::StatFruit => None,
+        }
+    }
+}
+
 /// How a melee weapon is wielded. One-handed melee wields in either hand and
 /// is dual-wield eligible; two-handed occupies the weapon hand alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -525,3 +632,59 @@ impl core::fmt::Display for TransformationSkinsError {
 }
 
 impl core::error::Error for TransformationSkinsError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn table(rows: &[u64]) -> PerLevelPrice {
+        PerLevelPrice::try_from(rows.iter().copied().map(Zen).collect::<Vec<_>>()).unwrap()
+    }
+
+    fn level(value: u8) -> ItemLevel {
+        ItemLevel::new(value).unwrap()
+    }
+
+    #[test]
+    fn per_level_price_reads_each_leading_row_and_saturates_to_last() {
+        // Loch's Feather: level 0 -> 180000, level >= 1 -> 7500000.
+        let feather = table(&[180_000, 7_500_000]);
+        assert_eq!(feather.at(ItemLevel::ZERO), Zen(180_000));
+        assert_eq!(feather.at(level(1)), Zen(7_500_000));
+        assert_eq!(feather.at(level(15)), Zen(7_500_000));
+
+        let invitation = table(&[60_000, 60_000, 84_000, 120_000, 180_000]);
+        assert_eq!(invitation.at(level(2)), Zen(84_000));
+        assert_eq!(invitation.at(level(4)), Zen(180_000));
+        assert_eq!(invitation.at(level(9)), Zen(180_000));
+    }
+
+    #[test]
+    fn per_level_price_with_one_row_is_that_row_everywhere() {
+        let flat = table(&[42]);
+        assert_eq!(flat.at(ItemLevel::ZERO), Zen(42));
+        assert_eq!(flat.at(level(15)), Zen(42));
+    }
+
+    #[test]
+    fn per_level_price_rejects_an_empty_table() {
+        assert_eq!(
+            PerLevelPrice::try_from(Vec::new()),
+            Err(PerLevelPriceError::Empty)
+        );
+        assert!(serde_json::from_str::<PerLevelPrice>("[]").is_err());
+    }
+
+    #[test]
+    fn per_level_price_wire_round_trips_as_a_plain_array() {
+        let price = ItemPrice::PerLevel {
+            zen_by_level: table(&[180_000, 7_500_000]),
+        };
+        let json = serde_json::to_string(&price).unwrap();
+        assert_eq!(
+            json,
+            r#"{"kind":"per_level","zen_by_level":[180000,7500000]}"#
+        );
+        assert_eq!(serde_json::from_str::<ItemPrice>(&json).unwrap(), price);
+    }
+}

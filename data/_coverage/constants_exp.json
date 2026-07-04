@@ -12,7 +12,7 @@
     "exp_tables[075]": "curve and 400 cap applied to every era per decision 6 - OpenMU flattens one curve onto 0.75/0.95d whose historical caps were lower; accepted as shipped data",
     "game_config[075].review": "exp_jitter_percent: OpenMU uniform-jitter mechanism and 0.8-1.2 values, no classic corroboration - pending classic GS verification; personal_store: ~1.0-era feature, curated backport per decision 1",
     "game_config[075].drops.review": "all rates are OpenMU defaults (categories 0.5/0.3/0.001/0.0001 from GameConfigurationInitializerBase; skill 50% from DefaultDropGenerator) - authentic model is per-monster ItemRate/MoneyRate (Monster.txt) x global ItemDropRate/ZenDropRate (CommonServer.cfg); replace when classic sources land",
-    "game_config[075].option_roll.review": "chances and the 2-excellent cap are OpenMU initializer defaults pending authentic classic sources; max_dropped_option_level 3 is commonly held classic knowledge stated here as policy"
+    "game_config[075].option_roll.review": "the three drop-time chances and the 2-excellent cap are OpenMU initializer defaults pending authentic classic sources; max_dropped_option_level 3 is commonly held classic knowledge stated here as policy"
   },
   "gaps": {
     "exp_tables.formula": "v1 formula string killed; curve content is the ExpTable doc comment, table stays authoritative",
@@ -38,6 +38,7 @@
     "tick_duration_ms 100 is a mu-core decision (4), not an OpenMU value",
     "zen_caps 2000000000 override decision 7; OpenMU source has int.MaxValue",
     "nested drops/option_roll sections carry review only, no source_version (provenance is the enclosing record's source_version)",
-    "option_roll shape is options-owned, drops shape is drops-owned; this extractor owns the game_config.json envelope/record around them"
+    "option_roll shape is options-owned, drops shape is drops-owned; this extractor owns the game_config.json envelope/record around them",
+    "second_wing_bonus_roll_per_10000 and dinorant_option_roll_per_10000 retired (W-CRAFT): both were consumer-less chaos-machine chances shadowing their authoritative homes — the chaos_mixes WingEconomics record's luck/excellent chances and the dinorant family facts in the craft service; one number, one home"
   ]
 }
