@@ -284,7 +284,7 @@
   },
   "gaps": [
     "Devil Square wave spawns (28 rows on map 9) omitted from spawns.json -> W-DS event configs; residue (four square rectangles, per-wave participant monster numbers, boss) recorded in the monsters_spawns v2 section, flagged as OpenMU 0.95d tuning to re-source under W-SRC",
-    "merchant store contents deferred (merchant_stores.json, follow-up wave); merchant NPCs here carry only role/window",
+    "merchant NPCs here carry only role/window; store contents ship separately in npc_shops.json (tools/extract/shops.py)",
     "quests startable at NPCs (Sevina #235, window=quest) deferred to quests.json (follow-up wave)",
     "MP / MagicDefense Monster.txt columns: OpenMU never modeled them, so no values ship; they enter MonsterCombat when an authentic Monster.txt source is wired in (W-SRC), never as fabricated zeros",
     "no s6 monster backports this wave: none in the approved source list; known 1.0-era candidates (Blood Castle mobs, Archangel Messenger NPC, higher golden-invasion tiers) left out by that decision",

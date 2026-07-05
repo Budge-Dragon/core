@@ -573,8 +573,8 @@ def main():
             "-> W-DS event configs; residue (four square rectangles, per-wave "
             "participant monster numbers, boss) recorded in the monsters_spawns v2 "
             "section, flagged as OpenMU 0.95d tuning to re-source under W-SRC",
-            "merchant store contents deferred (merchant_stores.json, follow-up "
-            "wave); merchant NPCs here carry only role/window",
+            "merchant NPCs here carry only role/window; store contents ship "
+            "separately in npc_shops.json (tools/extract/shops.py)",
             "quests startable at NPCs (Sevina #235, window=quest) deferred to "
             "quests.json (follow-up wave)",
             "MP / MagicDefense Monster.txt columns: OpenMU never modeled them, so "

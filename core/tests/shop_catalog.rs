@@ -1,4 +1,4 @@
-//! W-SHOP shelf-catalog contract, proven against the real regenerated `/data`.
+//! Shelf-catalog contract, proven against the real regenerated `/data`.
 //!
 //! The Atlas resolves all eleven era merchants' shelves with every entry
 //! joined to its item definition at parse, the 8×15 grid re-proven with zero

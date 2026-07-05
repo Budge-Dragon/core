@@ -1,4 +1,4 @@
-//! W-SHOP end-to-end flows over the real regenerated `/data`: buy (new-item,
+//! End-to-end shop flows over the real regenerated `/data`: buy (new-item,
 //! whole-stack merge, every failure, the space-before-zen order), sell
 //! (destroy-by-value, zero-price success, wallet-full keeps the item), repair
 //! (equipped and stored, the kind gate, the site multipliers, the broken

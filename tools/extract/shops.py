@@ -12,7 +12,8 @@ durability and links luck / a leveled normal option / skill flags.
 
 One record per merchant NPC number, provenance envelope (source_version "075"),
 entries carrying: shelf slot (the classic row*8+col byte), ItemRef, level
-(EnhanceLevel, 0..11), and a kind-tagged stock (the W-SHOP ShelfStock wire):
+(EnhanceLevel, 0..11), and a kind-tagged stock (the ShelfStock wire contract
+in core):
   gear   - wearable: luck/skill rolls + optional pre-applied normal option
   stack  - stackable consumable pack (potions/apple/antidote x1|x3)
   quiver - ammunition: one purchase = one full 255 quiver, NO stack field (K2)
