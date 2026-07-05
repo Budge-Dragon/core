@@ -16,7 +16,7 @@ use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
 use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::interval::Interval;
-use mu_core::components::inventory::{Cell, PlacementRejection};
+use mu_core::components::inventory::{Cell, Footprint, PlacementRejection};
 use mu_core::components::item_instance::{
     CraftedAugment, DinorantOptionSet, Durability, ExcellentArmorSet, ExcellentOptions,
     ExcellentWeaponSet, ItemInstance, LuckRoll, RarityRoll, RolledNormalOption, SkillRoll,
@@ -35,11 +35,13 @@ use mu_core::components::spatial::{
     ConeHalfWidth, Facing, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
 use mu_core::components::tile::TileCoord;
+use mu_core::components::trade_window::{Side, TradeWindow};
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
 use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::item_definitions::{ItemPrice, PerLevelPrice};
 use mu_core::data::special_drops::SpecialDrop;
 use mu_core::entities::character::Character;
+use mu_core::entities::trade_session::{TradeLocks, TradeOffer, TradeOffers, TradeSession};
 use mu_core::entities::world_item::WorldItem;
 use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
@@ -58,7 +60,12 @@ use mu_core::events::shop::{
 };
 use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
+use mu_core::events::trade::{
+    BouncedProof, CancelReason, OfferOutcome, RearrangeOutcome, RequestRejection, SideFailure,
+    TradeEvent, UnlockOutcome, WithdrawOutcome, ZenOfferOutcome,
+};
 use mu_core::services::inventory::ZenPickupOutcome;
+use mu_core::services::trade::{AcceptOutcome, LockResult, RequestOutcome, TradeAvailability};
 
 /// The canonical mobile-entity placement reused by every event that nests one.
 /// Position is the centre of tile (2, 3); facing east; grounded; map 0.
@@ -1427,4 +1434,306 @@ fn mobility_every_kind_tag_is_pinned() {
             Some(expected)
         );
     }
+}
+
+// -- Player-trade wire pins. -----------------------------------------------------
+
+#[test]
+fn trade_session_wire_is_pinned_with_windows_and_escrow_as_bare_integers() {
+    assert_eq!(
+        serde_json::to_string(&TradeSession::Requested).unwrap(),
+        r#"{"kind":"requested"}"#
+    );
+    let session = TradeSession::Open {
+        offers: TradeOffers::empty().with(
+            Side::Requester,
+            TradeOffer::empty()
+                .with_window(
+                    TradeWindow::empty()
+                        .place(
+                            Cell { row: 0, col: 0 },
+                            Footprint::new(1, 1).unwrap(),
+                            normal_instance(),
+                        )
+                        .unwrap(),
+                )
+                .with_escrow_zen(Zen(400_000)),
+        ),
+        locks: TradeLocks::NeitherLocked,
+    };
+    assert_eq!(
+        serde_json::to_string(&session).unwrap(),
+        concat!(
+            r#"{"kind":"open","offers":{"requester":{"window":{"rows":4,"cols":8,"placed":"#,
+            r#"[{"anchor":{"row":0,"col":0},"footprint":{"width":1,"height":1},"item":"#,
+            r#"{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"#,
+            r#""luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}}}]},"#,
+            r#""escrow_zen":400000},"partner":{"window":{"rows":4,"cols":8,"placed":[]},"escrow_zen":0}},"#,
+            r#""locks":{"kind":"neither_locked"}}"#,
+        )
+    );
+    // The escrowed instance survives the wire unchanged — no augment or
+    // durability drift across escrow.
+    let reparsed: TradeSession =
+        serde_json::from_str(&serde_json::to_string(&session).unwrap()).unwrap();
+    let TradeSession::Open { offers, .. } = reparsed else {
+        panic!("still open");
+    };
+    let placed = offers.get(Side::Requester).window().placed();
+    assert_eq!(placed.first().unwrap().item, normal_instance());
+}
+
+#[test]
+fn trade_locks_and_bounced_proof_wire_pins() {
+    assert_eq!(
+        serde_json::to_string(&TradeLocks::NeitherLocked).unwrap(),
+        r#"{"kind":"neither_locked"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&TradeLocks::OneLocked {
+            side: Side::Requester
+        })
+        .unwrap(),
+        r#"{"kind":"one_locked","side":"requester"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&BouncedProof::Both {
+            requester: SideFailure::ItemsDoNotFit,
+            partner: SideFailure::WalletWouldOverflow,
+        })
+        .unwrap(),
+        r#"{"kind":"both","requester":"items_do_not_fit","partner":"wallet_would_overflow"}"#
+    );
+}
+
+#[test]
+fn trade_outcome_every_kind_tag_is_pinned() {
+    let at = Cell { row: 0, col: 0 };
+    for (value, expected) in [
+        (
+            serde_json::to_value(OfferOutcome::Offered { at }).unwrap(),
+            "offered",
+        ),
+        (
+            serde_json::to_value(OfferOutcome::NotOpen).unwrap(),
+            "not_open",
+        ),
+        (
+            serde_json::to_value(OfferOutcome::SideLocked).unwrap(),
+            "side_locked",
+        ),
+        (
+            serde_json::to_value(OfferOutcome::NoItemAtSource).unwrap(),
+            "no_item_at_source",
+        ),
+        (
+            serde_json::to_value(OfferOutcome::WindowCellsOccupied).unwrap(),
+            "window_cells_occupied",
+        ),
+        (
+            serde_json::to_value(OfferOutcome::WindowOutOfBounds).unwrap(),
+            "window_out_of_bounds",
+        ),
+        (
+            serde_json::to_value(WithdrawOutcome::Withdrawn { at }).unwrap(),
+            "withdrawn",
+        ),
+        (
+            serde_json::to_value(WithdrawOutcome::NoItemAtWindowCell).unwrap(),
+            "no_item_at_window_cell",
+        ),
+        (
+            serde_json::to_value(WithdrawOutcome::InventoryFull).unwrap(),
+            "inventory_full",
+        ),
+        (
+            serde_json::to_value(ZenOfferOutcome::Offered {
+                escrowed: Zen(1),
+                wallet: CarriedZen::new(0).unwrap(),
+            })
+            .unwrap(),
+            "offered",
+        ),
+        (
+            serde_json::to_value(ZenOfferOutcome::Unaffordable {
+                wallet: CarriedZen::new(0).unwrap(),
+            })
+            .unwrap(),
+            "unaffordable",
+        ),
+        (
+            serde_json::to_value(ZenOfferOutcome::WalletFull).unwrap(),
+            "wallet_full",
+        ),
+        (
+            serde_json::to_value(RearrangeOutcome::Rearranged { from: at, to: at }).unwrap(),
+            "rearranged",
+        ),
+        (
+            serde_json::to_value(UnlockOutcome::Unlocked).unwrap(),
+            "unlocked",
+        ),
+        (
+            serde_json::to_value(UnlockOutcome::AlreadyUnlocked).unwrap(),
+            "already_unlocked",
+        ),
+    ] {
+        assert_eq!(kind_tag(&value), Some(expected));
+    }
+}
+
+#[test]
+fn trade_session_outcome_every_kind_tag_is_pinned() {
+    for (value, expected) in [
+        (
+            serde_json::to_value(RequestOutcome::Opened {
+                session: TradeSession::Requested,
+            })
+            .unwrap(),
+            "opened",
+        ),
+        (
+            serde_json::to_value(RequestOutcome::Rejected {
+                reason: RequestRejection::SelfTrade,
+            })
+            .unwrap(),
+            "rejected",
+        ),
+        (
+            serde_json::to_value(AcceptOutcome::Accepted {
+                session: TradeSession::opened(),
+            })
+            .unwrap(),
+            "accepted",
+        ),
+        (
+            serde_json::to_value(AcceptOutcome::WrongSide {
+                session: TradeSession::Requested,
+            })
+            .unwrap(),
+            "wrong_side",
+        ),
+        (
+            serde_json::to_value(AcceptOutcome::NotRequested {
+                session: TradeSession::opened(),
+            })
+            .unwrap(),
+            "not_requested",
+        ),
+        (
+            serde_json::to_value(LockResult::Locked {
+                session: TradeSession::opened(),
+            })
+            .unwrap(),
+            "locked",
+        ),
+        (
+            serde_json::to_value(LockResult::AlreadyLocked {
+                session: TradeSession::opened(),
+            })
+            .unwrap(),
+            "already_locked",
+        ),
+        (
+            serde_json::to_value(LockResult::Bounced {
+                session: TradeSession::opened(),
+                proof: BouncedProof::Requester {
+                    failure: SideFailure::ItemsAndWallet,
+                },
+            })
+            .unwrap(),
+            "bounced",
+        ),
+        (
+            serde_json::to_value(LockResult::Completed).unwrap(),
+            "completed",
+        ),
+        (
+            serde_json::to_value(TradeAvailability::SameCharacter).unwrap(),
+            "same_character",
+        ),
+        (
+            serde_json::to_value(TradeAvailability::Busy).unwrap(),
+            "busy",
+        ),
+        (
+            serde_json::to_value(TradeAvailability::Dead).unwrap(),
+            "dead",
+        ),
+    ] {
+        assert_eq!(kind_tag(&value), Some(expected));
+    }
+}
+
+#[test]
+fn trade_event_every_kind_tag_is_pinned() {
+    let at = Cell { row: 1, col: 2 };
+    for (event, expected) in [
+        (TradeEvent::Opened, "opened"),
+        (TradeEvent::Accepted, "accepted"),
+        (
+            TradeEvent::ItemOffered {
+                by: Side::Requester,
+                at,
+            },
+            "item_offered",
+        ),
+        (
+            TradeEvent::ItemWithdrawn {
+                by: Side::Partner,
+                at,
+            },
+            "item_withdrawn",
+        ),
+        (
+            TradeEvent::ItemRearranged {
+                by: Side::Requester,
+                from: at,
+                to: at,
+            },
+            "item_rearranged",
+        ),
+        (
+            TradeEvent::ZenOffered {
+                by: Side::Partner,
+                amount: Zen(9),
+            },
+            "zen_offered",
+        ),
+        (
+            TradeEvent::Locked {
+                by: Side::Requester,
+            },
+            "locked",
+        ),
+        (
+            TradeEvent::Unlocked {
+                by: Side::Requester,
+            },
+            "unlocked",
+        ),
+        (
+            TradeEvent::DealChanged { by: Side::Partner },
+            "deal_changed",
+        ),
+        (TradeEvent::Completed, "completed"),
+        (
+            TradeEvent::Cancelled {
+                reason: CancelReason::Declined,
+            },
+            "cancelled",
+        ),
+    ] {
+        assert_eq!(
+            kind_tag(&serde_json::to_value(event).unwrap()),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        serde_json::to_string(&TradeEvent::Cancelled {
+            reason: CancelReason::Declined,
+        })
+        .unwrap(),
+        r#"{"kind":"cancelled","reason":"declined"}"#
+    );
 }

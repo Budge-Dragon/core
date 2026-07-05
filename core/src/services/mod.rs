@@ -23,3 +23,4 @@ pub mod ratio;
 pub mod shop;
 pub mod skills;
 pub mod spawn;
+pub mod trade;
