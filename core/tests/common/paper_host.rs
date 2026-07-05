@@ -27,6 +27,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
+use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::element::PerElement;
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
@@ -51,6 +52,7 @@ use mu_core::data::item_definitions::ItemKind;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::option_roll::OptionRollPolicy;
+use mu_core::data::skills::AreaPattern;
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
@@ -66,6 +68,7 @@ use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightOutcome, StepOutcome};
 use mu_core::events::progression::LevelUp;
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
+use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
 use mu_core::services::combat::resolve_attack;
 use mu_core::services::effects::{
@@ -79,14 +82,15 @@ use mu_core::services::kill::resolve_kill;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::movement::resolve_step;
 use mu_core::services::profile::{character_profile, monster_profile};
-use mu_core::services::skills::{SkillRouting, cast_heal, route};
+use mu_core::services::skills::{DamagingSkill, SkillRouting, cast, cast_heal, route};
 use mu_core::services::spawn::{SpawnResult, place_spawn};
 use mu_core::services::trade::{
     AcceptOutcome, Holdings, LockResult, RequestOutcome, TradeAvailability, accept, cancel, lock,
     offer_item, offer_zen, request,
 };
 
-use dataset::{or_abort, real_atlas, real_static_data};
+pub use dataset::or_abort;
+use dataset::{real_atlas, real_static_data};
 use rng::TestRng;
 
 /// The one owned world value: the held static [`Atlas`], one seeded stream, the
@@ -554,6 +558,160 @@ impl World {
         let slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
         *slot = persisted;
         outcome
+    }
+
+    /// Equips `item` onto the character at `char_index` into a NAMED `slot`
+    /// (seam 1): the core [`equip`] service decides — accepting the item, or
+    /// rejecting it with the reason its kind and the slot's occupancy dictate
+    /// ([`EquipRejection::IncompatibleSlot`], [`EquipRejection::SlotOccupied`], or
+    /// [`EquipRejection::TwoHandedConflict`]). On a rejection the worn set is
+    /// returned unchanged and the bounced item rides the outcome — the failure
+    /// branch [`Self::equip_first_available`] cannot reach, since that oracle only
+    /// ever surfaces `IncompatibleSlot`. The returned worn set is written back
+    /// *through* the persist seam either way.
+    ///
+    /// [`EquipRejection::IncompatibleSlot`]: mu_core::events::inventory::EquipRejection::IncompatibleSlot
+    /// [`EquipRejection::SlotOccupied`]: mu_core::events::inventory::EquipRejection::SlotOccupied
+    /// [`EquipRejection::TwoHandedConflict`]: mu_core::events::inventory::EquipRejection::TwoHandedConflict
+    pub fn equip_into(
+        &mut self,
+        char_index: usize,
+        item: ItemInstance,
+        slot: EquipmentSlot,
+    ) -> EquipOutcome {
+        let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let def = or_abort(self.atlas.item(item.item).ok_or("unknown item to equip"));
+        let (new_worn, outcome) = equip(worn, item, &def.kind, slot, &self.atlas);
+        let persisted = persist(new_worn);
+        let worn_slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
+        *worn_slot = persisted;
+        outcome
+    }
+
+    /// Casts the damaging `skill` from the caster at `caster_index`, aimed at
+    /// `aim`, over the batch of monsters at `target_indices` (seam 9, V4 twin for
+    /// offence): routes the skill from the held atlas (aborting on a non-damaging
+    /// one), derives the caster's own combat profile and one [`CombatTarget`] per
+    /// batch monster from held state, resolves [`cast`] over the map's grid and the
+    /// world's stream, persists the caster's spent vitals (K1), then writes each
+    /// struck target's returned health, effects, and any knockback displacement
+    /// back onto its monster *through* the persist seam — mapping each hit's
+    /// batch-position `target_index` to the monster index the caller supplied.
+    /// Returns the [`SkillOutcome`]. A rejection spends nothing and touches no
+    /// target.
+    pub fn cast_damaging(
+        &mut self,
+        caster_index: usize,
+        skill: SkillNumber,
+        aim: WorldPos,
+        target_indices: &[usize],
+    ) -> SkillOutcome {
+        let (spent_vitals, outcome) = {
+            let skill_def = or_abort(self.atlas.skill(skill).ok_or("unknown skill"));
+            let damaging = match route(skill_def) {
+                SkillRouting::Damaging(reference) => reference,
+                SkillRouting::Heal(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => {
+                    return or_abort(Err::<SkillOutcome, _>("skill is not a damaging skill"));
+                }
+            };
+            let mut targets = Vec::with_capacity(target_indices.len());
+            for &index in target_indices {
+                let mob = *or_abort(self.monsters.get(index).ok_or("no target monster"));
+                let def = or_abort(self.atlas.monster(mob.number).ok_or("unknown monster def"));
+                let profile = match &def.role {
+                    MonsterRole::Monster {
+                        combat,
+                        resistances,
+                        ..
+                    }
+                    | MonsterRole::Guard {
+                        combat,
+                        resistances,
+                        ..
+                    }
+                    | MonsterRole::Trap {
+                        combat,
+                        resistances,
+                        ..
+                    } => monster_profile(combat, resistances, combat.level),
+                    MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
+                        return or_abort(Err::<SkillOutcome, _>(
+                            "cast was handed a non-combat monster",
+                        ));
+                    }
+                };
+                targets.push(CombatTarget::new(
+                    profile,
+                    mob.health,
+                    mob.placement,
+                    mob.active_effects,
+                ));
+            }
+            let caster = or_abort(self.characters.get(caster_index).ok_or("no caster"));
+            let grid = or_abort(
+                self.atlas
+                    .walk_grid(caster.placement().map)
+                    .ok_or("no walk grid"),
+            );
+            cast(caster, damaging, aim, &targets, grid, &mut self.rng)
+        };
+        let vitals_value = or_abort(serde_json::to_value(spent_vitals));
+        self.persist_character_with(caster_index, "vitals", vitals_value);
+        if let SkillOutcome::Cast { hits, .. } = &outcome {
+            for hit in hits {
+                self.write_back_target_hit(target_indices, hit);
+            }
+        }
+        outcome
+    }
+
+    /// Writes one struck target's [`TargetHit`] back onto its monster: maps the
+    /// hit's batch-position `target_index` to the monster index the caster passed,
+    /// sets the returned health and effects, applies any knockback displacement,
+    /// and persists the updated instance through the seam.
+    fn write_back_target_hit(&mut self, target_indices: &[usize], hit: &TargetHit) {
+        let (batch_index, health, active_effects, displacement) = match hit {
+            TargetHit::Missed {
+                target_index,
+                health,
+                active_effects,
+            }
+            | TargetHit::Killed {
+                target_index,
+                health,
+                active_effects,
+                ..
+            } => (*target_index, *health, *active_effects, None),
+            TargetHit::Landed {
+                target_index,
+                health,
+                active_effects,
+                displacement,
+                ..
+            } => (*target_index, *health, *active_effects, *displacement),
+        };
+        let monster_index = *or_abort(
+            target_indices
+                .get(batch_index)
+                .ok_or("hit target index outside the batch"),
+        );
+        let mut updated = *or_abort(
+            self.monsters
+                .get(monster_index)
+                .ok_or("no monster at index"),
+        );
+        updated.health = health;
+        updated.active_effects = active_effects;
+        if let Some(placement) = displacement {
+            updated.placement = placement;
+        }
+        let persisted = persist(updated);
+        let slot = or_abort(
+            self.monsters
+                .get_mut(monster_index)
+                .ok_or("no monster slot"),
+        );
+        *slot = persisted;
     }
 
     /// Applies a kill's `gained` experience and `level_ups` to the character at
@@ -1336,6 +1494,30 @@ pub fn fighting_monster_from(
     )
 }
 
+/// The number of the first fighting monster that both LANDS on a low-level
+/// knight and stays survivable hit-for-hit: an attack rate at or above 80
+/// (out-rating a level-20 knight's defense so the bite reliably connects) with
+/// per-hit damage capped at 70 (a wound a single self-heal can chase). Re-found
+/// from the roster on every run, never a hard-coded number.
+#[must_use]
+pub fn pressing_monster(atlas: &Atlas) -> MonsterNumber {
+    or_abort(
+        atlas
+            .monsters()
+            .find_map(|definition| match &definition.role {
+                MonsterRole::Monster { combat, .. } => {
+                    (combat.attack_rate >= 80 && combat.max_phys_damage <= 70 && combat.hp > 0)
+                        .then_some(definition.number)
+                }
+                MonsterRole::Guard { .. }
+                | MonsterRole::Trap { .. }
+                | MonsterRole::Npc { .. }
+                | MonsterRole::SoccerBall => None,
+            })
+            .ok_or("the dataset has no pressing-but-survivable monster"),
+    )
+}
+
 /// The number of the first passive definition — a town NPC or the soccer ball —
 /// whose placement resolves to a [`mu_core::entities::spawned::Spawned::Placed`],
 /// never a fightable mob.
@@ -1391,6 +1573,51 @@ pub fn heal_skill(atlas: &Atlas) -> SkillNumber {
                 SkillRouting::Damaging(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => None,
             })
             .ok_or("the dataset has no heal skill"),
+    )
+}
+
+/// The number of the first non-elemental single-target damaging skill — a clean
+/// `DirectHit` carrying a real mana cost, re-found from the shipped catalog on
+/// every run (the router is the source, never a hard-coded skill id). Chosen
+/// non-elemental so a landed hit inflicts no ailment and triggers no knockback,
+/// keeping the kill-chain writeback a pure health drain.
+#[must_use]
+pub fn direct_hit_skill(atlas: &Atlas) -> SkillNumber {
+    or_abort(
+        atlas
+            .skills()
+            .find_map(|skill| match route(skill) {
+                SkillRouting::Damaging(reference) => {
+                    (matches!(reference.shape(), DamagingSkill::DirectHit)
+                        && skill.element.is_none()
+                        && skill.cost.mana > 0)
+                        .then_some(skill.number)
+                }
+                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
+            })
+            .ok_or("the dataset has no non-elemental direct-hit skill"),
+    )
+}
+
+/// The number of the first caster-centred area skill — a `Nova`-pattern strike
+/// whose region is a disc around the caster, so one cast sweeps every seated mob
+/// within range. Re-found from the catalog, never hard-coded.
+#[must_use]
+pub fn nova_skill(atlas: &Atlas) -> SkillNumber {
+    or_abort(
+        atlas
+            .skills()
+            .find_map(|skill| match route(skill) {
+                SkillRouting::Damaging(reference) => matches!(
+                    reference.shape(),
+                    DamagingSkill::Area {
+                        pattern: AreaPattern::Nova
+                    }
+                )
+                .then_some(skill.number),
+                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
+            })
+            .ok_or("the dataset has no nova area skill"),
     )
 }
 

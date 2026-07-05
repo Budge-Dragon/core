@@ -19,7 +19,7 @@ mod paper_host;
 
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::equipment::EquipmentSlot;
-use mu_core::components::inventory::Footprint;
+use mu_core::components::inventory::{Cell, Footprint};
 use mu_core::components::item_instance::{ItemInstance, RarityRoll, RolledNormalOption};
 use mu_core::components::item_options::NormalOption;
 use mu_core::components::item_quality::ItemRarity;
@@ -27,8 +27,8 @@ use mu_core::components::item_ref::ItemRef;
 use mu_core::components::levels::OptionLevel;
 use mu_core::components::movement::{FlightChange, Movement};
 use mu_core::components::pool::Pool;
-use mu_core::components::spatial::Radius;
-use mu_core::components::tile::TileFacing;
+use mu_core::components::spatial::{Radius, WorldPos};
+use mu_core::components::tile::{TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{ItemLevel, MapNumber, Tick, Zen};
 use mu_core::data::common::MonsterNumber;
@@ -40,12 +40,13 @@ use mu_core::entities::trade_session::TradeSession;
 use mu_core::events::combat::AttackOutcome;
 use mu_core::events::craft::MixOutcome;
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
-use mu_core::events::inventory::{EquipOutcome, PlaceOutcome, RemoveOutcome};
+use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, RemoveOutcome};
 use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::Drop;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
+use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
 use mu_core::events::trade::{CancelReason, OfferOutcome, ZenOfferOutcome};
 use mu_core::services::effects::ApplicableBuff;
@@ -55,9 +56,10 @@ use mu_core::services::profile::character_profile;
 use mu_core::services::trade::LockResult;
 
 use paper_host::{
-    World, aggressive_monster, cell, dark_knight, fighting_monster_from, first_passive_monster,
-    footprint_of, heal_skill, is_equippable, item_at_level, item_instance, low_level_monster,
-    monster_instance, persist, pos, tile, walkable_run, wire, zen,
+    World, aggressive_monster, cell, dark_knight, direct_hit_skill, fighting_monster_from,
+    first_passive_monster, footprint_of, heal_skill, is_equippable, item_at_level, item_instance,
+    low_level_monster, monster_instance, nova_skill, or_abort, persist, pos, pressing_monster,
+    tile, walkable_run, wire, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -112,6 +114,27 @@ const LOCHS_FEATHER: ItemRef = ItemRef {
 const CAPE_OF_LORD: ItemRef = ItemRef {
     group: 13,
     number: 30,
+};
+
+/// A real shield (group 6, number 0) — the off-hand occupant that makes a
+/// two-handed weapon conflict.
+const SHIELD: ItemRef = ItemRef {
+    group: 6,
+    number: 0,
+};
+
+/// A real two-handed weapon (group 0, number 9) — claims both hands, so it
+/// cannot share a hand pair with a worn shield.
+const TWO_HANDED_SWORD: ItemRef = ItemRef {
+    group: 0,
+    number: 9,
+};
+
+/// A real bow (group 4, number 0) — an elf-only weapon, used to prove the equip
+/// service ignores an item's class list (a Dark Knight wears it anyway).
+const ELF_BOW: ItemRef = ItemRef {
+    group: 4,
+    number: 0,
 };
 
 /// Elf Lala, the potion merchant NPC (number 242); shelf slot 0 is her
@@ -1567,5 +1590,739 @@ fn the_ordered_event_trace_is_identical_across_same_seed_replays() {
     assert!(
         first.len() > 3,
         "the composed run produced a substantive trace"
+    );
+}
+
+// --- Damaging-skill kill chain (seam 9; V4 offence twin). --------------------
+
+/// Everything a skill-kill loot chain produced: the world after the kill, the
+/// actor/target/ground indices, the rolled drop and its identity, the caster's
+/// mana across the fight, and the experience the kill granted.
+struct SkillKill {
+    world: World,
+    caster: usize,
+    victim: usize,
+    ground: usize,
+    rolled: ItemInstance,
+    item: ItemRef,
+    mana_before: u32,
+    mana_after: u32,
+    gained: u64,
+}
+
+/// Casts a real DAMAGING skill in a loop until it lands the killing blow, then
+/// resolves the reward and grounds the first equippable item it dropped —
+/// sweeping the construction seed (outside the drive loop) until a skill-kill
+/// yields such a drop. `None` only if no seed in the range drops an equippable
+/// item — statistically impossible over an equipment-heavy pool.
+fn skill_kill_with_item_drop() -> Option<SkillKill> {
+    for seed in 0u64..128 {
+        let mut world = World::new(seed, MapNumber(0));
+        let caster = world.seat_character(dark_knight(80, 300, tile(10, 10)));
+        let skill = direct_hit_skill(world.atlas());
+        let (number, combat, _resistances) = low_level_monster(world.atlas(), 20);
+        let victim = world.seat_monster(monster_instance(number, combat.hp, tile(10, 10)));
+        let aim = world.character(caster).placement().position;
+        let mana_before = world.character(caster).vitals().mana.current();
+
+        // Cast the damaging skill onto the mob until a Killed hit lands — each
+        // cast spends the skill's mana and drains the target through the writeback.
+        let mut killed = false;
+        for _ in 0..10_000u32 {
+            match world.cast_damaging(caster, skill, aim, &[victim]) {
+                SkillOutcome::Cast { hits, .. } => {
+                    if hits
+                        .iter()
+                        .any(|hit| matches!(hit, TargetHit::Killed { .. }))
+                    {
+                        killed = true;
+                        break;
+                    }
+                }
+                SkillOutcome::Rejected { .. } => break,
+            }
+        }
+        if !killed {
+            continue;
+        }
+
+        let mana_after = world.character(caster).vitals().mana.current();
+        let resolution = world.resolve_kill_of(caster, victim);
+        let gained = resolution.experience.gained.0;
+        let drop = item_drops(&resolution)
+            .into_iter()
+            .find(|candidate| is_equippable(world.atlas(), candidate.0));
+        let Some((item, level, rarity)) = drop else {
+            continue;
+        };
+        let position = world.monster(victim).placement.position;
+        let (ground, rolled) = world.drop_item_to_ground(item, level, rarity, position, Tick(1200));
+        return Some(SkillKill {
+            world,
+            caster,
+            victim,
+            ground,
+            rolled,
+            item,
+            mana_before,
+            mana_after,
+            gained,
+        });
+    }
+    None
+}
+
+#[test]
+fn a_damaging_skill_cast_kills_a_mob_pays_mana_and_its_loot_is_picked_up() {
+    let SkillKill {
+        mut world,
+        caster,
+        victim,
+        ground,
+        rolled,
+        item,
+        mana_before,
+        mana_after,
+        gained,
+    } = skill_kill_with_item_drop()
+        .expect("a seed in 0..128 lands a skill-kill that drops an item");
+
+    // Mana paid: each damaging cast spent the skill's mana, so the caster's mana
+    // strictly fell across the fight.
+    assert!(
+        mana_after < mana_before,
+        "the damaging casts spent the caster's mana"
+    );
+
+    // Killed BY THE SKILL: the victim's health, persisted after each cast's
+    // writeback, reached zero — the basic-attack drive method was never called.
+    assert_eq!(world.monster(victim).health.current(), 0);
+
+    // The skill-kill produced a real reward: experience and at least one drop.
+    assert!(gained > 0, "the skill-kill grants experience");
+
+    // The dropped item is picked up into the bag, byte-identical to the rolled
+    // instance — the skill-kill loot chain closes.
+    let footprint = footprint_of(world.atlas(), item);
+    let anchor = world
+        .inventory(caster)
+        .first_fit(footprint)
+        .expect("the empty bag has room");
+    assert_eq!(world.ground_item_count(), 1);
+    assert_eq!(
+        world.pickup(caster, ground, anchor),
+        PickupOutcome::PickedUp { at: anchor }
+    );
+    assert_eq!(world.ground_item_count(), 0);
+    let bagged = world
+        .inventory(caster)
+        .occupant(anchor)
+        .expect("the bag holds the picked item")
+        .item
+        .clone();
+    assert_eq!(wire(&bagged), wire(&rolled));
+}
+
+#[test]
+fn a_nova_cast_kills_a_cluster_and_each_kill_pays_out_its_own_reward() {
+    // One area cast over two seated mobs kills both — multi-kill loot no other
+    // test touches. Swept over the construction seed until one nova lands a lethal
+    // hit on both frail mobs (a miss on either just tries the next seed).
+    let mut proven = false;
+    for seed in 0u64..64 {
+        let mut world = World::new(seed, MapNumber(0));
+        let caster = world.seat_character(dark_knight(80, 300, tile(10, 10)));
+        let nova = nova_skill(world.atlas());
+        let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+        // Two frail mobs flanking the caster, both inside the caster-centred disc.
+        let mob_a = world.seat_monster(monster_instance(number, 1, tile(11, 10)));
+        let mob_b = world.seat_monster(monster_instance(number, 1, tile(10, 11)));
+        let aim = world.character(caster).placement().position;
+        let mana_before = world.character(caster).vitals().mana.current();
+
+        let outcome = world.cast_damaging(caster, nova, aim, &[mob_a, mob_b]);
+        assert!(
+            matches!(outcome, SkillOutcome::Cast { .. }),
+            "a funded nova over two mobs resolves"
+        );
+
+        // Both frail mobs must be dead for this seed to prove the multi-kill.
+        if world.monster(mob_a).health.current() != 0 || world.monster(mob_b).health.current() != 0
+        {
+            continue;
+        }
+
+        // The one cast paid its mana once, and each kill pays out its own reward.
+        assert!(
+            world.character(caster).vitals().mana.current() < mana_before,
+            "the nova cast spent mana"
+        );
+        let reward_a = world.resolve_kill_of(caster, mob_a);
+        let reward_b = world.resolve_kill_of(caster, mob_b);
+        assert!(
+            reward_a.experience.gained.0 > 0,
+            "the first kill pays experience"
+        );
+        assert!(
+            reward_b.experience.gained.0 > 0,
+            "the second kill pays experience"
+        );
+        proven = true;
+        break;
+    }
+    assert!(proven, "a seed in 0..64 lands a lethal nova on both mobs");
+}
+
+// --- Equip gating: the refused branch W-SIM never asserted (seam 1). ---------
+
+#[test]
+fn equip_is_gated_by_kind_and_occupancy_and_a_refusal_leaves_the_worn_set_intact() {
+    let mut world = World::new(2024, MapNumber(0));
+    let knight = world.seat_character(dark_knight(80, 300, tile(10, 10)));
+
+    // A — IncompatibleSlot: a non-wearable jewel is refused by a real slot, and
+    // the empty worn set is left byte-for-byte unchanged.
+    let empty_worn = wire(world.equipment(knight));
+    let jewel = item_instance(world.atlas(), JEWEL_OF_BLESS);
+    match world.equip_into(knight, jewel, EquipmentSlot::Helm) {
+        EquipOutcome::Rejected { reason, .. } => {
+            assert_eq!(reason, EquipRejection::IncompatibleSlot);
+        }
+        EquipOutcome::Equipped { .. } => panic!("a jewel is wearable in no slot"),
+    }
+    assert_eq!(
+        wire(world.equipment(knight)),
+        empty_worn,
+        "a refused incompatible equip leaves the worn set untouched"
+    );
+
+    // B — SlotOccupied: a helm worn, a second helm refused from the same slot,
+    // and the one-helm worn set left unchanged.
+    let helm = item_instance(world.atlas(), HELM);
+    assert!(matches!(
+        world.equip_into(knight, helm, EquipmentSlot::Helm),
+        EquipOutcome::Equipped {
+            slot: EquipmentSlot::Helm
+        }
+    ));
+    let helm_worn = wire(world.equipment(knight));
+    let second_helm = item_instance(world.atlas(), HELM);
+    match world.equip_into(knight, second_helm, EquipmentSlot::Helm) {
+        EquipOutcome::Rejected { reason, .. } => assert_eq!(reason, EquipRejection::SlotOccupied),
+        EquipOutcome::Equipped { .. } => panic!("the helm slot is already worn"),
+    }
+    assert_eq!(
+        wire(world.equipment(knight)),
+        helm_worn,
+        "a refused second helm leaves the occupied slot unchanged"
+    );
+
+    // C — TwoHandedConflict (the 2h-while-shield conflict): a shield worn in one
+    // hand, a two-hander refused from the paired hand, worn set left unchanged.
+    let shield = item_instance(world.atlas(), SHIELD);
+    assert!(matches!(
+        world.equip_into(knight, shield, EquipmentSlot::LeftHand),
+        EquipOutcome::Equipped {
+            slot: EquipmentSlot::LeftHand
+        }
+    ));
+    let shielded_worn = wire(world.equipment(knight));
+    let two_hander = item_instance(world.atlas(), TWO_HANDED_SWORD);
+    match world.equip_into(knight, two_hander, EquipmentSlot::RightHand) {
+        EquipOutcome::Rejected { reason, .. } => {
+            assert_eq!(reason, EquipRejection::TwoHandedConflict);
+        }
+        EquipOutcome::Equipped { .. } => {
+            panic!("a two-hander cannot share a hand pair with a worn shield")
+        }
+    }
+    assert_eq!(
+        wire(world.equipment(knight)),
+        shielded_worn,
+        "a refused two-hander leaves the shield-in-hand set unchanged"
+    );
+
+    // D — the DOCUMENTED GAP: core's equip gates on kind->slot and two-handed
+    // occupancy ONLY — never on an item's class list or its wear (stat/level)
+    // requirements, which have no equip consumer in core. A class-mismatched item
+    // is therefore ACCEPTED: an elf-only bow is worn by a Dark Knight.
+    let elf_seat = world.seat_character(dark_knight(80, 300, tile(11, 11)));
+    let bow = item_instance(world.atlas(), ELF_BOW);
+    match world.equip_into(elf_seat, bow, EquipmentSlot::RightHand) {
+        EquipOutcome::Equipped { slot } => assert_eq!(
+            slot,
+            EquipmentSlot::RightHand,
+            "equip ignores the class list — the elf-only bow is worn by the Dark Knight"
+        ),
+        EquipOutcome::Rejected { reason, .. } => {
+            panic!("equip does not gate on class, yet refused with {reason:?}")
+        }
+    }
+}
+
+// --- Heal as a survivability tool inside a fight (seam 9; V4). ---------------
+
+/// Fights one mob while the player self-heals between blows, on construction
+/// `seed`. `None` when this seed's exchange did not show a real dip-and-recover
+/// win (the mob out-raced the heals, or never bit before dying) — the caller
+/// sweeps the seed. Every proven-cooperating seed asserts the win, the survival,
+/// and the mana spend as hard invariants.
+fn heal_carries_the_player_through_a_fight(seed: u64) -> Option<()> {
+    let mut world = World::new(seed, MapNumber(0));
+    // A low-level knight — its defense is out-rated by the pressing mob, so the
+    // bites land — but a high strength, so it kills a low-HP mob fast, before the
+    // wounds outrun a heal-per-bite.
+    let player = world.seat_character(dark_knight(20, 250, tile(10, 10)));
+    let heal = heal_skill(world.atlas());
+    // A pressing mob co-located, seated with a low HP pool so the knight fells it
+    // in a handful of blows; its attack rate out-rates the knight, so it draws
+    // real blood the self-heal must mend.
+    let mob = world.seat_monster(monster_instance(
+        pressing_monster(world.atlas()),
+        200,
+        tile(10, 10),
+    ));
+
+    // Start the player wounded so the mob's bite and the heal are both visible.
+    world.set_health(player, or_abort(Pool::new(450, 500)));
+    let mana_before = world.character(player).vitals().mana.current();
+
+    let mut bitten = false;
+    let mut recovered = false;
+    let mut won = false;
+    for _ in 0..10_000u32 {
+        // The mob bites the player; a lethal bite means it out-raced the heals
+        // this seed — try another.
+        let before_bite = world.character(player).vitals().health.current();
+        if matches!(
+            world.player_struck_by_monster(player, mob),
+            AttackOutcome::Killed { .. }
+        ) {
+            return None;
+        }
+        let wounded = world.character(player).vitals().health.current();
+
+        // The player heals only the wounds it actually takes — a landed bite is
+        // mended by a self-heal cast between blows.
+        if wounded < before_bite {
+            bitten = true;
+            match world.cast_heal_on(player, player, heal).0 {
+                BuffCastOutcome::Healed { .. } => {
+                    if world.character(player).vitals().health.current() > wounded {
+                        recovered = true;
+                    }
+                }
+                // Mana ran dry before the mob died — this seed can't prove the
+                // survival loop; try another.
+                BuffCastOutcome::Rejected { .. } | BuffCastOutcome::Applied { .. } => {
+                    return None;
+                }
+            }
+        }
+
+        // The player strikes back.
+        if matches!(world.strike(player, mob), AttackOutcome::Killed { .. }) {
+            won = true;
+            break;
+        }
+    }
+
+    if !(won && bitten && recovered) {
+        return None;
+    }
+
+    // The fight was won alive: the mob drew blood, a self-heal mended it, the mob
+    // is dead, the player still breathes, and the heals spent mana.
+    assert!(
+        world.character(player).vitals().health.current() > 0,
+        "the player survived the exchange"
+    );
+    assert_eq!(world.monster(mob).health.current(), 0, "the mob is dead");
+    assert!(
+        world.character(player).vitals().mana.current() < mana_before,
+        "the self-heals spent mana"
+    );
+    Some(())
+}
+
+#[test]
+fn a_self_heal_between_blows_carries_the_player_through_a_winning_fight() {
+    let carried = (0u64..64).any(|seed| heal_carries_the_player_through_a_fight(seed).is_some());
+    assert!(
+        carried,
+        "a seed in 0..64 lets the healed player win the fight alive"
+    );
+}
+
+// --- The canonical golden path: one identity + one wallet, front to back. ----
+
+/// Farms the first kill of the golden path (BEATS 1-5): spawns a fightable mob at
+/// `mob_tile`, advances its AI to a real intent, walks the `hero` to it along the
+/// real terrain, strikes it dead, and resolves the reward. Returns the money the
+/// kill dropped (gated at the 20-zen potion cost) and the victim's position, or
+/// `None` when this seed's money drop did not clear the gate. Every combat beat
+/// is a hard invariant.
+fn farm_first_kill(world: &mut World, hero: usize, mob_tile: TileCoord) -> Option<(u64, WorldPos)> {
+    // BEAT 1 — Spawn a fightable mob. A combat monster is seated; its number is stable.
+    let (number, _combat, _resistances) = fighting_monster_from(world.atlas(), 30);
+    let placement = SpawnPlacement::Fixed {
+        position: mob_tile,
+        facing: TileFacing::East,
+    };
+    let spawn = world.spawn_from(number, placement);
+    let instance = match spawn.spawned.first()? {
+        Spawned::Mob { instance } => *instance,
+        Spawned::Placed { .. } => return None,
+    };
+    assert_eq!(
+        instance.number, number,
+        "the spawned mob is the requested combat monster"
+    );
+    let mob = world.seat_monster(instance);
+
+    // BEAT 2 — Advance its AI. Aimed at its own tile it decides a real Attack intent.
+    let intent = world.advance_monster(mob, Some(instance.placement.position), Tick(1));
+    assert!(
+        matches!(intent, MonsterIntent::Attack { .. }),
+        "the AI returns a real intent, not inert"
+    );
+
+    // BEAT 3 — Walk the hero to the mob. Position strictly advances; never a false Block.
+    let start_x = world.character(hero).placement().position.x().raw();
+    let touch = Radius::from_tiles(1);
+    while !world
+        .character(hero)
+        .placement()
+        .position
+        .within_range(mob_tile.to_world(), touch)
+    {
+        assert!(
+            matches!(
+                world.step(hero, mob_tile.to_world()),
+                StepOutcome::Resolved { .. }
+            ),
+            "the walkable corridor must never block a step"
+        );
+    }
+    assert!(
+        world.character(hero).placement().position.x().raw() > start_x,
+        "the hero advanced toward the mob"
+    );
+
+    // BEAT 4 — Strike the mob to death. HP falls monotonically; the last blow is Killed.
+    let mut previous = world.monster(mob).health.current();
+    let mut killed = false;
+    for _ in 0..10_000u32 {
+        let outcome = world.strike(hero, mob);
+        let current = world.monster(mob).health.current();
+        assert!(
+            current <= previous,
+            "the mob's health never rises under attack"
+        );
+        previous = current;
+        if matches!(outcome, AttackOutcome::Killed { .. }) {
+            killed = true;
+            break;
+        }
+    }
+    assert!(killed, "the mob is beaten to a killing blow");
+    assert_eq!(world.monster(mob).health.current(), 0);
+
+    // BEAT 5 — Resolve the kill. Experience is granted and drops are rolled.
+    let resolution = world.resolve_kill_of(hero, mob);
+    assert!(
+        resolution.experience.gained.0 > 0,
+        "the kill grants experience"
+    );
+    // The kill's money funds the potion — required this seed (>= the 20-zen cost).
+    let pile = zen_drop(&resolution).filter(|amount| *amount >= 20)?;
+    Some((pile, world.monster(mob).placement.position))
+}
+
+/// Picks up the kill's money and item drops and gears up (BEATS 6-8): credits the
+/// wallet by exactly the pile, lands the item drop in the bag byte-identical to
+/// the roll, and wears it. `None` on the empty-bag first-fit gate (never reached).
+/// Every value beat is a hard invariant.
+fn loot_and_gear(world: &mut World, hero: usize, pile: u64, mob_pos: WorldPos) -> Option<()> {
+    // BEAT 6 — Pick up the money pile. The wallet is credited by EXACTLY the pile.
+    assert_eq!(world.character(hero).zen(), zen(0));
+    let ground_zen = world.seat_ground_zen(Zen(pile), mob_pos, Tick(6_000));
+    assert_eq!(
+        world.pickup_zen(hero, ground_zen),
+        ZenPickupOutcome::PickedUp
+    );
+    assert_eq!(
+        world.character(hero).zen(),
+        zen(pile),
+        "the wallet holds exactly the picked-up pile"
+    );
+
+    // BEAT 7 — Pick up the kill's item drop (materialised the way the harness lays
+    // any kill drop — drop_item_to_ground rolls the full instance). It leaves the
+    // ground and lands in the bag once, byte-identical to the rolled instance.
+    let (ground_item, rolled) = world.drop_item_to_ground(
+        DRAGON_ARMOR,
+        ItemLevel::ZERO,
+        ItemRarity::Normal,
+        mob_pos,
+        Tick(6_000),
+    );
+    let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
+    let anchor = world.inventory(hero).first_fit(footprint)?;
+    assert_eq!(world.ground_item_count(), 1);
+    assert_eq!(
+        world.pickup(hero, ground_item, anchor),
+        PickupOutcome::PickedUp { at: anchor }
+    );
+    assert_eq!(world.ground_item_count(), 0);
+    let bagged = or_abort(
+        world
+            .inventory(hero)
+            .occupant(anchor)
+            .ok_or("the bag holds the picked item"),
+    )
+    .item
+    .clone();
+    assert_eq!(
+        wire(&bagged),
+        wire(&rolled),
+        "the bagged item is byte-identical to the rolled drop"
+    );
+
+    // BEAT 8 — Equip it. The worn item is byte-identical to the rolled instance.
+    let in_hand = match world.remove_from_bag(hero, anchor) {
+        RemoveOutcome::Removed { item, .. } => item,
+        RemoveOutcome::Rejected { .. } => {
+            or_abort(Err::<_, &str>("the anchor held the picked item"))
+        }
+    };
+    let slot = match world.equip_first_available(hero, in_hand) {
+        EquipOutcome::Equipped { slot } => slot,
+        EquipOutcome::Rejected { .. } => {
+            or_abort(Err::<_, &str>("the dropped armor is equippable"))
+        }
+    };
+    let worn = or_abort(world.equipment(hero).get(slot).ok_or("the slot is filled")).clone();
+    assert_eq!(
+        wire(&worn),
+        wire(&rolled),
+        "the worn item is byte-identical to the rolled drop"
+    );
+    Some(())
+}
+
+/// Walks to the merchant, buys, sells, and crafts (BEATS 9-11): the potion cost is
+/// debited from the threaded wallet, the cape's proceeds credited, and the chaos
+/// mix's fee charged against the same wallet. Returns the created item and its bag
+/// anchor for the trade beat; `None` when the mix's success roll did not fire this
+/// seed. Every non-probabilistic beat is a hard invariant.
+fn shop_and_craft(
+    world: &mut World,
+    hero: usize,
+    merchant_tile: TileCoord,
+) -> Option<(ItemInstance, Cell)> {
+    let merchant = merchant_tile.to_world();
+
+    // BEAT 9 — Walk to the merchant and buy a potion. Balance = wallet - cost.
+    assert!(
+        matches!(world.step(hero, merchant), StepOutcome::Resolved { .. }),
+        "the corridor must never block the walk to the merchant"
+    );
+    let before_buy = world.character(hero).zen();
+    let slot0 = or_abort(ShelfSlot::new(0));
+    let after_buy = match world.buy(hero, ELF_LALA, slot0, merchant) {
+        BuyOutcome::NewItem { balance, .. } | BuyOutcome::Merged { balance, .. } => balance,
+        BuyOutcome::OutOfRange
+        | BuyOutcome::UnknownShelfSlot
+        | BuyOutcome::InventoryFull
+        | BuyOutcome::InsufficientZen => or_abort(Err::<_, &str>(
+            "in reach with the earned zen, the potion buy lands",
+        )),
+    };
+    assert_eq!(
+        after_buy,
+        zen(before_buy.get() - 20),
+        "the potion cost is debited from the threaded wallet"
+    );
+    assert_eq!(world.character(hero).zen(), after_buy);
+
+    // BEAT 10 — Sell a Cape of Lord (funds the crafting fee). Proceeds credited; slot freed.
+    let cape = item_instance(world.atlas(), CAPE_OF_LORD);
+    let cape_footprint = footprint_of(world.atlas(), CAPE_OF_LORD);
+    let cape_anchor = world.inventory(hero).first_fit(cape_footprint)?;
+    assert!(matches!(
+        world.place_in_bag(hero, cape, cape_footprint, cape_anchor),
+        PlaceOutcome::Placed { .. }
+    ));
+    let before_sale = world.character(hero).zen();
+    let after_sale = match world.sell(hero, cape_anchor, merchant) {
+        SellOutcome::Sold { proceeds, balance } => {
+            assert!(proceeds.0 > 0, "the cape sale credits real proceeds");
+            assert_eq!(
+                balance,
+                zen(before_sale.get() + proceeds.0),
+                "proceeds add to the threaded wallet"
+            );
+            balance
+        }
+        SellOutcome::OutOfRange | SellOutcome::NoItemAtCell | SellOutcome::WalletFull => {
+            or_abort(Err::<_, &str>("a merchant in reach buys the cape"))
+        }
+    };
+    assert_eq!(world.character(hero).zen(), after_sale);
+    assert!(
+        world.inventory(hero).occupant(cape_anchor).is_none(),
+        "the sold item's slot is freed"
+    );
+
+    // BEAT 11 — Craft at the chaos machine. A result is created and lands in the
+    // bag; the fee is charged against the threaded wallet. A failed roll just
+    // tries the next seed (the created-item assertion needs a success).
+    let sword = {
+        let mut sword = item_at_level(world.atlas(), SWORD, 6);
+        sword.normal_option = Some(RolledNormalOption {
+            option: NormalOption::PhysicalDamage,
+            level: OptionLevel::L1,
+        });
+        sword
+    };
+    let placed = vec![sword, item_instance(world.atlas(), JEWEL_OF_CHAOS)];
+    let before_mix = world.character(hero).zen();
+    let (created, after_mix) = match world.mix(hero, placed) {
+        MixOutcome::Success {
+            created,
+            fee,
+            zen: balance,
+            ..
+        } => {
+            assert_eq!(
+                balance,
+                zen(before_mix.get() - fee.0),
+                "the mix fee is charged off the real wallet"
+            );
+            (created, balance)
+        }
+        MixOutcome::Failed { .. } | MixOutcome::Rejected { .. } => return None,
+    };
+    assert_eq!(world.character(hero).zen(), after_mix);
+    let created_footprint = footprint_of(world.atlas(), created.item);
+    let created_anchor = world.inventory(hero).first_fit(created_footprint)?;
+    assert!(matches!(
+        world.place_in_bag(hero, created.clone(), created_footprint, created_anchor),
+        PlaceOutcome::Placed { .. }
+    ));
+    let created_bagged = or_abort(
+        world
+            .inventory(hero)
+            .occupant(created_anchor)
+            .ok_or("the bag holds the created item"),
+    )
+    .item
+    .clone();
+    assert_eq!(
+        wire(&created_bagged),
+        wire(&created),
+        "the created item is in the bag byte-for-byte"
+    );
+    Some((created, created_anchor))
+}
+
+/// Trades the crafted item to a second actor (BEAT 12): the item crosses to the
+/// partner's bag byte-for-byte and the zen ledger balances. Every beat is a hard
+/// invariant.
+fn trade_created_item(
+    world: &mut World,
+    hero: usize,
+    merchant_tile: TileCoord,
+    created: &ItemInstance,
+    created_anchor: Cell,
+) {
+    let partner = world.seat_character(dark_knight(80, 300, merchant_tile));
+    let session = world.open_and_accept_trade(hero, partner);
+    assert_eq!(
+        world.offer_item_to_trade(session, hero, Side::Requester, created_anchor, cell(0, 0)),
+        OfferOutcome::Offered { at: cell(0, 0) }
+    );
+    let hero_before_trade = world.character(hero).zen();
+    let offered = 1_000u64;
+    assert!(matches!(
+        world.offer_zen_to_trade(session, hero, Side::Requester, Zen(offered)),
+        ZenOfferOutcome::Offered { .. }
+    ));
+    assert!(matches!(
+        world.lock_trade(session, hero, partner, Side::Partner),
+        LockResult::Locked { .. }
+    ));
+    assert_eq!(
+        world.lock_trade(session, hero, partner, Side::Requester),
+        LockResult::Completed
+    );
+
+    let landed = world.inventory(partner).placed();
+    assert_eq!(landed.len(), 1);
+    let crossed = or_abort(
+        landed
+            .first()
+            .ok_or("the partner's bag holds the traded item"),
+    );
+    assert_eq!(
+        wire(&crossed.item),
+        wire(created),
+        "the created item crossed to the partner byte-for-byte"
+    );
+    assert_eq!(
+        world.character(partner).zen(),
+        zen(offered),
+        "the partner gained exactly the offered zen"
+    );
+    assert_eq!(
+        world.character(hero).zen(),
+        zen(hero_before_trade.get() - offered),
+        "the hero kept the remainder"
+    );
+}
+
+/// Plays one full session front-to-back on construction `seed`, threading one hero
+/// identity and one wallet through every beat. `None` when this seed's
+/// probabilistic beats (the kill's money drop, the chaos mix's success roll) do
+/// not cooperate — the caller sweeps the seed OUTSIDE the run so the single stream
+/// stays deterministic.
+fn play_full_session(seed: u64) -> Option<()> {
+    let mut world = World::new(seed, MapNumber(0));
+
+    // A straight walkable corridor on real Lorencia terrain — the hero walks it to
+    // the mob and on to the merchant.
+    let run = walkable_run(world.atlas(), MapNumber(0), 8);
+    let start = *run.first()?;
+    let mob_tile = *run.get(5)?;
+    let merchant_tile = *run.get(6)?;
+
+    // ONE hero identity and ONE wallet (starting empty), threaded through every beat.
+    let hero = world.seat_character(dark_knight(80, 300, start));
+
+    // BEATS 1-5 — Spawn -> AI -> walk -> strike -> kill, earning the pile.
+    let (pile, mob_pos) = farm_first_kill(&mut world, hero, mob_tile)?;
+    // BEATS 6-8 — Pick up the money and item, and gear up.
+    loot_and_gear(&mut world, hero, pile, mob_pos)?;
+    // BEATS 9-11 — Walk to the merchant, buy, sell, and craft.
+    let (created, created_anchor) = shop_and_craft(&mut world, hero, merchant_tile)?;
+    // BEAT 12 — Trade the crafted item to a second actor.
+    trade_created_item(&mut world, hero, merchant_tile, &created, created_anchor);
+    Some(())
+}
+
+#[test]
+fn a_full_session_plays_start_to_finish_with_sensible_state_at_every_beat() {
+    // The single "the game works end-to-end" artifact: one hero identity and one
+    // wallet threaded through every beat — spawn, AI, walk, kill, loot, gear,
+    // shop, craft, trade — each asserting a game-sensible value (not wire
+    // equality). The run plays on the first construction seed whose probabilistic
+    // beats (the kill's money drop and the chaos mix's success roll) cooperate;
+    // every other beat is a hard invariant. Sweeping the seed OUTSIDE the run
+    // keeps the single stream deterministic — the harness idiom.
+    let played = (0u64..1024).any(|seed| play_full_session(seed).is_some());
+    assert!(
+        played,
+        "a construction seed in 0..1024 plays the whole session start to finish"
     );
 }
