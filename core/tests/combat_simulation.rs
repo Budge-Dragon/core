@@ -58,7 +58,7 @@ use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::{Drop, DropResolution};
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::progression::ExpAward;
-use mu_core::events::skills::SkillOutcome;
+use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::services::combat::resolve_attack;
 use mu_core::services::experience::award_kill_experience;
 use mu_core::services::kill::resolve_kill;
@@ -383,11 +383,11 @@ fn a_shoved_monster_re_chases_its_attacker() {
         else {
             continue;
         };
-        let Some(hit) = hits.first() else { continue };
-        let AttackOutcome::Landed { .. } = hit.outcome else {
-            continue;
-        };
-        let Some(shoved) = hit.displacement else {
+        let Some(TargetHit::Landed {
+            displacement: Some(shoved),
+            ..
+        }) = hits.first().copied()
+        else {
             continue;
         };
 
@@ -716,12 +716,13 @@ fn a_landed_lightning_strike_reports_a_knockback() {
         if let SkillOutcome::Cast { hits, .. } =
             cast(&caster, bolt, aim, &targets, &grid, &mut rng).1
         {
-            if let Some(hit) = hits.first() {
-                if matches!(hit.outcome, AttackOutcome::Landed { .. }) && hit.displacement.is_some()
-                {
-                    saw_displacement = true;
-                    break;
-                }
+            if let Some(TargetHit::Landed {
+                displacement: Some(_),
+                ..
+            }) = hits.first()
+            {
+                saw_displacement = true;
+                break;
             }
         }
     }

@@ -217,16 +217,16 @@ fn skill_event_wire_shapes_are_pinned() {
         serde_json::to_string(&CastRejection::OutOfRange).unwrap(),
         r#""out_of_range""#
     );
+    // TargetHit is kind-tagged, mirroring AttackOutcome's missed/landed/killed
+    // split; the ailment/knockback fields exist only on the landed variant.
     let cast = SkillOutcome::Cast {
         caster_placement: placement(),
-        hits: vec![TargetHit {
+        hits: vec![TargetHit::Landed {
             target_index: 0,
-            outcome: AttackOutcome::Landed {
-                hit: Hit {
-                    damage: Damage(7),
-                    quality: HitQuality::Normal,
-                    modifiers: DamageModifiers::NONE,
-                },
+            hit: Hit {
+                damage: Damage(7),
+                quality: HitQuality::Normal,
+                modifiers: DamageModifiers::NONE,
             },
             health: Pool::new(20, 60).unwrap(),
             active_effects: ActiveEffects::EMPTY,
@@ -237,8 +237,31 @@ fn skill_event_wire_shapes_are_pinned() {
     assert_eq!(
         serde_json::to_string(&cast).unwrap(),
         format!(
-            r#"{{"kind":"cast","caster_placement":{PLACEMENT_JSON},"hits":[{{"target_index":0,"outcome":{{"kind":"landed","hit":{{"damage":7,"quality":"normal","modifiers":[]}}}},"health":{{"current":20,"max":60}},"active_effects":[],"inflicted":null,"displacement":null}}]}}"#
+            r#"{{"kind":"cast","caster_placement":{PLACEMENT_JSON},"hits":[{{"kind":"landed","target_index":0,"hit":{{"damage":7,"quality":"normal","modifiers":[]}},"health":{{"current":20,"max":60}},"active_effects":[],"inflicted":null,"displacement":null}}]}}"#
         )
+    );
+    let missed = TargetHit::Missed {
+        target_index: 1,
+        health: Pool::new(35, 35).unwrap(),
+        active_effects: ActiveEffects::EMPTY,
+    };
+    assert_eq!(
+        serde_json::to_string(&missed).unwrap(),
+        r#"{"kind":"missed","target_index":1,"health":{"current":35,"max":35},"active_effects":[]}"#
+    );
+    let killed = TargetHit::Killed {
+        target_index: 2,
+        hit: Hit {
+            damage: Damage(50),
+            quality: HitQuality::Critical,
+            modifiers: DamageModifiers::NONE,
+        },
+        health: Pool::new(0, 40).unwrap(),
+        active_effects: ActiveEffects::EMPTY,
+    };
+    assert_eq!(
+        serde_json::to_string(&killed).unwrap(),
+        r#"{"kind":"killed","target_index":2,"hit":{"damage":50,"quality":"critical","modifiers":[]},"health":{"current":0,"max":40},"active_effects":[]}"#
     );
 }
 
@@ -397,6 +420,43 @@ fn skill_outcome_every_kind_tag_is_pinned() {
         };
         assert_eq!(
             kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn target_hit_every_kind_tag_is_pinned() {
+    let hit = sample_hit();
+    let health = Pool::new(20, 60).unwrap();
+    for target_hit in [
+        TargetHit::Missed {
+            target_index: 0,
+            health,
+            active_effects: ActiveEffects::EMPTY,
+        },
+        TargetHit::Landed {
+            target_index: 0,
+            hit,
+            health,
+            active_effects: ActiveEffects::EMPTY,
+            inflicted: None,
+            displacement: None,
+        },
+        TargetHit::Killed {
+            target_index: 0,
+            hit,
+            health,
+            active_effects: ActiveEffects::EMPTY,
+        },
+    ] {
+        let expected = match &target_hit {
+            TargetHit::Missed { .. } => "missed",
+            TargetHit::Landed { .. } => "landed",
+            TargetHit::Killed { .. } => "killed",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(target_hit).unwrap()),
             Some(expected)
         );
     }

@@ -523,31 +523,35 @@ fn resolve_target_hit(
 ) -> TargetHit {
     let target_profile = effective_profile(*target.profile(), &target.active_effects());
     let (health, outcome) = resolve_attack(caster_profile, &target_profile, target.health(), rng);
-    let mut inflicted = None;
-    let mut displacement = None;
-    if let AttackOutcome::Landed { .. } = outcome {
-        let applied = apply_element(target, skill, rng);
-        if applied {
-            inflicted = skill.inflicts();
+    match outcome {
+        AttackOutcome::Missed => TargetHit::Missed {
+            target_index: index,
+            health,
+            active_effects: target.active_effects(),
+        },
+        AttackOutcome::Landed { hit } => {
+            let applied = apply_element(target, skill, rng);
+            let inflicted = if applied { skill.inflicts() } else { None };
+            let displacement = if knockback_triggered(skill, applied) {
+                knockback(target.placement(), grid, rng)
+            } else {
+                None
+            };
+            TargetHit::Landed {
+                target_index: index,
+                hit,
+                health,
+                active_effects: target.active_effects(),
+                inflicted,
+                displacement,
+            }
         }
-        if knockback_triggered(skill, applied) {
-            displacement = knockback(target.placement(), grid, rng);
-        }
-    }
-    // A lethal strike clears the victim's whole effect store in-core; a non-lethal
-    // strike carries it forward unchanged (a newly inflicted ailment is reported
-    // separately in `inflicted` for the host to apply).
-    let active_effects = match outcome {
-        AttackOutcome::Killed { .. } => ActiveEffects::EMPTY,
-        AttackOutcome::Landed { .. } | AttackOutcome::Missed => target.active_effects(),
-    };
-    TargetHit {
-        target_index: index,
-        outcome,
-        health,
-        active_effects,
-        inflicted,
-        displacement,
+        AttackOutcome::Killed { hit } => TargetHit::Killed {
+            target_index: index,
+            hit,
+            health,
+            active_effects: ActiveEffects::EMPTY,
+        },
     }
 }
 
@@ -1012,13 +1016,10 @@ mod tests {
     fn landed_damage(outcome: SkillOutcome) -> Option<u32> {
         match outcome {
             SkillOutcome::Cast { hits, .. } => match hits.first() {
-                Some(target_hit) => match target_hit.outcome {
-                    AttackOutcome::Landed { hit } | AttackOutcome::Killed { hit } => {
-                        Some(hit.damage.0)
-                    }
-                    AttackOutcome::Missed => None,
-                },
-                None => None,
+                Some(TargetHit::Landed { hit, .. } | TargetHit::Killed { hit, .. }) => {
+                    Some(hit.damage.0)
+                }
+                Some(TargetHit::Missed { .. }) | None => None,
             },
             SkillOutcome::Rejected { .. } => None,
         }
@@ -1193,17 +1194,17 @@ mod tests {
                 continue;
             };
             let Some(hit) = hits.first() else { continue };
-            match hit.outcome {
-                AttackOutcome::Killed { .. } => {
+            match hit {
+                TargetHit::Killed { active_effects, .. } => {
                     assert_eq!(
-                        hit.active_effects,
+                        *active_effects,
                         ActiveEffects::EMPTY,
                         "a lethal strike clears every effect"
                     );
                     saw_kill = true;
                     break;
                 }
-                AttackOutcome::Landed { .. } | AttackOutcome::Missed => {}
+                TargetHit::Landed { .. } | TargetHit::Missed { .. } => {}
             }
         }
         assert!(saw_kill, "a landing strike kills the 1-HP victim");
@@ -1221,8 +1222,8 @@ mod tests {
         if let SkillOutcome::Cast { hits, .. } =
             cast(&caster, plain, aim, &targets, &all_walkable(), &mut rng).1
         {
-            if let AttackOutcome::Landed { .. } = hits[0].outcome {
-                assert_eq!(hits[0].inflicted, Some(Ailment::Frozen));
+            if let TargetHit::Landed { inflicted, .. } = hits[0] {
+                assert_eq!(inflicted, Some(Ailment::Frozen));
             }
         }
         // Fully immune elemental target (resist 255): never inflicts.
@@ -1240,7 +1241,9 @@ mod tests {
         if let SkillOutcome::Cast { hits, .. } =
             cast(&caster, icy, aim, &immune, &all_walkable(), &mut rng).1
         {
-            assert_eq!(hits[0].inflicted, None);
+            if let TargetHit::Landed { inflicted, .. } = hits[0] {
+                assert_eq!(inflicted, None);
+            }
         }
     }
 
@@ -1261,12 +1264,12 @@ mod tests {
         let mut rng = TestRng::new(4);
         let (_, outcome) = cast(&caster, bolt, aim, &targets, &all_walkable(), &mut rng);
         match outcome {
-            SkillOutcome::Cast { hits, .. } => match hits[0].outcome {
-                AttackOutcome::Landed { .. } => {
-                    let moved = hits[0].displacement.expect("a landed lightning hit shoves");
+            SkillOutcome::Cast { hits, .. } => match hits[0] {
+                TargetHit::Landed { displacement, .. } => {
+                    let moved = displacement.expect("a landed lightning hit shoves");
                     assert_ne!(moved.position, targets[0].placement().position);
                 }
-                AttackOutcome::Killed { .. } | AttackOutcome::Missed => {}
+                TargetHit::Killed { .. } | TargetHit::Missed { .. } => {}
             },
             SkillOutcome::Rejected { .. } => panic!("cast should resolve"),
         }
@@ -1290,11 +1293,8 @@ mod tests {
                 assert!(
                     caster_placement.position.x().raw() > caster.placement().position.x().raw()
                 );
-                if let AttackOutcome::Landed { .. } = hits[0].outcome {
-                    assert!(
-                        hits[0].displacement.is_some(),
-                        "a landed lunge knocks the target"
-                    );
+                if let TargetHit::Landed { displacement, .. } = hits[0] {
+                    assert!(displacement.is_some(), "a landed lunge knocks the target");
                 }
             }
             SkillOutcome::Rejected { .. } => panic!("lunge should resolve"),
@@ -1329,11 +1329,13 @@ mod tests {
             if let SkillOutcome::Cast { hits, .. } =
                 cast(&caster, bolt, aim, &targets, &grid, &mut rng).1
             {
-                if let AttackOutcome::Landed { .. } = hits[0].outcome {
-                    if let Some(moved) = hits[0].displacement {
-                        // Any reported move stayed on the walkable row.
-                        assert!(grid.walkable(moved.position), "seed {seed}");
-                    }
+                if let TargetHit::Landed {
+                    displacement: Some(moved),
+                    ..
+                } = hits[0]
+                {
+                    // Any reported move stayed on the walkable row.
+                    assert!(grid.walkable(moved.position), "seed {seed}");
                 }
             }
         }
