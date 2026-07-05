@@ -33,7 +33,7 @@ use crate::components::item_instance::{
 use crate::components::item_options::{DinorantOption, SecondWingBonus};
 use crate::components::item_ref::ItemRef;
 use crate::components::levels::{EnhanceLevel, OptionLevel};
-use crate::components::units::{ItemLevel, Percent, Zen};
+use crate::components::units::{CarriedZen, DebitOutcome, ItemLevel, Percent, Zen};
 use crate::data::atlas::{Atlas, ResolvedOutput, ResolvedRecipe};
 use crate::data::chaos_mixes::{
     ItemAtLevel, ItemLevelWindow, UpgradeTarget, WingEconomics, row_at,
@@ -126,7 +126,7 @@ const FRUIT_WEIGHT_TOTAL: u32 = {
 #[must_use]
 pub fn mix(
     placed: Vec<ItemInstance>,
-    zen: Zen,
+    zen: CarriedZen,
     atlas: &Atlas,
     rng: &mut impl RngCore,
 ) -> MixOutcome {
@@ -150,13 +150,15 @@ pub fn mix(
 
     let rate = success_rate(&matched);
     let fee = attempt_fee(&matched, rate);
-    if zen < fee {
-        return MixOutcome::Rejected {
-            reason: RejectReason::InsufficientZen,
-            items: into_items(matched),
-        };
-    }
-    let balance = Zen(zen.0.saturating_sub(fee.0));
+    let balance = match zen.debit(fee) {
+        DebitOutcome::Debited { balance } => balance,
+        DebitOutcome::Insufficient { .. } => {
+            return MixOutcome::Rejected {
+                reason: RejectReason::InsufficientZen,
+                items: into_items(matched),
+            };
+        }
+    };
     if roll_success(rate, rng) {
         succeed(matched, rate, fee, balance, rng)
     } else {
@@ -1221,7 +1223,7 @@ fn succeed(
     matched: MatchedRecipe<'_>,
     rate: Percent,
     fee: Zen,
-    zen: Zen,
+    zen: CarriedZen,
     rng: &mut impl RngCore,
 ) -> MixOutcome {
     let (created, returned) = match matched {
@@ -1557,7 +1559,12 @@ fn draw_index(len: usize, rng: &mut impl RngCore) -> usize {
 // Fail dispositions (§5 per family; §4.4 downgrade).
 // ---------------------------------------------------------------------------
 
-fn fail(matched: MatchedRecipe<'_>, fee: Zen, zen: Zen, rng: &mut impl RngCore) -> MixOutcome {
+fn fail(
+    matched: MatchedRecipe<'_>,
+    fee: Zen,
+    zen: CarriedZen,
+    rng: &mut impl RngCore,
+) -> MixOutcome {
     let casualties = match matched {
         MatchedRecipe::ChaosWeapon {
             sacrifices,

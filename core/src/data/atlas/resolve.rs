@@ -12,15 +12,19 @@ use crate::components::tile::{TileFacing, WalkGrid};
 use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe, UpgradeTarget};
 use crate::data::common::{GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::gates_warps::{EnterGate, GateWarpRecord, SpawnGate, TargetGate, Warp};
-use crate::data::item_definitions::ItemDefinition;
+use crate::data::item_definitions::{ItemDefinition, ItemKind};
 use crate::data::map_definitions::MapDefinition;
 use crate::data::monster_definitions::MonsterDefinition;
+use crate::data::npc_shops::{MerchantShop, ShelfSlot, ShelfStock};
 use crate::data::skills::Skill;
 use crate::data::spawns::Spawn;
 use crate::data::terrain::MapTerrain;
 
 use super::AtlasError;
-use super::views::{Landing, ResolvedEnterGate, ResolvedOutput, ResolvedRecipe, ResolvedSpawn};
+use super::views::{
+    Landing, ResolvedEnterGate, ResolvedOutput, ResolvedRecipe, ResolvedShelfEntry, ResolvedShop,
+    ResolvedSpawn,
+};
 
 /// The gate records partitioned by kind, with per-file identity sets proven
 /// unique.
@@ -319,6 +323,152 @@ pub(super) fn resolve_spawns(
             .push(ResolvedSpawn { spawn, monster });
     }
     Ok(by_map)
+}
+
+/// Joins each merchant's shelf entries to their item definitions and re-proves
+/// the shelf contract in the same pass, RETAINING the join anchor-indexed per
+/// merchant (the [`resolve_spawns`] precedent): every entry `ItemRef`
+/// resolves, every footprint (from the joined definition) fits the 8×15 grid
+/// with no two entries overlapping, every stock tag agrees with its
+/// definition's kind, and every stack fits its definition's cap. The
+/// shop/merchant edge and per-NPC record uniqueness are the check module's
+/// proof.
+pub(super) fn resolve_shops(
+    shops: Vec<MerchantShop>,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<BTreeMap<MonsterNumber, ResolvedShop>, AtlasError> {
+    let mut by_npc = BTreeMap::new();
+    for shop in shops {
+        let npc = shop.npc;
+        let mut occupied: BTreeSet<(u16, u16)> = BTreeSet::new();
+        let mut entries = BTreeMap::new();
+        for entry in shop.shelf {
+            let slot = entry.slot;
+            let def = items
+                .get(&entry.item)
+                .ok_or(AtlasError::UnknownItemRef { item: entry.item })?;
+            if !stock_fits(&entry.stock, def) {
+                return Err(AtlasError::ShelfStockKindMismatch { npc, slot });
+            }
+            if let ShelfStock::Stack { pieces } = &entry.stock {
+                if pieces.get() > def.durability {
+                    return Err(AtlasError::ShelfStackOverCap { npc, slot });
+                }
+            }
+            claim_footprint(&mut occupied, npc, slot, def)?;
+            entries.insert(
+                slot,
+                ResolvedShelfEntry {
+                    level: entry.level,
+                    stock: entry.stock,
+                    def: def.clone(),
+                },
+            );
+        }
+        by_npc.insert(npc, ResolvedShop { entries });
+    }
+    Ok(by_npc)
+}
+
+/// Claims the cells an entry's footprint covers on the 8×15 grid, proving the
+/// footprint stays in-grid and collides with no previously claimed cell
+/// (which also proves anchor uniqueness — a repeated anchor collides on its
+/// own first cell).
+fn claim_footprint(
+    occupied: &mut BTreeSet<(u16, u16)>,
+    npc: MonsterNumber,
+    slot: ShelfSlot,
+    def: &ItemDefinition,
+) -> Result<(), AtlasError> {
+    let row = u16::from(slot.row());
+    let col = u16::from(slot.col());
+    let height = u16::from(def.height);
+    let width = u16::from(def.width);
+    if row + height > u16::from(ShelfSlot::ROWS) || col + width > u16::from(ShelfSlot::COLUMNS) {
+        return Err(AtlasError::ShelfFootprintOutOfGrid { npc, slot });
+    }
+    for covered_row in row..row + height {
+        for covered_col in col..col + width {
+            if !occupied.insert((covered_row, covered_col)) {
+                return Err(AtlasError::ShelfSlotOverlap { npc, slot });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The stock gate a definition's kind admits — the kind axis of the
+/// parse-time stock/kind cross-check. The family discriminant is dual-sourced
+/// (the wire stock tag and the joined kind), so the two must agree here once
+/// and the buy service never re-checks.
+enum ShelfKindBucket {
+    /// Wearable non-ammo equipment — admits `Gear`.
+    Gear,
+    /// Ammunition — admits `Quiver`.
+    Ammo,
+    /// A consumable — admits `Stack` above durability 1, `Single` at 1.
+    Consumable,
+    /// Every other non-wearable kind — admits `Single` at durability 1.
+    Inert,
+}
+
+/// The bucket of one kind — total over [`ItemKind`].
+fn shelf_kind_bucket(kind: &ItemKind) -> ShelfKindBucket {
+    match kind {
+        ItemKind::Weapon { .. }
+        | ItemKind::Bow { .. }
+        | ItemKind::Crossbow { .. }
+        | ItemKind::Staff { .. }
+        | ItemKind::Shield { .. }
+        | ItemKind::Helm { .. }
+        | ItemKind::BodyArmor { .. }
+        | ItemKind::Pants { .. }
+        | ItemKind::Gloves { .. }
+        | ItemKind::Boots { .. }
+        | ItemKind::Wings { .. }
+        | ItemKind::Pet { .. }
+        | ItemKind::Ring { .. }
+        | ItemKind::Pendant { .. }
+        | ItemKind::TransformationRing { .. } => ShelfKindBucket::Gear,
+        ItemKind::Arrows { .. } | ItemKind::Bolts { .. } => ShelfKindBucket::Ammo,
+        ItemKind::Consumable { .. } => ShelfKindBucket::Consumable,
+        ItemKind::Orb { .. }
+        | ItemKind::SkillScroll { .. }
+        | ItemKind::Jewel { .. }
+        | ItemKind::LuckyBox
+        | ItemKind::EventTicket { .. }
+        | ItemKind::MixMaterial
+        | ItemKind::StatFruit => ShelfKindBucket::Inert,
+    }
+}
+
+/// Whether a shelf entry's configured stock tag matches the joined
+/// definition: `Gear` on a wearable non-ammo kind, `Stack` on a stackable
+/// consumable (durability above 1), `Quiver` on ammunition, `Single` on any
+/// durability-1 non-wearable piece (skill scrolls, orbs, Ale, Town Portal
+/// Scroll).
+fn stock_fits(stock: &ShelfStock, def: &ItemDefinition) -> bool {
+    match (stock, shelf_kind_bucket(&def.kind)) {
+        (ShelfStock::Gear { .. }, ShelfKindBucket::Gear)
+        | (ShelfStock::Quiver, ShelfKindBucket::Ammo) => true,
+        (ShelfStock::Stack { .. }, ShelfKindBucket::Consumable) => def.durability > 1,
+        (ShelfStock::Single, ShelfKindBucket::Consumable | ShelfKindBucket::Inert) => {
+            def.durability == 1
+        }
+        (
+            ShelfStock::Gear { .. },
+            ShelfKindBucket::Ammo | ShelfKindBucket::Consumable | ShelfKindBucket::Inert,
+        )
+        | (
+            ShelfStock::Quiver,
+            ShelfKindBucket::Gear | ShelfKindBucket::Consumable | ShelfKindBucket::Inert,
+        )
+        | (
+            ShelfStock::Stack { .. },
+            ShelfKindBucket::Gear | ShelfKindBucket::Ammo | ShelfKindBucket::Inert,
+        )
+        | (ShelfStock::Single, ShelfKindBucket::Gear | ShelfKindBucket::Ammo) => false,
+    }
 }
 
 /// The authentic descending crafting-number scan order — a total match over

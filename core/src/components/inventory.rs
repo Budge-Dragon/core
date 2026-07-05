@@ -16,7 +16,7 @@ use core::num::NonZeroU8;
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::item_instance::ItemInstance;
+use crate::components::item_instance::{Durability, ItemInstance};
 
 /// A grid cell coordinate. Plain data — in-bounds is checked against the grid's
 /// `rows`/`cols`, not a field invariant.
@@ -262,6 +262,67 @@ impl Inventory {
         ))
     }
 
+    /// The first anchor `footprint` fits at, scanning row-major — row 0 left
+    /// to right, then row 1, and so on. Genuine optionality: a grid with no
+    /// fitting region has no anchor.
+    #[must_use]
+    pub fn first_fit(&self, footprint: Footprint) -> Option<Cell> {
+        (0..self.rows).find_map(|row| {
+            (0..self.cols).find_map(|col| {
+                let anchor = Cell { row, col };
+                let candidate = Rect::of(anchor, footprint);
+                let fits = candidate.in_bounds(self.rows, self.cols)
+                    && !self.placed.iter().any(|placed| {
+                        candidate.overlaps(Rect::of(placed.anchor, placed.footprint))
+                    });
+                fits.then_some(anchor)
+            })
+        })
+    }
+
+    /// Raises the gauge of the item covering `cell` by `add` — the whole-pack
+    /// stack absorb of a buy merge (a stack's piece count is its
+    /// `durability.current()`). Data-free: the ceiling is the target's own
+    /// `durability.max()`, never a definition lookup; the stackability gate
+    /// and the identity match live in the service holding the resolved
+    /// definition. On rejection the unchanged inventory is handed back.
+    ///
+    /// # Errors
+    /// Returns [`AbsorbRejection::NoItemAtCell`] when no item covers `cell`,
+    /// or [`AbsorbRejection::WouldOverflow`] when `current + add` exceeds the
+    /// target's own maximum — the whole pack must fit; no partial absorb
+    /// exists.
+    pub fn absorb(self, cell: Cell, add: NonZeroU8) -> Result<Self, (Self, AbsorbRejection)> {
+        let Some(occupant) = self.occupant(cell) else {
+            return Err((self, AbsorbRejection::NoItemAtCell));
+        };
+        let anchor = occupant.anchor;
+        let gauge = occupant.item.durability;
+        let Some(sum) = gauge.current().checked_add(add.get()) else {
+            return Err((self, AbsorbRejection::WouldOverflow));
+        };
+        // The gauge constructor IS the ceiling proof — its rejection is the
+        // overflow answer, never a re-checked precondition.
+        let Ok(raised) = Durability::new(sum, gauge.max()) else {
+            return Err((self, AbsorbRejection::WouldOverflow));
+        };
+        let placed = self
+            .placed
+            .into_iter()
+            .map(|mut placed| {
+                if placed.anchor == anchor {
+                    placed.item.durability = raised;
+                }
+                placed
+            })
+            .collect();
+        Ok(Self {
+            rows: self.rows,
+            cols: self.cols,
+            placed,
+        })
+    }
+
     /// Moves the item covering `from` so its anchor is `to`, reusing its stored
     /// footprint. Self-overlap on the moving item's own old cells is legal — the
     /// overlap test excludes it. On rejection the unchanged inventory is handed
@@ -359,6 +420,29 @@ impl core::fmt::Display for PlacementRejection {
 }
 
 impl core::error::Error for PlacementRejection {}
+
+/// Why a stack absorb was rejected — component-owned, decided from the
+/// target's presence and its own gauge ceiling alone. Plain (non-serde):
+/// consumed and re-mapped by services onto their own wire outcomes; it
+/// never crosses a port itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbsorbRejection {
+    /// No item covers the addressed cell.
+    NoItemAtCell,
+    /// The whole addition would push the gauge past its own maximum.
+    WouldOverflow,
+}
+
+impl core::fmt::Display for AbsorbRejection {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoItemAtCell => write!(f, "no item covers the addressed cell"),
+            Self::WouldOverflow => write!(f, "the addition would overflow the gauge"),
+        }
+    }
+}
+
+impl core::error::Error for AbsorbRejection {}
 
 #[cfg(test)]
 mod tests {
@@ -505,6 +589,98 @@ mod tests {
         let (inventory, reason) = inventory.move_to(cell(0, 0), cell(7, 7)).unwrap_err();
         assert_eq!(reason, PlacementRejection::CellOutOfBounds);
         assert!(inventory.occupant(cell(0, 0)).is_some());
+    }
+
+    #[test]
+    fn first_fit_over_an_empty_grid_anchors_at_the_origin() {
+        let inventory = Inventory::empty(15, 8);
+        assert_eq!(inventory.first_fit(footprint(1, 1)), Some(cell(0, 0)));
+        assert_eq!(inventory.first_fit(footprint(2, 3)), Some(cell(0, 0)));
+        assert_eq!(inventory.first_fit(footprint(8, 15)), Some(cell(0, 0)));
+    }
+
+    #[test]
+    fn first_fit_scans_row_major() {
+        // A full row 0 sends a 1x1 to the start of row 1.
+        let inventory = Inventory::empty(15, 8)
+            .place(cell(0, 0), footprint(8, 1), item(1))
+            .unwrap();
+        assert_eq!(inventory.first_fit(footprint(1, 1)), Some(cell(1, 0)));
+        // A partial obstruction is skipped to the first fitting anchor on the
+        // same row.
+        let inventory = Inventory::empty(15, 8)
+            .place(cell(0, 0), footprint(3, 2), item(2))
+            .unwrap();
+        assert_eq!(inventory.first_fit(footprint(2, 2)), Some(cell(0, 3)));
+        // A footprint too wide for the remaining row space drops below.
+        assert_eq!(inventory.first_fit(footprint(6, 1)), Some(cell(2, 0)));
+    }
+
+    #[test]
+    fn first_fit_reports_no_anchor_on_a_grid_with_no_region() {
+        let inventory = Inventory::empty(2, 2)
+            .place(cell(0, 0), footprint(2, 2), item(1))
+            .unwrap();
+        assert_eq!(inventory.first_fit(footprint(1, 1)), None);
+        // An oversized footprint never fits an empty grid either.
+        assert_eq!(Inventory::empty(2, 2).first_fit(footprint(3, 1)), None);
+    }
+
+    fn stack(number: u16, pieces: u8, cap: u8) -> ItemInstance {
+        let mut stack = item(number);
+        stack.durability = Durability::new(pieces, cap).unwrap();
+        stack
+    }
+
+    #[test]
+    fn absorb_raises_the_gauge_and_adds_no_placed_item() {
+        let inventory = Inventory::empty(8, 8)
+            .place(cell(2, 2), footprint(1, 1), stack(5, 1, 3))
+            .unwrap();
+        let inventory = inventory
+            .absorb(cell(2, 2), NonZeroU8::new(2).unwrap())
+            .unwrap();
+        assert_eq!(inventory.placed().len(), 1);
+        let occupant = inventory.occupant(cell(2, 2)).unwrap();
+        assert_eq!(occupant.item.durability, Durability::new(3, 3).unwrap());
+    }
+
+    #[test]
+    fn absorb_that_would_overflow_hands_the_inventory_back_unchanged() {
+        let inventory = Inventory::empty(8, 8)
+            .place(cell(0, 0), footprint(1, 1), stack(5, 2, 3))
+            .unwrap();
+        let (inventory, rejection) = inventory
+            .absorb(cell(0, 0), NonZeroU8::new(2).unwrap())
+            .unwrap_err();
+        assert_eq!(rejection, AbsorbRejection::WouldOverflow);
+        let occupant = inventory.occupant(cell(0, 0)).unwrap();
+        assert_eq!(occupant.item.durability, Durability::new(2, 3).unwrap());
+        // A u8-overflowing addition is the same rejection.
+        let full = Inventory::empty(8, 8)
+            .place(cell(0, 0), footprint(1, 1), stack(5, 255, 255))
+            .unwrap();
+        let (_, rejection) = full
+            .absorb(cell(0, 0), NonZeroU8::new(1).unwrap())
+            .unwrap_err();
+        assert_eq!(rejection, AbsorbRejection::WouldOverflow);
+    }
+
+    #[test]
+    fn absorb_addresses_any_covered_cell_and_rejects_an_empty_one() {
+        let inventory = Inventory::empty(8, 8)
+            .place(cell(1, 1), footprint(2, 2), stack(5, 1, 30))
+            .unwrap();
+        // A covered non-anchor cell reaches the same occupant.
+        let inventory = inventory
+            .absorb(cell(2, 2), NonZeroU8::new(1).unwrap())
+            .unwrap();
+        let occupant = inventory.occupant(cell(1, 1)).unwrap();
+        assert_eq!(occupant.item.durability, Durability::new(2, 30).unwrap());
+        let (_, rejection) = inventory
+            .absorb(cell(7, 7), NonZeroU8::new(1).unwrap())
+            .unwrap_err();
+        assert_eq!(rejection, AbsorbRejection::NoItemAtCell);
     }
 
     #[test]

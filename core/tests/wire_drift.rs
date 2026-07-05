@@ -35,12 +35,13 @@ use mu_core::components::spatial::{
     ConeHalfWidth, Facing, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
 use mu_core::components::tile::TileCoord;
-use mu_core::components::units::{Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
+use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
 use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::item_definitions::{ItemPrice, PerLevelPrice};
 use mu_core::data::special_drops::SpecialDrop;
 use mu_core::entities::character::Character;
 use mu_core::entities::world_item::WorldItem;
+use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
 use mu_core::events::craft::{Casualty, MixOutcome, RejectReason};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
@@ -52,8 +53,12 @@ use mu_core::events::loot::{Drop, DropResolution};
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
 use mu_core::events::progression::{ExpAward, LevelUp};
+use mu_core::events::shop::{
+    BuyOutcome, RepairAllOutcome, RepairOutcome, SellOutcome, SlotRepair, SlotRepairResult,
+};
 use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
+use mu_core::services::inventory::ZenPickupOutcome;
 
 /// The canonical mobile-entity placement reused by every event that nests one.
 /// Position is the centre of tile (2, 3); facing east; grounded; map 0.
@@ -754,6 +759,20 @@ fn world_item_wire_is_pinned() {
 }
 
 #[test]
+fn world_zen_wire_is_pinned() {
+    let world_zen = WorldZen {
+        amount: Zen(40_000),
+        position: WorldPos::clamped(163_840, 229_376),
+        map: MapNumber(0),
+        despawn: Tick(1200),
+    };
+    assert_eq!(
+        serde_json::to_string(&world_zen).unwrap(),
+        r#"{"amount":40000,"position":{"x":163840,"y":229376},"map":0,"despawn":1200}"#
+    );
+}
+
+#[test]
 fn container_outcome_wire_shapes_are_pinned() {
     assert_eq!(
         serde_json::to_string(&PlaceOutcome::Placed {
@@ -843,6 +862,211 @@ fn container_outcome_every_kind_tag_is_pinned() {
     }
 }
 
+// -- NPC-shop outcome and zen-pickup wire pins. --------------------------------
+
+#[test]
+fn shop_outcome_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&BuyOutcome::NewItem {
+            at: Cell { row: 0, col: 0 },
+            balance: CarriedZen::new(497_600).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"new_item","at":{"row":0,"col":0},"balance":497600}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&BuyOutcome::Merged {
+            at: Cell { row: 2, col: 5 },
+            balance: CarriedZen::new(980).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"merged","at":{"row":2,"col":5},"balance":980}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&SellOutcome::Sold {
+            proceeds: Zen(820),
+            balance: CarriedZen::new(250_820).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"sold","proceeds":820,"balance":250820}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RepairOutcome::Repaired {
+            cost: Zen(210),
+            balance: CarriedZen::new(790).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"repaired","cost":210,"balance":790}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RepairAllOutcome::Walked {
+            slots: vec![SlotRepair {
+                slot: EquipmentSlot::LeftHand,
+                result: SlotRepairResult::Unaffordable { cost: Zen(50) },
+            }],
+            balance: CarriedZen::new(49).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"walked","slots":[{"slot":"left_hand","result":{"kind":"unaffordable","cost":50}}],"balance":49}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ZenPickupOutcome::PickedUp).unwrap(),
+        r#"{"kind":"picked_up"}"#
+    );
+    let over_cap = ZenPickupOutcome::OverCap {
+        world_zen: WorldZen {
+            amount: Zen(40_000),
+            position: WorldPos::clamped(163_840, 229_376),
+            map: MapNumber(0),
+            despawn: Tick(1200),
+        },
+    };
+    assert_eq!(
+        serde_json::to_string(&over_cap).unwrap(),
+        r#"{"kind":"over_cap","world_zen":{"amount":40000,"position":{"x":163840,"y":229376},"map":0,"despawn":1200}}"#
+    );
+}
+
+#[test]
+fn buy_outcome_every_kind_tag_is_pinned() {
+    let balance = CarriedZen::new(0).unwrap();
+    let at = Cell { row: 0, col: 0 };
+    for outcome in [
+        BuyOutcome::NewItem { at, balance },
+        BuyOutcome::Merged { at, balance },
+        BuyOutcome::OutOfRange,
+        BuyOutcome::UnknownShelfSlot,
+        BuyOutcome::InventoryFull,
+        BuyOutcome::InsufficientZen,
+    ] {
+        let expected = match &outcome {
+            BuyOutcome::NewItem { .. } => "new_item",
+            BuyOutcome::Merged { .. } => "merged",
+            BuyOutcome::OutOfRange => "out_of_range",
+            BuyOutcome::UnknownShelfSlot => "unknown_shelf_slot",
+            BuyOutcome::InventoryFull => "inventory_full",
+            BuyOutcome::InsufficientZen => "insufficient_zen",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn sell_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        SellOutcome::Sold {
+            proceeds: Zen(0),
+            balance: CarriedZen::new(0).unwrap(),
+        },
+        SellOutcome::OutOfRange,
+        SellOutcome::NoItemAtCell,
+        SellOutcome::WalletFull,
+    ] {
+        let expected = match &outcome {
+            SellOutcome::Sold { .. } => "sold",
+            SellOutcome::OutOfRange => "out_of_range",
+            SellOutcome::NoItemAtCell => "no_item_at_cell",
+            SellOutcome::WalletFull => "wallet_full",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn repair_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        RepairOutcome::Repaired {
+            cost: Zen(1),
+            balance: CarriedZen::new(0).unwrap(),
+        },
+        RepairOutcome::AlreadyFull,
+        RepairOutcome::NotRepairableKind,
+        RepairOutcome::Empty,
+        RepairOutcome::OutOfRange,
+        RepairOutcome::InsufficientZen,
+    ] {
+        let expected = match &outcome {
+            RepairOutcome::Repaired { .. } => "repaired",
+            RepairOutcome::AlreadyFull => "already_full",
+            RepairOutcome::NotRepairableKind => "not_repairable_kind",
+            RepairOutcome::Empty => "empty",
+            RepairOutcome::OutOfRange => "out_of_range",
+            RepairOutcome::InsufficientZen => "insufficient_zen",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn repair_all_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        RepairAllOutcome::OutOfRange,
+        RepairAllOutcome::Walked {
+            slots: Vec::new(),
+            balance: CarriedZen::new(0).unwrap(),
+        },
+    ] {
+        let expected = match &outcome {
+            RepairAllOutcome::OutOfRange => "out_of_range",
+            RepairAllOutcome::Walked { .. } => "walked",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+    for result in [
+        SlotRepairResult::Repaired { cost: Zen(1) },
+        SlotRepairResult::AlreadyFull,
+        SlotRepairResult::Empty,
+        SlotRepairResult::Unaffordable { cost: Zen(1) },
+    ] {
+        let expected = match &result {
+            SlotRepairResult::Repaired { .. } => "repaired",
+            SlotRepairResult::AlreadyFull => "already_full",
+            SlotRepairResult::Empty => "empty",
+            SlotRepairResult::Unaffordable { .. } => "unaffordable",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(result).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn zen_pickup_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        ZenPickupOutcome::PickedUp,
+        ZenPickupOutcome::OverCap {
+            world_zen: WorldZen {
+                amount: Zen(1),
+                position: WorldPos::clamped(0, 0),
+                map: MapNumber(0),
+                despawn: Tick(0),
+            },
+        },
+    ] {
+        let expected = match &outcome {
+            ZenPickupOutcome::PickedUp => "picked_up",
+            ZenPickupOutcome::OverCap { .. } => "over_cap",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
 // -- Chaos-machine mix outcome wire pins. --------------------------------------
 
 #[test]
@@ -858,7 +1082,7 @@ fn mix_outcome_wire_shapes_are_pinned() {
     assert_eq!(
         serde_json::to_string(&MixOutcome::Failed {
             fee: Zen(250_000),
-            zen: Zen(750_000),
+            zen: CarriedZen::new(750_000).unwrap(),
             casualties: vec![Casualty::Destroyed {
                 item: ItemRef {
                     group: 12,
@@ -872,7 +1096,7 @@ fn mix_outcome_wire_shapes_are_pinned() {
     assert_eq!(
         serde_json::to_string(&MixOutcome::Success {
             fee: Zen(5_000_000),
-            zen: Zen(0),
+            zen: CarriedZen::new(0).unwrap(),
             created: normal_instance(),
             returned: Vec::new(),
         })
@@ -890,12 +1114,12 @@ fn mix_outcome_every_kind_tag_is_pinned() {
         },
         MixOutcome::Failed {
             fee: Zen(1),
-            zen: Zen(0),
+            zen: CarriedZen::new(0).unwrap(),
             casualties: Vec::new(),
         },
         MixOutcome::Success {
             fee: Zen(1),
-            zen: Zen(0),
+            zen: CarriedZen::new(0).unwrap(),
             created: normal_instance(),
             returned: Vec::new(),
         },

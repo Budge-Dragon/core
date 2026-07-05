@@ -16,6 +16,111 @@ pub struct Zen(
     pub u64,
 );
 
+/// A carried zen balance, proven `<= 2_000_000_000` at construction and on
+/// the wire. Distinct from [`Zen`] (a price, fee, or drop amount, unbounded):
+/// a loaded excellent item's buy price reachably exceeds the carry cap, so a
+/// price is not a balance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "u64", into = "u64")]
+pub struct CarriedZen(u64);
+
+impl CarriedZen {
+    /// The carry cap. A design pin, not a source extraction: OpenMU carries
+    /// only a config `int.MaxValue`; the classic client's 2e9 cap appears
+    /// nowhere in it. The constant is ours.
+    pub const CAP: u64 = 2_000_000_000;
+
+    /// Builds a balance; values above the carry cap are rejected. No
+    /// `clamped` twin (unlike [`Level`]/[`Percent`]): a saturating money
+    /// constructor silently destroys zen. Fallible construction only.
+    ///
+    /// # Errors
+    /// Returns [`UnitError::ZenAboveCap`] when `value` exceeds [`Self::CAP`].
+    pub fn new(value: u64) -> Result<Self, UnitError> {
+        if value > Self::CAP {
+            return Err(UnitError::ZenAboveCap { value });
+        }
+        Ok(Self(value))
+    }
+
+    /// The balance value.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    /// Adds a credit; a summed balance over the cap is rejected and the
+    /// balance preserved — never clamped. The cap edge is inclusive.
+    #[must_use]
+    pub fn credit(self, amount: Zen) -> CreditOutcome {
+        let sum = self.0.saturating_add(amount.0);
+        if sum > Self::CAP {
+            return CreditOutcome::OverCap { balance: self };
+        }
+        CreditOutcome::Credited { balance: Self(sum) }
+    }
+
+    /// Removes a debit; an amount over the balance is rejected and the
+    /// balance preserved.
+    #[must_use]
+    pub fn debit(self, amount: Zen) -> DebitOutcome {
+        match self.0.checked_sub(amount.0) {
+            Some(remaining) => DebitOutcome::Debited {
+                balance: Self(remaining),
+            },
+            None => DebitOutcome::Insufficient { balance: self },
+        }
+    }
+}
+
+impl TryFrom<u64> for CarriedZen {
+    type Error = UnitError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<CarriedZen> for u64 {
+    fn from(zen: CarriedZen) -> Self {
+        zen.0
+    }
+}
+
+/// Result of a [`CarriedZen::credit`] — the cap edge is inclusive. Plain
+/// (non-serde): consumed and re-mapped by services onto their own wire
+/// outcomes; it never crosses a port itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreditOutcome {
+    /// The credit fit under the cap.
+    Credited {
+        /// The new balance after the credit.
+        balance: CarriedZen,
+    },
+    /// The summed balance would exceed the cap; nothing was credited.
+    OverCap {
+        /// The unchanged balance.
+        balance: CarriedZen,
+    },
+}
+
+/// Result of a [`CarriedZen::debit`]. Plain (non-serde): consumed and
+/// re-mapped by services onto their own wire outcomes; it never crosses a
+/// port itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebitOutcome {
+    /// The debit was covered.
+    Debited {
+        /// The new balance after the debit.
+        balance: CarriedZen,
+    },
+    /// The amount exceeds the balance; nothing was debited.
+    Insufficient {
+        /// The unchanged balance.
+        balance: CarriedZen,
+    },
+}
+
 /// An experience amount (table entries, per-kill gains).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Exp(
@@ -408,6 +513,11 @@ pub enum UnitError {
     LevelZero,
     /// Tick duration of zero milliseconds.
     ZeroTickDuration,
+    /// Carried zen above the carry cap.
+    ZenAboveCap {
+        /// The rejected value.
+        value: u64,
+    },
 }
 
 impl core::fmt::Display for UnitError {
@@ -420,6 +530,9 @@ impl core::fmt::Display for UnitError {
             Self::ItemLevelAbove15 { value } => write!(f, "item level {value} exceeds 15"),
             Self::LevelZero => write!(f, "level must be at least 1"),
             Self::ZeroTickDuration => write!(f, "tick duration must be nonzero"),
+            Self::ZenAboveCap { value } => {
+                write!(f, "carried zen {value} exceeds 2000000000")
+            }
         }
     }
 }
@@ -577,6 +690,87 @@ mod tests {
         assert_eq!(serde_json::from_str::<Tick>("42").unwrap(), Tick(42));
         assert_eq!(serde_json::to_string(&Ticks(7)).unwrap(), "7");
         assert_eq!(serde_json::from_str::<Ticks>("7").unwrap(), Ticks(7));
+    }
+
+    #[test]
+    fn carried_zen_constructs_at_the_cap_and_rejects_above() {
+        assert_eq!(CarriedZen::new(2_000_000_000).unwrap().get(), 2_000_000_000);
+        assert_eq!(
+            CarriedZen::new(2_000_000_001),
+            Err(UnitError::ZenAboveCap {
+                value: 2_000_000_001
+            })
+        );
+    }
+
+    #[test]
+    fn carried_zen_credit_sums_below_the_cap() {
+        let balance = CarriedZen::new(250_000).unwrap();
+        assert_eq!(
+            balance.credit(Zen(40_000)),
+            CreditOutcome::Credited {
+                balance: CarriedZen::new(290_000).unwrap()
+            }
+        );
+    }
+
+    #[test]
+    fn carried_zen_credit_cap_edge_is_inclusive() {
+        let balance = CarriedZen::new(1_999_999_999).unwrap();
+        assert_eq!(
+            balance.credit(Zen(1)),
+            CreditOutcome::Credited {
+                balance: CarriedZen::new(CarriedZen::CAP).unwrap()
+            }
+        );
+    }
+
+    #[test]
+    fn carried_zen_credit_over_the_cap_preserves_the_balance() {
+        let balance = CarriedZen::new(1_999_999_999).unwrap();
+        assert_eq!(balance.credit(Zen(2)), CreditOutcome::OverCap { balance });
+    }
+
+    #[test]
+    fn carried_zen_debit_reduces_when_funds_suffice() {
+        let balance = CarriedZen::new(1_000_000).unwrap();
+        assert_eq!(
+            balance.debit(Zen(250_000)),
+            DebitOutcome::Debited {
+                balance: CarriedZen::new(750_000).unwrap()
+            }
+        );
+    }
+
+    #[test]
+    fn carried_zen_debit_exactly_to_zero() {
+        let balance = CarriedZen::new(250_000).unwrap();
+        assert_eq!(
+            balance.debit(Zen(250_000)),
+            DebitOutcome::Debited {
+                balance: CarriedZen::new(0).unwrap()
+            }
+        );
+    }
+
+    #[test]
+    fn carried_zen_debit_over_the_balance_preserves_it() {
+        let balance = CarriedZen::new(250_000).unwrap();
+        assert_eq!(
+            balance.debit(Zen(250_001)),
+            DebitOutcome::Insufficient { balance }
+        );
+    }
+
+    #[test]
+    fn carried_zen_wire_is_a_bare_integer_reproven_on_parse() {
+        let balance = CarriedZen::new(250_000).unwrap();
+        assert_eq!(serde_json::to_string(&balance).unwrap(), "250000");
+        assert_eq!(
+            serde_json::from_str::<CarriedZen>("250000").unwrap(),
+            balance
+        );
+        assert!(serde_json::from_str::<CarriedZen>("2000000001").is_err());
     }
 
     #[test]

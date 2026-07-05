@@ -21,6 +21,7 @@ pub mod gates_warps;
 pub mod item_definitions;
 pub mod map_definitions;
 pub mod monster_definitions;
+pub mod npc_shops;
 pub mod option_roll;
 pub mod skills;
 pub mod spawns;

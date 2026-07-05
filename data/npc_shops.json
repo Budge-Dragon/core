@@ -1,0 +1,3121 @@
+{
+  "records": [
+    {
+      "npc": 242,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 14,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 1,
+          "item": {
+            "group": 14,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 14,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 3,
+          "item": {
+            "group": 14,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 14,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 5,
+          "item": {
+            "group": 14,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 14,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 7,
+          "item": {
+            "group": 14,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 8,
+          "item": {
+            "group": 14,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 9,
+          "item": {
+            "group": 14,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 10,
+          "item": {
+            "group": 14,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 11,
+          "item": {
+            "group": 14,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 12,
+          "item": {
+            "group": 14,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 13,
+          "item": {
+            "group": 14,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 14,
+          "item": {
+            "group": 14,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 15,
+          "item": {
+            "group": 14,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 12,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 17,
+          "item": {
+            "group": 12,
+            "number": 9
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 12,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 21,
+          "item": {
+            "group": 14,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 4,
+            "number": 7
+          },
+          "level": 0,
+          "stock": "quiver"
+        },
+        {
+          "slot": 23,
+          "item": {
+            "group": 4,
+            "number": 15
+          },
+          "level": 0,
+          "stock": "quiver"
+        },
+        {
+          "slot": 24,
+          "item": {
+            "group": 12,
+            "number": 11
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 25,
+          "item": {
+            "group": 12,
+            "number": 11
+          },
+          "level": 1,
+          "stock": "single"
+        },
+        {
+          "slot": 26,
+          "item": {
+            "group": 12,
+            "number": 11
+          },
+          "level": 2,
+          "stock": "single"
+        },
+        {
+          "slot": 27,
+          "item": {
+            "group": 12,
+            "number": 11
+          },
+          "level": 3,
+          "stock": "single"
+        },
+        {
+          "slot": 28,
+          "item": {
+            "group": 12,
+            "number": 11
+          },
+          "level": 4,
+          "stock": "single"
+        },
+        {
+          "slot": 32,
+          "item": {
+            "group": 7,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 8,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 9,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 38,
+          "item": {
+            "group": 10,
+            "number": 10
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          },
+          "review": "kept verbatim (spec K4): the Vine set ships mixed levels — +0 helm/armor/pants, +3 gloves/boots (Version075/MerchantStores.cs:245-249); deliberate quirk or transcription error is undecidable from source (consult open question 8)"
+        },
+        {
+          "slot": 48,
+          "item": {
+            "group": 11,
+            "number": 10
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          },
+          "review": "kept verbatim (spec K4): the Vine set ships mixed levels — +0 helm/armor/pants, +3 gloves/boots (Version075/MerchantStores.cs:245-249); deliberate quirk or transcription error is undecidable from source (consult open question 8)"
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 7,
+            "number": 11
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 52,
+          "item": {
+            "group": 8,
+            "number": 11
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 54,
+          "item": {
+            "group": 9,
+            "number": 11
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 64,
+          "item": {
+            "group": 10,
+            "number": 11
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 66,
+          "item": {
+            "group": 11,
+            "number": 11
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 68,
+          "item": {
+            "group": 7,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 70,
+          "item": {
+            "group": 8,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 80,
+          "item": {
+            "group": 9,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 82,
+          "item": {
+            "group": 10,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 84,
+          "item": {
+            "group": 11,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        }
+      ]
+    },
+    {
+      "npc": 243,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 7,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 8,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 9,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 10,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 11,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 7,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 8,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 9,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 32,
+          "item": {
+            "group": 10,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 11,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 4,
+            "number": 8
+          },
+          "level": 1,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 38,
+          "item": {
+            "group": 4,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 48,
+          "item": {
+            "group": 4,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 4,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 52,
+          "item": {
+            "group": 4,
+            "number": 2
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 54,
+          "item": {
+            "group": 4,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 72,
+          "item": {
+            "group": 4,
+            "number": 11
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 74,
+          "item": {
+            "group": 4,
+            "number": 4
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 76,
+          "item": {
+            "group": 4,
+            "number": 10
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 78,
+          "item": {
+            "group": 6,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 2
+          },
+          "review": "kept verbatim (spec K6): one of exactly two era shields carrying normal option level 2 — Legendary Shield at Izabel, Elven Shield at Eo (Version075/MerchantStores.cs:315,356); every other store option is level 1"
+        }
+      ]
+    },
+    {
+      "npc": 244,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 14,
+            "number": 9
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 1,
+          "item": {
+            "group": 14,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        }
+      ]
+    },
+    {
+      "npc": 245,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 14,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 1,
+          "item": {
+            "group": 14,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 14,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 3,
+          "item": {
+            "group": 14,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 14,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 5,
+          "item": {
+            "group": 14,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 14,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 7,
+          "item": {
+            "group": 14,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 8,
+          "item": {
+            "group": 14,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 9,
+          "item": {
+            "group": 14,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 10,
+          "item": {
+            "group": 14,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 11,
+          "item": {
+            "group": 14,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 12,
+          "item": {
+            "group": 14,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 13,
+          "item": {
+            "group": 14,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 14,
+          "item": {
+            "group": 14,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 15,
+          "item": {
+            "group": 14,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 7,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 8,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 9,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 10,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 32,
+          "item": {
+            "group": 11,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 14,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 35,
+          "item": {
+            "group": 4,
+            "number": 7
+          },
+          "level": 0,
+          "stock": "quiver"
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 4,
+            "number": 15
+          },
+          "level": 0,
+          "stock": "quiver"
+        },
+        {
+          "slot": 37,
+          "item": {
+            "group": 15,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 38,
+          "item": {
+            "group": 15,
+            "number": 7
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 48,
+          "item": {
+            "group": 5,
+            "number": 4
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "wizardry_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 5,
+            "number": 5
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "wizardry_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 52,
+          "item": {
+            "group": 6,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 2
+          },
+          "review": "kept verbatim (spec K6): one of exactly two era shields carrying normal option level 2 — Legendary Shield at Izabel, Elven Shield at Eo (Version075/MerchantStores.cs:315,356); every other store option is level 1"
+        }
+      ]
+    },
+    {
+      "npc": 246,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 7,
+            "number": 1
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 8,
+            "number": 1
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 9,
+            "number": 1
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 10,
+            "number": 1
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 11,
+            "number": 1
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 0,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 0,
+            "number": 11
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 26,
+          "item": {
+            "group": 0,
+            "number": 15
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 32,
+          "item": {
+            "group": 0,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 33,
+          "item": {
+            "group": 0,
+            "number": 14
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 44,
+          "item": {
+            "group": 0,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 46,
+          "item": {
+            "group": 4,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 3,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 56,
+          "item": {
+            "group": 3,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 68,
+          "item": {
+            "group": 4,
+            "number": 5
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 70,
+          "item": {
+            "group": 4,
+            "number": 13
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        }
+      ]
+    },
+    {
+      "npc": 248,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 38,
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 40,
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 52,
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 54,
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 56,
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 66,
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 68,
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 70,
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 72,
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 82,
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 84,
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 88,
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 98,
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 104,
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        }
+      ]
+    },
+    {
+      "npc": 250,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 7,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 7,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 7,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 7,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 8,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 8,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 8,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 8,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 9,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 9,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 38,
+          "item": {
+            "group": 9,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 40,
+          "item": {
+            "group": 9,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 11,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 52,
+          "item": {
+            "group": 11,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 54,
+          "item": {
+            "group": 11,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 56,
+          "item": {
+            "group": 11,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 66,
+          "item": {
+            "group": 10,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 68,
+          "item": {
+            "group": 10,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 70,
+          "item": {
+            "group": 10,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 72,
+          "item": {
+            "group": 10,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 82,
+          "item": {
+            "group": 9,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 84,
+          "item": {
+            "group": 10,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 88,
+          "item": {
+            "group": 7,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 98,
+          "item": {
+            "group": 11,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 104,
+          "item": {
+            "group": 8,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        }
+      ]
+    },
+    {
+      "npc": 251,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 6,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 6,
+            "number": 4
+          },
+          "level": 1,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 6,
+            "number": 1
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 6,
+            "number": 2
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 6,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 6,
+            "number": 10
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 6,
+            "number": 9
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 6,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 32,
+          "item": {
+            "group": 6,
+            "number": 5
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 6,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 6,
+            "number": 11
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 38,
+          "item": {
+            "group": 6,
+            "number": 12
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "defense_rate",
+            "level": 1
+          }
+        },
+        {
+          "slot": 48,
+          "item": {
+            "group": 0,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 49,
+          "item": {
+            "group": 1,
+            "number": 1
+          },
+          "level": 1,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 2,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          },
+          "review": "our data fix over OpenMU (spec D15): OpenMU creates Scepters #1 (Morning Star) at BOTH +2 (slot 50, comment claims 'Mace') and +3 (slot 54) — Version075/MerchantStores.cs:133,137; the stated stock list is the rule, so this entry ships the actual Mace (Scepters #0) at +2, no skill per the original comment intent (the comment carries no +S and the call passes skill=false)"
+        },
+        {
+          "slot": 51,
+          "item": {
+            "group": 0,
+            "number": 2
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 52,
+          "item": {
+            "group": 1,
+            "number": 2
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 53,
+          "item": {
+            "group": 0,
+            "number": 4
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 54,
+          "item": {
+            "group": 2,
+            "number": 1
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 55,
+          "item": {
+            "group": 1,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 72,
+          "item": {
+            "group": 0,
+            "number": 0
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 73,
+          "item": {
+            "group": 0,
+            "number": 6
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 74,
+          "item": {
+            "group": 0,
+            "number": 8
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 75,
+          "item": {
+            "group": 0,
+            "number": 5
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 76,
+          "item": {
+            "group": 0,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "with_skill",
+          "option": {
+            "option": "physical_damage",
+            "level": 1
+          },
+          "review": "our data fix over OpenMU (spec D14): OpenMU creates Gladius AND Falchion both at slot 73 (Version075/MerchantStores.cs:141-142), leaving the Falchion unreachable behind the first-match lookup; moved to slot 76 — the nearest free anchor (row 9, col 4), the first row-major free cell after the occupied 72-75 sword run, fitting the 1x3 footprint on rows 9-11"
+        }
+      ]
+    },
+    {
+      "npc": 253,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 14,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 1,
+          "item": {
+            "group": 14,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 14,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 3,
+          "item": {
+            "group": 14,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 14,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 5,
+          "item": {
+            "group": 14,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 14,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 7,
+          "item": {
+            "group": 14,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 1
+        },
+        {
+          "slot": 8,
+          "item": {
+            "group": 14,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 9,
+          "item": {
+            "group": 14,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 10,
+          "item": {
+            "group": 14,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 11,
+          "item": {
+            "group": 14,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 12,
+          "item": {
+            "group": 14,
+            "number": 4
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 13,
+          "item": {
+            "group": 14,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 14,
+          "item": {
+            "group": 14,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 15,
+          "item": {
+            "group": 14,
+            "number": 8
+          },
+          "level": 0,
+          "stock": "stack",
+          "pieces": 3
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 4,
+            "number": 7
+          },
+          "level": 0,
+          "stock": "quiver"
+        },
+        {
+          "slot": 17,
+          "item": {
+            "group": 4,
+            "number": 15
+          },
+          "level": 0,
+          "stock": "quiver"
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 14,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        }
+      ]
+    },
+    {
+      "npc": 254,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 15,
+            "number": 3
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 1,
+          "item": {
+            "group": 15,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 2,
+          "item": {
+            "group": 15,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 3,
+          "item": {
+            "group": 15,
+            "number": 1
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 4,
+          "item": {
+            "group": 15,
+            "number": 5
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 5,
+          "item": {
+            "group": 15,
+            "number": 6
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 6,
+          "item": {
+            "group": 15,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 16,
+          "item": {
+            "group": 7,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 18,
+          "item": {
+            "group": 7,
+            "number": 4
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 20,
+          "item": {
+            "group": 7,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 22,
+          "item": {
+            "group": 5,
+            "number": 0
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "wizardry_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 32,
+          "item": {
+            "group": 8,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 34,
+          "item": {
+            "group": 8,
+            "number": 4
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 36,
+          "item": {
+            "group": 8,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 46,
+          "item": {
+            "group": 5,
+            "number": 1
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "wizardry_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 48,
+          "item": {
+            "group": 9,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 50,
+          "item": {
+            "group": 9,
+            "number": 4
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 60,
+          "item": {
+            "group": 9,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 64,
+          "item": {
+            "group": 11,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 66,
+          "item": {
+            "group": 11,
+            "number": 4
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 70,
+          "item": {
+            "group": 5,
+            "number": 2
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "wizardry_damage",
+            "level": 1
+          }
+        },
+        {
+          "slot": 76,
+          "item": {
+            "group": 11,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 80,
+          "item": {
+            "group": 10,
+            "number": 2
+          },
+          "level": 0,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 82,
+          "item": {
+            "group": 10,
+            "number": 4
+          },
+          "level": 2,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 92,
+          "item": {
+            "group": 10,
+            "number": 7
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "defense",
+            "level": 1
+          }
+        },
+        {
+          "slot": 94,
+          "item": {
+            "group": 5,
+            "number": 3
+          },
+          "level": 3,
+          "stock": "gear",
+          "luck": "lucky",
+          "skill": "no_skill",
+          "option": {
+            "option": "wizardry_damage",
+            "level": 1
+          }
+        }
+      ]
+    },
+    {
+      "npc": 255,
+      "source_version": "075",
+      "shelf": [
+        {
+          "slot": 0,
+          "item": {
+            "group": 14,
+            "number": 9
+          },
+          "level": 0,
+          "stock": "single"
+        },
+        {
+          "slot": 1,
+          "item": {
+            "group": 14,
+            "number": 10
+          },
+          "level": 0,
+          "stock": "single"
+        }
+      ]
+    }
+  ]
+}
