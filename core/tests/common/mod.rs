@@ -18,10 +18,9 @@
 //! determinism observable.
 
 pub mod dataset;
+pub mod rng;
 
 use std::collections::BTreeMap;
-
-use rand_core::RngCore;
 
 use mu_core::components::spatial::{Fixed, UNITS_PER_TILE};
 use mu_core::components::tile::WalkGrid;
@@ -38,6 +37,7 @@ use mu_core::services::spawn::populate_map;
 
 use dataset::or_abort;
 pub use dataset::real_atlas;
+pub use rng::TestRng;
 
 /// A one-tile step in sub-units — the mob movement grain used by the step
 /// services in the integration tests.
@@ -47,44 +47,6 @@ pub const ONE_TILE: Fixed = Fixed::from_raw(UNITS_PER_TILE);
 #[must_use]
 pub fn tick() -> TickDuration {
     or_abort(TickDuration::new(50))
-}
-
-/// Deterministic `SplitMix64` — the exact stream `data_files.rs` uses, mirrored
-/// here so population and every tick replay identically across targets.
-pub struct TestRng {
-    state: u64,
-}
-
-impl TestRng {
-    /// Seeds the stream.
-    #[must_use]
-    pub fn new(seed: u64) -> Self {
-        Self { state: seed }
-    }
-}
-
-impl RngCore for TestRng {
-    fn next_u64(&mut self) -> u64 {
-        self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.state;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    fn next_u32(&mut self) -> u32 {
-        let [b0, b1, b2, b3, _, _, _, _] = self.next_u64().to_le_bytes();
-        u32::from_le_bytes([b0, b1, b2, b3])
-    }
-
-    fn fill_bytes(&mut self, dst: &mut [u8]) {
-        for chunk in dst.chunks_mut(8) {
-            let bytes = self.next_u64().to_le_bytes();
-            for (slot, byte) in chunk.iter_mut().zip(bytes.iter()) {
-                *slot = *byte;
-            }
-        }
-    }
 }
 
 /// The host-side behavior join: a monster number to the `MobBehavior` of the
