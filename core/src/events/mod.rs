@@ -16,3 +16,4 @@ pub mod progression;
 pub mod shop;
 pub mod skills;
 pub mod spawn;
+pub mod trade;

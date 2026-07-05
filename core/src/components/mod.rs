@@ -24,5 +24,6 @@ pub mod pool;
 pub mod spatial;
 pub mod stats;
 pub mod tile;
+pub mod trade_window;
 pub mod units;
 pub mod vitals;
