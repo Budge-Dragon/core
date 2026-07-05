@@ -254,16 +254,30 @@ def build_weapons():
             drops=drops, drop_level=drop_level, max_item_level=ITEM_LEVEL_CAP,
             durability=durability, kind=kind))
 
+    # W-SRC: the classic ammo per-level base tables (arrow/bolt arms of the
+    # special-item dictionary); the services ammo branch scales the base by
+    # current durability / definition durability (empty quiver -> 0).
+    ammo_base_rows = {"arrows": [70, 1200, 2000, 2800],
+                      "bolts": [100, 1400, 2200, 3000]}
     for a in calls(text_095d, "CreateAmmunition"):
         (group, number, slot, width, height, drops, name, drop_level,
          durability, wizard, knight, elf) = a
         version = "075" if (group, number) in in_075 else "095d"
-        kind = {"kind": "arrows" if number == 15 else "bolts",
+        kind_tag = "arrows" if number == 15 else "bolts"
+        kind = {"kind": kind_tag,
                 "classes": classes_from_levels(dw=wizard, dk=knight, elf=elf)}
+        rows = ammo_base_rows[kind_tag]
         records.append(item(
             group, number, name, version, width=width, height=height,
             drops=drops, drop_level=drop_level, max_item_level=0,
-            durability=durability, kind=kind))
+            durability=durability, price=per_level_price(*rows),
+            review="per-level price rows from " + PRICE_DICT_SRC
+                   + "; level 0 is the dictionary's %d default arm, rows 1-3 "
+                     "its level rows, carried-but-unreachable at the shipped "
+                     "max_item_level 0 (the DS-ticket era-stable-table "
+                     "precedent); the base is scaled by current/definition "
+                     "durability in the services ammo branch" % rows[0],
+            kind=kind))
     return records
 
 
@@ -856,7 +870,9 @@ def build_tickets_and_materials():
 # main
 # ---------------------------------------------------------------------------
 
-def main():
+def build_all():
+    """Every ItemDefinition record, identity-sorted — the single item source
+    (shops.py reuses it for footprints/kinds/durability)."""
     records = []
     records += build_weapons()
     records += build_armors()
@@ -874,6 +890,11 @@ def main():
     ids = [(r["id"]["group"], r["id"]["number"]) for r in records]
     assert len(ids) == len(set(ids)), "duplicate item identity"
     records.sort(key=lambda r: (r["id"]["group"], r["id"]["number"]))
+    return records
+
+
+def main():
+    records = build_all()
 
     # Display names -> host-owned sidecar keyed by {group, number}; the core
     # file carries only the identity and rules.
@@ -931,7 +952,7 @@ def main():
             "wing jol_options are the BuildOptions normal (Jewel-of-Life) option kinds as NormalOption: Elf health_recovery_pct, Heaven wizardry_damage, Satan physical_damage, Spirits [health_recovery_pct, physical_damage], Soul [health_recovery_pct, wizardry_damage], Dragon [health_recovery_pct, physical_damage], Darkness [wizardry_damage, physical_damage]; Cape of Lord [physical_damage] (s6-sourced, review-flagged)",
             "pendant excellent is the ExcellentCategory object {set:weapon, damage:physical|wizardry} (Fire/Wind/Ability -> physical, Lighting/Ice/Water -> wizardry); pets serialize CombatBonus inline (absorb -> incoming_damage_pct, attack increase -> damage_pct, health -> max_health); movement-speed power-ups deleted -> Horn of Uniria carries no bonuses (ground_mount) and the mount fact rides PetRide",
             "requirements split: equipment carries WearRequirements (raw Item.txt columns, scaled at equip by services), orbs/scrolls carry LearnRequirements (absolute consumption minima, no vitality column)",
-            "price is kind-tagged three ways (W-CRAFT): {fixed, zen} = the item's base NPC price -- orbs/scrolls verbatim (the classic group-12/15 Value-verbatim branch), consumables floor(Value^2*10/12) (the classic Value-branch base, W-SRC), the five jewels and the stat fruit from the OpenMU special-item price dictionary (ItemPriceCalculator.cs, consult D.4); {per_level, zen_by_level} = the dictionary's classic per-level tables on mix materials and event tickets (non-empty array indexed by item level, clamped to the last entry; index 0 = the dictionary's default arm; Devil's Invitation level-0 is our clamp, review-flagged); {formula} = priced entirely by the services price rule (equipment, wings, jewelry, pets, lucky box, transformation ring -- box/ring cross-checked against the full special dictionary: no classic special value)",
+            "price is kind-tagged three ways (W-CRAFT): {fixed, zen} = the item's base NPC price -- orbs/scrolls verbatim (the classic group-12/15 Value-verbatim branch), consumables floor(Value^2*10/12) (the classic Value-branch base, W-SRC), the five jewels and the stat fruit from the OpenMU special-item price dictionary (ItemPriceCalculator.cs, consult D.4); {per_level, zen_by_level} = the dictionary's classic per-level tables on mix materials, event tickets, and ammo (non-empty array indexed by item level, clamped to the last entry; index 0 = the dictionary's default arm; Devil's Invitation level-0 is our clamp, review-flagged; the arrow/bolt bases [70,1200,2000,2800]/[100,1400,2200,3000] moved formula -> per_level for W-SHOP, review-flagged, scaled by durability ratio in the services ammo branch); {formula} = priced entirely by the services price rule (equipment, wings, jewelry, pets, lucky box, transformation ring -- box/ring cross-checked against the full special dictionary: no classic special value)",
             "W-SRC: consumable fixed prices changed semantics this wave -- previously the raw Item.txt Value column (5/10/20/30), now the classic Value-branch base price floor(Value^2*10/12) (20/83/333/750), so {fixed, zen} means one thing everywhere: the base the services consumable branch scales (x2^level, tens-truncate, x piece count)",
             "potion durability=3 is OpenMU stack-size modeling (invented value): the 8 durability-3 consumables (Apple, healing x3, mana x3, Antidote) carry the review flag; Ale/Town Portal (durability 1) do not; stacking itself is a W-ENT inventory rule",
             "transformation ring skins [2, 7, 14, 8, 9, 41] are MonsterNumbers (Atlas-proven); weapon/shield/pet skills and orb/scroll teaches are SkillNumbers (Atlas-proven)",

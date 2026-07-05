@@ -12,7 +12,7 @@ use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
 use crate::components::placement::Placement;
 use crate::components::stats::Stats;
-use crate::components::units::{Exp, Level, Zen};
+use crate::components::units::{CarriedZen, Exp, Level};
 use crate::components::vitals::Vitals;
 
 /// A live player character. Private fields: construction (serde or otherwise)
@@ -25,7 +25,7 @@ pub struct Character {
     experience: Exp,
     stats: Stats,
     unspent_points: u16,
-    zen: Zen,
+    zen: CarriedZen,
     placement: Placement,
     vitals: Vitals,
     active_effects: ActiveEffects,
@@ -40,7 +40,7 @@ struct RawCharacter {
     experience: Exp,
     stats: Stats,
     unspent_points: u16,
-    zen: Zen,
+    zen: CarriedZen,
     placement: Placement,
     vitals: Vitals,
     /// A record that predates timed effects, or a freshly created character,
@@ -125,7 +125,7 @@ impl Character {
 
     /// The zen the character carries.
     #[must_use]
-    pub fn zen(&self) -> Zen {
+    pub fn zen(&self) -> CarriedZen {
         self.zen
     }
 
@@ -206,7 +206,7 @@ mod tests {
             experience: Exp(1_234_567),
             stats,
             unspent_points: 15,
-            zen: Zen(250_000),
+            zen: CarriedZen::new(250_000).unwrap(),
             placement: placement(),
             vitals: vitals(),
             active_effects: ActiveEffects::EMPTY,
@@ -238,9 +238,19 @@ mod tests {
         assert_eq!(character.class(), CharacterClass::DarkKnight);
         assert_eq!(character.level().get(), 42);
         assert_eq!(character.stats(), standard());
-        assert_eq!(character.zen(), Zen(250_000));
+        assert_eq!(character.zen(), CarriedZen::new(250_000).unwrap());
         let json = serde_json::to_string(&character).unwrap();
+        assert!(json.contains(r#""zen":250000"#), "zen is a bare integer");
         assert_eq!(serde_json::from_str::<Character>(&json).unwrap(), character);
+    }
+
+    #[test]
+    fn a_persisted_zen_above_the_cap_fails_to_parse() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+        value["zen"] = serde_json::json!(2_000_000_001_u64);
+        assert!(serde_json::from_value::<Character>(value).is_err());
     }
 
     #[test]

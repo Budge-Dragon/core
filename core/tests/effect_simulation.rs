@@ -35,6 +35,7 @@ use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterDefinition, MonsterRole};
+use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
 use mu_core::data::special_drops::SpecialDropRecord;
@@ -106,6 +107,7 @@ fn real_atlas() -> Atlas {
         special_drops: load::<SpecialDropRecord>("special_drops"),
         ancient_sets: load::<AncientSet>("ancient_sets"),
         chaos_mixes: load::<ChaosMix>("chaos_mixes"),
+        shops: load::<MerchantShop>("npc_shops"),
         classes: load::<ClassRecord>("classes"),
         exp_tables: load::<ExpTable>("exp_tables"),
         game_config: load::<GameConfig>("game_config"),

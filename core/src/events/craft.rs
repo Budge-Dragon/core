@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::item_instance::ItemInstance;
 use crate::components::item_ref::ItemRef;
-use crate::components::units::Zen;
+use crate::components::units::{CarriedZen, Zen};
 
 /// The one outcome of a chaos-machine mix, kind-tagged. `zen` on the charged
 /// variants is the new balance after the fee — the fee is charged up front and
@@ -29,7 +29,7 @@ pub enum MixOutcome {
         /// The fee that was charged and kept.
         fee: Zen,
         /// The new zen balance after the fee.
-        zen: Zen,
+        zen: CarriedZen,
         /// Each input's fate — every input appears exactly once.
         casualties: Vec<Casualty>,
     },
@@ -40,7 +40,7 @@ pub enum MixOutcome {
         /// The fee that was charged and kept.
         fee: Zen,
         /// The new zen balance after the fee.
-        zen: Zen,
+        zen: CarriedZen,
         /// The crafted (or upgraded-in-place) item.
         created: ItemInstance,
         /// The inputs the recipe left untouched (a ticket family's extras).
@@ -133,7 +133,7 @@ mod tests {
     fn failed_round_trips_with_every_casualty_kind() {
         let outcome = MixOutcome::Failed {
             fee: Zen(250_000),
-            zen: Zen(750_000),
+            zen: CarriedZen::new(750_000).unwrap(),
             casualties: vec![
                 Casualty::Destroyed {
                     item: ItemRef {
@@ -146,6 +146,10 @@ mod tests {
             ],
         };
         let json = serde_json::to_string(&outcome).unwrap();
+        assert!(
+            json.contains(r#""fee":250000,"zen":750000"#),
+            "the balance stays a bare integer on the wire"
+        );
         assert_eq!(serde_json::from_str::<MixOutcome>(&json).unwrap(), outcome);
     }
 
@@ -153,7 +157,7 @@ mod tests {
     fn success_round_trips() {
         let outcome = MixOutcome::Success {
             fee: Zen(5_000_000),
-            zen: Zen(0),
+            zen: CarriedZen::new(0).unwrap(),
             created: instance(),
             returned: vec![instance()],
         };

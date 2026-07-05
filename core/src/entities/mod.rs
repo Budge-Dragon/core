@@ -8,3 +8,4 @@ pub mod character;
 pub mod monster_instance;
 pub mod spawned;
 pub mod world_item;
+pub mod world_zen;

@@ -1,0 +1,49 @@
+{
+  "records": 11,
+  "entries": 231,
+  "entries_by_npc": {
+    "242": 42,
+    "243": 20,
+    "244": 2,
+    "245": 29,
+    "246": 16,
+    "248": 25,
+    "250": 25,
+    "251": 25,
+    "253": 19,
+    "254": 26,
+    "255": 2
+  },
+  "by_stock": {
+    "stack": 48,
+    "single": 24,
+    "quiver": 6,
+    "gear": 153
+  },
+  "review_count": 6,
+  "reviews": {
+    "npc 242 slot 38": "kept verbatim (spec K4): the Vine set ships mixed levels — +0 helm/armor/pants, +3 gloves/boots (Version075/MerchantStores.cs:245-249); deliberate quirk or transcription error is undecidable from source (consult open question 8)",
+    "npc 242 slot 48": "kept verbatim (spec K4): the Vine set ships mixed levels — +0 helm/armor/pants, +3 gloves/boots (Version075/MerchantStores.cs:245-249); deliberate quirk or transcription error is undecidable from source (consult open question 8)",
+    "npc 243 slot 78": "kept verbatim (spec K6): one of exactly two era shields carrying normal option level 2 — Legendary Shield at Izabel, Elven Shield at Eo (Version075/MerchantStores.cs:315,356); every other store option is level 1",
+    "npc 245 slot 52": "kept verbatim (spec K6): one of exactly two era shields carrying normal option level 2 — Legendary Shield at Izabel, Elven Shield at Eo (Version075/MerchantStores.cs:315,356); every other store option is level 1",
+    "npc 251 slot 50": "our data fix over OpenMU (spec D15): OpenMU creates Scepters #1 (Morning Star) at BOTH +2 (slot 50, comment claims 'Mace') and +3 (slot 54) — Version075/MerchantStores.cs:133,137; the stated stock list is the rule, so this entry ships the actual Mace (Scepters #0) at +2, no skill per the original comment intent (the comment carries no +S and the call passes skill=false)",
+    "npc 251 slot 76": "our data fix over OpenMU (spec D14): OpenMU creates Gladius AND Falchion both at slot 73 (Version075/MerchantStores.cs:141-142), leaving the Falchion unreachable behind the first-match lookup; moved to slot 76 — the nearest free anchor (row 9, col 4), the first row-major free cell after the occupied 72-75 sword run, fitting the 1x3 footprint on rows 9-11"
+  },
+  "data_fixes": {
+    "hanzo_falchion_slot": "D14: Falchion (Swords #7) moved from the duplicated slot 73 to slot 76 (nearest free anchor fitting its 1x3 footprint); OpenMU's duplicate makes it unreachable",
+    "hanzo_mace": "D15: the slot-50 +2 entry ships the actual Mace (Scepters #0, no skill) instead of OpenMU's second Morning Star (Scepters #1); the source comment lies"
+  },
+  "kept_quirks": {
+    "vine_mixed_levels": "K4: Vine +0 helm/armor/pants with +3 gloves/boots, verbatim",
+    "option_2_shields": "K6: exactly two shields at option level 2 (Legendary Shield at Izabel, Elven Shield at Eo), verbatim",
+    "ammo_quivers": "K2: ammo entries carry NO stack field; one purchase = one full 255 quiver (definition durability)"
+  },
+  "notes": [
+    "grid contract 8x15 is OURS (spec L6): OpenMU has no server-side bound; the extractor proves every footprint in-bounds and non-overlapping per merchant (footprints from items.build_all, the same source item_definitions.json is written from)",
+    "stock families emitted: gear (wearables: luck/skill rolls + optional pre-applied normal option), stack (potions/apple/antidote x1|x3), quiver (ammo, no stack field), single (skill scrolls, orbs incl. summon orbs +0..+4, Ale, Town Portal Scroll) — all four ShelfStock variants are reachable",
+    "Ale and Town Portal Scroll are durability-1 consumables emitted as single (spec §9.1 'Ale and Town Portal Scroll single'), not stack: the merge-eligible stack family stays exactly the potion/apple/antidote packs (spec §4.1.4)",
+    "the pre-applied normal option kind is derived from the definition's own option family (physical_damage weapons/bows, wizardry_damage staffs, defense_rate shields, defense armor) — ItemHelper picks First(OptionType == Option) of the definition",
+    "248 Martin and 250 Harold share one store builder with distinct NPC identities (consult E.1.5); their records are identical by construction",
+    "no names sidecar: shop records carry no display name; merchant names live in data/names/monster_definitions.json"
+  ]
+}

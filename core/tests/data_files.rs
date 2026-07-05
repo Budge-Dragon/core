@@ -36,6 +36,7 @@ use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::{MapDefinition, MapEnvironment};
 use mu_core::data::monster_definitions::MonsterDefinition;
+use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
 use mu_core::data::spawns::{SpawnPlacement, SpawnSchedule};
@@ -110,6 +111,7 @@ macro_rules! static_data {
             special_drops: load!(SpecialDropRecord, "special_drops", 9),
             ancient_sets: load!(AncientSet, "ancient_sets", 36),
             chaos_mixes: load!(ChaosMix, "chaos_mixes", 10),
+            shops: load!(MerchantShop, "npc_shops", 11),
             classes: load!(ClassRecord, "classes", 8),
             exp_tables: load!(ExpTable, "exp_tables", 1),
             game_config: load!(GameConfig, "game_config", 1),
@@ -133,6 +135,7 @@ fn every_v2_file_parses_with_expected_record_count() {
     assert_eq!(data.special_drops.records.len(), 9);
     assert_eq!(data.ancient_sets.records.len(), 36);
     assert_eq!(data.chaos_mixes.records.len(), 10);
+    assert_eq!(data.shops.records.len(), 11);
     assert_eq!(data.classes.records.len(), 8);
     assert_eq!(data.exp_tables.records.len(), 1);
     assert_eq!(data.game_config.records.len(), 1);

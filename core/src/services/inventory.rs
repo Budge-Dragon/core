@@ -1,19 +1,24 @@
-//! Container behavior: the thin `(state, intent) -> (state, outcome)` adapters
-//! over the [`Inventory`] and [`Equipment`] components. Each folds the
-//! component's `Result` into a per-operation outcome enum with no `unwrap` —
-//! both arms bound — and never re-implements a geometry rule. The equip service
-//! is the one place item-kind/slot compatibility and two-handed dual-hand
-//! occupancy are decided (the component accepts any instance in any slot).
-//! Container operations draw zero RNG.
+//! Container and pickup behavior: the thin `(state, intent) -> (state,
+//! outcome)` adapters over the [`Inventory`] and [`Equipment`] components,
+//! plus the ground-pickup pair — [`pickup`] lifts a [`WorldItem`] into the
+//! inventory and [`pickup_zen`] merges a [`WorldZen`] pile into a
+//! [`CarriedZen`] balance. Each folds the component's `Result` into a
+//! per-operation outcome enum with no `unwrap` — both arms bound — and never
+//! re-implements a geometry or cap rule. The equip service is the one place
+//! item-kind/slot compatibility and two-handed dual-hand occupancy are
+//! decided (the component accepts any instance in any slot). Container
+//! operations draw zero RNG.
 
 use serde::{Deserialize, Serialize};
 
 use crate::components::equipment::{Equipment, EquipmentSlot};
 use crate::components::inventory::{Cell, Footprint, Inventory, PlacementRejection};
 use crate::components::item_instance::ItemInstance;
+use crate::components::units::{CarriedZen, CreditOutcome};
 use crate::data::atlas::Atlas;
 use crate::data::item_definitions::{ItemKind, WeaponHandling};
 use crate::entities::world_item::WorldItem;
+use crate::entities::world_zen::WorldZen;
 use crate::events::inventory::{
     EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
 };
@@ -120,6 +125,37 @@ pub fn pickup(
                 },
             },
         ),
+    }
+}
+
+/// What a zen pickup produced, kind-tagged: the whole pile merged into the
+/// balance, or crediting it would overflow the carry cap and the untouched
+/// pile is handed back — intact, still on the ground, still pickable. No
+/// partial pickup exists. Lives in the service (not `events`) because the
+/// rejection carries a whole [`WorldZen`] entity, and an event never imports
+/// an entity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ZenPickupOutcome {
+    /// The whole pile merged; the returned balance is the new total.
+    PickedUp,
+    /// The pile would overflow the carry cap; the untouched pile is handed
+    /// back and the balance is unchanged.
+    OverCap {
+        /// The pile, exactly as it was.
+        world_zen: WorldZen,
+    },
+}
+
+/// Picks a whole zen pile up, merging it through [`CarriedZen::credit`]. The
+/// returned balance is authoritative: the new total on a pickup, the
+/// unchanged balance on an over-cap rejection. Range gating follows the
+/// item-[`pickup`] seam unchanged — the host owns pickup reach.
+#[must_use]
+pub fn pickup_zen(world_zen: WorldZen, zen: CarriedZen) -> (CarriedZen, ZenPickupOutcome) {
+    match zen.credit(world_zen.amount) {
+        CreditOutcome::Credited { balance } => (balance, ZenPickupOutcome::PickedUp),
+        CreditOutcome::OverCap { balance } => (balance, ZenPickupOutcome::OverCap { world_zen }),
     }
 }
 
@@ -373,7 +409,7 @@ mod tests {
     };
     use crate::components::item_ref::ItemRef;
     use crate::components::spatial::WorldPos;
-    use crate::components::units::{ItemLevel, MapNumber, Tick};
+    use crate::components::units::{ItemLevel, MapNumber, Tick, Zen};
 
     // The equip service now resolves a paired-hand occupant through the Atlas, so
     // its two-handed rule and `reconcile_equipment` are exercised against the real
@@ -508,6 +544,43 @@ mod tests {
         );
         assert_eq!(outcome, PickupOutcome::PickedUp { at: cell(0, 0) });
         assert_eq!(inventory.placed().len(), 1);
+    }
+
+    fn pile(amount: u64) -> WorldZen {
+        WorldZen {
+            amount: Zen(amount),
+            position: WorldPos::clamped(100, 200),
+            map: MapNumber(3),
+            despawn: Tick(1200),
+        }
+    }
+
+    #[test]
+    fn pickup_zen_merges_the_whole_pile() {
+        let (balance, outcome) = pickup_zen(pile(40_000), CarriedZen::new(250_000).unwrap());
+        assert_eq!(balance, CarriedZen::new(290_000).unwrap());
+        assert_eq!(outcome, ZenPickupOutcome::PickedUp);
+    }
+
+    #[test]
+    fn pickup_zen_over_cap_hands_the_untouched_pile_back() {
+        let (balance, outcome) = pickup_zen(pile(2), CarriedZen::new(1_999_999_999).unwrap());
+        assert_eq!(balance, CarriedZen::new(1_999_999_999).unwrap());
+        assert_eq!(outcome, ZenPickupOutcome::OverCap { world_zen: pile(2) });
+    }
+
+    #[test]
+    fn zen_pickup_outcome_wire_round_trips() {
+        assert_eq!(
+            serde_json::to_string(&ZenPickupOutcome::PickedUp).unwrap(),
+            r#"{"kind":"picked_up"}"#
+        );
+        let rejected = ZenPickupOutcome::OverCap { world_zen: pile(7) };
+        let json = serde_json::to_string(&rejected).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ZenPickupOutcome>(&json).unwrap(),
+            rejected
+        );
     }
 
     #[test]

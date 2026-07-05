@@ -46,6 +46,7 @@ CATEGORY_BY_FILE = {
     "special_drops.json": "drops",
     "box_drops.json": "drops",
     "chaos_mixes.json": "chaos_mixes",
+    "npc_shops.json": "shops",
     "exp_tables.json": "constants_exp",
     "game_config.json": "constants_exp",
 }
@@ -64,6 +65,8 @@ def rec_label(fname, rec):
         return f"{fname} item {ident.get('group')}/{ident.get('number')}"
     if "number" in rec:
         return f"{fname} #{rec['number']}"
+    if "npc" in rec:
+        return f"{fname} npc {rec['npc']}"
     if "set_number" in rec:
         return f"{fname} set {rec['set_number']}"
     if "index" in rec:
@@ -310,6 +313,16 @@ def check_chaos_mixes():
         check_items(fname, items, label, "recipe item")
 
 
+def check_npc_shops():
+    fname = "npc_shops.json"
+    for rec in records_of(fname):
+        label = rec_label(fname, rec)
+        check_monster(fname, rec.get("npc"), label, "npc")
+        for entry in rec.get("shelf", []):
+            check_item(fname, entry.get("item"), label,
+                       f"shelf slot {entry.get('slot')}")
+
+
 def check_game_config():
     fname = "game_config.json"
     for rec in records_of(fname):
@@ -330,6 +343,7 @@ check_ancient_sets()
 check_special_drops()
 check_box_drops()
 check_chaos_mixes()
+check_npc_shops()
 check_game_config()
 
 total_records = sum(len(records) for records in datasets.values())

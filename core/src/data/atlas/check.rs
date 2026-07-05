@@ -1,9 +1,10 @@
 //! The referential-integrity checks [`Atlas::parse`](super::Atlas::parse) runs
 //! over the already-indexed lookups: every monster attack, summon, item skill,
-//! ancient piece, chaos-recipe ingredient, special/box drop, and class home
-//! resolves to a record that exists. Each returns the first [`AtlasError`] it
-//! finds. (Chaos-recipe *output* refs are proven by the resolve module's
-//! catalog join, which retains the proof as the definition-joined catalog.)
+//! ancient piece, chaos-recipe ingredient, special/box drop, class home, and
+//! shop/merchant edge resolves to a record that exists. Each returns the first
+//! [`AtlasError`] it finds. (Chaos-recipe *output* refs and shelf-entry item
+//! refs are proven by the resolve module's catalog joins, which retain the
+//! proof as the definition-joined catalogs.)
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,7 +15,8 @@ use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe};
 use crate::data::classes::ClassRecord;
 use crate::data::common::{ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::item_definitions::{ItemDefinition, ItemKind};
-use crate::data::monster_definitions::{MonsterAttack, MonsterDefinition, MonsterRole};
+use crate::data::monster_definitions::{MonsterAttack, MonsterDefinition, MonsterRole, NpcWindow};
+use crate::data::npc_shops::MerchantShop;
 use crate::data::skills::{Skill, SkillShape};
 use crate::data::special_drops::{SpecialDrop, SpecialDropRecord};
 
@@ -142,6 +144,62 @@ fn ingredient_refs(recipe: &ChaosRecipe) -> Vec<ItemRef> {
         ChaosRecipe::Fruits { catalyst, .. } => vec![*catalyst],
         ChaosRecipe::DevilSquareTicket { eye, key, .. } => vec![*eye, *key],
         ChaosRecipe::BloodCastleTicket { scroll, bone, .. } => vec![*scroll, *bone],
+    }
+}
+
+/// Proves the shop/merchant edge both ways: every shop record's NPC number
+/// resolves to a merchant-window NPC definition (with no number carrying two
+/// records), and every merchant-window definition carries a shop record.
+/// (Shelf-entry `ItemRef`s are proven by the resolve module's catalog join,
+/// which retains the proof — the chaos-recipe split.)
+pub(super) fn check_shops(
+    shops: &[MerchantShop],
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
+) -> Result<(), AtlasError> {
+    let mut stocked = BTreeSet::new();
+    for shop in shops {
+        if !stocked.insert(shop.npc) {
+            return Err(AtlasError::DuplicateShopRecord { npc: shop.npc });
+        }
+        let Some(definition) = monsters.get(&shop.npc) else {
+            return Err(AtlasError::UnknownMonsterRef { monster: shop.npc });
+        };
+        if !is_merchant(definition) {
+            return Err(AtlasError::ShopForNonMerchant { npc: shop.npc });
+        }
+    }
+    for definition in monsters.values() {
+        if is_merchant(definition) && !stocked.contains(&definition.number) {
+            return Err(AtlasError::MerchantWithoutShop {
+                npc: definition.number,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Whether a definition is a merchant-window NPC — the only role a shop
+/// record may name, and the only role owed one.
+fn is_merchant(definition: &MonsterDefinition) -> bool {
+    match definition.role {
+        MonsterRole::Npc {
+            window: Some(NpcWindow::Merchant),
+        } => true,
+        MonsterRole::Npc {
+            window:
+                Some(
+                    NpcWindow::Vault
+                    | NpcWindow::ChaosMachine
+                    | NpcWindow::GuildMaster
+                    | NpcWindow::DevilSquare
+                    | NpcWindow::Quest,
+                )
+                | None,
+        }
+        | MonsterRole::Monster { .. }
+        | MonsterRole::Guard { .. }
+        | MonsterRole::Trap { .. }
+        | MonsterRole::SoccerBall => false,
     }
 }
 

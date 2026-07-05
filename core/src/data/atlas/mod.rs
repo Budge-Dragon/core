@@ -26,6 +26,7 @@ use crate::data::gates_warps::{GateWarpRecord, SpawnGate, Warp, WarpIndex};
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::MapDefinition;
 use crate::data::monster_definitions::MonsterDefinition;
+use crate::data::npc_shops::{MerchantShop, ShelfSlot};
 use crate::data::skills::Skill;
 use crate::data::spawns::Spawn;
 use crate::data::special_drops::SpecialDropRecord;
@@ -33,18 +34,20 @@ use crate::data::terrain::MapTerrain;
 
 pub use crate::data::drop_pool::DropPool;
 pub use views::{
-    EnterGateView, Landing, MapHandle, ResolvedOutput, ResolvedRecipe, SpawnEntry, WarpView,
+    EnterGateView, Landing, MapHandle, ResolvedOutput, ResolvedRecipe, ShelfEntryView, ShopView,
+    SpawnEntry, WarpView,
 };
 
 use check::{
     check_ancient_sets, check_box_drops, check_chaos_mixes, check_classes, check_items,
-    check_monster_attacks, check_special_drops, check_summons,
+    check_monster_attacks, check_shops, check_special_drops, check_summons,
 };
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
-    resolve_chaos_recipes, resolve_enter_gates, resolve_spawns, resolve_warps, take_single,
+    resolve_chaos_recipes, resolve_enter_gates, resolve_shops, resolve_spawns, resolve_warps,
+    take_single,
 };
-use views::{ResolvedEnterGate, ResolvedSpawn};
+use views::{ResolvedEnterGate, ResolvedShop, ResolvedSpawn};
 
 /// Respawn fallback map (Lorencia); the Atlas proves it carries a spawn gate.
 const FALLBACK_MAP: MapNumber = MapNumber(0);
@@ -72,6 +75,8 @@ pub struct StaticData {
     pub ancient_sets: DataFile<AncientSet>,
     /// `chaos_mixes.json`.
     pub chaos_mixes: DataFile<ChaosMix>,
+    /// `npc_shops.json`.
+    pub shops: DataFile<MerchantShop>,
     /// `classes.json`.
     pub classes: DataFile<ClassRecord>,
     /// `exp_tables.json`.
@@ -108,6 +113,7 @@ pub struct Atlas {
     box_drops: Vec<BoxDrop>,
     drop_pool: DropPool,
     chaos_recipes: Vec<ResolvedRecipe>,
+    shops: BTreeMap<MonsterNumber, ResolvedShop>,
 }
 
 impl Atlas {
@@ -141,6 +147,8 @@ impl Atlas {
         check_ancient_sets(&data.ancient_sets.records, &items)?;
         check_chaos_mixes(&data.chaos_mixes.records, &items)?;
         let chaos_recipes = resolve_chaos_recipes(data.chaos_mixes.records, &items)?;
+        check_shops(&data.shops.records, &monsters)?;
+        let shops = resolve_shops(data.shops.records, &items)?;
         check_special_drops(&data.special_drops.records, &items, &monsters, &map_numbers)?;
         check_box_drops(&data.box_drops.records, &items)?;
         check_classes(&data.classes.records, &map_numbers)?;
@@ -191,6 +199,7 @@ impl Atlas {
             box_drops: data.box_drops.records,
             drop_pool,
             chaos_recipes,
+            shops,
         })
     }
 
@@ -382,6 +391,18 @@ impl Atlas {
     pub fn chaos_recipes(&self) -> impl Iterator<Item = &ResolvedRecipe> {
         self.chaos_recipes.iter()
     }
+
+    /// The resolved shelf catalog for an NPC number; `None` when the number
+    /// is not a merchant — genuine optionality of an open number. A number
+    /// taken from a resolved talk edge is proven present by `parse`, and
+    /// every returned entry carries its definition joined at parse — no
+    /// re-resolution anywhere downstream.
+    #[must_use]
+    pub fn shop(&self, npc: MonsterNumber) -> Option<ShopView<'_>> {
+        self.shops.get(&npc).map(|shop| ShopView {
+            entries: &shop.entries,
+        })
+    }
 }
 
 /// Why the dataset does not form a consistent world — one variant per proof.
@@ -474,6 +495,49 @@ pub enum AtlasError {
         /// The unresolved item.
         item: ItemRef,
     },
+    /// A shop record names an NPC that is not a merchant-window definition.
+    ShopForNonMerchant {
+        /// The wrong-role NPC number.
+        npc: MonsterNumber,
+    },
+    /// A merchant-window definition has no shop record.
+    MerchantWithoutShop {
+        /// The unstocked merchant.
+        npc: MonsterNumber,
+    },
+    /// Two shop records name the same NPC.
+    DuplicateShopRecord {
+        /// The repeated NPC number.
+        npc: MonsterNumber,
+    },
+    /// Two shelf entries of one shop cover a common cell.
+    ShelfSlotOverlap {
+        /// The shop's NPC number.
+        npc: MonsterNumber,
+        /// The anchor of the later colliding entry.
+        slot: ShelfSlot,
+    },
+    /// A shelf entry's footprint runs past the 8×15 grid.
+    ShelfFootprintOutOfGrid {
+        /// The shop's NPC number.
+        npc: MonsterNumber,
+        /// The anchor of the overrunning entry.
+        slot: ShelfSlot,
+    },
+    /// A shelf entry's stock tag disagrees with its definition's kind.
+    ShelfStockKindMismatch {
+        /// The shop's NPC number.
+        npc: MonsterNumber,
+        /// The anchor of the mismatched entry.
+        slot: ShelfSlot,
+    },
+    /// A stack entry's piece count exceeds its definition's stack cap.
+    ShelfStackOverCap {
+        /// The shop's NPC number.
+        npc: MonsterNumber,
+        /// The anchor of the over-cap entry.
+        slot: ShelfSlot,
+    },
     /// The class records do not form a complete, unique roster.
     ClassTable(ClassTableError),
     /// The experience curve is malformed.
@@ -542,6 +606,36 @@ impl core::fmt::Display for AtlasError {
             }
             Self::UnknownSkillRef { skill } => write!(f, "reference to unknown skill {skill:?}"),
             Self::UnknownItemRef { item } => write!(f, "reference to unknown item {item:?}"),
+            Self::ShopForNonMerchant { npc } => {
+                write!(f, "shop record for non-merchant NPC {npc:?}")
+            }
+            Self::MerchantWithoutShop { npc } => {
+                write!(f, "merchant NPC {npc:?} has no shop record")
+            }
+            Self::DuplicateShopRecord { npc } => {
+                write!(f, "duplicate shop record for NPC {npc:?}")
+            }
+            Self::ShelfSlotOverlap { npc, slot } => {
+                write!(f, "shop {npc:?} shelf entry at {slot:?} overlaps another")
+            }
+            Self::ShelfFootprintOutOfGrid { npc, slot } => {
+                write!(
+                    f,
+                    "shop {npc:?} shelf entry at {slot:?} runs past the 8x15 grid"
+                )
+            }
+            Self::ShelfStockKindMismatch { npc, slot } => {
+                write!(
+                    f,
+                    "shop {npc:?} shelf entry at {slot:?} carries the wrong stock kind"
+                )
+            }
+            Self::ShelfStackOverCap { npc, slot } => {
+                write!(
+                    f,
+                    "shop {npc:?} shelf entry at {slot:?} stacks past its cap"
+                )
+            }
             Self::ClassTable(err) => write!(f, "class table: {err}"),
             Self::ExpCurve(err) => write!(f, "experience curve: {err}"),
             Self::AncientRoster(err) => write!(f, "ancient roster: {err}"),
@@ -582,6 +676,13 @@ impl core::error::Error for AtlasError {
             | Self::UnknownMonsterRef { .. }
             | Self::UnknownSkillRef { .. }
             | Self::UnknownItemRef { .. }
+            | Self::ShopForNonMerchant { .. }
+            | Self::MerchantWithoutShop { .. }
+            | Self::DuplicateShopRecord { .. }
+            | Self::ShelfSlotOverlap { .. }
+            | Self::ShelfFootprintOutOfGrid { .. }
+            | Self::ShelfStockKindMismatch { .. }
+            | Self::ShelfStackOverCap { .. }
             | Self::ExpTableNotSingle { .. }
             | Self::GameConfigNotSingle { .. }
             | Self::TerrainForUnknownMap { .. }

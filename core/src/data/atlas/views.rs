@@ -1,13 +1,15 @@
 //! The resolved view types the [`Atlas`](super::Atlas) hands out: landings,
 //! enter-gate and warp views, spawn entries, the per-map handle, and the
-//! definition-joined chaos-recipe catalog — each over resolved state whose
-//! referents were proven present at parse. The backing `Resolved*` records are
-//! retained by the Atlas and read back through these views; only the Atlas
-//! mints them, so no view has a public fabricating constructor.
+//! definition-joined chaos-recipe and shelf catalogs — each over resolved
+//! state whose referents were proven present at parse. The backing `Resolved*`
+//! records are retained by the Atlas and read back through these views; only
+//! the Atlas mints them, so no view has a public fabricating constructor.
 
 use core::num::NonZeroU8;
+use std::collections::BTreeMap;
 
 use crate::components::collections::OneOrMore;
+use crate::components::levels::EnhanceLevel;
 use crate::components::spatial::{Facing, WorldRect};
 use crate::components::tile::WalkGrid;
 use crate::components::units::{Percent, Zen};
@@ -17,6 +19,7 @@ use crate::data::gates_warps::{EnterGate, Warp};
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::MapDefinition;
 use crate::data::monster_definitions::MonsterDefinition;
+use crate::data::npc_shops::{ShelfSlot, ShelfStock};
 use crate::data::spawns::Spawn;
 
 /// The landing side of a resolved gate reference, in world space.
@@ -216,6 +219,72 @@ pub enum ResolvedOutput {
     Choice(OneOrMore<ItemDefinition>),
     /// Exactly one result, no pick draw (cape, dinorant, fruit, tickets).
     Single(ItemDefinition),
+}
+
+/// One merchant's shelf catalog with every entry's `ItemRef` joined to its
+/// [`ItemDefinition`] at parse, anchor-indexed by [`ShelfSlot`] — the
+/// [`ResolvedSpawn`] owned-join precedent applied per merchant. A non-anchor
+/// covered cell simply is not a key, so exact-anchor lookup is the map's own
+/// shape, not a filter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ResolvedShop {
+    pub(super) entries: BTreeMap<ShelfSlot, ResolvedShelfEntry>,
+}
+
+/// One shelf entry retained with its owned definition join: the configured
+/// plus-level and stock facts beside the definition they were proven against.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ResolvedShelfEntry {
+    pub(super) level: EnhanceLevel,
+    pub(super) stock: ShelfStock,
+    pub(super) def: ItemDefinition,
+}
+
+/// A merchant's resolved shelf catalog, borrowed from the atlas — the public
+/// view over the owned entry-to-definition join, mirroring [`SpawnEntry`].
+#[derive(Debug, Clone, Copy)]
+pub struct ShopView<'a> {
+    pub(super) entries: &'a BTreeMap<ShelfSlot, ResolvedShelfEntry>,
+}
+
+/// One shelf entry borrowed with the definition it resolves to — resolution,
+/// grid fit, and stock/kind agreement all proven at parse.
+#[derive(Debug, Clone, Copy)]
+pub struct ShelfEntryView<'a> {
+    /// The configured plus-level.
+    pub level: EnhanceLevel,
+    /// The family-specific materialization facts.
+    pub stock: &'a ShelfStock,
+    /// The joined definition — resolution proven at parse.
+    pub def: &'a ItemDefinition,
+}
+
+impl<'a> ShopView<'a> {
+    /// The entry anchored at exactly `slot`; `None` for an empty slot or a
+    /// non-anchor covered cell — exact anchor equality, the classic
+    /// first-match shelf addressing.
+    #[must_use]
+    pub fn entry(&self, slot: ShelfSlot) -> Option<ShelfEntryView<'a>> {
+        self.entries.get(&slot).map(|entry| ShelfEntryView {
+            level: entry.level,
+            stock: &entry.stock,
+            def: &entry.def,
+        })
+    }
+
+    /// Every entry with its anchor, in anchor order.
+    pub fn entries(&self) -> impl Iterator<Item = (ShelfSlot, ShelfEntryView<'a>)> {
+        self.entries.iter().map(|(slot, entry)| {
+            (
+                *slot,
+                ShelfEntryView {
+                    level: entry.level,
+                    stock: &entry.stock,
+                    def: &entry.def,
+                },
+            )
+        })
+    }
 }
 
 /// A proven-present view of one map: its definition, its walk grid, and its

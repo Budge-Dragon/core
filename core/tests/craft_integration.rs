@@ -29,7 +29,7 @@ use mu_core::components::item_instance::{
 use mu_core::components::item_options::NormalOption;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
-use mu_core::components::units::{ItemLevel, MapNumber, Zen};
+use mu_core::components::units::{CarriedZen, ItemLevel, MapNumber, Zen};
 use mu_core::data::ancient_sets::AncientSet;
 use mu_core::data::atlas::{Atlas, StaticData};
 use mu_core::data::box_drops::BoxDrop;
@@ -42,6 +42,7 @@ use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::MonsterDefinition;
+use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
 use mu_core::data::special_drops::SpecialDropRecord;
@@ -105,6 +106,7 @@ fn real_atlas() -> Atlas {
         special_drops: load::<SpecialDropRecord>("special_drops"),
         ancient_sets: load::<AncientSet>("ancient_sets"),
         chaos_mixes: load::<ChaosMix>("chaos_mixes"),
+        shops: load::<MerchantShop>("npc_shops"),
         classes: load::<ClassRecord>("classes"),
         exp_tables: load::<ExpTable>("exp_tables"),
         game_config: load::<GameConfig>("game_config"),
@@ -155,7 +157,12 @@ const SEED_SUCCESS: u64 = 24;
 /// every rate this suite reaches (all ≤ 90).
 const SEED_FAILURE: u64 = 8;
 /// A comfortable balance for every fee in the suite.
-const BALANCE: Zen = Zen(100_000_000);
+const BALANCE: u64 = 100_000_000;
+
+/// Builds a carried balance; every literal in the suite is under the cap.
+fn carried(value: u64) -> CarriedZen {
+    or_abort(CarriedZen::new(value))
+}
 
 // --- Concrete catalog identities (from the shipped `/data`). ---
 
@@ -319,7 +326,7 @@ fn option_sword(atlas: &Atlas) -> ItemInstance {
     with_option(item(atlas, SWORD, 6), NormalOption::PhysicalDamage)
 }
 
-fn run(atlas: &Atlas, placed: Vec<ItemInstance>, zen: Zen, seed: u64) -> MixOutcome {
+fn run(atlas: &Atlas, placed: Vec<ItemInstance>, zen: CarriedZen, seed: u64) -> MixOutcome {
     let mut rng = TestRng::new(seed);
     mix(placed, zen, atlas, &mut rng)
 }
@@ -341,7 +348,7 @@ fn chaos_weapon_mix_creates_a_catalog_weapon_and_charges_the_value_fee() {
     let atlas = real_atlas();
     // Old values: sword 26,100 + chaos 40,000 → rate 3, fee 30,000.
     let placed = vec![option_sword(&atlas), item(&atlas, JEWEL_OF_CHAOS, 0)];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success {
             fee,
             zen,
@@ -349,7 +356,7 @@ fn chaos_weapon_mix_creates_a_catalog_weapon_and_charges_the_value_fee() {
             returned,
         } => {
             assert_eq!(fee, Zen(30_000));
-            assert_eq!(zen, Zen(BALANCE.0 - 30_000));
+            assert_eq!(zen, carried(BALANCE - 30_000));
             assert!(CHAOS_WEAPONS.contains(&created.item));
             assert!(created.level.get() <= 4);
             let def = atlas.item(created.item).unwrap();
@@ -371,14 +378,14 @@ fn chaos_weapon_mix_creates_a_catalog_weapon_and_charges_the_value_fee() {
 fn a_failed_chaos_weapon_mix_downgrades_the_sacrifice_and_destroys_the_jewel() {
     let atlas = real_atlas();
     let placed = vec![option_sword(&atlas), item(&atlas, JEWEL_OF_CHAOS, 0)];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee,
             zen,
             casualties,
         } => {
             assert_eq!(fee, Zen(30_000));
-            assert_eq!(zen, Zen(BALANCE.0 - 30_000), "the fee is never refunded");
+            assert_eq!(zen, carried(BALANCE - 30_000), "the fee is never refunded");
             assert_eq!(casualties.len(), 2);
             match &casualties[0] {
                 Casualty::Downgraded { item } => {
@@ -407,7 +414,7 @@ fn an_over_stuffed_chaos_weapon_mix_saturates_to_certainty() {
     for _ in 0..60 {
         placed.push(item(&atlas, JEWEL_OF_BLESS, 0));
     }
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Success { fee, .. } => assert_eq!(fee, Zen(1_000_000)),
         MixOutcome::Rejected { .. } | MixOutcome::Failed { .. } => {
             panic!("rate 100 always succeeds")
@@ -421,7 +428,7 @@ fn first_wings_mix_creates_a_first_wing_at_plus_zero() {
     // Old values: staff 471,600 + chaos 40,000 → rate 25, fee 250,000.
     let staff = with_option(item(&atlas, CHAOS_STAFF, 7), NormalOption::WizardryDamage);
     let placed = vec![staff, item(&atlas, JEWEL_OF_CHAOS, 0)];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { fee, created, .. } => {
             assert_eq!(fee, Zen(250_000));
             assert!(FIRST_WINGS.contains(&created.item));
@@ -446,7 +453,7 @@ fn first_wings_extras_are_destroyed_on_both_outcomes() {
         option_sword(&atlas),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { returned, fee, .. } => {
             assert!(returned.is_empty(), "K3: extras never come back");
             // Rate 26 (471,600 + 26,100 + 40,000 over 20,000) → fee 260,000.
@@ -458,7 +465,7 @@ fn first_wings_extras_are_destroyed_on_both_outcomes() {
     }
     // K3 on failure: the chaos weapon downgrades, the extra is destroyed.
     let placed = vec![staff, option_sword(&atlas), item(&atlas, JEWEL_OF_CHAOS, 0)];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed { casualties, .. } => {
             assert_eq!(casualties.len(), 3);
             match &casualties[0] {
@@ -483,12 +490,12 @@ fn second_wings_mix_creates_a_second_wing_for_the_flat_fee() {
         item(&atlas, LOCHS_FEATHER, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success {
             fee, created, zen, ..
         } => {
             assert_eq!(fee, Zen(5_000_000));
-            assert_eq!(zen, Zen(BALANCE.0 - 5_000_000));
+            assert_eq!(zen, carried(BALANCE - 5_000_000));
             assert!(SECOND_WINGS.contains(&created.item));
             assert_eq!(created.level, ItemLevel::ZERO);
         }
@@ -509,7 +516,7 @@ fn a_failed_second_wings_mix_destroys_everything() {
         excellent(item(&atlas, GLOVES, 8)),
         excellent(item(&atlas, GLOVES, 8)),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee, casualties, ..
         } => {
@@ -536,7 +543,7 @@ fn a_plus_one_feather_crafts_the_cape_and_a_plus_zero_feather_a_second_wing() {
         item(&atlas, LOCHS_FEATHER, 1),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { created, fee, .. } => {
             assert_eq!(created.item, CAPE_OF_LORD);
             assert_eq!(created.level, ItemLevel::ZERO);
@@ -552,7 +559,7 @@ fn a_plus_one_feather_crafts_the_cape_and_a_plus_zero_feather_a_second_wing() {
         item(&atlas, LOCHS_FEATHER, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { created, .. } => {
             assert!(SECOND_WINGS.contains(&created.item));
         }
@@ -570,7 +577,7 @@ fn a_failed_cape_mix_destroys_wing_crest_and_jewel() {
         item(&atlas, LOCHS_FEATHER, 1),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee, casualties, ..
         } => {
@@ -596,7 +603,7 @@ fn plus_ten_upgrades_the_placed_item_in_place() {
         item(&atlas, JEWEL_OF_BLESS, 0),
         item(&atlas, JEWEL_OF_SOUL, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success {
             fee,
             created,
@@ -626,7 +633,7 @@ fn a_failed_plus_ten_destroys_the_item_and_the_jewels() {
         item(&atlas, JEWEL_OF_BLESS, 0),
         item(&atlas, JEWEL_OF_SOUL, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee, casualties, ..
         } => {
@@ -655,7 +662,7 @@ fn plus_eleven_needs_the_exact_two_two_jewel_counts() {
         item(&atlas, JEWEL_OF_SOUL, 0),
         item(&atlas, JEWEL_OF_SOUL, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { fee, created, .. } => {
             assert_eq!(fee, Zen(4_000_000));
             assert_eq!(created.item, HELM);
@@ -674,7 +681,7 @@ fn plus_eleven_needs_the_exact_two_two_jewel_counts() {
         item(&atlas, JEWEL_OF_SOUL, 0),
         item(&atlas, JEWEL_OF_SOUL, 0),
     ];
-    match run(&atlas, short, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, short, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Rejected { reason, items } => {
             assert_eq!(reason, RejectReason::NoRecipeMatch);
             assert_eq!(items.len(), 5, "every input handed back");
@@ -694,12 +701,12 @@ fn dinorant_mix_always_carries_its_skill_and_gates_on_full_horns() {
         item(&atlas, HORN_OF_UNIRIA, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success {
             fee, created, zen, ..
         } => {
             assert_eq!(fee, Zen(250_000));
-            assert_eq!(zen, Zen(BALANCE.0 - 250_000));
+            assert_eq!(zen, carried(BALANCE - 250_000));
             assert_eq!(created.item, HORN_OF_DINORANT);
             assert_eq!(created.level, ItemLevel::ZERO);
             assert_eq!(created.skill, SkillRoll::WithSkill, "Fire Breath, no draw");
@@ -719,7 +726,7 @@ fn dinorant_mix_always_carries_its_skill_and_gates_on_full_horns() {
         worn,
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Rejected { reason, items } => {
             assert_eq!(reason, RejectReason::NoRecipeMatch);
             assert_eq!(items.len(), 4);
@@ -739,7 +746,7 @@ fn a_failed_dinorant_mix_destroys_horns_and_jewel() {
         item(&atlas, HORN_OF_UNIRIA, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee, casualties, ..
         } => {
@@ -774,7 +781,7 @@ fn dinorant_options_across_seeds_are_zero_one_or_two_distinct() {
             item(&atlas, HORN_OF_UNIRIA, 0),
             item(&atlas, JEWEL_OF_CHAOS, 0),
         ];
-        if let MixOutcome::Success { created, .. } = run(&atlas, placed, BALANCE, seed) {
+        if let MixOutcome::Success { created, .. } = run(&atlas, placed, carried(BALANCE), seed) {
             match created.augment {
                 CraftedAugment::None => bare += 1,
                 // Distinctness is structural: the option set is a
@@ -799,12 +806,12 @@ fn fruit_mix_rolls_a_weighted_level_and_an_exact_balance_lands_on_zero() {
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
     // Exact balance: the 3,000,000 fee lands the balance at zero.
-    match run(&atlas, placed, Zen(3_000_000), SEED_SUCCESS) {
+    match run(&atlas, placed, carried(3_000_000), SEED_SUCCESS) {
         MixOutcome::Success {
             fee, zen, created, ..
         } => {
             assert_eq!(fee, Zen(3_000_000));
-            assert_eq!(zen, Zen(0));
+            assert_eq!(zen, carried(0));
             assert_eq!(created.item, STAT_FRUIT);
             assert!(created.level.get() <= 4);
             assert_eq!(created.durability.current(), 1);
@@ -818,7 +825,7 @@ fn fruit_mix_rolls_a_weighted_level_and_an_exact_balance_lands_on_zero() {
         item(&atlas, JEWEL_OF_CREATION, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed { casualties, .. } => {
             assert_eq!(
                 destroyed_refs(&casualties),
@@ -840,7 +847,7 @@ fn devil_square_ticket_uses_the_shared_level_and_its_fee_row() {
         item(&atlas, DEVILS_KEY, 3),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { fee, created, .. } => {
             assert_eq!(fee, Zen(400_000), "the level-3 fee row");
             assert_eq!(created.item, DEVILS_INVITATION);
@@ -857,7 +864,7 @@ fn devil_square_ticket_uses_the_shared_level_and_its_fee_row() {
         item(&atlas, DEVILS_KEY, 3),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, unequal, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, unequal, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Rejected { reason, items } => {
             assert_eq!(reason, RejectReason::NoRecipeMatch);
             assert_eq!(items.len(), 3);
@@ -872,7 +879,7 @@ fn devil_square_ticket_uses_the_shared_level_and_its_fee_row() {
         item(&atlas, DEVILS_KEY, 3),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee, casualties, ..
         } => {
@@ -896,7 +903,7 @@ fn a_level_zero_ticket_pair_uses_the_level_one_row_k1() {
         item(&atlas, DEVILS_KEY, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { fee, created, .. } => {
             assert_eq!(fee, Zen(100_000), "K1: the level-1 fee row");
             assert_eq!(created.level, ItemLevel::ZERO);
@@ -915,7 +922,7 @@ fn blood_castle_ticket_mixes_at_the_shared_level() {
         item(&atlas, BLOOD_BONE, 5),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { fee, created, .. } => {
             assert_eq!(fee, Zen(400_000), "the level-5 fee row");
             assert_eq!(created.item, INVISIBILITY_CLOAK);
@@ -931,7 +938,7 @@ fn blood_castle_ticket_mixes_at_the_shared_level() {
         item(&atlas, BLOOD_BONE, 5),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed { casualties, .. } => {
             assert_eq!(
                 destroyed_refs(&casualties),
@@ -951,7 +958,7 @@ fn one_option_chaos_weapon_resolves_to_first_wings_not_a_sacrifice() {
     let atlas = real_atlas();
     let axe = with_option(item(&atlas, CHAOS_AXE, 6), NormalOption::PhysicalDamage);
     let placed = vec![axe, item(&atlas, JEWEL_OF_CHAOS, 0)];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { created, .. } => {
             assert!(
                 FIRST_WINGS.contains(&created.item),
@@ -969,7 +976,7 @@ fn two_option_chaos_weapons_fall_through_to_a_chaos_weapon_sacrifice() {
     let atlas = real_atlas();
     let axe = with_option(item(&atlas, CHAOS_AXE, 6), NormalOption::PhysicalDamage);
     let placed = vec![axe.clone(), axe, item(&atlas, JEWEL_OF_CHAOS, 0)];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { created, .. } => {
             assert!(
                 CHAOS_WEAPONS.contains(&created.item),
@@ -997,7 +1004,7 @@ fn an_upgrade_window_with_a_leftover_falls_through_to_chaos_weapon() {
         item(&atlas, JEWEL_OF_BLESS, 0),
         item(&atlas, JEWEL_OF_SOUL, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success { created, .. } => {
             assert!(CHAOS_WEAPONS.contains(&created.item));
         }
@@ -1017,7 +1024,7 @@ fn a_ticket_window_returns_unclaimed_junk_untouched() {
         item(&atlas, JEWEL_OF_CHAOS, 0),
         junk.clone(),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success {
             created, returned, ..
         } => {
@@ -1035,7 +1042,7 @@ fn a_ticket_window_returns_unclaimed_junk_untouched() {
 fn a_lone_jewel_forms_no_recipe_and_charges_nothing() {
     let atlas = real_atlas();
     let jewel = item(&atlas, JEWEL_OF_CHAOS, 0);
-    match run(&atlas, vec![jewel.clone()], Zen(0), 7) {
+    match run(&atlas, vec![jewel.clone()], carried(0), 7) {
         MixOutcome::Rejected { reason, items } => {
             assert_eq!(reason, RejectReason::NoRecipeMatch);
             assert_eq!(items, vec![jewel]);
@@ -1058,7 +1065,7 @@ fn every_input_appears_exactly_once_across_a_failed_chaos_weapon_outcome() {
         item(&atlas, JEWEL_OF_CHAOS, 0),
         item(&atlas, JEWEL_OF_CHAOS, 0),
     ];
-    match run(&atlas, placed, BALANCE, SEED_FAILURE) {
+    match run(&atlas, placed, carried(BALANCE), SEED_FAILURE) {
         MixOutcome::Failed {
             fee, casualties, ..
         } => {
@@ -1093,7 +1100,7 @@ fn a_ticket_success_accounts_created_returned_and_consumed_exactly_once() {
         item(&atlas, JEWEL_OF_CHAOS, 0),
         extra.clone(),
     ];
-    match run(&atlas, placed, BALANCE, SEED_SUCCESS) {
+    match run(&atlas, placed, carried(BALANCE), SEED_SUCCESS) {
         MixOutcome::Success {
             created, returned, ..
         } => {
@@ -1116,7 +1123,7 @@ fn no_outcome_over_any_seed_drops_an_input_silently() {
     for seed in 0..40 {
         // A chaos-weapon window: 2 inputs.
         let placed = vec![option_sword(&atlas), item(&atlas, JEWEL_OF_CHAOS, 0)];
-        match run(&atlas, placed, BALANCE, seed) {
+        match run(&atlas, placed, carried(BALANCE), seed) {
             MixOutcome::Rejected { items, .. } => assert_eq!(items.len(), 2),
             MixOutcome::Failed { casualties, .. } => assert_eq!(casualties.len(), 2),
             MixOutcome::Success { returned, .. } => assert!(returned.is_empty()),
@@ -1128,7 +1135,7 @@ fn no_outcome_over_any_seed_drops_an_input_silently() {
             item(&atlas, JEWEL_OF_CHAOS, 0),
             item(&atlas, JEWEL_OF_SOUL, 0),
         ];
-        match run(&atlas, placed, BALANCE, seed) {
+        match run(&atlas, placed, carried(BALANCE), seed) {
             MixOutcome::Rejected { items, .. } => assert_eq!(items.len(), 4),
             MixOutcome::Failed { casualties, .. } => assert_eq!(casualties.len(), 4),
             MixOutcome::Success { returned, .. } => assert_eq!(returned.len(), 1),
@@ -1150,7 +1157,7 @@ fn an_unaffordable_fee_rejects_with_nothing_consumed() {
         item(&atlas, JEWEL_OF_SOUL, 0),
         item(&atlas, JEWEL_OF_SOUL, 0),
     ];
-    match run(&atlas, placed, Zen(3_999_999), SEED_SUCCESS) {
+    match run(&atlas, placed, carried(3_999_999), SEED_SUCCESS) {
         MixOutcome::Rejected { reason, items } => {
             assert_eq!(reason, RejectReason::InsufficientZen);
             assert_eq!(items.len(), 6, "every input handed back");
@@ -1172,15 +1179,15 @@ fn success_and_failure_both_charge_the_exact_fee() {
             item(atlas, JEWEL_OF_CHAOS, 0),
         ]
     };
-    match run(&atlas, window(&atlas), Zen(1_000_000), SEED_SUCCESS) {
-        MixOutcome::Success { zen, .. } => assert_eq!(zen, Zen(750_000)),
+    match run(&atlas, window(&atlas), carried(1_000_000), SEED_SUCCESS) {
+        MixOutcome::Success { zen, .. } => assert_eq!(zen, carried(750_000)),
         MixOutcome::Rejected { .. } | MixOutcome::Failed { .. } => {
             panic!("seed {SEED_SUCCESS} passes rate 70")
         }
     }
-    match run(&atlas, window(&atlas), Zen(1_000_000), SEED_FAILURE) {
+    match run(&atlas, window(&atlas), carried(1_000_000), SEED_FAILURE) {
         MixOutcome::Failed { zen, .. } => {
-            assert_eq!(zen, Zen(750_000), "the fee is never refunded");
+            assert_eq!(zen, carried(750_000), "the fee is never refunded");
         }
         MixOutcome::Rejected { .. } | MixOutcome::Success { .. } => {
             panic!("seed {SEED_FAILURE} fails rate 70")
@@ -1201,8 +1208,8 @@ fn the_same_window_zen_and_seed_produce_a_bit_identical_outcome() {
                 item(atlas, JEWEL_OF_BLESS, 0),
             ]
         };
-        let first = run(&atlas, window(&atlas), BALANCE, seed);
-        let second = run(&atlas, window(&atlas), BALANCE, seed);
+        let first = run(&atlas, window(&atlas), carried(BALANCE), seed);
+        let second = run(&atlas, window(&atlas), carried(BALANCE), seed);
         assert_eq!(first, second, "seed {seed} must replay bit-for-bit");
 
         let horns = |atlas: &Atlas| {
@@ -1214,8 +1221,8 @@ fn the_same_window_zen_and_seed_produce_a_bit_identical_outcome() {
             ]
         };
         assert_eq!(
-            run(&atlas, horns(&atlas), BALANCE, seed),
-            run(&atlas, horns(&atlas), BALANCE, seed),
+            run(&atlas, horns(&atlas), carried(BALANCE), seed),
+            run(&atlas, horns(&atlas), carried(BALANCE), seed),
             "dinorant augments replay bit-for-bit under seed {seed}"
         );
     }
@@ -1228,8 +1235,10 @@ fn every_item_kind_row_prices_at_its_pinned_value() {
     let atlas = real_atlas();
     // One priced instance per `ItemKind` row: (group, number, level, zen).
     // Weapon (width-1 discount) / bow / crossbow / staff / shield (discounted)
-    // / helm / body armor / pants / gloves / boots / arrows / bolts on the
-    // general branch; group-12 wings on the wing branch (the pinned 55.4M
+    // / helm / body armor / pants / gloves / boots on the general branch;
+    // arrows / bolts on the classic ammo branch (per-level base × quiver
+    // fill — a full quiver prices its level-0 base verbatim, 70 and 100);
+    // group-12 wings on the wing branch (the pinned 55.4M
     // anchor) with the cape routed cubic; ring / pendant / transformation ring
     // and the Uniria on the cubic branch; the Dinorant on its 960k special;
     // orb / skill scroll / jewel / stat fruit fixed-verbatim; the apple
@@ -1246,7 +1255,7 @@ fn every_item_kind_row_prices_at_its_pinned_value() {
         (9, 0, 0, 1_600),
         (10, 0, 0, 1_200),
         (11, 0, 0, 1_000),
-        (4, 15, 0, 100),
+        (4, 15, 0, 70),
         (4, 7, 0, 100),
         (12, 0, 0, 55_400_000),
         (13, 30, 0, 5_832_100),
