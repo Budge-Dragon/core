@@ -13,6 +13,11 @@ pub struct MapDefinition {
     pub number: MapNumber,
     /// Traversal medium; entry and movement rules in services match on it.
     pub environment: MapEnvironment,
+    /// The town a death on this map respawns at: the map itself when it owns a
+    /// spawn gate, else Lorencia (0), with the two authentic overrides applied
+    /// (Devil Square → Noria, Icarus → Lost Tower). Required on the wire — a
+    /// missing value is a generation bug, not a default.
+    pub respawn_map: MapNumber,
     /// Battle-soccer pitch; present only on Arena.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub soccer_pitch: Option<SoccerPitch>,
@@ -46,4 +51,28 @@ pub struct SoccerPitch {
     pub left_spawn: TileCoord,
     /// Right team spawn point.
     pub right_spawn: TileCoord,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn round_trips_a_map_definition_carrying_respawn_map() {
+        let json = r#"{"number":8,"environment":"ground","respawn_map":8,"source_version":"s6"}"#;
+        let def: MapDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(def.respawn_map, MapNumber(8));
+
+        let wire = serde_json::to_string(&def).unwrap();
+        let reparsed: MapDefinition = serde_json::from_str(&wire).unwrap();
+        assert_eq!(reparsed, def);
+    }
+
+    #[test]
+    fn rejects_a_map_definition_that_omits_respawn_map() {
+        // respawn_map is required — a record without it is a parse error at the
+        // data boundary, never a fabricated default.
+        let json = r#"{"number":8,"environment":"ground","source_version":"s6"}"#;
+        assert!(serde_json::from_str::<MapDefinition>(json).is_err());
+    }
 }

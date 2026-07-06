@@ -6,8 +6,9 @@
 //! [`resolve_death`] draws **no** randomness — the penalty is pure integer ratio
 //! math floored at the current level's threshold, so it never de-levels — and is
 //! idempotent on an already-dead character. [`respawn`] draws exactly the landing
-//! sample: one uniform pick over the death-map gate's retained walkable set (else
-//! the Lorencia fallback), refills the three vitals to the class-formula maxima,
+//! sample: one uniform pick over the death map's respawn-destination gate's
+//! retained walkable set (else the Lorencia fallback), refills the three vitals to
+//! the class-formula maxima,
 //! clears every active effect, and returns the character alive. Both mirror the
 //! [`crate::services::experience::apply_experience`] writeback template.
 
@@ -94,8 +95,9 @@ pub fn resolve_death(
 }
 
 /// The respawn step: seats a dead character back in town and returns it alive.
-/// Selects the death map's first spawn gate, else the Lorencia fallback; samples
-/// one walkable landing tile from the gate's retained set; refills the three
+/// Selects the death map's respawn-destination gate (its own town, an override
+/// town, or Lorencia), else the Lorencia fallback for a map outside the 11;
+/// samples one walkable landing tile from the gate's retained set; refills the three
 /// vitals to the class-formula maxima; clears every active effect. Draws exactly
 /// one random word — the landing pick. On an already-alive character it is a
 /// no-op that returns before touching the RNG, so the stream is untouched.
@@ -108,7 +110,7 @@ pub fn respawn(
     match character.life() {
         LifeState::Alive => (character.clone(), None),
         LifeState::Dead { .. } => {
-            let gate = match atlas.spawn_gate(character.placement().map) {
+            let gate = match atlas.respawn_gate_for_death_map(character.placement().map) {
                 Some(view) => view,
                 None => atlas.fallback_spawn_gate(),
             };

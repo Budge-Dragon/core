@@ -15,12 +15,14 @@ use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe};
 use crate::data::classes::ClassRecord;
 use crate::data::common::{ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::item_definitions::{ItemDefinition, ItemKind};
+use crate::data::map_definitions::MapDefinition;
 use crate::data::monster_definitions::{MonsterAttack, MonsterDefinition, MonsterRole, NpcWindow};
 use crate::data::npc_shops::MerchantShop;
 use crate::data::skills::{Skill, SkillShape};
 use crate::data::special_drops::{SpecialDrop, SpecialDropRecord};
 
 use super::AtlasError;
+use super::views::ResolvedSpawnGate;
 
 pub(super) fn check_monster_attacks(
     monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
@@ -47,6 +49,30 @@ pub(super) fn check_summons(
     for skill in skills.values() {
         if let SkillShape::Summon { monster } = skill.shape {
             require_monster(monsters, monster)?;
+        }
+    }
+    Ok(())
+}
+
+/// Proves every map's `respawn_map` destination resolves to a town that owns a
+/// spawn gate, in one pass — the parse-time referential-integrity proof for the
+/// respawn edge. A `respawn_map` that names no map at all is an
+/// [`AtlasError::UnknownMapRef`]; a known-but-gate-less target (a map with no
+/// spawn gate) is an [`AtlasError::RespawnMapWithoutSpawnGate`] — either way a
+/// load failure, never a runtime "nowhere to respawn" branch. The check retains
+/// nothing: the destination lookup is a two-hop read on the [`Atlas`](super::Atlas)
+/// over the already-retained map and own-gate stores.
+pub(super) fn check_respawn_destinations(
+    maps: &BTreeMap<MapNumber, MapDefinition>,
+    respawn_gate_by_map: &BTreeMap<MapNumber, ResolvedSpawnGate>,
+) -> Result<(), AtlasError> {
+    for (&map, definition) in maps {
+        let respawn_map = definition.respawn_map;
+        if !maps.contains_key(&respawn_map) {
+            return Err(AtlasError::UnknownMapRef { map: respawn_map });
+        }
+        if !respawn_gate_by_map.contains_key(&respawn_map) {
+            return Err(AtlasError::RespawnMapWithoutSpawnGate { map, respawn_map });
         }
     }
     Ok(())

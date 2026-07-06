@@ -20,6 +20,7 @@ use serde_json::{Value, json};
 
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::life::LifeState;
+use mu_core::components::movement::Movement;
 use mu_core::components::spatial::{Facing, WorldPos};
 use mu_core::components::tile::TileArea;
 use mu_core::components::units::{CarriedZen, Exp, MapNumber, Tick, TickDuration, Zen};
@@ -495,9 +496,10 @@ fn respawn_seats_a_map_3_death_on_a_walkable_tile_inside_real_gate_27() {
 }
 
 #[test]
-fn respawn_falls_back_to_lorencia_when_the_death_map_has_no_gate() {
+fn respawn_seats_a_map_8_tarkan_death_inside_real_gate_57() {
     let atlas = real_atlas();
-    // Map 8 carries no spawn gate.
+    // Map 8 (Tarkan) now owns spawn gate 57 (an s6 backport), so a Tarkan death
+    // respawns in Tarkan itself — not exiled to Lorencia as the shipped respawn did.
     let hero = dark_knight(
         100,
         total(&atlas, 100),
@@ -510,18 +512,266 @@ fn respawn_falls_back_to_lorencia_when_the_death_map_has_no_gate() {
 
     let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
 
-    let rect = gate_rect(133, 118, 151, 135);
-    assert_eq!(revived.placement().map, MapNumber(0), "Lorencia fallback");
-    assert_landed_inside(&atlas, 0, revived.placement().position, rect);
+    let rect = gate_rect(187, 63, 203, 69);
+    assert_eq!(
+        revived.placement().map,
+        MapNumber(8),
+        "Tarkan, its own respawn_map"
+    );
+    assert_ne!(
+        revived.placement().map,
+        MapNumber(0),
+        "not exiled to Lorencia"
+    );
+    assert_landed_inside(&atlas, 8, revived.placement().position, rect);
     assert_eq!(revived.life(), LifeState::Alive);
     assert_eq!(
         respawned,
         Some(Respawned {
-            map: MapNumber(0),
+            map: MapNumber(8),
             position: revived.placement().position,
             facing: RESPAWN_FACING,
         })
     );
+}
+
+#[test]
+fn respawn_sends_a_map_10_icarus_death_down_to_lost_tower_gate_42() {
+    let atlas = real_atlas();
+    // Seed a flyer over Icarus (a Sky map that owns no town gate); its respawn_map
+    // override (10 -> 4) settles the death on the ground of Lost Tower.
+    let grounded = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        10,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+    let mut value = serde_json::to_value(&grounded).unwrap();
+    value["placement"]["movement"] = json!("flying");
+    let hero: Character = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        hero.placement().movement,
+        Movement::Flying,
+        "seeded flying over Icarus"
+    );
+
+    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    let rect = gate_rect(203, 70, 213, 81);
+    assert_eq!(
+        revived.placement().map,
+        MapNumber(4),
+        "Lost Tower — the override, not Lorencia"
+    );
+    assert_landed_inside(&atlas, 4, revived.placement().position, rect);
+    assert_eq!(
+        revived.placement().movement,
+        Movement::Grounded,
+        "a sky death stands up on the ground"
+    );
+    assert_eq!(revived.life(), LifeState::Alive);
+    assert_eq!(respawned.map(|r| r.map), Some(MapNumber(4)));
+}
+
+#[test]
+fn respawn_sends_a_map_9_devil_square_death_out_to_noria_not_the_arena() {
+    let atlas = real_atlas();
+    // Devil Square (map 9) owns its own gate 58, but its respawn_map override
+    // (9 -> 3) routes the death out to Noria, the town hosting the event's door.
+    let hero = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        9,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+
+    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    let noria_gate = gate_rect(171, 108, 177, 117);
+    let arena_gate = gate_rect(133, 91, 141, 99);
+    assert_eq!(
+        revived.placement().map,
+        MapNumber(3),
+        "Noria — the override"
+    );
+    assert_landed_inside(&atlas, 3, revived.placement().position, noria_gate);
+    assert!(
+        !arena_gate.contains(revived.placement().position),
+        "not seated back inside Devil Square's own gate 58"
+    );
+    assert_eq!(respawned.map(|r| r.map), Some(MapNumber(3)));
+}
+
+#[test]
+fn respawn_seats_a_map_2_devias_death_in_devias_unchanged() {
+    let atlas = real_atlas();
+    // Devias (map 2) owns gate 22; its respawn_map is self (2 -> 2), unchanged.
+    let hero = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        2,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+
+    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    assert_eq!(revived.placement().map, MapNumber(2));
+    assert_landed_inside(
+        &atlas,
+        2,
+        revived.placement().position,
+        gate_rect(197, 35, 218, 50),
+    );
+    assert_eq!(respawned.map(|r| r.map), Some(MapNumber(2)));
+}
+
+#[test]
+fn respawn_seats_a_map_4_lost_tower_death_in_lost_tower_unchanged() {
+    let atlas = real_atlas();
+    // Lost Tower (map 4) owns gate 42; its respawn_map is self (4 -> 4), unchanged
+    // — and the same town an Icarus death is redirected to.
+    let hero = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        4,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+
+    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    assert_eq!(revived.placement().map, MapNumber(4));
+    assert_landed_inside(
+        &atlas,
+        4,
+        revived.placement().position,
+        gate_rect(203, 70, 213, 81),
+    );
+    assert_eq!(respawned.map(|r| r.map), Some(MapNumber(4)));
+}
+
+#[test]
+fn respawn_resolves_a_gate_less_dungeon_death_to_lorencia() {
+    let atlas = real_atlas();
+    // Dungeon (map 1) owns no town gate; its respawn_map defaults to Lorencia (1 -> 0).
+    let hero = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        1,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+
+    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    assert_eq!(revived.placement().map, MapNumber(0), "Lorencia");
+    assert_landed_inside(
+        &atlas,
+        0,
+        revived.placement().position,
+        gate_rect(133, 118, 151, 135),
+    );
+    assert_eq!(respawned.map(|r| r.map), Some(MapNumber(0)));
+}
+
+#[test]
+fn respawn_resolves_a_gate_less_exile_death_to_lorencia() {
+    let atlas = real_atlas();
+    // Exile (map 5) is an unreachable placeholder with no gate; respawn_map 5 -> 0.
+    let hero = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        5,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+
+    let (revived, _respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    assert_eq!(revived.placement().map, MapNumber(0), "Lorencia");
+    assert_landed_inside(
+        &atlas,
+        0,
+        revived.placement().position,
+        gate_rect(133, 118, 151, 135),
+    );
+}
+
+#[test]
+fn respawn_on_a_map_outside_the_eleven_falls_back_to_lorencia() {
+    let atlas = real_atlas();
+    // An arbitrary Placement.map no record carries: the destination lookup returns
+    // nothing (honest unknown-map optionality) and respawn seats the Lorencia fallback.
+    let hero = dark_knight(
+        100,
+        total(&atlas, 100),
+        500_000,
+        200,
+        zero_vitals(500, 400, 400),
+        no_effects(),
+        dead(1),
+    );
+    assert!(
+        atlas.respawn_gate_for_death_map(MapNumber(200)).is_none(),
+        "map 200 has no respawn destination"
+    );
+
+    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+    assert_eq!(revived.placement().map, MapNumber(0), "Lorencia fallback");
+    assert_landed_inside(
+        &atlas,
+        0,
+        revived.placement().position,
+        gate_rect(133, 118, 151, 135),
+    );
+    assert_eq!(respawned.map(|r| r.map), Some(MapNumber(0)));
+}
+
+#[test]
+fn respawn_carries_the_destination_map_not_the_died_on_map() {
+    let atlas = real_atlas();
+    // For a redirected death, both the returned placement and the Respawned outcome
+    // carry the destination map, not the map the character died on.
+    for (died_on, destination) in [(9u8, 3u8), (10, 4)] {
+        let hero = dark_knight(
+            100,
+            total(&atlas, 100),
+            500_000,
+            died_on,
+            zero_vitals(500, 400, 400),
+            no_effects(),
+            dead(1),
+        );
+
+        let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+
+        assert_eq!(
+            revived.placement().map,
+            MapNumber(destination),
+            "died on {died_on}, placement carries destination"
+        );
+        assert_eq!(
+            respawned.map(|r| r.map),
+            Some(MapNumber(destination)),
+            "died on {died_on}, Respawned carries destination"
+        );
+    }
 }
 
 #[test]
@@ -600,13 +850,15 @@ fn respawn_clears_a_poison_that_survived_the_death() {
 }
 
 #[test]
-fn respawn_is_deterministic_for_the_same_seed() {
+fn respawn_is_deterministic_across_the_redirect_for_the_same_seed() {
     let atlas = real_atlas();
+    // Death on map 9 (Devil Square) redirects to Noria (3); the redirect draws no
+    // RNG, so the same seed lands on the identical destination tile both runs.
     let hero = dark_knight(
         100,
         total(&atlas, 100),
         500_000,
-        3,
+        9,
         zero_vitals(500, 400, 400),
         no_effects(),
         dead(1),
@@ -615,6 +867,11 @@ fn respawn_is_deterministic_for_the_same_seed() {
     let (revived_a, respawned_a) = respawn(&hero, &atlas, &mut TestRng::new(7));
     let (revived_b, respawned_b) = respawn(&hero, &atlas, &mut TestRng::new(7));
 
+    assert_eq!(
+        respawned_a.map(|r| r.map),
+        Some(MapNumber(3)),
+        "redirected to Noria"
+    );
     assert_eq!(
         respawned_a, respawned_b,
         "identical landing on the same seed"
@@ -701,8 +958,9 @@ fn every_gated_map_resolves_a_walkable_respawn_gate_over_real_data() {
     // The parse-time invariant holds over the shipped dataset: every map carrying
     // a spawn gate resolves a respawn point whose every retained landing tile is
     // walkable. Map 6 carries orphan gates 51/52 on blocked tiles, yet parse still
-    // succeeds because only a map's first gate (50) is a respawn point.
-    for map in [0u8, 2, 3, 4, 6, 7, 9] {
+    // succeeds because only a map's first gate (50) is a respawn point. Map 8
+    // (Tarkan) now owns spawn gate 57.
+    for map in [0u8, 2, 3, 4, 6, 7, 8, 9] {
         let gate = or_abort(
             atlas
                 .spawn_gate(MapNumber(map))
