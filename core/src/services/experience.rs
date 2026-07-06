@@ -13,11 +13,14 @@
 
 use rand_core::RngCore;
 
+use crate::components::pool::Pool;
 use crate::components::units::{Exp, Level};
+use crate::components::vitals::Vitals;
 use crate::data::atlas::Atlas;
 use crate::entities::character::Character;
-use crate::events::progression::LevelUp;
+use crate::events::progression::{GrowthEvent, LevelUp};
 use crate::services::chance::uniform_in_inclusive;
+use crate::services::profile::character_profile;
 use crate::services::ratio::{floor_div_u64_to_u32, nonzero, scale_ratio};
 
 // W-SRC: OpenMU experience constants hardcoded in the award routine, not in
@@ -53,6 +56,70 @@ pub fn award_kill_experience(
         Exp(u64::from(gained)),
         level_ups_from(killer.level(), new_total, atlas),
     )
+}
+
+/// Applies a kill's `gained` experience to `character`: writes the new total
+/// (clamped at the level cap, discarding over-cap surplus), grants the class
+/// `points_per_level` per level crossed into the UNSPENT wallet, and refills the
+/// three vitals to the freshly-derived class-formula maxima on any crossing.
+/// Pure and deterministic — no RNG (the award's jitter was spent upstream), no
+/// in-place mutation. Returns the grown character and the growth events.
+#[must_use]
+pub fn apply_experience(
+    character: &Character,
+    gained: Exp,
+    atlas: &Atlas,
+) -> (Character, Vec<GrowthEvent>) {
+    let cap_total = atlas.exp_curve().cap_total();
+    let raw_sum = character.experience().0.saturating_add(gained.0);
+    let new_total = Exp(raw_sum.min(cap_total.0));
+    let discarded = raw_sum > cap_total.0;
+
+    let crossings = level_ups_from(character.level(), new_total, atlas);
+    match crossings.split_last() {
+        None => {
+            let grown =
+                character.with_progress(character.level(), new_total, character.unspent_points());
+            let events = if discarded {
+                vec![GrowthEvent::MaxLevelReached]
+            } else {
+                Vec::new()
+            };
+            (grown, events)
+        }
+        Some((top, prior)) => {
+            let reached = top.level;
+            let count = prior.len() + 1;
+            let per_level = u32::from(atlas.classes().record(character.class()).points_per_level);
+            let count32 = u32::try_from(count).unwrap_or(u32::MAX);
+            let nominal = u16::try_from(per_level.saturating_mul(count32)).unwrap_or(u16::MAX);
+            let new_unspent = character.unspent_points().saturating_add(nominal);
+            let applied_delta = new_unspent.saturating_sub(character.unspent_points());
+
+            // One refill at the top-crossed level equals OpenMU's per-crossing refill
+            // because stats are invariant across the award: the points are banked
+            // UNSPENT, so every intermediate set-to-max is subsumed by the final one.
+            // If a future wave auto-assigns stat points on level-up, vitality can rise
+            // mid-award and this collapse breaks — refill must then run per crossing.
+            let advanced = character.with_progress(reached, new_total, new_unspent);
+            let (_profile, maxima) = character_profile(&advanced);
+            let refilled = Vitals {
+                health: Pool::full(maxima.max_health),
+                mana: Pool::full(maxima.max_mana),
+                ability: Pool::full(maxima.max_ability),
+            };
+            let grown = advanced.with_vitals(refilled);
+
+            let mut events = vec![GrowthEvent::LevelsGained {
+                reached,
+                points_granted: applied_delta,
+            }];
+            if discarded {
+                events.push(GrowthEvent::MaxLevelReached);
+            }
+            (grown, events)
+        }
+    }
 }
 
 /// The pre-jitter base award in the victim's level, dampened by the `reference`

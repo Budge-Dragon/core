@@ -32,6 +32,11 @@ pub struct ExpTable {
 pub struct ExpCurve {
     max_level: Level,
     totals: Vec<Exp>,
+    /// Captured at parse from the last curve entry (construction proves it
+    /// present, since `max_level` is nonzero so a valid table is non-empty), so
+    /// the cap clamp is a total field read, never a fallible `level(max_level)`
+    /// lookup.
+    cap_total: Exp,
 }
 
 /// A level proven to lie within the curve's domain (`1..=max_level`), carrying
@@ -67,6 +72,9 @@ impl ExpCurve {
     /// totals decrease at any step.
     pub fn parse(table: ExpTable) -> Result<Self, ExpTableError> {
         let expected = usize::from(table.max_level.get());
+        let Some((&cap_total, _)) = table.total_exp_by_level.split_last() else {
+            return Err(ExpTableError::LengthMismatch { expected, found: 0 });
+        };
         let found = table.total_exp_by_level.len();
         if found != expected {
             return Err(ExpTableError::LengthMismatch { expected, found });
@@ -83,6 +91,7 @@ impl ExpCurve {
         Ok(Self {
             max_level: table.max_level,
             totals: table.total_exp_by_level,
+            cap_total,
         })
     }
 
@@ -90,6 +99,12 @@ impl ExpCurve {
     #[must_use]
     pub fn max_level(&self) -> Level {
         self.max_level
+    }
+
+    /// The total experience required to hold the level cap.
+    #[must_use]
+    pub fn cap_total(&self) -> Exp {
+        self.cap_total
     }
 
     /// Mints a [`CurveLevel`] proven within `1..=max_level`, resolving its
@@ -159,3 +174,44 @@ impl core::fmt::Display for ExpTableError {
 }
 
 impl core::error::Error for ExpTableError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::common::{Provenance, SourceVersion};
+
+    fn table(max_level: u16, totals: Vec<Exp>) -> ExpTable {
+        ExpTable {
+            provenance: Provenance {
+                source_version: SourceVersion::V075,
+                review: None,
+            },
+            max_level: Level::new(max_level).unwrap(),
+            total_exp_by_level: totals,
+        }
+    }
+
+    #[test]
+    fn cap_total_equals_the_max_level_total() {
+        let curve = ExpCurve::parse(table(4, vec![Exp(0), Exp(100), Exp(400), Exp(900)])).unwrap();
+        assert_eq!(
+            curve.cap_total(),
+            curve
+                .level(curve.max_level().get())
+                .unwrap()
+                .total_to_hold()
+        );
+        assert_eq!(curve.cap_total(), Exp(900));
+    }
+
+    #[test]
+    fn an_empty_table_is_a_length_mismatch() {
+        assert_eq!(
+            ExpCurve::parse(table(3, Vec::new())),
+            Err(ExpTableError::LengthMismatch {
+                expected: 3,
+                found: 0,
+            })
+        );
+    }
+}

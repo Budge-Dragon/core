@@ -69,7 +69,7 @@ use mu_core::events::kill::KillResolution;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightOutcome, StepOutcome};
 use mu_core::events::party::{MemberAward, PartyEvent};
-use mu_core::events::progression::LevelUp;
+use mu_core::events::progression::GrowthEvent;
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
@@ -77,6 +77,7 @@ use mu_core::services::combat::resolve_attack;
 use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
 };
+use mu_core::services::experience::apply_experience;
 use mu_core::services::inventory::{
     PickupOutcome, PlaceIntent, ZenPickupOutcome, equip, place_item, remove_item,
 };
@@ -729,66 +730,22 @@ impl World {
         *slot = persisted;
     }
 
-    /// Applies a kill's `gained` experience and `level_ups` to the character at
-    /// `char_index` by editing its wire form and re-loading it — the only path a
-    /// `Character` mutates (serde-only), which re-proves the class↔stats gate on
-    /// the way in.
-    ///
-    /// This method IS the R1 missing-port finding made executable (spec §0.3,
-    /// §5.2): no core service applies a `LevelUp`. It host-invents two rules — the
-    /// `points_per_level × level_ups` stat-point grant (read from the atlas class
-    /// table) AND the refill-vitals-to-max rule (re-derived from the grown
-    /// character's class-formula `VitalMaxima`). Neither is expressed by any
-    /// returned value or blessed by any doc; the harness drives the growth seam
-    /// so the fight-feedback assertion can run, but this is NOT clean host-policy.
-    pub fn apply_growth(&mut self, char_index: usize, gained: Exp, level_ups: &[LevelUp]) {
+    /// Applies a kill's `gained` experience to the character at `char_index`
+    /// through the core leveling service, persists the grown character, and
+    /// returns the growth events for delivery. The growth RULE (points grant, cap
+    /// clamp, vitals refill) now lives in core — this is a thin persist-and-deliver
+    /// driver.
+    pub fn apply_growth(&mut self, char_index: usize, gained: Exp) -> Vec<GrowthEvent> {
         let character = or_abort(self.characters.get(char_index).ok_or("no character"));
-        let class = character.class();
-        let base_level = character.level();
-        let base_points = character.unspent_points();
-        let base_exp = character.experience();
-        let mut wire = or_abort(serde_json::to_value(character));
-
-        let new_level = match level_ups.iter().map(|level_up| level_up.level).max() {
-            Some(level) => level,
-            None => base_level,
-        };
-        let per_level = self.atlas.classes().record(class).points_per_level;
-        let crossings = or_abort(u16::try_from(level_ups.len()));
-        let granted = u16::from(per_level).saturating_mul(crossings);
-        let new_points = base_points.saturating_add(granted);
-        let new_exp = Exp(base_exp.0.saturating_add(gained.0));
-
-        {
-            let object = or_abort(wire.as_object_mut().ok_or("character is not an object"));
-            object.insert("experience".to_owned(), serde_json::json!(new_exp.0));
-            object.insert("level".to_owned(), serde_json::json!(new_level.get()));
-            object.insert("unspent_points".to_owned(), serde_json::json!(new_points));
-        }
-
-        // Re-derive the class-formula maxima on the grown character, then seat the
-        // vitals full at them — the host-invented refill rule.
-        let grown: Character = or_abort(serde_json::from_value(wire.clone()));
-        let (_, maxima) = character_profile(&grown);
-        {
-            let object = or_abort(wire.as_object_mut().ok_or("character is not an object"));
-            object.insert(
-                "vitals".to_owned(),
-                serde_json::json!({
-                    "health": {"current": maxima.max_health, "max": maxima.max_health},
-                    "mana": {"current": maxima.max_mana, "max": maxima.max_mana},
-                    "ability": {"current": maxima.max_ability, "max": maxima.max_ability},
-                }),
-            );
-        }
-        let final_character: Character = or_abort(serde_json::from_value(wire));
-        let persisted = persist(final_character);
+        let (grown, events) = apply_experience(character, gained, &self.atlas);
+        let persisted = persist(grown);
         let slot = or_abort(
             self.characters
                 .get_mut(char_index)
                 .ok_or("no character slot"),
         );
         *slot = persisted;
+        events
     }
 
     /// Drives one monster strike onto the player (seam 7, V6): the forwarded
@@ -1553,15 +1510,19 @@ impl World {
     }
 
     /// Distributes one kill's experience across the party at `party_index` over
-    /// the caller-built `facts`, then applies each returned award to its member's
-    /// character through the existing `apply_growth` seam (slot = character index).
+    /// the caller-built `facts`, then applies each returned award's `gained` to its
+    /// member's character through the core leveling service (slot = character
+    /// index). Returns each award paired with the growth events the leveling
+    /// service produced, so the party path proves the delivery duty like the solo
+    /// path: `MemberAward.level_ups` is the party observable, and each award's
+    /// `GrowthEvent`s are the applied outcome the host delivers outward.
     pub fn distribute_kill_experience(
         &mut self,
         party_index: usize,
         facts: &[party::MemberFact],
         killer: MemberSlot,
         victim_level: Level,
-    ) -> Vec<MemberAward> {
+    ) -> Vec<(MemberAward, Vec<GrowthEvent>)> {
         let party = self.party(party_index).clone();
         // The host owns the account↔slot map, so it resolves the killer's fact by
         // value here (a boundary lookup, `or_abort`-resolved) and hands the rest as
@@ -1572,8 +1533,11 @@ impl World {
                 .find(|fact| fact.slot == killer)
                 .ok_or("killer not among facts"),
         );
-        let others: Vec<party::MemberFact> =
-            facts.iter().copied().filter(|fact| fact.slot != killer).collect();
+        let others: Vec<party::MemberFact> = facts
+            .iter()
+            .copied()
+            .filter(|fact| fact.slot != killer)
+            .collect();
         let awards = party::distribute_kill_experience(
             &party,
             killer_fact,
@@ -1582,10 +1546,13 @@ impl World {
             &self.atlas,
             &mut self.rng,
         );
-        for award in &awards {
-            self.apply_growth(usize::from(award.slot.0), award.gained, &award.level_ups);
-        }
         awards
+            .into_iter()
+            .map(|award| {
+                let events = self.apply_growth(usize::from(award.slot.0), award.gained);
+                (award, events)
+            })
+            .collect()
     }
 
     /// Splits one zen pile across the party at `party_index` over the caller-built
