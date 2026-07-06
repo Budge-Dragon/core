@@ -654,6 +654,20 @@ impl Durability {
             max: new_max,
         }
     }
+
+    /// This gauge after one piece is consumed: the next lower gauge, or `None`
+    /// when the consumed piece was the last (the count reaches zero and the
+    /// whole item is removed rather than left as a zero-count stack). The
+    /// consume twin of the stack-raise gauge, mirroring
+    /// [`crate::components::active_effect::PoisonTicks::decrement`] — the
+    /// last-piece signal the inventory acts on.
+    #[must_use]
+    pub fn decremented(self) -> Option<Self> {
+        NonZeroU8::new(self.current.saturating_sub(1)).map(|current| Self {
+            current: current.get(),
+            max: self.max,
+        })
+    }
 }
 
 impl TryFrom<DurabilityWire> for Durability {
@@ -796,6 +810,21 @@ mod tests {
         assert_eq!(gauge.rescaled(25), Durability::full(25));
         // Rescaling onto a zero maximum lands on the 0/0 gauge.
         assert_eq!(Durability::full(30).rescaled(0), Durability::full(0));
+    }
+
+    #[test]
+    fn durability_decremented_lowers_and_signals_the_last_piece() {
+        // Above one piece the gauge lowers by one, its ceiling unchanged.
+        assert_eq!(
+            Durability::new(3, 3).unwrap().decremented(),
+            Some(Durability::new(2, 3).unwrap())
+        );
+        assert_eq!(
+            Durability::new(2, 3).unwrap().decremented(),
+            Some(Durability::new(1, 3).unwrap())
+        );
+        // The last piece signals removal (`None`), never a zero-count gauge.
+        assert_eq!(Durability::new(1, 3).unwrap().decremented(), None);
     }
 
     #[test]

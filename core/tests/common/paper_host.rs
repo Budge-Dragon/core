@@ -62,6 +62,7 @@ use mu_core::entities::trade_session::TradeSession;
 use mu_core::entities::world_item::WorldItem;
 use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::AttackOutcome;
+use mu_core::events::consume::ConsumeEvent;
 use mu_core::events::craft::MixOutcome;
 use mu_core::events::death::{DeathEvent, Respawned};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
@@ -75,6 +76,7 @@ use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
 use mu_core::services::combat::resolve_attack;
+use mu_core::services::consume::use_consumable;
 use mu_core::services::death::{resolve_death, respawn};
 use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
@@ -1051,6 +1053,31 @@ impl World {
             | BuyOutcome::InsufficientZen => {}
         }
         outcome
+    }
+
+    /// Drinks the consumable covering `cell` in the bag of the character at
+    /// `char_index` (the CONSUMABLE-USE flow): reads the live character and bag,
+    /// calls the real [`use_consumable`] over the held atlas, and writes BOTH the
+    /// returned character and bag back *through* the persist seam. No heal, cure,
+    /// reject-when-no-op, or stack-decrement rule is authored host-side — the
+    /// formula, the cap, the refusal, and the decrement all live in core. Returns
+    /// the consume events for delivery.
+    ///
+    /// [`use_consumable`]: mu_core::services::consume::use_consumable
+    pub fn use_consumable(&mut self, char_index: usize, cell: Cell) -> Vec<ConsumeEvent> {
+        let character = self.character(char_index).clone();
+        let inventory = self.inventory(char_index).clone();
+        let (new_character, new_inventory, events) =
+            use_consumable(&character, inventory, cell, &self.atlas);
+        let persisted = persist(new_character);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        self.store_inventory(char_index, new_inventory);
+        events
     }
 
     /// Sells the item covering `cell` from the bag of the character at

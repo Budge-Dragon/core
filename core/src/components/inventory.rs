@@ -323,6 +323,32 @@ impl Inventory {
         })
     }
 
+    /// Consumes one piece of the stack covering `cell`: lowers its gauge by one
+    /// (a stack's piece count is its `durability.current()`), or removes the
+    /// whole item when the last piece is consumed — no zero-count ghost cell
+    /// survives. The decrement twin of [`Self::absorb`]; the whole-item removal
+    /// on the last piece is folded here, not banned inside [`Durability`]. On
+    /// rejection the unchanged inventory is handed back.
+    ///
+    /// # Errors
+    /// Returns [`PlacementRejection::NoItemAtCell`] when no item covers `cell`.
+    pub fn consume_one(self, cell: Cell) -> Result<Self, (Self, PlacementRejection)> {
+        let Some((index, _)) = self.locate(cell) else {
+            return Err((self, PlacementRejection::NoItemAtCell));
+        };
+        let mut placed = self.placed;
+        let mut consumed = placed.remove(index);
+        if let Some(lowered) = consumed.item.durability.decremented() {
+            consumed.item.durability = lowered;
+            placed.insert(index, consumed);
+        }
+        Ok(Self {
+            rows: self.rows,
+            cols: self.cols,
+            placed,
+        })
+    }
+
     /// Moves the item covering `from` so its anchor is `to`, reusing its stored
     /// footprint. Self-overlap on the moving item's own old cells is legal — the
     /// overlap test excludes it. On rejection the unchanged inventory is handed
@@ -681,6 +707,42 @@ mod tests {
             .absorb(cell(7, 7), NonZeroU8::new(1).unwrap())
             .unwrap_err();
         assert_eq!(rejection, AbsorbRejection::NoItemAtCell);
+    }
+
+    #[test]
+    fn consume_one_lowers_a_multi_piece_stack_by_one() {
+        let inventory = Inventory::empty(8, 8)
+            .place(cell(2, 2), footprint(1, 1), stack(5, 3, 3))
+            .unwrap();
+        let inventory = inventory.consume_one(cell(2, 2)).unwrap();
+        assert_eq!(inventory.placed().len(), 1);
+        let occupant = inventory.occupant(cell(2, 2)).unwrap();
+        assert_eq!(occupant.item.durability, Durability::new(2, 3).unwrap());
+    }
+
+    #[test]
+    fn consume_one_last_piece_empties_the_cell() {
+        let inventory = Inventory::empty(8, 8)
+            .place(cell(1, 1), footprint(1, 1), stack(5, 1, 3))
+            .unwrap();
+        let inventory = inventory.consume_one(cell(1, 1)).unwrap();
+        // The whole item is gone — no zero-count stack lingers at the cell.
+        assert!(inventory.occupant(cell(1, 1)).is_none());
+        assert!(inventory.placed().is_empty());
+    }
+
+    #[test]
+    fn consume_one_addresses_any_covered_cell_and_rejects_an_empty_one() {
+        let inventory = Inventory::empty(8, 8)
+            .place(cell(1, 1), footprint(2, 2), stack(5, 2, 3))
+            .unwrap();
+        // A covered non-anchor cell reaches the same stack.
+        let inventory = inventory.consume_one(cell(2, 2)).unwrap();
+        let occupant = inventory.occupant(cell(1, 1)).unwrap();
+        assert_eq!(occupant.item.durability, Durability::new(1, 3).unwrap());
+        let (inventory, reason) = inventory.consume_one(cell(7, 7)).unwrap_err();
+        assert_eq!(reason, PlacementRejection::NoItemAtCell);
+        assert_eq!(inventory.placed().len(), 1);
     }
 
     #[test]

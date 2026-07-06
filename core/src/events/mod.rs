@@ -5,6 +5,7 @@
 //! value; the host decides whether to log it, persist it, or broadcast it.
 
 pub mod combat;
+pub mod consume;
 pub mod craft;
 pub mod death;
 pub mod effect;
