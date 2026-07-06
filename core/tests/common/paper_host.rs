@@ -63,6 +63,7 @@ use mu_core::entities::world_item::WorldItem;
 use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::AttackOutcome;
 use mu_core::events::craft::MixOutcome;
+use mu_core::events::death::{DeathEvent, Respawned};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, RemoveOutcome};
 use mu_core::events::kill::KillResolution;
@@ -74,6 +75,7 @@ use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
 use mu_core::services::combat::resolve_attack;
+use mu_core::services::death::{resolve_death, respawn};
 use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
 };
@@ -799,6 +801,48 @@ impl World {
 
         self.set_health(player_index, new_health);
         outcome
+    }
+
+    /// Runs the monster-kill death step on the player at `char_index` (the
+    /// W-DEATH seam, V6 continuation): reads the live character, calls the core
+    /// [`resolve_death`] service at `at` on the host's fixed tick base, persists
+    /// the returned character, and hands the death events back for delivery. The
+    /// death RULE — the exp + zen penalty, the Dead-marking, leaving vitals and
+    /// effects in place — lives in core; this is a thin persist-and-deliver
+    /// driver, the death twin of [`Self::apply_growth`]. No penalty, gate, refill,
+    /// or clear logic is authored host-side.
+    pub fn resolve_player_death(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
+        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let (dead, events) = resolve_death(character, at, host_tick(), &self.atlas);
+        let persisted = persist(dead);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        events
+    }
+
+    /// Runs the respawn step on the player at `char_index` once its scheduled
+    /// respawn beat is due (the W-DEATH seam): reads the live character, calls the
+    /// core [`respawn`] service over the world's stream (the single landing draw),
+    /// persists the revived character, and hands the [`Respawned`] landing back for
+    /// delivery. The respawn RULE — the gate pick, the landing sample, the vitals
+    /// refill, the effect clear — lives in core; this is a thin persist-and-deliver
+    /// driver, the revive twin of [`Self::resolve_player_death`]. `None` only when
+    /// the character was already alive (the symmetric no-op).
+    pub fn respawn_player(&mut self, char_index: usize) -> Option<Respawned> {
+        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let (revived, respawned) = respawn(character, &self.atlas, &mut self.rng);
+        let persisted = persist(revived);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        respawned
     }
 
     /// Sets the health pool of the character at `char_index` by swapping its
@@ -1663,6 +1707,45 @@ pub fn dark_knight(level: u16, strength: u16, at: TileCoord) -> Character {
         "unspent_points": 0,
         "zen": 0,
         "placement": {"position": position, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
+        "vitals": {
+            "health": {"current": 500, "max": 500},
+            "mana": {"current": 400, "max": 400},
+            "ability": {"current": 400, "max": 400}
+        }
+    });
+    or_abort(serde_json::from_value(json))
+}
+
+/// A gearless Dark Knight seeded mid-band in its own level's experience band and
+/// carrying `zen`, seated on `map` at tile `at` with a drainable health pool —
+/// the W-DEATH loop subject. Its experience is read from the real exp curve
+/// (the level start plus half the band), so a death docks a real, non-zero 1% of
+/// the band; its zen is seeded so the bracket percentage docks too. A knight's
+/// defense is agility-derived, so this level-100 knight drains to zero exactly as
+/// the level-6 case does — the death is combat-driven, not fabricated. `level`
+/// must sit below the cap so a next-level band exists to seed into.
+#[must_use]
+pub fn dark_knight_in_band(
+    atlas: &Atlas,
+    level: u16,
+    zen: u64,
+    map: MapNumber,
+    at: TileCoord,
+) -> Character {
+    let curve = atlas.exp_curve();
+    let floor = or_abort(curve.level(level)).total_to_hold().0;
+    let next = or_abort(curve.level(level + 1)).total_to_hold().0;
+    let experience = floor + (next - floor) / 2;
+    let position = or_abort(serde_json::to_value(at.to_world()));
+    let map = or_abort(serde_json::to_value(map));
+    let json = serde_json::json!({
+        "class": "dark_knight",
+        "level": level,
+        "experience": experience,
+        "stats": {"kind": "standard", "strength": 150, "agility": 120, "vitality": 100, "energy": 30},
+        "unspent_points": 0,
+        "zen": zen,
+        "placement": {"position": position, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": map},
         "vitals": {
             "health": {"current": 500, "max": 500},
             "mana": {"current": 400, "max": 400},

@@ -8,6 +8,7 @@
 pub mod chance;
 pub mod combat;
 pub mod craft;
+pub mod death;
 pub mod effects;
 pub mod experience;
 pub mod inventory;

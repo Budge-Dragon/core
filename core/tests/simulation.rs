@@ -25,13 +25,14 @@ use mu_core::components::item_options::NormalOption;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::item_ref::ItemRef;
 use mu_core::components::levels::OptionLevel;
+use mu_core::components::life::LifeState;
 use mu_core::components::movement::{FlightChange, Movement};
 use mu_core::components::party::{Leadership, MemberSlot, Membership, Vitality};
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Radius, WorldPos};
 use mu_core::components::tile::{TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
-use mu_core::components::units::{ItemLevel, Level, MapNumber, Tick, Zen};
+use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Zen};
 use mu_core::data::common::MonsterNumber;
 use mu_core::data::effects::Ailment;
 use mu_core::data::npc_shops::ShelfSlot;
@@ -42,6 +43,7 @@ use mu_core::entities::trade_session::TradeSession;
 use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::AttackOutcome;
 use mu_core::events::craft::MixOutcome;
+use mu_core::events::death::{DeathEvent, Respawned};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, RemoveOutcome};
 use mu_core::events::kill::KillResolution;
@@ -62,10 +64,10 @@ use mu_core::services::profile::character_profile;
 use mu_core::services::trade::LockResult;
 
 use paper_host::{
-    World, aggressive_monster, cell, dark_knight, direct_hit_skill, fighting_monster_from,
-    first_passive_monster, footprint_of, heal_skill, is_equippable, item_at_level, item_instance,
-    low_level_monster, monster_instance, nova_skill, or_abort, persist, pos, pressing_monster,
-    tile, walkable_run, wire, zen,
+    World, aggressive_monster, cell, dark_knight, dark_knight_in_band, direct_hit_skill,
+    fighting_monster_from, first_passive_monster, footprint_of, heal_skill, is_equippable,
+    item_at_level, item_instance, low_level_monster, monster_instance, nova_skill, or_abort,
+    persist, pos, pressing_monster, tile, walkable_run, wire, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -754,40 +756,185 @@ fn a_monsters_attack_intent_forwarded_into_combat_drains_a_player_to_death() {
     assert_eq!(world.character(player).vitals().health.current(), 0);
 }
 
+/// The experience a death step docked — the `(lost, remaining)` an
+/// `ExperienceDocked` event carries, or `None` when nothing was docked.
+fn experience_docked(events: &[DeathEvent]) -> Option<(Exp, Exp)> {
+    events.iter().find_map(|event| match event {
+        DeathEvent::ExperienceDocked { lost, remaining } => Some((*lost, *remaining)),
+        DeathEvent::Died { .. } | DeathEvent::ZenDocked { .. } => None,
+    })
+}
+
+/// The zen a death step docked — the `(lost, remaining)` a `ZenDocked` event
+/// carries, or `None` when nothing was docked.
+fn zen_docked(events: &[DeathEvent]) -> Option<(Zen, CarriedZen)> {
+    events.iter().find_map(|event| match event {
+        DeathEvent::ZenDocked { lost, remaining } => Some((*lost, *remaining)),
+        DeathEvent::Died { .. } | DeathEvent::ExperienceDocked { .. } => None,
+    })
+}
+
 #[test]
-fn player_death_is_the_end_of_the_road_no_respawn_or_loss_is_invented() {
-    let mut world = World::new(42, MapNumber(0));
-    let player = world.seat_character(dark_knight(6, 100, tile(10, 10)));
+fn a_player_death_docks_penalty_then_respawns_in_town_closing_the_loop() {
+    let mut world = World::new(42, MapNumber(3));
+
+    // A level-100 Dark Knight seeded mid-band and carrying zen, seated on map 3
+    // (which owns a spawn gate). A knight's defense is agility-derived, so this
+    // level-100 knight drains to zero exactly as the level-6 sibling does — the
+    // death is combat-driven, never fabricated.
+    let hero = dark_knight_in_band(world.atlas(), 100, 1_000_000, MapNumber(3), tile(10, 10));
+    let player = world.seat_character(hero);
     let (number, combat, _resistances) = fighting_monster_from(world.atlas(), 30);
     let monster = world.seat_monster(monster_instance(number, combat.hp, tile(10, 10)));
 
-    let start_exp = world.character(player).experience();
-    let start_zen = world.character(player).zen();
+    // A poison is active at the instant of death; it must ride through the dead
+    // beat and clear only on respawn.
+    world.apply_ailment_to(player, Ailment::Poisoned, 30, Tick(0));
+    assert!(
+        world.character(player).active_effects().poison().is_some(),
+        "the hero is poisoned before it dies"
+    );
 
+    // The real 1% of the level-100 band, read from the shipped curve — not a
+    // literal, so the dock is proven against real data.
+    let expected_exp_loss = {
+        let curve = world.atlas().exp_curve();
+        let band = or_abort(curve.level(101)).total_to_hold().0
+            - or_abort(curve.level(100)).total_to_hold().0;
+        band / 100
+    };
+    let before_exp = world.character(player).experience();
+    let before_zen = world.character(player).zen();
+
+    // The monster drains the player to a killing blow.
+    let mut killed = false;
     for _ in 0..10_000u32 {
         if matches!(
             world.player_struck_by_monster(player, monster),
             AttackOutcome::Killed { .. }
         ) {
+            killed = true;
             break;
         }
     }
-
-    // The player is dead. mu-core models a monster Killed, not a player death →
-    // respawn cycle: there is NO core service to respawn it, dock its
-    // experience, or take its money (spec §5.2 player-death finding). The harness
-    // STOPS at the killed player and records the gap — nothing to call. The only
-    // thing left to prove is that the killed player still round-trips.
+    assert!(killed, "the monster drains the player to a killing blow");
     assert_eq!(world.character(player).vitals().health.current(), 0);
-    let dead = world.character(player).clone();
-    assert_eq!(
-        serde_json::to_string(&dead).unwrap(),
-        serde_json::to_string(&persist(dead.clone())).unwrap(),
+
+    // The death step: the paper host calls the real resolve_death and persists the
+    // returned dead character. No penalty, mark, or clear logic lives host-side.
+    let death_events = world.resolve_player_death(player, Tick(500));
+
+    let respawn_at = match world.character(player).life() {
+        LifeState::Dead { respawn_at } => respawn_at,
+        LifeState::Alive => panic!("resolve_death marks the killed player Dead"),
+    };
+    assert!(respawn_at > Tick(500), "the dead beat is tick-delayed");
+    assert!(
+        death_events.contains(&DeathEvent::Died { respawn_at }),
+        "the death events carry the scheduled respawn"
     );
 
-    // No loss pathway docked the dead player: experience and zen are as created.
-    assert_eq!(world.character(player).experience(), start_exp);
-    assert_eq!(world.character(player).zen(), start_zen);
+    // Experience docked the real 1% band, floored so the level never drops.
+    let after_exp = world.character(player).experience();
+    let (exp_lost, exp_remaining) =
+        experience_docked(&death_events).expect("a mid-band level-100 death docks experience");
+    assert_eq!(exp_lost.0, expected_exp_loss, "docked the real 1% band");
+    assert_eq!(exp_remaining, after_exp);
+    assert_eq!(after_exp.0, before_exp.0 - expected_exp_loss);
+    assert_eq!(
+        world.character(player).level().get(),
+        100,
+        "the floor never de-levels"
+    );
+
+    // Zen docked its bracket percentage (1% at level 100).
+    let after_zen = world.character(player).zen();
+    let (zen_lost, zen_remaining) = zen_docked(&death_events).expect("a level-100 death docks zen");
+    assert_eq!(zen_remaining, after_zen);
+    assert_eq!(zen_lost.0, before_zen.get() - after_zen.get());
+    assert!(
+        zen_lost.0 > 0,
+        "the bracket percentage docked a real amount"
+    );
+
+    // resolve_death heals nothing and clears nothing: vitals stay at zero and the
+    // poison rides through the dead beat, uncleared.
+    assert_eq!(
+        world.character(player).vitals().health.current(),
+        0,
+        "resolve_death does not heal"
+    );
+    assert!(
+        world.character(player).active_effects().poison().is_some(),
+        "the poison survives the dead beat"
+    );
+
+    // Advance to the respawn beat and respawn — the paper host calls the real
+    // respawn and persists the revived character.
+    let respawned = world
+        .respawn_player(player)
+        .expect("a dead player respawns");
+
+    // Alive, seated on the walkable town tile the Respawned carries.
+    assert_eq!(world.character(player).life(), LifeState::Alive);
+    let placement = world.character(player).placement();
+    assert_eq!(
+        respawned,
+        Respawned {
+            map: placement.map,
+            position: placement.position,
+            facing: placement.facing,
+        },
+        "the Respawned mirrors where the player now stands"
+    );
+    let grid = or_abort(
+        world
+            .atlas()
+            .walk_grid(placement.map)
+            .ok_or("the respawn map has a walk grid"),
+    );
+    assert!(
+        grid.walkable(placement.position),
+        "respawn lands on a walkable town tile"
+    );
+
+    // All three vitals refilled to the class-formula maxima; every effect cleared.
+    let revived = world.character(player);
+    let (_profile, maxima) = character_profile(revived);
+    assert_eq!(revived.vitals().health, Pool::full(maxima.max_health));
+    assert_eq!(revived.vitals().mana, Pool::full(maxima.max_mana));
+    assert_eq!(revived.vitals().ability, Pool::full(maxima.max_ability));
+    assert_eq!(revived.active_effects(), ActiveEffects::EMPTY);
+
+    // The loop closes. The respawned player round-trips persist (the class↔stats
+    // gate re-proves on load)...
+    let revived = revived.clone();
+    assert_eq!(
+        serde_json::to_string(&revived).unwrap(),
+        serde_json::to_string(&persist(revived.clone())).unwrap(),
+    );
+
+    // ...and death is no longer terminal: a fresh strike lands on the alive player
+    // and drains it below full — the field is open again.
+    let full_health = world.character(player).vitals().health.current();
+    assert!(
+        full_health > 0,
+        "the respawned player stands at full health"
+    );
+    let mut struck = false;
+    for _ in 0..10_000u32 {
+        let outcome = world.player_struck_by_monster(player, monster);
+        if world.character(player).vitals().health.current() < full_health
+            || matches!(outcome, AttackOutcome::Killed { .. })
+        {
+            struck = true;
+            break;
+        }
+    }
+    assert!(
+        struck,
+        "the respawned player takes fresh combat damage — death did not end the road"
+    );
 }
 
 // --- Zen as one economy: earn then spend one purse (seam 2; V1/V7). ----------

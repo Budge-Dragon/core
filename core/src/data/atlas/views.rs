@@ -10,12 +10,12 @@ use std::collections::BTreeMap;
 
 use crate::components::collections::OneOrMore;
 use crate::components::levels::EnhanceLevel;
-use crate::components::spatial::{Facing, WorldRect};
-use crate::components::tile::WalkGrid;
+use crate::components::spatial::{Facing, WorldPos, WorldRect};
+use crate::components::tile::{TileFacing, WalkGrid};
 use crate::components::units::{Percent, Zen};
 use crate::data::chaos_mixes::{ItemAtLevel, ItemLevelWindow, UpgradeTarget, WingEconomics};
 use crate::data::common::{ItemRef, MapNumber};
-use crate::data::gates_warps::{EnterGate, Warp};
+use crate::data::gates_warps::{EnterGate, SpawnGate, Warp};
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::MapDefinition;
 use crate::data::monster_definitions::MonsterDefinition;
@@ -49,6 +49,44 @@ pub(super) struct ResolvedEnterGate {
     pub(super) gate: EnterGate,
     pub(super) trigger: WorldRect,
     pub(super) landing: Landing,
+}
+
+/// A spawn gate with its walkable landing set resolved and retained at parse —
+/// the [`ResolvedEnterGate`] retain-at-parse precedent applied to respawn. The
+/// landing is a non-empty [`OneOrMore<WorldPos>`] (a gate whose area holds no
+/// walkable tile is an [`AtlasError`](super::AtlasError) at load), so respawn's
+/// uniform draw over it is total by type — never a runtime empty-check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ResolvedSpawnGate {
+    pub(super) gate: SpawnGate,
+    pub(super) landing: OneOrMore<WorldPos>,
+}
+
+impl ResolvedSpawnGate {
+    /// The borrowed view the Atlas hands out: the landing map, the retained
+    /// walkable landing set, and the gate's authored arrival facing projected to
+    /// world space (absent when the gate carries none).
+    pub(super) fn view(&self) -> SpawnGateView<'_> {
+        SpawnGateView {
+            map: self.gate.map,
+            landing: &self.landing,
+            facing: self.gate.direction.map(TileFacing::to_facing),
+        }
+    }
+}
+
+/// A spawn gate borrowed with its resolved walkable landing set — the public
+/// view respawn reads, mirroring [`EnterGateView`]. `facing` is the gate's
+/// authored arrival direction; when absent, the respawn service seats its own
+/// default heading, so the projection stays out of this data view.
+#[derive(Debug, Clone, Copy)]
+pub struct SpawnGateView<'a> {
+    /// The map arrivals land on.
+    pub map: MapNumber,
+    /// The gate's walkable landing tiles — non-empty, proven at parse.
+    pub landing: &'a OneOrMore<WorldPos>,
+    /// The authored arrival facing, if the gate carries one.
+    pub facing: Option<Facing>,
 }
 
 /// A warp entry with its landing resolved.

@@ -22,7 +22,7 @@ use crate::data::common::{DataFile, GateNumber, ItemRef, MapNumber, MonsterNumbe
 use crate::data::drop_config::DropConfig;
 use crate::data::exp_tables::{ExpCurve, ExpTable, ExpTableError};
 use crate::data::game_config::{GameConfig, ProgressionConfig};
-use crate::data::gates_warps::{GateWarpRecord, SpawnGate, Warp, WarpIndex};
+use crate::data::gates_warps::{GateWarpRecord, Warp, WarpIndex};
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::MapDefinition;
 use crate::data::monster_definitions::MonsterDefinition;
@@ -35,7 +35,7 @@ use crate::data::terrain::MapTerrain;
 pub use crate::data::drop_pool::DropPool;
 pub use views::{
     EnterGateView, Landing, MapHandle, ResolvedOutput, ResolvedRecipe, ShelfEntryView, ShopView,
-    SpawnEntry, WarpView,
+    SpawnEntry, SpawnGateView, WarpView,
 };
 
 use check::{
@@ -44,10 +44,10 @@ use check::{
 };
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
-    resolve_chaos_recipes, resolve_enter_gates, resolve_shops, resolve_spawns, resolve_warps,
-    take_single,
+    resolve_chaos_recipes, resolve_enter_gates, resolve_shops, resolve_spawn_gates, resolve_spawns,
+    resolve_warps, take_single,
 };
-use views::{ResolvedEnterGate, ResolvedShop, ResolvedSpawn};
+use views::{ResolvedEnterGate, ResolvedShop, ResolvedSpawn, ResolvedSpawnGate};
 
 /// Respawn fallback map (Lorencia); the Atlas proves it carries a spawn gate.
 const FALLBACK_MAP: MapNumber = MapNumber(0);
@@ -96,10 +96,10 @@ pub struct StaticData {
 pub struct Atlas {
     maps: BTreeMap<MapNumber, MapDefinition>,
     spawns_by_map: BTreeMap<MapNumber, Vec<ResolvedSpawn>>,
-    spawn_gates_by_map: BTreeMap<MapNumber, Vec<SpawnGate>>,
+    respawn_gate_by_map: BTreeMap<MapNumber, ResolvedSpawnGate>,
     enter_gates_by_map: BTreeMap<MapNumber, Vec<ResolvedEnterGate>>,
     warps: Vec<(Warp, Landing)>,
-    fallback: SpawnGate,
+    fallback: ResolvedSpawnGate,
     walk_grids: BTreeMap<MapNumber, WalkGrid>,
     items: BTreeMap<ItemRef, ItemDefinition>,
     monsters: BTreeMap<MonsterNumber, MonsterDefinition>,
@@ -165,24 +165,20 @@ impl Atlas {
         let drop_config = game_config.drops;
         let drop_pool = DropPool::build(items.values());
 
-        let fallback = gates
-            .spawn_gates
-            .iter()
-            .find(|gate| gate.map == FALLBACK_MAP)
+        // Walk grids are built before the spawn-gate resolution so each respawn
+        // gate's walkable landing set resolves against its map's grid at parse.
+        let walk_grids = index_terrain(data.terrain, &map_numbers)?;
+
+        let respawn_gate_by_map = resolve_spawn_gates(gates.spawn_gates, &walk_grids)?;
+        let fallback = respawn_gate_by_map
+            .get(&FALLBACK_MAP)
             .cloned()
             .ok_or(AtlasError::FallbackSpawnGateMissing)?;
-
-        let mut spawn_gates_by_map: BTreeMap<MapNumber, Vec<SpawnGate>> = BTreeMap::new();
-        for gate in gates.spawn_gates {
-            spawn_gates_by_map.entry(gate.map).or_default().push(gate);
-        }
-
-        let walk_grids = index_terrain(data.terrain, &map_numbers)?;
 
         Ok(Self {
             maps,
             spawns_by_map,
-            spawn_gates_by_map,
+            respawn_gate_by_map,
             enter_gates_by_map,
             warps,
             fallback,
@@ -238,7 +234,7 @@ impl Atlas {
     }
 
     /// The retained spawns for a map; the empty slice for a map with none — a
-    /// real "this map spawns nothing" answer, mirroring [`Atlas::spawn_gates`].
+    /// real "this map spawns nothing" answer.
     fn map_spawns(&self, map: MapNumber) -> &[ResolvedSpawn] {
         match self.spawns_by_map.get(&map) {
             Some(spawns) => spawns,
@@ -246,19 +242,23 @@ impl Atlas {
         }
     }
 
-    /// Spawn gates on a map; empty for maps without one.
+    /// The respawn spawn gate on a map — the first gate in file order, its
+    /// walkable landing set proven non-empty at parse; `None` for a map with no
+    /// spawn gate, where respawn falls back to Lorencia. A map's later gates are
+    /// travel-landing targets resolved through the warp/enter-gate path, not
+    /// respawn points, so they are not exposed here.
     #[must_use]
-    pub fn spawn_gates(&self, map: MapNumber) -> &[SpawnGate] {
-        match self.spawn_gates_by_map.get(&map) {
-            Some(gates) => gates,
-            None => &[],
-        }
+    pub fn spawn_gate(&self, map: MapNumber) -> Option<SpawnGateView<'_>> {
+        self.respawn_gate_by_map
+            .get(&map)
+            .map(ResolvedSpawnGate::view)
     }
 
-    /// The fallback spawn gate on Lorencia — presence proven by `parse`.
+    /// The fallback spawn gate on Lorencia, its walkable landing resolved at
+    /// parse — presence proven by `parse`.
     #[must_use]
-    pub fn fallback_spawn_gate(&self) -> &SpawnGate {
-        &self.fallback
+    pub fn fallback_spawn_gate(&self) -> SpawnGateView<'_> {
+        self.fallback.view()
     }
 
     /// The enter gate whose world trigger area covers a position, if any. The
@@ -475,6 +475,14 @@ pub enum AtlasError {
     },
     /// The respawn fallback map (Lorencia) has no spawn gate.
     FallbackSpawnGateMissing,
+    /// A respawn spawn gate's landing area holds no walkable tile — respawn
+    /// would have nowhere to place a character sent to it.
+    SpawnGateWithoutWalkableLanding {
+        /// The map the gate is on.
+        map: MapNumber,
+        /// The gate with no walkable landing.
+        gate: GateNumber,
+    },
     /// A record references a map with no record.
     UnknownMapRef {
         /// The unresolved map.
@@ -600,6 +608,12 @@ impl core::fmt::Display for AtlasError {
             Self::FallbackSpawnGateMissing => {
                 write!(f, "the fallback map has no spawn gate")
             }
+            Self::SpawnGateWithoutWalkableLanding { map, gate } => {
+                write!(
+                    f,
+                    "spawn gate {gate:?} on map {map:?} has no walkable landing tile"
+                )
+            }
             Self::UnknownMapRef { map } => write!(f, "reference to unknown map {map:?}"),
             Self::UnknownMonsterRef { monster } => {
                 write!(f, "reference to unknown monster {monster:?}")
@@ -672,6 +686,7 @@ impl core::error::Error for AtlasError {
             | Self::WarpTargetsUnknownGate { .. }
             | Self::WarpTargetsEnterGate { .. }
             | Self::FallbackSpawnGateMissing
+            | Self::SpawnGateWithoutWalkableLanding { .. }
             | Self::UnknownMapRef { .. }
             | Self::UnknownMonsterRef { .. }
             | Self::UnknownSkillRef { .. }
