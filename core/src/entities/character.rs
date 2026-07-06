@@ -146,6 +146,31 @@ impl Character {
     pub fn active_effects(&self) -> ActiveEffects {
         self.active_effects
     }
+
+    /// This character with its leveling scalars advanced; every other field —
+    /// class, stats, zen, placement, vitals, active effects — carried unchanged.
+    pub(crate) fn with_progress(
+        &self,
+        level: Level,
+        experience: Exp,
+        unspent_points: u16,
+    ) -> Character {
+        Character {
+            level,
+            experience,
+            unspent_points,
+            ..self.clone()
+        }
+    }
+
+    /// This character with its vitals reseated; every other field carried
+    /// unchanged. The caller derives the refilled pools from the class formula.
+    pub(crate) fn with_vitals(&self, vitals: Vitals) -> Character {
+        Character {
+            vitals,
+            ..self.clone()
+        }
+    }
 }
 
 /// Rejection of a class-to-stats pairing that contradicts the command-class
@@ -321,6 +346,45 @@ mod tests {
                 CharacterClass::DarkLord
             ))
         );
+    }
+
+    #[test]
+    fn with_progress_advances_scalars_and_carries_the_rest() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let grown = character.with_progress(Level::new(43).unwrap(), Exp(2_000_000), 20);
+        assert_eq!(grown.level(), Level::new(43).unwrap());
+        assert_eq!(grown.experience(), Exp(2_000_000));
+        assert_eq!(grown.unspent_points(), 20);
+        // Every other field is carried verbatim.
+        assert_eq!(grown.class(), character.class());
+        assert_eq!(grown.stats(), character.stats());
+        assert_eq!(grown.zen(), character.zen());
+        assert_eq!(grown.placement(), character.placement());
+        assert_eq!(grown.vitals(), character.vitals());
+        assert_eq!(grown.active_effects(), character.active_effects());
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(&grown).unwrap()).unwrap(),
+            grown
+        );
+    }
+
+    #[test]
+    fn with_vitals_reseats_only_the_pools() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let refilled = Vitals {
+            health: Pool::full(1500),
+            mana: Pool::full(500),
+            ability: Pool::full(42),
+        };
+        let reseated = character.with_vitals(refilled);
+        assert_eq!(reseated.vitals(), refilled);
+        assert_eq!(reseated.level(), character.level());
+        assert_eq!(reseated.experience(), character.experience());
+        assert_eq!(reseated.unspent_points(), character.unspent_points());
+        assert_eq!(reseated.class(), character.class());
+        assert_eq!(reseated.stats(), character.stats());
+        assert_eq!(reseated.zen(), character.zen());
+        assert_eq!(reseated.placement(), character.placement());
     }
 
     #[test]

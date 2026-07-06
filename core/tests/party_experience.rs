@@ -264,7 +264,8 @@ fn excluding_a_dead_or_off_map_or_out_of_range_member_shrinks_the_qualifying_set
 
     // Baseline: all three qualify.
     let mut rng = TestRng::new(seed);
-    let full = distribute_kill_experience(&party, killer_fact, &others, level(30), &atlas, &mut rng);
+    let full =
+        distribute_kill_experience(&party, killer_fact, &others, level(30), &atlas, &mut rng);
     assert_eq!(full.len(), 3);
 
     // Slot 2 (others[1]) dead -> excluded from the award and the denominator.

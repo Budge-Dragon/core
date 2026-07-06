@@ -49,6 +49,7 @@ use mu_core::events::loot::Drop;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
 use mu_core::events::party::PartyEvent;
+use mu_core::events::progression::GrowthEvent;
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
@@ -568,10 +569,10 @@ fn a_full_bag_refuses_the_pickup_and_the_item_stays_on_the_ground_intact() {
     );
 }
 
-// --- Experience → growth → combat feedback (seam 3; R1, serde-only). ---------
+// --- Experience → growth → combat feedback (seam 3; W-GROW leveling service). -
 
 #[test]
-fn levels_from_a_kill_are_applied_by_serde_edit_and_the_next_fight_is_stronger() {
+fn levels_from_a_kill_are_applied_by_the_leveling_service_and_the_next_fight_is_stronger() {
     let mut world = World::new(7, MapNumber(0));
     let killer = world.seat_character(dark_knight(1, 150, tile(10, 10)));
     let (number, combat, _resistances) = fighting_monster_from(world.atlas(), 30);
@@ -579,6 +580,7 @@ fn levels_from_a_kill_are_applied_by_serde_edit_and_the_next_fight_is_stronger()
 
     let before_rate = character_profile(world.character(killer)).0.attack_rate();
     let before_level = world.character(killer).level();
+    let before_points = world.character(killer).unspent_points();
 
     let resolution = world.resolve_kill_of(killer, victim);
     assert!(
@@ -586,11 +588,22 @@ fn levels_from_a_kill_are_applied_by_serde_edit_and_the_next_fight_is_stronger()
         "a level-1 killer of a high-level victim crosses levels"
     );
 
-    // R1 is a GENUINE GAP (spec §5.2), not clean host-policy: no core service
-    // applies a LevelUp, so apply_growth host-invents both the points-per-level
-    // grant and the refill-vitals rule. The harness DRIVES the seam so the
-    // fight-feedback assertion holds, but SURFACES the finding — see paper_host.
-    world.apply_growth(killer, resolution.experience.gained, &resolution.level_ups);
+    // The core leveling service (W-GROW) owns the growth rule — the points grant,
+    // the cap clamp, and the vitals refill. The driver applies the gained
+    // experience through it and returns the growth events for delivery.
+    let events = world.apply_growth(killer, resolution.experience.gained);
+    match events.first() {
+        Some(GrowthEvent::LevelsGained {
+            reached,
+            points_granted,
+        }) => {
+            assert_eq!(*reached, world.character(killer).level());
+            assert!(*points_granted > 0, "a crossing banks unspent points");
+        }
+        Some(GrowthEvent::MaxLevelReached) | None => {
+            panic!("a level-crossing kill must emit LevelsGained first")
+        }
+    }
 
     // The grown Character round-trips through persist (the class↔stats invariant
     // re-proves on load).
@@ -600,9 +613,11 @@ fn levels_from_a_kill_are_applied_by_serde_edit_and_the_next_fight_is_stronger()
         serde_json::to_string(&persist(grown.clone())).unwrap(),
     );
 
-    // The re-derived profile is strictly stronger: the level rose, so the
-    // level-scaled attack rate rose (the physical span is strength-derived, so
-    // leveling's combat feedback is the higher attack rate and min-damage floor).
+    // The banked points rose and the re-derived profile is strictly stronger: the
+    // level rose, so the level-scaled attack rate rose (the physical span is
+    // strength-derived, so leveling's combat feedback is the higher attack rate
+    // and min-damage floor).
+    assert!(world.character(killer).unspent_points() > before_points);
     assert!(world.character(killer).level() > before_level);
     let after_rate = character_profile(world.character(killer)).0.attack_rate();
     assert!(after_rate > before_rate);
@@ -633,8 +648,68 @@ fn a_multi_level_kill_lists_levels_ascending_and_applies_the_top_one() {
         .map(|level_up| level_up.level)
         .max()
         .expect("the list is non-empty");
-    world.apply_growth(killer, resolution.experience.gained, level_ups);
+    let events = world.apply_growth(killer, resolution.experience.gained);
     assert_eq!(world.character(killer).level(), top);
+    // The applied top level shows in the growth event's `reached`, matching the
+    // ascending delivery list's maximum.
+    match events.first() {
+        Some(GrowthEvent::LevelsGained { reached, .. }) => assert_eq!(*reached, top),
+        Some(GrowthEvent::MaxLevelReached) | None => {
+            panic!("a multi-level kill must emit LevelsGained first")
+        }
+    }
+}
+
+#[test]
+fn a_hero_levels_up_from_a_kill_banks_points_refills_and_returns_stronger() {
+    let mut world = World::new(19, MapNumber(0));
+    let killer = world.seat_character(dark_knight(1, 150, tile(10, 10)));
+    let (number, combat, _resistances) = fighting_monster_from(world.atlas(), 30);
+    let victim = world.seat_monster(monster_instance(number, combat.hp, tile(10, 10)));
+
+    let before_level = world.character(killer).level();
+    let before_points = world.character(killer).unspent_points();
+    let before_rate = character_profile(world.character(killer)).0.attack_rate();
+
+    let resolution = world.resolve_kill_of(killer, victim);
+    let events = world.apply_growth(killer, resolution.experience.gained);
+
+    // The kill crossed levels: the growth event reports the reached level and a
+    // positive points grant, both landing on the persisted character.
+    let (reached, points_granted) = match events.first() {
+        Some(GrowthEvent::LevelsGained {
+            reached,
+            points_granted,
+        }) => (*reached, *points_granted),
+        Some(GrowthEvent::MaxLevelReached) | None => {
+            panic!("a level-1 killer of a level-30 victim crosses levels")
+        }
+    };
+    assert!(points_granted > 0);
+
+    // The persisted character banked the points, rose to the reached level, and
+    // had all three vitals refilled to the class-formula maxima at the new level.
+    let hero = world.character(killer);
+    assert_eq!(hero.level(), reached);
+    assert!(hero.level() > before_level);
+    assert!(hero.unspent_points() > before_points);
+    let (_profile, maxima) = character_profile(hero);
+    assert_eq!(hero.vitals().health, Pool::full(maxima.max_health));
+    assert_eq!(hero.vitals().mana, Pool::full(maxima.max_mana));
+    assert_eq!(hero.vitals().ability, Pool::full(maxima.max_ability));
+
+    // The grown character round-trips through persist (the class↔stats gate
+    // re-proves on load).
+    let grown = hero.clone();
+    assert_eq!(
+        serde_json::to_string(&grown).unwrap(),
+        serde_json::to_string(&persist(grown.clone())).unwrap(),
+    );
+
+    // The re-derived profile is strictly stronger — the loop closes: level up and
+    // get stronger.
+    let after_rate = character_profile(&grown).0.attack_rate();
+    assert!(after_rate > before_rate);
 }
 
 // --- Monster attack intent → player death (seam 7; V6; death boundary). ------
@@ -2581,7 +2656,7 @@ fn a_party_kill_fans_exp_to_the_qualifiers_and_dead_or_out_of_range_members_get_
     let awards =
         world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
 
-    let slots: Vec<u8> = awards.iter().map(|award| award.slot.0).collect();
+    let slots: Vec<u8> = awards.iter().map(|(award, _events)| award.slot.0).collect();
     assert_eq!(
         slots,
         vec![0, 1],
@@ -2602,6 +2677,58 @@ fn a_party_kill_fans_exp_to_the_qualifiers_and_dead_or_out_of_range_members_get_
     // Each grown character survives the persist round-trip.
     let grown = world.character(killer).clone();
     assert_eq!(wire(&grown), wire(&persist(grown.clone())));
+}
+
+#[test]
+fn a_party_kill_surfaces_growth_events_only_for_the_member_that_crosses_a_level() {
+    let mut world = World::new(23, MapNumber(0));
+    // Slot 0 is a level-1 killer: any positive share carries it into level 2.
+    // Slot 1 is a level-5 member: its larger share stays well short of the
+    // level-6 threshold, so it crosses nothing — across the whole jitter band.
+    world.seat_character(dark_knight(1, 150, tile(10, 10))); // slot 0
+    world.seat_character(dark_knight(5, 150, tile(11, 10))); // slot 1
+    let party = world.seat_party(PartySession::forming());
+
+    let facts = vec![
+        world.member_fact(MemberSlot(0), Vitality::Alive),
+        world.member_fact(MemberSlot(1), Vitality::Alive),
+    ];
+
+    let awards =
+        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
+
+    // The crossing killer surfaces LevelsGained with a positive point grant.
+    let killer_award = or_abort(
+        awards
+            .iter()
+            .find(|entry| entry.0.slot == MemberSlot(0))
+            .ok_or("slot 0 award"),
+    );
+    match killer_award.1.first() {
+        Some(GrowthEvent::LevelsGained {
+            reached,
+            points_granted,
+        }) => {
+            assert!(reached.get() > 1, "the level-1 killer climbed a level");
+            assert!(*points_granted > 0, "a crossing banks unspent points");
+        }
+        Some(GrowthEvent::MaxLevelReached) | None => {
+            panic!("the crossing member must surface LevelsGained first")
+        }
+    }
+
+    // The non-crossing member surfaces no growth event at all.
+    let member_award = or_abort(
+        awards
+            .iter()
+            .find(|entry| entry.0.slot == MemberSlot(1))
+            .ok_or("slot 1 award"),
+    );
+    assert_eq!(
+        member_award.1,
+        vec![],
+        "a member that crosses no level surfaces no growth event"
+    );
 }
 
 #[test]
