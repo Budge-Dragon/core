@@ -373,6 +373,50 @@ fn a_crossing_that_lands_on_the_cap_reports_both_levels_gained_and_max_level() {
 }
 
 #[test]
+fn a_crossing_that_lands_exactly_on_the_cap_gains_the_level_without_a_discard_signal() {
+    let atlas = real_atlas();
+    let max_level = atlas.exp_curve().max_level();
+    let cap_total = atlas.exp_curve().cap_total();
+    // Seat one level below the cap, holding exactly that level's own threshold, with
+    // depleted pools so the crossing's refill shows.
+    let threshold = total_to_hold(&atlas, max_level.get() - 1);
+    let hurt = serde_json::json!({
+        "health": {"current": 3, "max": 500},
+        "mana": {"current": 2, "max": 400},
+        "ability": {"current": 1, "max": 400},
+    });
+    let hero = dark_knight(max_level.get() - 1, threshold, 0, &hurt);
+    // A gain that lands the total *exactly* on the cap — zero surplus, nothing to
+    // discard (the strict `>` overshoot test never fires).
+    let gained = Exp(cap_total.0 - threshold);
+
+    let (grown, events) = apply_experience(&hero, gained, &atlas);
+
+    assert_eq!(grown.level(), max_level);
+    assert_eq!(
+        grown.experience(),
+        cap_total,
+        "the total lands exactly on the cap, wasting nothing"
+    );
+    assert_eq!(
+        grown.unspent_points(),
+        5,
+        "one crossing banks 5 for a knight"
+    );
+    assert_refilled_full(&grown);
+    // The exact landing wasted nothing, so there is no discard: LevelsGained alone,
+    // never MaxLevelReached. This pins the strict `>` against a `>=` regression.
+    assert_eq!(
+        events,
+        vec![GrowthEvent::LevelsGained {
+            reached: max_level,
+            points_granted: 5,
+        }]
+    );
+    assert_eq!(events.len(), 1, "no discard signal on an exact landing");
+}
+
+#[test]
 fn a_hurt_hero_has_all_three_pools_refilled_on_a_crossing() {
     let atlas = real_atlas();
     let t5 = total_to_hold(&atlas, 5);
