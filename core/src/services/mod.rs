@@ -17,6 +17,7 @@ pub mod kill;
 pub mod loot;
 pub mod monster_ai;
 pub mod movement;
+pub mod party;
 pub mod price;
 pub mod profile;
 pub mod ratio;

@@ -29,6 +29,7 @@ use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
 use mu_core::components::movement::{Mobility, Movement, SlowRatio};
+use mu_core::components::party::{Leadership, MemberSlot, Membership, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{
@@ -41,6 +42,7 @@ use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::item_definitions::{ItemPrice, PerLevelPrice};
 use mu_core::data::special_drops::SpecialDrop;
 use mu_core::entities::character::Character;
+use mu_core::entities::party_session::{PartyInvite, PartyMember, PartySession};
 use mu_core::entities::trade_session::{TradeLocks, TradeOffer, TradeOffers, TradeSession};
 use mu_core::entities::world_item::WorldItem;
 use mu_core::entities::world_zen::WorldZen;
@@ -54,6 +56,7 @@ use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::{Drop, DropResolution};
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
+use mu_core::events::party::{AcceptBounce, InviteRejection, MemberAward, PartyEvent};
 use mu_core::events::progression::{ExpAward, LevelUp};
 use mu_core::events::shop::{
     BuyOutcome, RepairAllOutcome, RepairOutcome, SellOutcome, SlotRepair, SlotRepairResult,
@@ -65,6 +68,7 @@ use mu_core::events::trade::{
     TradeEvent, UnlockOutcome, WithdrawOutcome, ZenOfferOutcome,
 };
 use mu_core::services::inventory::ZenPickupOutcome;
+use mu_core::services::party;
 use mu_core::services::trade::{AcceptOutcome, LockResult, RequestOutcome, TradeAvailability};
 
 /// The canonical mobile-entity placement reused by every event that nests one.
@@ -1735,5 +1739,248 @@ fn trade_event_every_kind_tag_is_pinned() {
         })
         .unwrap(),
         r#"{"kind":"cancelled","reason":"declined"}"#
+    );
+}
+
+fn party_of_three_with_a_held_seat() -> PartySession {
+    PartySession::forming().with_member(PartyMember {
+        slot: MemberSlot(2),
+        membership: Membership::Held {
+            expires: Tick(1300),
+        },
+    })
+}
+
+#[test]
+fn party_membership_leadership_and_session_wire_is_pinned() {
+    // Positional identity is a bare integer.
+    assert_eq!(serde_json::to_string(&MemberSlot(2)).unwrap(), "2");
+
+    assert_eq!(
+        serde_json::to_string(&Membership::Active).unwrap(),
+        r#"{"kind":"active"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Membership::Held {
+            expires: Tick(1300)
+        })
+        .unwrap(),
+        r#"{"kind":"held","expires":1300}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Leadership::Led { by: MemberSlot(0) }).unwrap(),
+        r#"{"kind":"led","by":0}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Leadership::Vacant).unwrap(),
+        r#"{"kind":"vacant"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Vitality::Alive).unwrap(),
+        r#"{"kind":"alive"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Vitality::Dead).unwrap(),
+        r#"{"kind":"dead"}"#
+    );
+
+    let session = party_of_three_with_a_held_seat();
+    assert_eq!(
+        serde_json::to_string(&session).unwrap(),
+        concat!(
+            r#"{"members":[{"slot":0,"membership":{"kind":"active"}},"#,
+            r#"{"slot":1,"membership":{"kind":"active"}},"#,
+            r#"{"slot":2,"membership":{"kind":"held","expires":1300}}],"#,
+            r#""leadership":{"kind":"led","by":0}}"#,
+        )
+    );
+    // The live session survives the wire mid-lifecycle unchanged.
+    let json = serde_json::to_string(&session).unwrap();
+    assert_eq!(
+        serde_json::from_str::<PartySession>(&json).unwrap(),
+        session
+    );
+
+    assert_eq!(
+        serde_json::to_string(&PartyInvite { expires: Tick(660) }).unwrap(),
+        r#"{"expires":660}"#
+    );
+}
+
+#[test]
+fn party_outcome_every_kind_tag_is_pinned() {
+    let invite = PartyInvite { expires: Tick(660) };
+    let session = party_of_three_with_a_held_seat();
+    for (value, expected) in [
+        (
+            serde_json::to_value(party::InviteOutcome::Sent { invite }).unwrap(),
+            "sent",
+        ),
+        (
+            serde_json::to_value(party::InviteOutcome::Rejected {
+                reason: InviteRejection::PartyFull,
+            })
+            .unwrap(),
+            "rejected",
+        ),
+        (
+            serde_json::to_value(party::AcceptOutcome::Joined {
+                session: session.clone(),
+            })
+            .unwrap(),
+            "joined",
+        ),
+        (
+            serde_json::to_value(party::AcceptOutcome::Bounced {
+                reason: AcceptBounce::InviterGone,
+            })
+            .unwrap(),
+            "bounced",
+        ),
+        (
+            serde_json::to_value(party::KickOutcome::Kicked {
+                session: session.clone(),
+            })
+            .unwrap(),
+            "kicked",
+        ),
+        (
+            serde_json::to_value(party::KickOutcome::Disbanded).unwrap(),
+            "disbanded",
+        ),
+        (
+            serde_json::to_value(party::KickOutcome::NotLeader).unwrap(),
+            "not_leader",
+        ),
+        (
+            serde_json::to_value(party::KickOutcome::NoSuchMember).unwrap(),
+            "no_such_member",
+        ),
+        (
+            serde_json::to_value(party::KickOutcome::CannotKickSelf).unwrap(),
+            "cannot_kick_self",
+        ),
+        (
+            serde_json::to_value(party::LeaveOutcome::Left {
+                session: session.clone(),
+            })
+            .unwrap(),
+            "left",
+        ),
+        (
+            serde_json::to_value(party::LeaveOutcome::Disbanded).unwrap(),
+            "disbanded",
+        ),
+        (
+            serde_json::to_value(party::DisconnectOutcome::Disconnected {
+                session: session.clone(),
+            })
+            .unwrap(),
+            "disconnected",
+        ),
+        (
+            serde_json::to_value(party::ReconnectOutcome::Reconnected { session }).unwrap(),
+            "reconnected",
+        ),
+        (
+            serde_json::to_value(party::PartyOutcome::Disbanded).unwrap(),
+            "disbanded",
+        ),
+        (
+            serde_json::to_value(party::InviteSweep::Pending { invite }).unwrap(),
+            "pending",
+        ),
+        (
+            serde_json::to_value(party::InviteSweep::Lapsed).unwrap(),
+            "lapsed",
+        ),
+    ] {
+        assert_eq!(kind_tag(&value), Some(expected));
+    }
+}
+
+#[test]
+fn party_event_award_and_refusal_wire_is_pinned() {
+    assert_eq!(
+        serde_json::to_string(&PartyEvent::Joined {
+            slot: MemberSlot(1)
+        })
+        .unwrap(),
+        r#"{"kind":"joined","slot":1}"#
+    );
+    for (event, expected) in [
+        (PartyEvent::InviteSent, "invite_sent"),
+        (PartyEvent::InviteReceived, "invite_received"),
+        (PartyEvent::InviteDeclined, "invite_declined"),
+        (PartyEvent::InviteExpired, "invite_expired"),
+        (
+            PartyEvent::Joined {
+                slot: MemberSlot(1),
+            },
+            "joined",
+        ),
+        (
+            PartyEvent::MemberKicked {
+                slot: MemberSlot(2),
+            },
+            "member_kicked",
+        ),
+        (
+            PartyEvent::MemberLeft {
+                slot: MemberSlot(0),
+            },
+            "member_left",
+        ),
+        (
+            PartyEvent::MemberHeld {
+                slot: MemberSlot(3),
+            },
+            "member_held",
+        ),
+        (
+            PartyEvent::MemberReconnected {
+                slot: MemberSlot(3),
+            },
+            "member_reconnected",
+        ),
+        (
+            PartyEvent::LeadershipTransferred { to: MemberSlot(1) },
+            "leadership_transferred",
+        ),
+        (
+            PartyEvent::MemberExpired {
+                slot: MemberSlot(4),
+            },
+            "member_expired",
+        ),
+        (PartyEvent::Disbanded, "disbanded"),
+    ] {
+        assert_eq!(
+            kind_tag(&serde_json::to_value(event).unwrap()),
+            Some(expected)
+        );
+    }
+
+    // MemberAward carries only components — a flat slot / gained / level-ups record.
+    assert_eq!(
+        serde_json::to_string(&MemberAward {
+            slot: MemberSlot(2),
+            gained: Exp(1137),
+            level_ups: vec![LevelUp {
+                level: Level::new(31).unwrap(),
+            }],
+        })
+        .unwrap(),
+        r#"{"slot":2,"gained":1137,"level_ups":[{"level":31}]}"#
+    );
+
+    // Named refusals are bare snake_case strings.
+    assert_eq!(
+        serde_json::to_string(&InviteRejection::OutOfRange).unwrap(),
+        r#""out_of_range""#
+    );
+    assert_eq!(
+        serde_json::to_string(&AcceptBounce::InviterNotLeader).unwrap(),
+        r#""inviter_not_leader""#
     );
 }

@@ -1,9 +1,15 @@
 //! Per-kill experience award and the level-ups it crosses. The base award is a
-//! pooled integer formula of the victim's level, dampened when the killer far
-//! out-levels the victim, bonused for high-level victims, scaled by the era
-//! factor, and jittered through the injected RNG. Pure and deterministic: the
-//! single jitter draw is the only randomness, and the level-up walk is a total
-//! climb up the experience curve.
+//! pooled integer formula of the victim's level, dampened when the reference
+//! level far out-levels the victim, bonused for high-level victims, and scaled
+//! by the era factor; the injected RNG jitters it through a single draw. Pure
+//! and deterministic: the single jitter draw is the only randomness, and the
+//! level-up walk is a total climb up the experience curve.
+//!
+//! The base formula, the jitter draw, and the level-up walk are exposed as
+//! shared seams ([`unjittered_base`], [`draw_jitter_percent`],
+//! [`level_ups_from`]) so the party pool ([`crate::services::party`]) reuses the
+//! very same math — the solo path is the `|Q| = 1` degenerate case, byte-identical
+//! by construction rather than by a copied formula.
 
 use rand_core::RngCore;
 
@@ -39,41 +45,54 @@ pub fn award_kill_experience(
     atlas: &Atlas,
     rng: &mut impl RngCore,
 ) -> (Exp, Vec<LevelUp>) {
-    let gained = base_award(killer, victim_level, atlas, rng);
+    let base = unjittered_base(killer.level(), victim_level);
+    let percent = draw_jitter_percent(atlas, rng);
+    let gained = scale_ratio(base, u32::from(percent), nonzero(100));
     let new_total = Exp(killer.experience().0.saturating_add(u64::from(gained)));
-    (Exp(u64::from(gained)), level_ups(killer, new_total, atlas))
+    (
+        Exp(u64::from(gained)),
+        level_ups_from(killer.level(), new_total, atlas),
+    )
 }
 
-fn base_award(
-    killer: &Character,
-    victim_level: Level,
-    atlas: &Atlas,
-    rng: &mut impl RngCore,
-) -> u32 {
+/// The pre-jitter base award in the victim's level, dampened by the `reference`
+/// level (the killer's level for a solo award; the qualifying set's average
+/// level for a party pool), high-level-victim bonused, and era-scaled `5/4`.
+/// No RNG — the jitter is applied separately so both paths share one draw.
+#[must_use]
+pub(crate) fn unjittered_base(reference_level: Level, victim_level: Level) -> u32 {
     let victim = u32::from(victim_level.get());
-    let killer_level = u32::from(killer.level().get());
+    let reference = u32::from(reference_level.get());
 
     let mut base = floor_div_u64_to_u32(
         u64::from(victim + 25).saturating_mul(u64::from(victim)),
         nonzero(3),
     );
-    if killer_level > victim + OVER_LEVEL_GAP {
-        base = scale_ratio(base, victim + OVER_LEVEL_GAP, nonzero(killer_level));
+    if reference > victim + OVER_LEVEL_GAP {
+        base = scale_ratio(base, victim + OVER_LEVEL_GAP, nonzero(reference));
     }
     if victim >= HIGH_LEVEL_VICTIM {
         base = base.saturating_add((victim - 64).saturating_mul(victim / 4));
     }
-    let scaled = scale_ratio(base, EXP_FACTOR_NUM, nonzero(EXP_FACTOR_DEN));
-    let jitter_percent = uniform_in_inclusive(atlas.progression().exp_jitter_percent, rng);
-    scale_ratio(scaled, u32::from(jitter_percent), nonzero(100))
+    scale_ratio(base, EXP_FACTOR_NUM, nonzero(EXP_FACTOR_DEN))
 }
 
-/// The levels the killer crosses climbing the experience curve from its current
-/// level toward `new_total`. Monotone: the first level whose held-total exceeds
-/// `new_total` ends the climb, as does the curve's cap.
-fn level_ups(killer: &Character, new_total: Exp, atlas: &Atlas) -> Vec<LevelUp> {
+/// The single per-kill jitter draw: one `uniform_in_inclusive` word over the
+/// authored percent band. Shared by the solo award and the party pool so a kill
+/// consumes exactly one random word regardless of party size.
+#[must_use]
+pub(crate) fn draw_jitter_percent(atlas: &Atlas, rng: &mut impl RngCore) -> u16 {
+    uniform_in_inclusive(atlas.progression().exp_jitter_percent, rng)
+}
+
+/// The levels crossed climbing the experience curve from `start_level` toward
+/// `new_total`. Monotone: the first level whose held-total exceeds `new_total`
+/// ends the climb, as does the curve's cap. Parameterized by a [`Level`] so both
+/// the solo killer and each party member reuse it.
+#[must_use]
+pub(crate) fn level_ups_from(start_level: Level, new_total: Exp, atlas: &Atlas) -> Vec<LevelUp> {
     let mut level_ups = Vec::new();
-    let mut level = killer.level().get().saturating_add(1);
+    let mut level = start_level.get().saturating_add(1);
     while let Ok(curve_level) = atlas.exp_curve().level(level) {
         if curve_level.total_to_hold() > new_total {
             break;
