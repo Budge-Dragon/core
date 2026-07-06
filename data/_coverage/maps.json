@@ -1,7 +1,7 @@
 {
   "files": {
     "map_definitions.json": 11,
-    "gates_warps.json": 70,
+    "gates_warps.json": 71,
     "terrain_binaries": 11
   },
   "counts_by_source_version": {
@@ -12,7 +12,8 @@
     "gates_warps.json": {
       "spawn_gate": {
         "075": 8,
-        "095d": 4
+        "095d": 4,
+        "s6": 1
       },
       "target_gate": {
         "075": 22

@@ -40,7 +40,8 @@ pub use views::{
 
 use check::{
     check_ancient_sets, check_box_drops, check_chaos_mixes, check_classes, check_items,
-    check_monster_attacks, check_shops, check_special_drops, check_summons,
+    check_monster_attacks, check_respawn_destinations, check_shops, check_special_drops,
+    check_summons,
 };
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
@@ -174,6 +175,7 @@ impl Atlas {
             .get(&FALLBACK_MAP)
             .cloned()
             .ok_or(AtlasError::FallbackSpawnGateMissing)?;
+        check_respawn_destinations(&maps, &respawn_gate_by_map)?;
 
         Ok(Self {
             maps,
@@ -242,15 +244,33 @@ impl Atlas {
         }
     }
 
-    /// The respawn spawn gate on a map — the first gate in file order, its
-    /// walkable landing set proven non-empty at parse; `None` for a map with no
-    /// spawn gate, where respawn falls back to Lorencia. A map's later gates are
-    /// travel-landing targets resolved through the warp/enter-gate path, not
-    /// respawn points, so they are not exposed here.
+    /// A map's own first spawn gate — the first gate in file order, its walkable
+    /// landing set proven non-empty at parse; `None` for a map that carries no
+    /// spawn gate. This is the gated-map walkability invariant's view (every
+    /// gate-owning map resolves a walkable first gate); the respawn service
+    /// reaches a destination through [`respawn_gate_for_death_map`](Self::respawn_gate_for_death_map),
+    /// not here. A map's later gates are travel-landing targets resolved through
+    /// the warp/enter-gate path, not respawn points, so they are not exposed here.
     #[must_use]
     pub fn spawn_gate(&self, map: MapNumber) -> Option<SpawnGateView<'_>> {
         self.respawn_gate_by_map
             .get(&map)
+            .map(ResolvedSpawnGate::view)
+    }
+
+    /// The respawn destination gate for a death on `map` — a two-hop read over
+    /// already-retained state: the map's `respawn_map` town (the map itself, an
+    /// override town, or Lorencia), then that town's own spawn gate, its walkable
+    /// landing proven non-empty at parse. Total over the map set: parse proves
+    /// every one of the 11 maps names a gate-owning town, so for a known `map`
+    /// the second hop always resolves. `None` for a `MapNumber` no record carries
+    /// — honest optionality of an arbitrary `Placement.map`, where respawn falls
+    /// back to Lorencia.
+    #[must_use]
+    pub fn respawn_gate_for_death_map(&self, map: MapNumber) -> Option<SpawnGateView<'_>> {
+        let respawn_map = self.maps.get(&map)?.respawn_map;
+        self.respawn_gate_by_map
+            .get(&respawn_map)
             .map(ResolvedSpawnGate::view)
     }
 
@@ -483,6 +503,14 @@ pub enum AtlasError {
         /// The gate with no walkable landing.
         gate: GateNumber,
     },
+    /// A map's `respawn_map` names a known map that owns no spawn gate — a death
+    /// on it would have no town to respawn in.
+    RespawnMapWithoutSpawnGate {
+        /// The died-on map whose respawn destination is gate-less.
+        map: MapNumber,
+        /// The gate-less destination it names.
+        respawn_map: MapNumber,
+    },
     /// A record references a map with no record.
     UnknownMapRef {
         /// The unresolved map.
@@ -614,6 +642,12 @@ impl core::fmt::Display for AtlasError {
                     "spawn gate {gate:?} on map {map:?} has no walkable landing tile"
                 )
             }
+            Self::RespawnMapWithoutSpawnGate { map, respawn_map } => {
+                write!(
+                    f,
+                    "map {map:?} respawns at map {respawn_map:?}, which has no spawn gate"
+                )
+            }
             Self::UnknownMapRef { map } => write!(f, "reference to unknown map {map:?}"),
             Self::UnknownMonsterRef { monster } => {
                 write!(f, "reference to unknown monster {monster:?}")
@@ -687,6 +721,7 @@ impl core::error::Error for AtlasError {
             | Self::WarpTargetsEnterGate { .. }
             | Self::FallbackSpawnGateMissing
             | Self::SpawnGateWithoutWalkableLanding { .. }
+            | Self::RespawnMapWithoutSpawnGate { .. }
             | Self::UnknownMapRef { .. }
             | Self::UnknownMonsterRef { .. }
             | Self::UnknownSkillRef { .. }

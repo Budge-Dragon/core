@@ -4,7 +4,7 @@
 Outputs:
   data/map_definitions.json    11 records (maps 0-10; Devil Square collapsed
                                to one map-9 record)
-  data/gates_warps.json        70 records, kind-tagged:
+  data/gates_warps.json        71 records, kind-tagged:
                                spawn_gate | target_gate | enter_gate | warp
   data/terrain/0.bin..10.bin   11 sidecars, keyed by map number (re-encoded
                                from OpenMU .att; the four byte-identical Devil
@@ -87,10 +87,18 @@ MAPS = [
      "files": [("Version075/Maps/Atlans.cs", "075")]},
     {"number": 8, "version": "095d", "att": "Terrain9.att",
      "files": [("Version095d/Maps/Tarkan.cs", "095d")]},
+    # respawn_map override: Icarus.cs:44 SafezoneMapNumber => LostTower.Number
+    # (4). Icarus owns no town spawn gate, so its default would be Lorencia (0);
+    # the override sends a sky death down to the ground of Lost Tower.
     {"number": 10, "version": "095d", "att": "Terrain11.att",
+     "respawn_map": 4,
      "files": [("Version095d/Maps/Icarus.cs", "095d")]},
+    # respawn_map override: DevilSquare1.cs:45 SafezoneMapNumber => Noria.Number
+    # (3). The arena owns its own gate 58, so its default would be self (9); the
+    # override sends a Devil-Square death out to the event's host town, Noria.
     {"number": 9, "version": "095d", "att": "Terrain10_1.att",
      "name": "Devil Square",
+     "respawn_map": 3,
      "review": "collapsed from OpenMU's four discriminator records (one client "
                "map; the four squares are event brackets, owned by W-DS); the "
                "four OpenMU terrain blobs were verified byte-identical before "
@@ -251,6 +259,8 @@ def emit_exit(gate):
     if gate["direction"] is not None:  # byte 0 -> unspecified, field omitted
         record["direction"] = gate["direction"]
     record["source_version"] = gate["source_version"]
+    if gate.get("review"):  # curated gates carry a provenance note; parsed ones do not
+        record["review"] = gate["review"]
     return record
 
 
@@ -325,6 +335,26 @@ def main():
     enters = tag_gate_versions(enters_095d, enters_075, "number")
     warps = tag_gate_versions(warps_095d, warps_075, "index")
     assert len(warps) == 14, len(warps)
+
+    # Curated backport: Tarkan's town spawn gate lives only in
+    # VersionSeasonSix/Gates.cs:198 (CreateExitGate(maps[8], 187,63,203,69, 0,
+    # true)); the 0.95d Gates.cs omits it, which exiled Tarkan deaths to
+    # Lorencia. Adopt gate 57 as an s6 backport (rect verified fully walkable on
+    # terrain/8.bin) so map 8 owns a spawn gate and its respawn resolves to
+    # itself. Added as a literal rather than parsing all of SeasonSix Gates.cs,
+    # which would pull in dozens of unrelated later-era gates.
+    exits.append({
+        "number": 57,
+        "map": 8,
+        "area": rect(187, 63, 203, 69),
+        "direction": None,  # SeasonSix byte 0 -> unspecified facing
+        "is_spawn_gate": True,
+        "source_version": "s6",
+        "review": "Tarkan's town spawn gate is defined only in "
+                  "VersionSeasonSix/Gates.cs; the 0.95d Gates.cs omits it. "
+                  "Adopted as an s6 backport so Tarkan deaths respawn in Tarkan; "
+                  "rect (187,63)-(203,69) verified fully walkable on terrain/8.bin",
+    })
     assert all(w["source_version"] == "075" for w in warps), \
         "0.95d warp list expected to be the verbatim 0.75 copy"
 
@@ -334,16 +364,24 @@ def main():
     for warp in warps:
         assert warp["target_gate"] in exit_numbers, warp
 
+    # Maps that own a spawn gate — a death respawns on the map it died on when
+    # the map is in this set, else it defaults to Lorencia (0). Re-derives
+    # BaseMapInitializer.cs:91 from our parsed gate data (the curated Tarkan gate
+    # 57 puts map 8 in the set). Explicit per-map overrides beat the default.
+    spawn_owner = {g["map"] for g in exits if g["is_spawn_gate"]}
+
     clear_terrain()
     map_records = []
     terrain_notes = {}
     for entry in MAPS:
         number = entry["number"]
         combined = "".join(read(rel) for rel, _v in entry["files"])
+        default_respawn = number if number in spawn_owner else 0
         record = {
             "number": number,
             "name": parse_map_name(entry),
             "environment": parse_environment(combined),
+            "respawn_map": entry.get("respawn_map", default_respawn),
         }
         pitch = parse_soccer_pitch(combined)
         if pitch is not None:
@@ -366,7 +404,7 @@ def main():
                     + [emit_warp(w) for w in warps])
     for record in gate_records:
         assert record["map"] in map_numbers if "map" in record else True, record
-    assert len(gate_records) == 70, len(gate_records)
+    assert len(gate_records) == 71, len(gate_records)
 
     # Display names -> host-owned sidecars; the core files carry only
     # identities and rules. Map names key by number; warp names by list index

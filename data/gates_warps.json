@@ -431,6 +431,19 @@
       "source_version": "075"
     },
     {
+      "kind": "spawn_gate",
+      "number": 57,
+      "map": 8,
+      "area": {
+        "x1": 187,
+        "y1": 63,
+        "x2": 203,
+        "y2": 69
+      },
+      "source_version": "s6",
+      "review": "Tarkan's town spawn gate is defined only in VersionSeasonSix/Gates.cs; the 0.95d Gates.cs omits it. Adopted as an s6 backport so Tarkan deaths respawn in Tarkan; rect (187,63)-(203,69) verified fully walkable on terrain/8.bin"
+    },
+    {
       "kind": "enter_gate",
       "number": 1,
       "map": 0,

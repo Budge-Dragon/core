@@ -102,7 +102,7 @@ macro_rules! static_data {
     () => {
         StaticData {
             maps: load!(MapDefinition, "map_definitions", 11),
-            gates_warps: load!(GateWarpRecord, "gates_warps", 70),
+            gates_warps: load!(GateWarpRecord, "gates_warps", 71),
             monsters: load!(MonsterDefinition, "monster_definitions", 100),
             spawns: load!(Spawn, "spawns", 1847),
             skills: load!(Skill, "skills", 51),
@@ -126,7 +126,7 @@ fn every_v2_file_parses_with_expected_record_count() {
     // all thirteen files deserialize into their record types.
     let data = static_data!();
     assert_eq!(data.maps.records.len(), 11);
-    assert_eq!(data.gates_warps.records.len(), 70);
+    assert_eq!(data.gates_warps.records.len(), 71);
     assert_eq!(data.monsters.records.len(), 100);
     assert_eq!(data.spawns.records.len(), 1847);
     assert_eq!(data.skills.records.len(), 51);
@@ -195,11 +195,88 @@ fn game_config_and_special_drops_build_from_real_data() {
 fn atlas_resolves_the_whole_real_dataset() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     assert_eq!(atlas.maps().count(), 11);
-    // 70 gate/warp records include exactly 14 warp entries.
+    // 71 gate/warp records include exactly 14 warp entries.
     assert_eq!(atlas.warps().count(), 14);
     // Lorencia's spawn gate is proven present by construction.
     let fallback = atlas.fallback_spawn_gate();
     assert_eq!(fallback.map.0, 0);
+}
+
+#[test]
+fn every_map_carries_its_pinned_respawn_map() {
+    let data = static_data!();
+    let expected = [
+        (0u8, 0u8),
+        (1, 0),
+        (2, 2),
+        (3, 3),
+        (4, 4),
+        (5, 0),
+        (6, 6),
+        (7, 7),
+        (8, 8),
+        (9, 3),
+        (10, 4),
+    ];
+    for (number, respawn_map) in expected {
+        let record = data
+            .maps
+            .records
+            .iter()
+            .find(|m| m.number == MapNumber(number))
+            .unwrap();
+        assert_eq!(
+            record.respawn_map,
+            MapNumber(respawn_map),
+            "map {number} respawn_map"
+        );
+    }
+}
+
+#[test]
+fn every_death_map_resolves_a_destination_gate_spanning_the_town_set() {
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    // Every one of the 11 died-on maps resolves a respawn destination gate whose
+    // retained landing tiles are all walkable. The destination set {0,2,3,4,6,7,8}
+    // is a subset of the gate-owning maps: map 9 owns a gate yet is never a
+    // destination (it redirects to Noria, map 3).
+    let mut destinations = std::collections::BTreeSet::new();
+    for map in 0u8..=10 {
+        let view = atlas.respawn_gate_for_death_map(MapNumber(map)).unwrap();
+        let grid = atlas.walk_grid(view.map).unwrap();
+        for &landing in view.landing.iter() {
+            assert!(
+                grid.walkable(landing),
+                "map {map} destination landing walkable"
+            );
+        }
+        destinations.insert(view.map.0);
+    }
+    assert_eq!(
+        destinations,
+        std::collections::BTreeSet::from([0u8, 2, 3, 4, 6, 7, 8])
+    );
+    // An arbitrary map no record carries has no respawn destination.
+    assert!(atlas.respawn_gate_for_death_map(MapNumber(200)).is_none());
+}
+
+#[test]
+fn atlas_rejects_a_respawn_map_pointing_at_a_gate_less_map() {
+    let mut data = static_data!();
+    // Rewrite Devias's respawn_map to Dungeon (map 1), which owns no spawn gate.
+    for map in &mut data.maps.records {
+        if map.number == MapNumber(2) {
+            map.respawn_map = MapNumber(1);
+        }
+    }
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(
+        err,
+        AtlasError::RespawnMapWithoutSpawnGate {
+            map: MapNumber(2),
+            respawn_map: MapNumber(1),
+        }
+    ));
 }
 
 #[test]
@@ -330,10 +407,10 @@ fn atlas_loads_terrain_walk_grids() {
     // NoGround would wrongly report walkable.
     assert!(!lorencia.walkable(TileCoord::new(0, 0).to_world()));
 
-    // Map 8 (Lost Tower) is roughly half blocked: its (0,0) corner is a
+    // Map 8 (Tarkan) is roughly half blocked: its (0,0) corner is a
     // NoGround (`0x04`) tile and is not walkable.
-    let lost_tower = atlas.walk_grid(MapNumber(8)).unwrap();
-    assert!(!lost_tower.walkable(TileCoord::new(0, 0).to_world()));
+    let tarkan = atlas.walk_grid(MapNumber(8)).unwrap();
+    assert!(!tarkan.walkable(TileCoord::new(0, 0).to_world()));
 }
 
 #[test]
@@ -732,14 +809,14 @@ fn grounded_steps_respect_real_terrain_walls() {
         StepOutcome::Blocked => panic!("a walkable neighbour must resolve"),
     }
 
-    // Lost Tower (map 8) (0,0) is NoGround: a grounded step there is blocked.
-    let lost_tower = atlas.walk_grid(MapNumber(8)).unwrap();
+    // Tarkan (map 8) (0,0) is NoGround: a grounded step there is blocked.
+    let tarkan = atlas.walk_grid(MapNumber(8)).unwrap();
     assert_eq!(
         resolve_step(
             grounded((1, 0), MapNumber(8)),
             TileCoord::new(0, 0).to_world(),
             ONE_TILE,
-            lost_tower
+            tarkan
         ),
         StepOutcome::Blocked
     );

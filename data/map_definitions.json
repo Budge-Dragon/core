@@ -3,37 +3,44 @@
     {
       "number": 0,
       "environment": "ground",
+      "respawn_map": 0,
       "source_version": "075"
     },
     {
       "number": 1,
       "environment": "ground",
+      "respawn_map": 0,
       "source_version": "075"
     },
     {
       "number": 2,
       "environment": "ground",
+      "respawn_map": 2,
       "source_version": "095d",
       "review": "0.75-era town re-derived by the 0.95d dataset with 0.95 terrain (only town map whose initializer overrides the 075_ terrain prefix); tagged 095d because the shipped map carries the 0.95d terrain sidecar (terrain/2.bin = Terrain3.att) — the record fields (number, name, environment) are the 0.75 map"
     },
     {
       "number": 3,
       "environment": "ground",
+      "respawn_map": 3,
       "source_version": "075"
     },
     {
       "number": 4,
       "environment": "ground",
+      "respawn_map": 4,
       "source_version": "075"
     },
     {
       "number": 5,
       "environment": "ground",
+      "respawn_map": 0,
       "source_version": "075"
     },
     {
       "number": 6,
       "environment": "ground",
+      "respawn_map": 6,
       "soccer_pitch": {
         "ground": {
           "x1": 55,
@@ -68,21 +75,25 @@
     {
       "number": 7,
       "environment": "underwater",
+      "respawn_map": 7,
       "source_version": "075"
     },
     {
       "number": 8,
       "environment": "ground",
+      "respawn_map": 8,
       "source_version": "095d"
     },
     {
       "number": 10,
       "environment": "sky",
+      "respawn_map": 4,
       "source_version": "095d"
     },
     {
       "number": 9,
       "environment": "ground",
+      "respawn_map": 3,
       "source_version": "095d",
       "review": "collapsed from OpenMU's four discriminator records (one client map; the four squares are event brackets, owned by W-DS); the four OpenMU terrain blobs were verified byte-identical before collapsing"
     }
