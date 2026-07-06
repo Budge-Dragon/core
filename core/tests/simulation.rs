@@ -26,17 +26,20 @@ use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::item_ref::ItemRef;
 use mu_core::components::levels::OptionLevel;
 use mu_core::components::movement::{FlightChange, Movement};
+use mu_core::components::party::{Leadership, MemberSlot, Membership, Vitality};
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Radius, WorldPos};
 use mu_core::components::tile::{TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
-use mu_core::components::units::{ItemLevel, MapNumber, Tick, Zen};
+use mu_core::components::units::{ItemLevel, Level, MapNumber, Tick, Zen};
 use mu_core::data::common::MonsterNumber;
 use mu_core::data::effects::Ailment;
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::spawns::SpawnPlacement;
+use mu_core::entities::party_session::{PartyMember, PartySession};
 use mu_core::entities::spawned::Spawned;
 use mu_core::entities::trade_session::TradeSession;
+use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::AttackOutcome;
 use mu_core::events::craft::MixOutcome;
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
@@ -45,12 +48,14 @@ use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::Drop;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
+use mu_core::events::party::PartyEvent;
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
 use mu_core::events::trade::{CancelReason, OfferOutcome, ZenOfferOutcome};
 use mu_core::services::effects::ApplicableBuff;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
+use mu_core::services::party;
 use mu_core::services::price::selling_price;
 use mu_core::services::profile::character_profile;
 use mu_core::services::trade::LockResult;
@@ -249,6 +254,8 @@ fn the_snapshot_serialises_exactly_the_live_sets_and_never_the_atlas() {
             "ground_zen",
             "inventories",
             "monsters",
+            "parties",
+            "pending_invites",
             "sessions"
         ],
     );
@@ -2320,9 +2327,370 @@ fn a_full_session_plays_start_to_finish_with_sensible_state_at_every_beat() {
     // beats (the kill's money drop and the chaos mix's success roll) cooperate;
     // every other beat is a hard invariant. Sweeping the seed OUTSIDE the run
     // keeps the single stream deterministic — the harness idiom.
+    //
+    // Grouping does not compose onto this single-identity spine (a party needs two
+    // live heroes and a shared kill); the full party flow — form, share one kill's
+    // exp, disband — is proven front-to-back in
+    // `a_full_party_flow_forms_shares_a_kill_and_disbands` in the Party section below.
     let played = (0u64..1024).any(|seed| play_full_session(seed).is_some());
     assert!(
         played,
         "a construction seed in 0..1024 plays the whole session start to finish"
     );
+}
+
+// --- Party: form, roster, shares, disband (seam D; W-PARTY). -----------------
+//
+// A party's `MemberSlot(i)` binds to the character seated at index `i` (the paper
+// host's account↔slot map). Each scenario reads live values, drives a pure party
+// service through the host, and asserts the persisted world — the standing sixth
+// gate for grouping. `distribute_kill_experience` is the only party beat that
+// draws RNG; the roster, invite, and zen beats are pure value functions.
+
+/// An `Active` member seat at `slot` — the roster ingredient scenarios pre-seat.
+fn active_member(slot: u8) -> PartyMember {
+    PartyMember {
+        slot: MemberSlot(slot),
+        membership: Membership::Active,
+    }
+}
+
+/// A trio led by slot 0, all `Active` (slots 0, 1, 2).
+fn seated_trio() -> PartySession {
+    PartySession::forming().with_member(active_member(2))
+}
+
+/// The host-resolved availability of the character at `char_index` as an invite
+/// target — read from its own live placement.
+fn available_target(world: &World, char_index: usize) -> party::PartyAvailability {
+    let placement = world.character(char_index).placement();
+    party::PartyAvailability::Available {
+        position: placement.position,
+        map: placement.map,
+    }
+}
+
+#[test]
+fn a_solo_hero_invites_a_second_who_accepts_and_the_persisted_party_seats_both() {
+    let mut world = World::new(1, MapNumber(0));
+    let a = world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    let b = world.seat_character(dark_knight(30, 150, tile(11, 10)));
+
+    let target = available_target(&world, b);
+    assert!(matches!(
+        world.invite(a, target, Tick(0)),
+        party::InviteOutcome::Sent { .. }
+    ));
+    assert_eq!(world.pending_invite_count(), 1);
+
+    assert!(matches!(
+        world.accept_invite(0, a, b),
+        party::AcceptOutcome::Joined { .. }
+    ));
+    assert_eq!(
+        world.pending_invite_count(),
+        0,
+        "the accepted invite is reaped"
+    );
+    assert_eq!(world.party_count(), 1);
+    let party = world.party(0);
+    assert_eq!(party.len(), 2);
+    assert_eq!(party.leadership(), Leadership::Led { by: MemberSlot(0) });
+    assert!(party.is_active(MemberSlot(0)) && party.is_active(MemberSlot(1)));
+}
+
+#[test]
+fn a_declined_invite_notifies_both_and_leaves_no_party() {
+    let mut world = World::new(2, MapNumber(0));
+    let a = world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    let b = world.seat_character(dark_knight(30, 150, tile(11, 10)));
+
+    let target = available_target(&world, b);
+    world.invite(a, target, Tick(0));
+    assert_eq!(world.pending_invite_count(), 1);
+
+    assert_eq!(world.decline_invite(0), vec![PartyEvent::InviteDeclined]);
+    assert_eq!(world.pending_invite_count(), 0);
+    assert_eq!(world.party_count(), 0);
+}
+
+#[test]
+fn a_pending_invite_lapses_at_its_ttl_and_is_reaped() {
+    let mut world = World::new(3, MapNumber(0));
+    let a = world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    let b = world.seat_character(dark_knight(30, 150, tile(11, 10)));
+
+    let target = available_target(&world, b);
+    world.invite(a, target, Tick(1000));
+    let expires = world.pending_invite(0).expires;
+
+    // Before expiry: still pending, still stored.
+    assert!(matches!(
+        world.advance_invite(0, Tick(0)),
+        party::InviteSweep::Pending { .. }
+    ));
+    assert_eq!(world.pending_invite_count(), 1);
+
+    // At its lease end: lapsed and reaped.
+    assert_eq!(world.advance_invite(0, expires), party::InviteSweep::Lapsed);
+    assert_eq!(world.pending_invite_count(), 0);
+}
+
+#[test]
+fn a_leader_leaving_a_trio_transfers_leadership_in_the_persisted_party() {
+    let mut world = World::new(4, MapNumber(0));
+    for _ in 0..3 {
+        world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    }
+    let party = world.seat_party(seated_trio());
+
+    assert!(matches!(
+        world.leave(party, MemberSlot(0)),
+        party::LeaveOutcome::Left { .. }
+    ));
+    let stored = world.party(party);
+    assert_eq!(stored.leadership(), Leadership::Led { by: MemberSlot(1) });
+    assert!(stored.member(MemberSlot(0)).is_none());
+    assert_eq!(stored.len(), 2);
+}
+
+#[test]
+fn a_leader_disconnect_moves_leadership_and_the_reconnecting_ex_leader_is_regular() {
+    let mut world = World::new(5, MapNumber(0));
+    for _ in 0..3 {
+        world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    }
+    let party = world.seat_party(seated_trio());
+
+    assert!(matches!(
+        world.disconnect(party, MemberSlot(0), Tick(0)),
+        party::DisconnectOutcome::Disconnected { .. }
+    ));
+    assert_eq!(
+        world.party(party).leadership(),
+        Leadership::Led { by: MemberSlot(1) },
+        "the offline leader never freezes the party"
+    );
+
+    assert!(matches!(
+        world.reconnect(party, MemberSlot(0)),
+        party::ReconnectOutcome::Reconnected { .. }
+    ));
+    let stored = world.party(party);
+    assert!(stored.is_active(MemberSlot(0)));
+    assert_eq!(
+        stored.leadership(),
+        Leadership::Led { by: MemberSlot(1) },
+        "a reconnecting ex-leader does not reclaim (sticky)"
+    );
+}
+
+#[test]
+fn a_leader_kicks_a_member_and_named_refusals_never_panic() {
+    let mut world = World::new(6, MapNumber(0));
+    for _ in 0..3 {
+        world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    }
+    let party = world.seat_party(seated_trio());
+
+    // A non-leader's kick is a named refusal, roster untouched.
+    assert_eq!(
+        world.kick(party, MemberSlot(1), MemberSlot(2)),
+        party::KickOutcome::NotLeader
+    );
+    assert_eq!(world.party(party).len(), 3);
+    // A kick at an unoccupied slot is a named refusal, never a panic.
+    assert_eq!(
+        world.kick(party, MemberSlot(0), MemberSlot(4)),
+        party::KickOutcome::NoSuchMember
+    );
+    // The real kick shrinks the roster.
+    assert!(matches!(
+        world.kick(party, MemberSlot(0), MemberSlot(2)),
+        party::KickOutcome::Kicked { .. }
+    ));
+    assert_eq!(world.party(party).len(), 2);
+    assert!(world.party(party).member(MemberSlot(2)).is_none());
+}
+
+#[test]
+fn a_leave_from_a_two_member_party_disbands_and_deletes_the_persisted_session() {
+    let mut world = World::new(7, MapNumber(0));
+    world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    world.seat_character(dark_knight(30, 150, tile(11, 10)));
+    let party = world.seat_party(PartySession::forming());
+    assert_eq!(world.party_count(), 1);
+
+    assert_eq!(
+        world.leave(party, MemberSlot(1)),
+        party::LeaveOutcome::Disbanded
+    );
+    assert_eq!(world.party_count(), 0, "a one-member party never exists");
+}
+
+#[test]
+fn a_disconnected_member_is_reaped_at_hold_expiry_and_the_party_shrinks() {
+    let mut world = World::new(8, MapNumber(0));
+    for _ in 0..3 {
+        world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    }
+    let party = world.seat_party(seated_trio());
+
+    world.disconnect(party, MemberSlot(2), Tick(0));
+    assert_eq!(world.party(party).len(), 3, "a held seat still counts");
+
+    // Before the hold lapses the party continues unchanged.
+    assert!(matches!(
+        world.advance_party(party, Tick(0)),
+        party::PartyOutcome::Continues { .. }
+    ));
+    assert_eq!(world.party(party).len(), 3);
+
+    // Well past the 5-minute hold, the seat is reaped like a leave.
+    assert!(matches!(
+        world.advance_party(party, Tick(1_000_000)),
+        party::PartyOutcome::Continues { .. }
+    ));
+    assert_eq!(world.party(party).len(), 2);
+    assert!(world.party(party).member(MemberSlot(2)).is_none());
+}
+
+#[test]
+fn a_party_kill_fans_exp_to_the_qualifiers_and_dead_or_out_of_range_members_get_nothing() {
+    let mut world = World::new(11, MapNumber(0));
+    let killer = world.seat_character(dark_knight(20, 150, tile(10, 10))); // slot 0
+    let helper = world.seat_character(dark_knight(20, 150, tile(11, 10))); // slot 1
+    let corpse = world.seat_character(dark_knight(20, 150, tile(12, 10))); // slot 2 (dead)
+    let stray = world.seat_character(dark_knight(20, 150, tile(40, 10))); // slot 3 (out of range)
+    let party = world.seat_party(
+        PartySession::forming()
+            .with_member(active_member(2))
+            .with_member(active_member(3)),
+    );
+
+    let facts = vec![
+        world.member_fact(MemberSlot(0), Vitality::Alive),
+        world.member_fact(MemberSlot(1), Vitality::Alive),
+        world.member_fact(MemberSlot(2), Vitality::Dead),
+        world.member_fact(MemberSlot(3), Vitality::Alive),
+    ];
+    let before_killer = world.character(killer).experience().0;
+    let before_corpse = world.character(corpse).experience().0;
+    let before_stray = world.character(stray).experience().0;
+
+    let awards =
+        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
+
+    let slots: Vec<u8> = awards.iter().map(|award| award.slot.0).collect();
+    assert_eq!(
+        slots,
+        vec![0, 1],
+        "only the two present, alive, in-range members earn"
+    );
+    assert!(world.character(killer).experience().0 > before_killer);
+    assert!(world.character(helper).experience().0 > 0);
+    assert_eq!(
+        world.character(corpse).experience().0,
+        before_corpse,
+        "a dead member earns nothing"
+    );
+    assert_eq!(
+        world.character(stray).experience().0,
+        before_stray,
+        "an out-of-range member earns nothing"
+    );
+    // Each grown character survives the persist round-trip.
+    let grown = world.character(killer).clone();
+    assert_eq!(wire(&grown), wire(&persist(grown.clone())));
+}
+
+#[test]
+fn a_party_zen_pile_splits_with_remainder_to_picker_and_an_at_cap_share_grounds() {
+    let mut world = World::new(9, MapNumber(0));
+    let picker = world.seat_character(dark_knight(30, 150, tile(10, 10))); // slot 0
+    let rich = world.seat_character(dark_knight(30, 150, tile(11, 10))); // slot 1 (at cap)
+    let third = world.seat_character(dark_knight(30, 150, tile(12, 10))); // slot 2
+    world.set_wallet(rich, zen(1_999_999_999));
+    let party = world.seat_party(seated_trio());
+
+    let facts = vec![
+        world.member_fact(MemberSlot(0), Vitality::Alive),
+        world.member_fact(MemberSlot(1), Vitality::Alive),
+        world.member_fact(MemberSlot(2), Vitality::Alive),
+    ];
+    let wallets = vec![
+        world.slot_wallet(MemberSlot(0)),
+        world.slot_wallet(MemberSlot(1)),
+        world.slot_wallet(MemberSlot(2)),
+    ];
+    let pile = WorldZen {
+        amount: Zen(100_000),
+        position: world.character(picker).placement().position,
+        map: MapNumber(0),
+        despawn: Tick(9999),
+    };
+
+    let result = world.split_zen_pickup(party, &pile, &facts, MemberSlot(0), &wallets);
+
+    // Picker keeps the odd coin; the at-cap member's share grounds, never lost.
+    assert_eq!(world.character(picker).zen(), zen(33_334));
+    assert_eq!(world.character(third).zen(), zen(33_333));
+    assert_eq!(
+        world.character(rich).zen(),
+        zen(1_999_999_999),
+        "the at-cap wallet is not clamped"
+    );
+    assert_eq!(result.to_ground.len(), 1);
+    assert_eq!(world.ground_zen(0).amount, Zen(33_333));
+
+    // The solo pickup_zen path is unchanged, exercised alongside the party split.
+    let solo_pile = world.seat_ground_zen(
+        Zen(1000),
+        world.character(third).placement().position,
+        Tick(9999),
+    );
+    assert_eq!(
+        world.pickup_zen(third, solo_pile),
+        ZenPickupOutcome::PickedUp
+    );
+    assert_eq!(world.character(third).zen(), zen(34_333));
+}
+
+#[test]
+fn a_full_party_flow_forms_shares_a_kill_and_disbands() {
+    let mut world = World::new(3, MapNumber(0));
+    let a = world.seat_character(dark_knight(20, 150, tile(10, 10)));
+    let b = world.seat_character(dark_knight(20, 150, tile(11, 10)));
+
+    // Form the party.
+    let target = available_target(&world, b);
+    assert!(matches!(
+        world.invite(a, target, Tick(0)),
+        party::InviteOutcome::Sent { .. }
+    ));
+    assert!(matches!(
+        world.accept_invite(0, a, b),
+        party::AcceptOutcome::Joined { .. }
+    ));
+    assert_eq!(world.party_count(), 1);
+
+    // Share one kill's experience across both members.
+    let facts = vec![
+        world.member_fact(MemberSlot(0), Vitality::Alive),
+        world.member_fact(MemberSlot(1), Vitality::Alive),
+    ];
+    let before_a = world.character(a).experience().0;
+    let before_b = world.character(b).experience().0;
+    let awards =
+        world.distribute_kill_experience(0, &facts, MemberSlot(0), or_abort(Level::new(30)));
+    assert_eq!(awards.len(), 2);
+    assert!(world.character(a).experience().0 > before_a);
+    assert!(world.character(b).experience().0 > before_b);
+
+    // A leave dropping below two disbands the whole party.
+    assert_eq!(
+        world.leave(0, MemberSlot(1)),
+        party::LeaveOutcome::Disbanded
+    );
+    assert_eq!(world.party_count(), 0);
 }

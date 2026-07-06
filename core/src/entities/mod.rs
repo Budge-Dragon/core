@@ -6,6 +6,7 @@
 
 pub mod character;
 pub mod monster_instance;
+pub mod party_session;
 pub mod spawned;
 pub mod trade_session;
 pub mod world_item;

@@ -37,13 +37,14 @@ use mu_core::components::item_instance::{
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::item_ref::ItemRef;
 use mu_core::components::movement::{CombatLock, FlightChange, Movement, Wings};
+use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, Fixed, UNITS_PER_TILE, WorldPos};
 use mu_core::components::tile::{TileCoord, WalkGrid};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{
-    CarriedZen, Exp, ItemLevel, MapNumber, Resistance, Tick, TickDuration, Zen,
+    CarriedZen, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
 };
 use mu_core::data::atlas::Atlas;
 use mu_core::data::common::{MonsterNumber, SkillNumber};
@@ -56,6 +57,7 @@ use mu_core::data::skills::AreaPattern;
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
+use mu_core::entities::party_session::{PartyInvite, PartySession};
 use mu_core::entities::trade_session::TradeSession;
 use mu_core::entities::world_item::WorldItem;
 use mu_core::entities::world_zen::WorldZen;
@@ -66,6 +68,7 @@ use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, Rem
 use mu_core::events::kill::KillResolution;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightOutcome, StepOutcome};
+use mu_core::events::party::{MemberAward, PartyEvent};
 use mu_core::events::progression::LevelUp;
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
@@ -81,6 +84,7 @@ use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::kill::resolve_kill;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::movement::resolve_step;
+use mu_core::services::party;
 use mu_core::services::profile::{character_profile, monster_profile};
 use mu_core::services::skills::{DamagingSkill, SkillRouting, cast, cast_heal, route};
 use mu_core::services::spawn::{SpawnResult, place_spawn};
@@ -126,6 +130,13 @@ pub struct World {
     ground_zen: Vec<WorldZen>,
     /// The open trade sessions, addressed by index.
     sessions: Vec<TradeSession>,
+    /// The live parties, addressed by index. A party's `MemberSlot(i)` maps to
+    /// the character at index `i` — the character `Vec` index is the account↔slot
+    /// map (the host owns the mapping; core sees only positional slots).
+    parties: Vec<PartySession>,
+    /// The pending party invites, addressed by index — owned data with a TTL,
+    /// reaped independently of any session.
+    pending_invites: Vec<PartyInvite>,
 }
 
 /// The persist seam — the database write/read boundary abstracted. Serialises a
@@ -165,6 +176,8 @@ struct LiveSnapshot<'a> {
     ground_items: &'a [WorldItem],
     ground_zen: &'a [WorldZen],
     sessions: &'a [TradeSession],
+    parties: &'a [PartySession],
+    pending_invites: &'a [PartyInvite],
 }
 
 impl World {
@@ -199,6 +212,8 @@ impl World {
             ground_items: Vec::new(),
             ground_zen: Vec::new(),
             sessions: Vec::new(),
+            parties: Vec::new(),
+            pending_invites: Vec::new(),
         }
     }
 
@@ -1307,6 +1322,329 @@ impl World {
         *slot = persisted;
     }
 
+    // --- Party lifecycle and the two shares. -------------------------------------
+    //
+    // A party's `MemberSlot(i)` maps to the character at index `i` (the host owns
+    // the account↔slot map). Each drive method reads live values, calls a pure
+    // party service, and writes every returned live value back *through* the
+    // persist seam before storing it.
+
+    /// The live party at `index`.
+    #[must_use]
+    pub fn party(&self, index: usize) -> &PartySession {
+        or_abort(self.parties.get(index).ok_or("no party at index"))
+    }
+
+    /// How many live parties the world holds — proves a disband deleted one.
+    #[must_use]
+    pub fn party_count(&self) -> usize {
+        self.parties.len()
+    }
+
+    /// The pending invite at `index`.
+    #[must_use]
+    pub fn pending_invite(&self, index: usize) -> &PartyInvite {
+        or_abort(
+            self.pending_invites
+                .get(index)
+                .ok_or("no pending invite at index"),
+        )
+    }
+
+    /// How many pending invites the world holds — proves a lapse/accept reaped one.
+    #[must_use]
+    pub fn pending_invite_count(&self) -> usize {
+        self.pending_invites.len()
+    }
+
+    /// Seats a pre-built party through the persist seam and returns its index —
+    /// used by scenarios that need a standing roster to leave/kick/disconnect.
+    pub fn seat_party(&mut self, party: PartySession) -> usize {
+        let index = self.parties.len();
+        self.parties.push(persist(party));
+        index
+    }
+
+    /// One member's live share fact, read from the character at slot `slot`
+    /// (identity = index). `vitality`/`position` are overridable by the scenario
+    /// (a dead or strayed member) after the fact is built.
+    #[must_use]
+    pub fn member_fact(&self, slot: MemberSlot, vitality: Vitality) -> party::MemberFact {
+        let character = self.character(usize::from(slot.0));
+        party::MemberFact {
+            slot,
+            level: character.level(),
+            experience: character.experience(),
+            vitality,
+            map: character.placement().map,
+            position: character.placement().position,
+        }
+    }
+
+    /// One member's wallet, read from the character at slot `slot`.
+    #[must_use]
+    pub fn slot_wallet(&self, slot: MemberSlot) -> party::SlotWallet {
+        party::SlotWallet {
+            slot,
+            wallet: self.character(usize::from(slot.0)).zen(),
+        }
+    }
+
+    /// Sends a solo-inviter party invite from the character at `inviter_char` to a
+    /// host-resolved `target`, seating the invite on success through the persist
+    /// seam. The inviter's locus comes from its own placement.
+    pub fn invite(
+        &mut self,
+        inviter_char: usize,
+        target: party::PartyAvailability,
+        now: Tick,
+    ) -> party::InviteOutcome {
+        let inviter = self.character(inviter_char);
+        let (outcome, _events) = party::invite(
+            inviter.placement().position,
+            inviter.placement().map,
+            target,
+            None,
+            now,
+            host_tick(),
+        );
+        if let party::InviteOutcome::Sent { invite } = &outcome {
+            self.pending_invites.push(persist(*invite));
+        }
+        outcome
+    }
+
+    /// Accepts the pending invite at `invite_index` from the solo inviter at
+    /// `inviter_char` on behalf of the responder at `responder_char`: re-resolves
+    /// the inviter's live presence and the responder's locus, forms the party, and
+    /// on success seats it and reaps the invite (both through the persist seam).
+    pub fn accept_invite(
+        &mut self,
+        invite_index: usize,
+        inviter_char: usize,
+        responder_char: usize,
+    ) -> party::AcceptOutcome {
+        let inviter = self.character(inviter_char);
+        let presence = party::InviterPresence::Present {
+            position: inviter.placement().position,
+            map: inviter.placement().map,
+        };
+        let responder = self.character(responder_char);
+        let (outcome, _events) = party::accept_invite(
+            presence,
+            None,
+            responder.placement().position,
+            responder.placement().map,
+        );
+        if let party::AcceptOutcome::Joined { session } = &outcome {
+            self.parties.push(persist(session.clone()));
+            self.pending_invites.remove(invite_index);
+        }
+        outcome
+    }
+
+    /// Declines the pending invite at `invite_index`, reaping it; the returned
+    /// events notify both sides.
+    pub fn decline_invite(&mut self, invite_index: usize) -> Vec<PartyEvent> {
+        let events = party::decline_invite();
+        self.pending_invites.remove(invite_index);
+        events
+    }
+
+    /// Kicks `target` from the party at `party_index` on the leader `actor`'s
+    /// behalf. On `Kicked` the surviving party is persisted back; on `Disbanded`
+    /// it is deleted; a named refusal leaves the roster stored and untouched.
+    pub fn kick(
+        &mut self,
+        party_index: usize,
+        actor: MemberSlot,
+        target: MemberSlot,
+    ) -> party::KickOutcome {
+        let (outcome, _events) = party::kick(self.party(party_index).clone(), actor, target);
+        match &outcome {
+            party::KickOutcome::Kicked { session } => {
+                self.store_party(party_index, session.clone());
+            }
+            party::KickOutcome::Disbanded => {
+                self.parties.remove(party_index);
+            }
+            party::KickOutcome::NotLeader
+            | party::KickOutcome::NoSuchMember
+            | party::KickOutcome::CannotKickSelf => {}
+        }
+        outcome
+    }
+
+    /// Removes `actor` from the party at `party_index`. On `Left` the surviving
+    /// party is persisted; on `Disbanded` it is deleted.
+    pub fn leave(&mut self, party_index: usize, actor: MemberSlot) -> party::LeaveOutcome {
+        let (outcome, _events) = party::leave(self.party(party_index).clone(), actor);
+        match &outcome {
+            party::LeaveOutcome::Left { session } => {
+                self.store_party(party_index, session.clone());
+            }
+            party::LeaveOutcome::Disbanded => {
+                self.parties.remove(party_index);
+            }
+            party::LeaveOutcome::NoSuchMember => {}
+        }
+        outcome
+    }
+
+    /// Holds the seat of `slot` in the party at `party_index` until it lapses,
+    /// persisting the (leadership-adjusted) party back.
+    pub fn disconnect(
+        &mut self,
+        party_index: usize,
+        slot: MemberSlot,
+        now: Tick,
+    ) -> party::DisconnectOutcome {
+        let (outcome, _events) =
+            party::disconnect(self.party(party_index).clone(), slot, now, host_tick());
+        if let party::DisconnectOutcome::Disconnected { session } = &outcome {
+            self.store_party(party_index, session.clone());
+        }
+        outcome
+    }
+
+    /// Restores `slot` to `Active` in the party at `party_index`, persisting the
+    /// party back.
+    pub fn reconnect(&mut self, party_index: usize, slot: MemberSlot) -> party::ReconnectOutcome {
+        let (outcome, _events) = party::reconnect(self.party(party_index).clone(), slot);
+        if let party::ReconnectOutcome::Reconnected { session } = &outcome {
+            self.store_party(party_index, session.clone());
+        }
+        outcome
+    }
+
+    /// Reaps every lapsed held seat in the party at `party_index`. On `Continues`
+    /// the shrunken party is persisted; on `Disbanded` it is deleted.
+    pub fn advance_party(&mut self, party_index: usize, now: Tick) -> party::PartyOutcome {
+        let (outcome, _events) = party::advance_party(self.party(party_index).clone(), now);
+        match &outcome {
+            party::PartyOutcome::Continues { session } => {
+                self.store_party(party_index, session.clone());
+            }
+            party::PartyOutcome::Disbanded => {
+                self.parties.remove(party_index);
+            }
+        }
+        outcome
+    }
+
+    /// Reaps the pending invite at `invite_index` when its lease has lapsed. On
+    /// `Pending` it is persisted back; on `Lapsed` it is deleted.
+    pub fn advance_invite(&mut self, invite_index: usize, now: Tick) -> party::InviteSweep {
+        let (outcome, _events) = party::advance_invite(*self.pending_invite(invite_index), now);
+        match &outcome {
+            party::InviteSweep::Pending { invite } => {
+                let slot = or_abort(
+                    self.pending_invites
+                        .get_mut(invite_index)
+                        .ok_or("no invite slot"),
+                );
+                *slot = persist(*invite);
+            }
+            party::InviteSweep::Lapsed => {
+                self.pending_invites.remove(invite_index);
+            }
+        }
+        outcome
+    }
+
+    /// Distributes one kill's experience across the party at `party_index` over
+    /// the caller-built `facts`, then applies each returned award to its member's
+    /// character through the existing `apply_growth` seam (slot = character index).
+    pub fn distribute_kill_experience(
+        &mut self,
+        party_index: usize,
+        facts: &[party::MemberFact],
+        killer: MemberSlot,
+        victim_level: Level,
+    ) -> Vec<MemberAward> {
+        let party = self.party(party_index).clone();
+        // The host owns the account↔slot map, so it resolves the killer's fact by
+        // value here (a boundary lookup, `or_abort`-resolved) and hands the rest as
+        // `others`; core seeds `Q` with the killer, proving `|Q| >= 1` structurally.
+        let killer_fact = *or_abort(
+            facts
+                .iter()
+                .find(|fact| fact.slot == killer)
+                .ok_or("killer not among facts"),
+        );
+        let others: Vec<party::MemberFact> =
+            facts.iter().copied().filter(|fact| fact.slot != killer).collect();
+        let awards = party::distribute_kill_experience(
+            &party,
+            killer_fact,
+            &others,
+            victim_level,
+            &self.atlas,
+            &mut self.rng,
+        );
+        for award in &awards {
+            self.apply_growth(usize::from(award.slot.0), award.gained, &award.level_ups);
+        }
+        awards
+    }
+
+    /// Splits one zen pile across the party at `party_index` over the caller-built
+    /// `facts`/`wallets`, then credits each qualifier's new balance back to its
+    /// character and grounds any over-cap share as a fresh pile — all through the
+    /// persist seam.
+    pub fn split_zen_pickup(
+        &mut self,
+        party_index: usize,
+        pile: &WorldZen,
+        facts: &[party::MemberFact],
+        picker: MemberSlot,
+        wallets: &[party::SlotWallet],
+    ) -> party::ZenSplitResult {
+        let party = self.party(party_index).clone();
+        // The host splits the picker's fact + wallet out by value (a boundary
+        // lookup, `or_abort`-resolved) and keeps the rest co-indexed; core seeds
+        // `Q` with the picker, so `|Q| >= 1` is structural, never a runtime guard.
+        let index = or_abort(
+            facts
+                .iter()
+                .position(|fact| fact.slot == picker)
+                .ok_or("picker not among facts"),
+        );
+        let picker_fact = *or_abort(facts.get(index).ok_or("picker fact"));
+        let picker_wallet = or_abort(wallets.get(index).ok_or("picker wallet")).wallet;
+        let others: Vec<party::MemberFact> = facts
+            .iter()
+            .enumerate()
+            .filter_map(|(i, fact)| (i != index).then_some(*fact))
+            .collect();
+        let other_wallets: Vec<party::SlotWallet> = wallets
+            .iter()
+            .enumerate()
+            .filter_map(|(i, wallet)| (i != index).then_some(*wallet))
+            .collect();
+        let result = party::split_zen_pickup(
+            pile,
+            &party,
+            picker_fact,
+            picker_wallet,
+            &others,
+            &other_wallets,
+        );
+        for credit in &result.credits {
+            self.set_wallet(usize::from(credit.slot.0), credit.wallet);
+        }
+        for grounded in &result.to_ground {
+            self.ground_zen.push(persist(grounded.clone()));
+        }
+        result
+    }
+
+    /// Persists `party` into the party slot at `party_index`.
+    fn store_party(&mut self, party_index: usize, party: PartySession) {
+        let slot = or_abort(self.parties.get_mut(party_index).ok_or("no party slot"));
+        *slot = persist(party);
+    }
+
     /// Serialises exactly the live sets — the atlas, the stream, and the map are
     /// excluded — so a replay divergence cannot hide in an unpersisted field.
     #[must_use]
@@ -1319,6 +1657,8 @@ impl World {
             ground_items: &self.ground_items,
             ground_zen: &self.ground_zen,
             sessions: &self.sessions,
+            parties: &self.parties,
+            pending_invites: &self.pending_invites,
         }))
     }
 }

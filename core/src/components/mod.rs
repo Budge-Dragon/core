@@ -19,6 +19,7 @@ pub mod item_quality;
 pub mod item_ref;
 pub mod levels;
 pub mod movement;
+pub mod party;
 pub mod placement;
 pub mod pool;
 pub mod spatial;
