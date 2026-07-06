@@ -42,6 +42,7 @@ use mu_core::entities::spawned::Spawned;
 use mu_core::entities::trade_session::TradeSession;
 use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::AttackOutcome;
+use mu_core::events::consume::{ConsumeEvent, PoolKind};
 use mu_core::events::craft::MixOutcome;
 use mu_core::events::death::{DeathEvent, Respawned};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
@@ -2180,6 +2181,91 @@ fn a_self_heal_between_blows_carries_the_player_through_a_winning_fight() {
     assert!(
         carried,
         "a seed in 0..64 lets the healed player win the fight alive"
+    );
+}
+
+#[test]
+fn a_bought_potion_is_drunk_to_heal_after_a_monster_bite_closing_the_consume_loop() {
+    // The CONSUMABLE-USE loop the town shops opened: buy → hurt → drink → heal,
+    // on one threaded identity over the real /data record. No heal rule lives
+    // host-side — the paper host reads live state, calls the real service, and
+    // persists what it returns.
+    let mut world = World::new(7, MapNumber(0));
+    // A low-level knight, whose defense the pressing mob out-rates so the bites
+    // land and draw the blood a potion must mend.
+    let player = world.seat_character(dark_knight(20, 250, tile(10, 10)));
+    // Fund the wallet so the small-HP-potion (83 zen) buy lands.
+    world.set_wallet(player, zen(1_000));
+
+    // Buy the small HP potion from Elf Lala. Slot 0 is her 20-zen apple; the
+    // small HP potion is shelf slot 1 (the classic small-healing pack).
+    let merchant = world.character(player).placement().position;
+    let slot = ShelfSlot::new(1).expect("shelf slot 1 is valid");
+    let potion_cell = match world.buy(player, ELF_LALA, slot, merchant) {
+        BuyOutcome::NewItem { at, .. } => at,
+        BuyOutcome::Merged { .. }
+        | BuyOutcome::OutOfRange
+        | BuyOutcome::UnknownShelfSlot
+        | BuyOutcome::InventoryFull
+        | BuyOutcome::InsufficientZen => panic!("the funded, in-range buy lands a fresh potion"),
+    };
+
+    // A pressing mob co-located draws blood — the hero drops below full health.
+    let mob = world.seat_monster(monster_instance(
+        pressing_monster(world.atlas()),
+        500,
+        tile(10, 10),
+    ));
+    let full = world.character(player).vitals().health.max();
+    let mut wounded = false;
+    for _ in 0..10_000u32 {
+        assert!(
+            !matches!(
+                world.player_struck_by_monster(player, mob),
+                AttackOutcome::Killed { .. }
+            ),
+            "a single bite cannot fell a full-health level-20 knight"
+        );
+        if world.character(player).vitals().health.current() < full {
+            wounded = true;
+            break;
+        }
+    }
+    assert!(wounded, "the pressing mob drew blood");
+    let hurt = world.character(player).vitals().health.current();
+
+    // Drink the potion: health rises off the real record (never a host-invented
+    // amount), and the single-piece stack empties the cell.
+    match world.use_consumable(player, potion_cell).as_slice() {
+        [
+            ConsumeEvent::Recovered {
+                pool: PoolKind::Health,
+                restored,
+            },
+        ] => {
+            assert!(*restored > 0, "a hurt hero's HP potion restores health");
+            assert_eq!(
+                world.character(player).vitals().health.current(),
+                hurt + restored,
+                "health rose by exactly the restored delta"
+            );
+        }
+        other => panic!("a hurt hero drinking an HP potion recovers health: {other:?}"),
+    }
+    assert!(
+        world.character(player).vitals().health.current() > hurt,
+        "the drink carried the hero back up"
+    );
+    assert!(
+        world.inventory(player).occupant(potion_cell).is_none(),
+        "the single potion left the bag — no zero-count ghost"
+    );
+
+    // The healed character survived the persist seam byte-for-byte.
+    let stored = world.character(player);
+    assert_eq!(
+        serde_json::to_string(stored).unwrap(),
+        serde_json::to_string(&persist(stored.clone())).unwrap(),
     );
 }
 

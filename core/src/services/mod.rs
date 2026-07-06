@@ -7,6 +7,7 @@
 
 pub mod chance;
 pub mod combat;
+pub mod consume;
 pub mod craft;
 pub mod death;
 pub mod effects;
