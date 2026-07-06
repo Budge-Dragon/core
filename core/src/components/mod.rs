@@ -18,6 +18,7 @@ pub mod item_options;
 pub mod item_quality;
 pub mod item_ref;
 pub mod levels;
+pub mod life;
 pub mod movement;
 pub mod party;
 pub mod placement;

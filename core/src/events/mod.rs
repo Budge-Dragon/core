@@ -6,6 +6,7 @@
 
 pub mod combat;
 pub mod craft;
+pub mod death;
 pub mod effect;
 pub mod inventory;
 pub mod kill;

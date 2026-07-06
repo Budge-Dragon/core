@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
+use crate::components::life::LifeState;
 use crate::components::placement::Placement;
 use crate::components::stats::Stats;
 use crate::components::units::{CarriedZen, Exp, Level};
@@ -29,6 +30,7 @@ pub struct Character {
     placement: Placement,
     vitals: Vitals,
     active_effects: ActiveEffects,
+    life: LifeState,
 }
 
 /// Wire mirror of [`Character`]. The invariant gate re-proves on the way in,
@@ -48,6 +50,11 @@ struct RawCharacter {
     /// default.
     #[serde(default = "ActiveEffects::empty")]
     active_effects: ActiveEffects,
+    /// A record that predates the death lifecycle, or a freshly created
+    /// character, carries no death — the real "no death recorded" value
+    /// (`Alive`), not a fabricated default.
+    #[serde(default = "LifeState::alive")]
+    life: LifeState,
 }
 
 impl TryFrom<RawCharacter> for Character {
@@ -65,6 +72,7 @@ impl TryFrom<RawCharacter> for Character {
                 placement: raw.placement,
                 vitals: raw.vitals,
                 active_effects: raw.active_effects,
+                life: raw.life,
             }),
             (true, Stats::Standard { .. }) => {
                 Err(CharacterError::StandardStatsOnCommandClass(raw.class))
@@ -88,6 +96,7 @@ impl From<Character> for RawCharacter {
             placement: character.placement,
             vitals: character.vitals,
             active_effects: character.active_effects,
+            life: character.life,
         }
     }
 }
@@ -147,6 +156,12 @@ impl Character {
         self.active_effects
     }
 
+    /// Whether the character is alive or dead awaiting respawn.
+    #[must_use]
+    pub fn life(&self) -> LifeState {
+        self.life
+    }
+
     /// This character with its leveling scalars advanced; every other field —
     /// class, stats, zen, placement, vitals, active effects — carried unchanged.
     pub(crate) fn with_progress(
@@ -168,6 +183,43 @@ impl Character {
     pub(crate) fn with_vitals(&self, vitals: Vitals) -> Character {
         Character {
             vitals,
+            ..self.clone()
+        }
+    }
+
+    /// This character with its life state reseated; every other field carried
+    /// unchanged. The death transitions flip it to `Dead` on a kill and back to
+    /// `Alive` on respawn.
+    pub(crate) fn with_life(&self, life: LifeState) -> Character {
+        Character {
+            life,
+            ..self.clone()
+        }
+    }
+
+    /// This character with its carried zen reseated; every other field carried
+    /// unchanged. The caller derives the docked balance through `CarriedZen`.
+    pub(crate) fn with_zen(&self, zen: CarriedZen) -> Character {
+        Character {
+            zen,
+            ..self.clone()
+        }
+    }
+
+    /// This character with its active effects reseated; every other field
+    /// carried unchanged. Respawn reseats the empty store — a clean slate.
+    pub(crate) fn with_effects(&self, active_effects: ActiveEffects) -> Character {
+        Character {
+            active_effects,
+            ..self.clone()
+        }
+    }
+
+    /// This character with its placement reseated; every other field carried
+    /// unchanged. Respawn reseats the town landing the gate resolved.
+    pub(crate) fn with_placement(&self, placement: Placement) -> Character {
+        Character {
+            placement,
             ..self.clone()
         }
     }
@@ -235,6 +287,7 @@ mod tests {
             placement: placement(),
             vitals: vitals(),
             active_effects: ActiveEffects::EMPTY,
+            life: LifeState::Alive,
         }
     }
 
@@ -395,5 +448,121 @@ mod tests {
         // Corrupt the persisted record: keep command stats, flip the class.
         value["class"] = serde_json::Value::String("dark_wizard".to_owned());
         assert!(serde_json::from_value::<Character>(value).is_err());
+    }
+
+    #[test]
+    fn life_defaults_alive_and_dead_round_trips() {
+        use crate::components::units::Tick;
+
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        // A fresh character records no death.
+        assert_eq!(character.life(), LifeState::Alive);
+
+        let value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+
+        // A persisted record that omits the field still parses (defaults Alive).
+        let mut object = value.as_object().unwrap().clone();
+        object.remove("life");
+        let legacy: Character = serde_json::from_value(serde_json::Value::Object(object)).unwrap();
+        assert_eq!(legacy.life(), LifeState::Alive);
+
+        // A record marked Dead round-trips through the wire, its life tagged
+        // "dead" carrying respawn_at.
+        let mut dead_record = value;
+        dead_record["life"] = serde_json::json!({"kind": "dead", "respawn_at": 903});
+        let dead: Character = serde_json::from_value(dead_record).unwrap();
+        assert_eq!(
+            dead.life(),
+            LifeState::Dead {
+                respawn_at: Tick(903)
+            }
+        );
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(&dead).unwrap()).unwrap(),
+            dead
+        );
+    }
+
+    /// Every field but the one the builder reseats is carried verbatim.
+    fn assert_carries_all_but(reseated: &Character, base: &Character) {
+        assert_eq!(reseated.class(), base.class());
+        assert_eq!(reseated.level(), base.level());
+        assert_eq!(reseated.experience(), base.experience());
+        assert_eq!(reseated.stats(), base.stats());
+        assert_eq!(reseated.unspent_points(), base.unspent_points());
+        // Persist round-trip — the class↔stats gate re-proves on load.
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(reseated).unwrap()).unwrap(),
+            *reseated
+        );
+    }
+
+    #[test]
+    fn with_life_reseats_only_life() {
+        use crate::components::units::Tick;
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let dead = character.with_life(LifeState::Dead {
+            respawn_at: Tick(903),
+        });
+        assert_eq!(
+            dead.life(),
+            LifeState::Dead {
+                respawn_at: Tick(903)
+            }
+        );
+        assert_carries_all_but(&dead, &character);
+        assert_eq!(dead.zen(), character.zen());
+        assert_eq!(dead.placement(), character.placement());
+        assert_eq!(dead.vitals(), character.vitals());
+        assert_eq!(dead.active_effects(), character.active_effects());
+    }
+
+    #[test]
+    fn with_zen_reseats_only_zen() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let docked = character.with_zen(CarriedZen::new(990_000).unwrap());
+        assert_eq!(docked.zen(), CarriedZen::new(990_000).unwrap());
+        assert_carries_all_but(&docked, &character);
+        assert_eq!(docked.life(), character.life());
+        assert_eq!(docked.placement(), character.placement());
+        assert_eq!(docked.vitals(), character.vitals());
+        assert_eq!(docked.active_effects(), character.active_effects());
+    }
+
+    #[test]
+    fn with_effects_reseats_only_effects() {
+        use crate::components::active_effect::ActiveEffect;
+        use crate::components::units::Tick;
+        let seeded = {
+            let base = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+            base.with_effects(ActiveEffects::EMPTY.with(ActiveEffect::Defense { expiry: Tick(80) }))
+        };
+        // Clearing back to empty reseats only the store.
+        let cleared = seeded.with_effects(ActiveEffects::EMPTY);
+        assert_eq!(cleared.active_effects(), ActiveEffects::EMPTY);
+        assert_carries_all_but(&cleared, &seeded);
+        assert_eq!(cleared.life(), seeded.life());
+        assert_eq!(cleared.zen(), seeded.zen());
+        assert_eq!(cleared.placement(), seeded.placement());
+        assert_eq!(cleared.vitals(), seeded.vitals());
+    }
+
+    #[test]
+    fn with_placement_reseats_only_placement() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let landing = Placement {
+            position: TileCoord::new(174, 112).to_world(),
+            facing: Facing::POS_X,
+            movement: Movement::Grounded,
+            map: MapNumber(3),
+        };
+        let moved = character.with_placement(landing);
+        assert_eq!(moved.placement(), landing);
+        assert_carries_all_but(&moved, &character);
+        assert_eq!(moved.life(), character.life());
+        assert_eq!(moved.zen(), character.zen());
+        assert_eq!(moved.vitals(), character.vitals());
+        assert_eq!(moved.active_effects(), character.active_effects());
     }
 }

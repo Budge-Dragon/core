@@ -7,7 +7,8 @@
 use core::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::components::collections::OneOrMore;
+use crate::components::collections::{EmptyCollection, OneOrMore};
+use crate::components::spatial::WorldPos;
 use crate::components::tile::{TileFacing, WalkGrid};
 use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe, UpgradeTarget};
 use crate::data::common::{GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
@@ -23,7 +24,7 @@ use crate::data::terrain::MapTerrain;
 use super::AtlasError;
 use super::views::{
     Landing, ResolvedEnterGate, ResolvedOutput, ResolvedRecipe, ResolvedShelfEntry, ResolvedShop,
-    ResolvedSpawn,
+    ResolvedSpawn, ResolvedSpawnGate,
 };
 
 /// The gate records partitioned by kind, with per-file identity sets proven
@@ -323,6 +324,44 @@ pub(super) fn resolve_spawns(
             .push(ResolvedSpawn { spawn, monster });
     }
     Ok(by_map)
+}
+
+/// Resolves the respawn spawn gate of each map — the file-order-first gate on
+/// the map — to its walkable landing set, RETAINING the join (the
+/// [`resolve_spawns`] retain-at-parse precedent). The landing is the walkable
+/// tiles inside the gate's area; a gate whose area holds none is the error, so
+/// every retained landing is a non-empty [`OneOrMore`] and respawn's uniform
+/// draw is total by type. Only the map's first gate is a respawn point (the
+/// pinned first-gate policy); its later gates are travel-landing targets
+/// resolved through [`GatePartition::landings`], not respawn sites, so their
+/// walkability is not this invariant's concern.
+pub(super) fn resolve_spawn_gates(
+    spawn_gates: Vec<SpawnGate>,
+    walk_grids: &BTreeMap<MapNumber, WalkGrid>,
+) -> Result<BTreeMap<MapNumber, ResolvedSpawnGate>, AtlasError> {
+    let mut first_by_map: BTreeMap<MapNumber, SpawnGate> = BTreeMap::new();
+    for gate in spawn_gates {
+        first_by_map.entry(gate.map).or_insert(gate);
+    }
+
+    let mut resolved = BTreeMap::new();
+    for (map, gate) in first_by_map {
+        // The grid is present — `check_maps` proved `gate.map` is a known map and
+        // `index_terrain` proved every map carries one — so the absent branch is
+        // unreachable; it folds to the empty-landing error, never a fabricated grid.
+        let cells: Vec<WorldPos> = match walk_grids.get(&map) {
+            Some(grid) => grid.walkable_positions_in(gate.area.to_world()).collect(),
+            None => Vec::new(),
+        };
+        let landing = OneOrMore::new(cells).map_err(|EmptyCollection| {
+            AtlasError::SpawnGateWithoutWalkableLanding {
+                map,
+                gate: gate.number,
+            }
+        })?;
+        resolved.insert(map, ResolvedSpawnGate { gate, landing });
+    }
+    Ok(resolved)
 }
 
 /// Joins each merchant's shelf entries to their item definitions and re-proves
