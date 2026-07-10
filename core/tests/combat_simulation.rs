@@ -418,7 +418,16 @@ fn a_shoved_monster_re_chases_its_attacker() {
     let mut proved = false;
     for seed in 0u64..64 {
         let mut rng = TestRng::new(seed);
-        let SkillOutcome::Cast { hits, .. } = cast(&caster, bolt, aim, &targets, &grid, &mut rng).1
+        let SkillOutcome::Cast { hits, .. } = cast(
+            &caster,
+            &character_profile(&caster).0,
+            bolt,
+            aim,
+            &targets,
+            &grid,
+            &mut rng,
+        )
+        .1
         else {
             continue;
         };
@@ -752,8 +761,16 @@ fn a_landed_lightning_strike_reports_a_knockback() {
     let mut saw_displacement = false;
     for seed in 0u64..64 {
         let mut rng = TestRng::new(seed);
-        if let SkillOutcome::Cast { hits, .. } =
-            cast(&caster, bolt, aim, &targets, &grid, &mut rng).1
+        if let SkillOutcome::Cast { hits, .. } = cast(
+            &caster,
+            &character_profile(&caster).0,
+            bolt,
+            aim,
+            &targets,
+            &grid,
+            &mut rng,
+        )
+        .1
         {
             if let Some(TargetHit::Landed {
                 displacement: Some(_),

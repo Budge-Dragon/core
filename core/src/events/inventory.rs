@@ -107,8 +107,8 @@ pub enum UnequipOutcome {
     SlotEmpty,
 }
 
-/// Why an equip was rejected — service-produced, decided from the item's kind
-/// and the target slot.
+/// Why an equip was rejected — service-produced, decided from the item's kind,
+/// the target slot, and the wearer's eligibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EquipRejection {
@@ -117,9 +117,14 @@ pub enum EquipRejection {
     /// The slot already holds an item.
     SlotOccupied,
     /// Two-handed dual-hand occupancy is broken: a two-handed weapon needs its
-    /// paired hand empty, or the item would share a hand pair with a worn
-    /// two-handed weapon.
+    /// paired hand empty (or ammunition beside a bow/crossbow), or the item
+    /// would share a hand pair with a worn two-handed weapon.
     TwoHandedConflict,
+    /// The wearer's class is not in the item's qualified-class list.
+    ClassMismatch,
+    /// A scaled stat requirement, or the raw level requirement, exceeds the
+    /// wearer's total.
+    RequirementsNotMet,
 }
 
 #[cfg(test)]
@@ -161,6 +166,14 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&EquipRejection::TwoHandedConflict).unwrap(),
             r#""two_handed_conflict""#
+        );
+        assert_eq!(
+            serde_json::to_string(&EquipRejection::ClassMismatch).unwrap(),
+            r#""class_mismatch""#
+        );
+        assert_eq!(
+            serde_json::to_string(&EquipRejection::RequirementsNotMet).unwrap(),
+            r#""requirements_not_met""#
         );
     }
 

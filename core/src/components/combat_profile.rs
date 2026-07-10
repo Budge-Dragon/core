@@ -33,6 +33,52 @@ pub struct CombatProfile {
     pub(crate) double_damage_chance: Percent,
     pub(crate) incoming_damage_reduction: Percent,
     pub(crate) flat_damage_add: u32,
+    /// Staff rise, doubled (`magic_power + 2·curve`) — the wizardry-span
+    /// multiplier `(200 + rise_x2)/200` the skill seam applies; `0` is the ×1
+    /// identity. Serde-defaulted so pre-gear persisted profiles still parse.
+    #[serde(default)]
+    pub(crate) wizardry_rise_x2: u16,
+    /// Defender excellent `DamageDecrease`, applied PRE-floor. Gearless zero.
+    #[serde(default = "Percent::zero")]
+    pub(crate) incoming_dd_pct: Percent,
+    /// Attacker wing damage increase, applied POST-floor. Gearless zero.
+    #[serde(default = "Percent::zero")]
+    pub(crate) wing_damage_pct: Percent,
+    /// Defender wing absorb, applied POST-floor (skipped when the damage is
+    /// 1 or less). Gearless zero.
+    #[serde(default = "Percent::zero")]
+    pub(crate) wing_absorb_pct: Percent,
+    /// Single or double-wielding — the typed fact the physical strike head's
+    /// pre-defense ×2 reads.
+    #[serde(default = "WeaponMode::single")]
+    pub(crate) weapon_mode: WeaponMode,
+}
+
+/// Whether the attacker wields one weapon (or none) or two one-handers — the
+/// typed double-wield fact, never a bare bool controlling flow. Read by the
+/// physical strike head to apply the authentic pre-defense ×2, and by the
+/// skill seam to halve a double-wielded skill's flat `D`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeaponMode {
+    /// One weapon or none: the physical span stands as assembled; no
+    /// pre-defense doubling. A gearless fighter and every monster are
+    /// `Single` — a real domain value, not a fabricated default.
+    Single,
+    /// Two one-handed swords/axes/maces (the DK/MG dual wield): the physical
+    /// span was already ×55/100-assembled in the equipment fold; the strike
+    /// doubles the physical quality base before defense (net 110%), and a
+    /// double-wielded skill's flat `D` is halved.
+    DoubleWield,
+}
+
+impl WeaponMode {
+    /// The single-weapon value — a real domain value used as the serde default
+    /// and by every gearless / monster construction site.
+    #[must_use]
+    pub const fn single() -> Self {
+        Self::Single
+    }
 }
 
 impl CombatProfile {
@@ -118,6 +164,42 @@ impl CombatProfile {
     #[must_use]
     pub fn flat_damage_add(&self) -> u32 {
         self.flat_damage_add
+    }
+
+    /// Staff rise, doubled — the wizardry-span multiplier numerator over 200
+    /// the skill seam applies to the whole `(WizBase + D)` parenthesis. `0` is
+    /// the gearless ×1 identity.
+    #[must_use]
+    pub fn wizardry_rise_x2(&self) -> u16 {
+        self.wizardry_rise_x2
+    }
+
+    /// Percentage the defender's excellent `DamageDecrease` removes, applied
+    /// before the minimum-damage floor (gearless zero).
+    #[must_use]
+    pub fn incoming_dd_pct(&self) -> Percent {
+        self.incoming_dd_pct
+    }
+
+    /// Percentage the attacker's wings add, applied after the minimum-damage
+    /// floor (gearless zero).
+    #[must_use]
+    pub fn wing_damage_pct(&self) -> Percent {
+        self.wing_damage_pct
+    }
+
+    /// Percentage the defender's wings absorb, applied after the
+    /// minimum-damage floor and skipped when the damage is 1 or less
+    /// (gearless zero).
+    #[must_use]
+    pub fn wing_absorb_pct(&self) -> Percent {
+        self.wing_absorb_pct
+    }
+
+    /// Whether the fighter single- or double-wields.
+    #[must_use]
+    pub fn weapon_mode(&self) -> WeaponMode {
+        self.weapon_mode
     }
 }
 
@@ -232,6 +314,11 @@ mod tests {
             double_damage_chance: Percent::ZERO,
             incoming_damage_reduction: Percent::ZERO,
             flat_damage_add: 0,
+            wizardry_rise_x2: 0,
+            incoming_dd_pct: Percent::ZERO,
+            wing_damage_pct: Percent::ZERO,
+            wing_absorb_pct: Percent::ZERO,
+            weapon_mode: WeaponMode::Single,
         }
     }
 
@@ -268,6 +355,27 @@ mod tests {
         assert_eq!(p.incoming_damage_reduction(), Percent::ZERO);
         let json = serde_json::to_string(&p).unwrap();
         assert!(json.contains(r#""incoming_damage_reduction":0"#));
+        assert!(json.contains(r#""weapon_mode":"single""#));
         assert_eq!(serde_json::from_str::<CombatProfile>(&json).unwrap(), p);
+    }
+
+    #[test]
+    fn a_pre_gear_wire_form_parses_to_the_gearless_identities() {
+        // A profile serialized before the gear fields existed still parses;
+        // every new field lands at its gearless zero/identity.
+        let mut value = serde_json::to_value(profile()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("wizardry_rise_x2");
+        object.remove("incoming_dd_pct");
+        object.remove("wing_damage_pct");
+        object.remove("wing_absorb_pct");
+        object.remove("weapon_mode");
+        let parsed: CombatProfile = serde_json::from_value(value).unwrap();
+        assert_eq!(parsed, profile());
+        assert_eq!(parsed.wizardry_rise_x2(), 0);
+        assert_eq!(parsed.incoming_dd_pct(), Percent::ZERO);
+        assert_eq!(parsed.wing_damage_pct(), Percent::ZERO);
+        assert_eq!(parsed.wing_absorb_pct(), Percent::ZERO);
+        assert_eq!(parsed.weapon_mode(), WeaponMode::Single);
     }
 }

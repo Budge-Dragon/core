@@ -28,3 +28,4 @@ pub mod skills;
 pub mod spawn;
 pub mod trade;
 pub mod travel;
+pub mod wear;

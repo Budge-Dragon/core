@@ -311,8 +311,8 @@ fn durability_curve(kind: &ItemKind) -> DurabilityCurve {
 }
 
 /// The item's full durability. Wearable kinds follow the enhancement/rarity
-/// curve when the level is an enhancement level; box-tier levels (12..=15, which
-/// have no enhancement level) and flat/stackable kinds take the raw base count.
+/// curve (box-tier levels 12..=15 read the +0 curve entry); flat/stackable
+/// kinds take the raw base count.
 fn roll_durability(
     def: &ItemDefinition,
     level: ItemLevel,
@@ -321,10 +321,11 @@ fn roll_durability(
 ) -> Durability {
     match durability_curve(kind) {
         DurabilityCurve::Flat => Durability::full(def.durability),
-        DurabilityCurve::Wear => match level.enhance_level() {
-            Some(enhance) => Durability::full(max_durability(def.durability, enhance, rarity)),
-            None => Durability::full(def.durability),
-        },
+        DurabilityCurve::Wear => Durability::full(max_durability(
+            def.durability,
+            level.enhance_level_or_zero(),
+            rarity,
+        )),
     }
 }
 

@@ -20,7 +20,9 @@ mod paper_host;
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::inventory::{Cell, Footprint};
-use mu_core::components::item_instance::{ItemInstance, RarityRoll, RolledNormalOption};
+use mu_core::components::item_instance::{
+    Durability, ItemInstance, RarityRoll, RolledNormalOption,
+};
 use mu_core::components::item_options::NormalOption;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::item_ref::ItemRef;
@@ -54,7 +56,7 @@ use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
 use mu_core::events::party::PartyEvent;
 use mu_core::events::progression::GrowthEvent;
-use mu_core::events::shop::{BuyOutcome, SellOutcome};
+use mu_core::events::shop::{BuyOutcome, RepairOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
 use mu_core::events::trade::{CancelReason, OfferOutcome, ZenOfferOutcome};
@@ -65,15 +67,16 @@ use mu_core::services::effects::ApplicableBuff;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
 use mu_core::services::party;
 use mu_core::services::price::selling_price;
-use mu_core::services::profile::character_profile;
+use mu_core::services::profile::{character_profile, equipped_profile};
 use mu_core::services::trade::LockResult;
+use mu_core::services::wear::WearEvent;
 
 use paper_host::{
-    World, aggressive_monster, cell, dark_knight, dark_knight_in_band, dark_wizard,
-    direct_hit_skill, fighting_monster_from, first_passive_monster, footprint_of, heal_skill,
-    is_equippable, item_at_level, item_instance, low_level_monster, magic_gladiator,
+    World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
+    dark_wizard, direct_hit_skill, fighting_monster_from, first_passive_monster, footprint_of,
+    heal_skill, is_equippable, item_at_level, item_instance, low_level_monster, magic_gladiator,
     monster_instance, none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile,
-    walkable_run, wire, wizardry_direct_skill, zen,
+    walkable_run, wearer_of, wire, wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -144,11 +147,19 @@ const TWO_HANDED_SWORD: ItemRef = ItemRef {
     number: 9,
 };
 
-/// A real bow (group 4, number 0) — an elf-only weapon, used to prove the equip
-/// service ignores an item's class list (a Dark Knight wears it anyway).
+/// A real bow (group 4, number 0) — an elf-only weapon, used to prove the
+/// LIVE class gate refuses it on a Dark Knight (the W-EQUIP Case-D flip).
 const ELF_BOW: ItemRef = ItemRef {
     group: 4,
     number: 0,
+};
+
+/// A real one-handed Blade (group 0, number 5) — damage [36, 47]; at +9 its
+/// scaled bars (str 171 / agi 114) sit under the reference knight's 200/120,
+/// so it equips through the live gate.
+const BLADE: ItemRef = ItemRef {
+    group: 0,
+    number: 5,
 };
 
 /// Elf Lala, the potion merchant NPC (number 242); shelf slot 0 is her
@@ -429,9 +440,10 @@ fn kill_with_equippable_drop() -> Option<(World, usize, usize, usize, ItemInstan
         // first equippable item drop (a jewel drop is a Drop::Item too, but not
         // wearable — the equip service is the oracle).
         let resolution = world.resolve_kill_of(killer, victim);
+        let wearer = wearer_of(world.character(killer));
         let drop = item_drops(&resolution)
             .into_iter()
-            .find(|candidate| is_equippable(world.atlas(), candidate.0));
+            .find(|candidate| is_equippable(world.atlas(), candidate.0, &wearer));
         let Some((item, level, rarity)) = drop else {
             continue;
         };
@@ -1258,28 +1270,52 @@ fn a_chaos_mix_created_item_is_landed_in_the_bag_then_worn() {
     );
 }
 
+/// The Magic Gladiator second wing (12/6) — the one second-wings-mix output a
+/// helper-buildable class can wear under the live equip gate.
+const MG_SECOND_WING: ItemRef = ItemRef {
+    group: 12,
+    number: 6,
+};
+
 #[test]
 fn crafted_wings_equipped_make_the_character_flight_eligible() {
-    let mut world = World::new(24, MapNumber(0));
-    let flyer = world.seat_character(dark_knight(30, 150, tile(10, 10)));
-    world.set_wallet(flyer, zen(10_000_000));
+    // The second-wings mix creates one of four class-locked, level-215-gated
+    // wings at random, so the flyer is a level-220 Magic Gladiator and the
+    // construction seed is swept until the mix succeeds with the MG wing —
+    // the live equip gate then accepts it for real.
+    for seed in 0u64..64 {
+        let mut world = World::new(seed, MapNumber(0));
+        let flyer = world.seat_character(magic_gladiator(220, tile(10, 10)));
+        world.set_wallet(flyer, zen(10_000_000));
 
-    // A Second Wings mix: a first wing + Loch's Feather + Jewel of Chaos → a
-    // second wing (fee 5,000,000).
-    let placed = vec![
-        item_instance(world.atlas(), FAIRY_WINGS),
-        item_instance(world.atlas(), LOCHS_FEATHER),
-        item_instance(world.atlas(), JEWEL_OF_CHAOS),
-    ];
-    let wing = match world.mix(flyer, placed) {
-        MixOutcome::Success { created, .. } => created,
-        MixOutcome::Rejected { .. } | MixOutcome::Failed { .. } => {
-            panic!("seed 24 passes the second-wings base rate")
+        // A Second Wings mix: a first wing + Loch's Feather + Jewel of Chaos →
+        // a second wing (fee 5,000,000).
+        let placed = vec![
+            item_instance(world.atlas(), FAIRY_WINGS),
+            item_instance(world.atlas(), LOCHS_FEATHER),
+            item_instance(world.atlas(), JEWEL_OF_CHAOS),
+        ];
+        let wing = match world.mix(flyer, placed) {
+            MixOutcome::Success { created, .. } => created,
+            MixOutcome::Rejected { .. } | MixOutcome::Failed { .. } => continue,
+        };
+        if wing.item != MG_SECOND_WING {
+            continue;
         }
-    };
+        crafted_wing_lifts_the_flyer(world, flyer, wing);
+        return;
+    }
+    panic!("no seed in 0..64 crafts the Magic Gladiator second wing");
+}
+
+/// The proven-cooperating seed's assertions: the crafted wing equips, flight
+/// lifts off, and a wingless knight stays grounded.
+fn crafted_wing_lifts_the_flyer(mut world: World, flyer: usize, wing: ItemInstance) {
     match world.equip_first_available(flyer, wing) {
         EquipOutcome::Equipped { slot } => assert_eq!(slot, EquipmentSlot::Wings),
-        EquipOutcome::Rejected { .. } => panic!("a crafted wing is wearable"),
+        EquipOutcome::Rejected { .. } => {
+            or_abort(Err::<(), &str>("the MG second wing equips on the flyer"));
+        }
     }
 
     // With the crafted wing worn, change_flight lifts off; the Movement persists
@@ -1884,9 +1920,10 @@ fn skill_kill_with_item_drop() -> Option<SkillKill> {
         let mana_after = world.character(caster).vitals().mana.current();
         let resolution = world.resolve_kill_of(caster, victim);
         let gained = resolution.experience.gained.0;
+        let wearer = wearer_of(world.character(caster));
         let drop = item_drops(&resolution)
             .into_iter()
-            .find(|candidate| is_equippable(world.atlas(), candidate.0));
+            .find(|candidate| is_equippable(world.atlas(), candidate.0, &wearer));
         let Some((item, level, rarity)) = drop else {
             continue;
         };
@@ -2202,22 +2239,245 @@ fn equip_is_gated_by_kind_and_occupancy_and_a_refusal_leaves_the_worn_set_intact
         "a refused two-hander leaves the shield-in-hand set unchanged"
     );
 
-    // D — the DOCUMENTED GAP: core's equip gates on kind->slot and two-handed
-    // occupancy ONLY — never on an item's class list or its wear (stat/level)
-    // requirements, which have no equip consumer in core. A class-mismatched item
-    // is therefore ACCEPTED: an elf-only bow is worn by a Dark Knight.
+    // D — the LIVE GATE (EQ-SIM-1, the W-EQUIP Case-D flip): equip now reads
+    // the item's class list, so the elf-only bow is REFUSED by a Dark Knight
+    // with ClassMismatch and the worn set stays byte-for-byte intact.
     let elf_seat = world.seat_character(dark_knight(80, 300, tile(11, 11)));
+    let bare_worn = wire(world.equipment(elf_seat));
     let bow = item_instance(world.atlas(), ELF_BOW);
     match world.equip_into(elf_seat, bow, EquipmentSlot::RightHand) {
-        EquipOutcome::Equipped { slot } => assert_eq!(
-            slot,
-            EquipmentSlot::RightHand,
-            "equip ignores the class list — the elf-only bow is worn by the Dark Knight"
-        ),
-        EquipOutcome::Rejected { reason, .. } => {
-            panic!("equip does not gate on class, yet refused with {reason:?}")
+        EquipOutcome::Rejected { reason, item } => {
+            assert_eq!(reason, EquipRejection::ClassMismatch);
+            assert_eq!(item.item, ELF_BOW, "the refused bow rides the outcome back");
+        }
+        EquipOutcome::Equipped { .. } => {
+            panic!("the class gate refuses an elf-only bow on a Dark Knight")
         }
     }
+    assert_eq!(
+        wire(world.equipment(elf_seat)),
+        bare_worn,
+        "a class-refused equip leaves the worn set untouched"
+    );
+}
+
+// --- The W-EQUIP standing gates: the wear lifecycle + the fold in a fight. ---
+
+/// Drives one strike→wear→break→repair lifecycle on construction `seed`
+/// (EQ-SIM-2): a knight wearing a single one-point helm — the only
+/// defensive-pool member, so every damaging bite grinds it — is bitten until
+/// the helm's persisted wear ledger crosses its last point, then the broken
+/// helm is repaired through the shipped W-SHOP repair service. `None` when
+/// this seed never both accumulated a pre-break `Worn` event and broke inside
+/// the budget — the caller sweeps. Every reached beat is a hard invariant.
+fn wear_break_repair_lifecycle(seed: u64) -> Option<()> {
+    let mut world = World::new(seed, MapNumber(0));
+    let hero = world.seat_character(dark_knight(50, 200, tile(10, 10)));
+    world.set_wallet(hero, zen(1_000_000));
+
+    // A real helm worn through the LIVE gate, ground to its last point.
+    let mut helm = item_instance(world.atlas(), HELM);
+    let full_max = helm.durability.max();
+    helm.durability = or_abort(Durability::new(1, full_max));
+    assert!(matches!(
+        world.equip_into(hero, helm, EquipmentSlot::Helm),
+        EquipOutcome::Equipped { .. }
+    ));
+
+    // A pressing mob (out-rates the knight, bites for <= 70) co-located: its
+    // sub-2000 bites MUST ride the persisted ledger before any point is lost.
+    let mob = world.seat_monster(monster_instance(
+        pressing_monster(world.atlas()),
+        10_000,
+        tile(10, 10),
+    ));
+
+    let mut worn_before_break = false;
+    let mut broke = false;
+    for _ in 0..10_000u32 {
+        world.set_health(hero, Pool::full(500));
+        let _ = world.player_struck_by_monster(hero, mob);
+        for event in world.drain_wear_events() {
+            match event {
+                WearEvent::Worn { slot, durability } => {
+                    assert_eq!(slot, EquipmentSlot::Helm, "the only pool member wears");
+                    assert_eq!(
+                        durability.current(),
+                        1,
+                        "the ledger accumulates without crossing before the break"
+                    );
+                    worn_before_break = true;
+                }
+                WearEvent::Broken { slot } => {
+                    assert_eq!(slot, EquipmentSlot::Helm);
+                    broke = true;
+                }
+                WearEvent::Destroyed { slot } => or_abort(Err::<(), String>(format!(
+                    "wear never destroys gear, yet {slot:?} was destroyed"
+                ))),
+            }
+        }
+        if broke {
+            break;
+        }
+    }
+    if !(worn_before_break && broke) {
+        return None;
+    }
+
+    // Broken: durability 0, STILL worn, the whole contribution off the fold.
+    let broken_helm = or_abort(
+        world
+            .equipment(hero)
+            .get(EquipmentSlot::Helm)
+            .ok_or("the broken helm stays worn"),
+    );
+    assert_eq!(broken_helm.durability.current(), 0);
+    let hero_char = world.character(hero).clone();
+    assert_eq!(
+        equipped_profile(&hero_char, world.equipment(hero), world.atlas()),
+        character_profile(&hero_char).0,
+        "a broken helm contributes nothing to the fold"
+    );
+
+    // A further bite finds an empty defensive pool — no wear event at all
+    // (the broken-out-of-pool OUR-pin, live through the host).
+    world.set_health(hero, Pool::full(500));
+    let _ = world.player_struck_by_monster(hero, mob);
+    assert!(
+        world.drain_wear_events().is_empty(),
+        "a broken piece leaves the wear pool"
+    );
+
+    // Repair through the shipped W-SHOP service: full stored max, wear
+    // ledger zeroed (the full-gauge equality is ledger-inclusive), a real
+    // price debited off the threaded wallet, the contribution returned.
+    let wallet_before = world.character(hero).zen();
+    match world.self_repair_worn(hero, EquipmentSlot::Helm) {
+        RepairOutcome::Repaired { cost, balance } => {
+            assert!(cost.0 > 0, "a real repair price is charged");
+            assert_eq!(balance.get(), wallet_before.get() - cost.0);
+            assert_eq!(world.character(hero).zen(), balance);
+        }
+        outcome @ (RepairOutcome::AlreadyFull
+        | RepairOutcome::NotRepairableKind
+        | RepairOutcome::Empty
+        | RepairOutcome::OutOfRange
+        | RepairOutcome::InsufficientZen) => or_abort(Err::<(), String>(format!(
+            "the funded self-repair lands: {outcome:?}"
+        ))),
+    }
+    let repaired = or_abort(
+        world
+            .equipment(hero)
+            .get(EquipmentSlot::Helm)
+            .ok_or("the repaired helm stays worn"),
+    );
+    assert_eq!(
+        repaired.durability,
+        Durability::full(full_max),
+        "repair restores the stored max and zeroes the ledger"
+    );
+    let hero_char = world.character(hero).clone();
+    assert!(
+        equipped_profile(&hero_char, world.equipment(hero), world.atlas()).defense()
+            > character_profile(&hero_char).0.defense(),
+        "the repaired helm's contribution returns to the fold"
+    );
+    Some(())
+}
+
+#[test]
+fn a_worn_item_wears_breaks_and_repairs_end_to_end_through_the_paper_host() {
+    // EQ-SIM-2: the full strike→wear→break→repair lifecycle the
+    // DURABILITY-COMBAT debt called undrivable, driven live through the paper
+    // host over the real /data Atlas and the shipped W-SHOP repair.
+    let proven = (0u64..16).any(|seed| wear_break_repair_lifecycle(seed).is_some());
+    assert!(
+        proven,
+        "a seed in 0..16 drives the wear→break→repair lifecycle end to end"
+    );
+}
+
+/// The strike budget both knights get against the armored mob.
+const GEARED_STRIKE_BUDGET: u32 = 40;
+/// The armored mob's seated health: above the bare knight's 40 × 5 = 200
+/// budget ceiling, within the geared knight's ~7 landed hits.
+const GEARED_MOB_HP: u32 = 300;
+
+/// Strikes the mob up to the budget, stopping on the kill; the mob's
+/// remaining health is returned.
+fn fight_armored_mob(world: &mut World, hero: usize, mob: usize) -> u32 {
+    for _ in 0..GEARED_STRIKE_BUDGET {
+        if matches!(world.strike(hero, mob), AttackOutcome::Killed { .. }) {
+            break;
+        }
+    }
+    world.monster(mob).health.current()
+}
+
+/// EQ-SIM-3 on construction `seed`: two knights of identical class, level,
+/// and stats — one bare, one wearing a real Blade +9 and helm through the
+/// live gate — each fight the same armored mob under the same seed. The mob's
+/// defense swallows the bare span whole, so every bare landed hit is the
+/// level floor 5 and the bare knight can NEVER kill inside the budget (a hard
+/// invariant on every seed); the geared knight's folded span kills. `None`
+/// when this seed's geared fight ran out of budget or the bare fight never
+/// landed a wound — the caller sweeps.
+fn geared_kills_where_gearless_wounds(seed: u64) -> Option<()> {
+    let mut bare_world = World::new(seed, MapNumber(0));
+    let bare = bare_world.seat_character(dark_knight(50, 200, tile(10, 10)));
+    let (number, combat) = armored_monster_from(bare_world.atlas(), 50);
+    let bare_mob = bare_world.seat_monster(monster_instance(number, GEARED_MOB_HP, tile(10, 10)));
+
+    let mut geared_world = World::new(seed, MapNumber(0));
+    let geared = geared_world.seat_character(dark_knight(50, 200, tile(10, 10)));
+    let geared_mob =
+        geared_world.seat_monster(monster_instance(number, GEARED_MOB_HP, tile(10, 10)));
+    let blade = item_at_level(geared_world.atlas(), BLADE, 9);
+    assert!(matches!(
+        geared_world.equip_into(geared, blade, EquipmentSlot::RightHand),
+        EquipOutcome::Equipped { .. }
+    ));
+    let helm = item_instance(geared_world.atlas(), HELM);
+    assert!(matches!(
+        geared_world.equip_into(geared, helm, EquipmentSlot::Helm),
+        EquipOutcome::Equipped { .. }
+    ));
+
+    // The fold is the observable cause: the geared span's MINIMUM clears the
+    // bare span's MAXIMUM, and the mob's defense swallows the bare span.
+    let geared_char = geared_world.character(geared).clone();
+    let geared_profile = equipped_profile(
+        &geared_char,
+        geared_world.equipment(geared),
+        geared_world.atlas(),
+    );
+    let bare_profile = character_profile(&geared_char).0;
+    assert!(geared_profile.physical().min() > bare_profile.physical().max());
+    assert!(
+        combat.defense >= bare_profile.physical().max(),
+        "the armored mob pins every bare landed hit to the level floor"
+    );
+
+    let bare_left = fight_armored_mob(&mut bare_world, bare, bare_mob);
+    assert!(
+        bare_left > 0,
+        "40 floor-pinned hits cannot reach 300 — the bare knight only wounds"
+    );
+    let geared_left = fight_armored_mob(&mut geared_world, geared, geared_mob);
+    (geared_left == 0 && bare_left < GEARED_MOB_HP).then_some(())
+}
+
+#[test]
+fn a_geared_knight_kills_the_armored_mob_its_gearless_twin_only_wounds() {
+    // EQ-SIM-3: end-to-end proof that the equipment fold changes a real
+    // fight's outcome — the whole wave's point.
+    let proven = (0u64..32).any(|seed| geared_kills_where_gearless_wounds(seed).is_some());
+    assert!(
+        proven,
+        "a seed in 0..32 lets the geared knight kill where its bare twin wounds"
+    );
 }
 
 // --- Heal as a survivability tool inside a fight (seam 9; V4). ---------------
@@ -3066,6 +3326,55 @@ fn loot_and_gear(world: &mut World, hero: usize, pile: u64, mob_pos: WorldPos) -
     Some(())
 }
 
+/// The worn plate is real (BEAT 8b): the equipment fold raises the hero's
+/// defense above its gearless derivation, and a landed bite from a fresh mob
+/// grinds the plate's persisted wear ledger — gear visibly changes combat and
+/// visibly wears, inside the one headline run. `None` when no bite landed
+/// inside the budget this seed — the caller sweeps. Every reached beat is a
+/// hard invariant.
+fn geared_bite(world: &mut World, hero: usize, mob_tile: TileCoord) -> Option<()> {
+    let hero_char = world.character(hero).clone();
+    let gearless = character_profile(&hero_char).0.defense();
+    let geared = equipped_profile(&hero_char, world.equipment(hero), world.atlas()).defense();
+    assert!(
+        geared > gearless,
+        "the worn plate raises the folded defense above the gearless derivation"
+    );
+
+    // A fresh biting mob; the hero's only worn piece is the plate, so any
+    // damaging bite must grind it — the ledger advance is visible on the
+    // persisted worn set's wire form.
+    let (number, _combat, _resistances) = fighting_monster_from(world.atlas(), 30);
+    let mob = world.seat_monster(monster_instance(number, 50, mob_tile));
+    let before_bite = wire(world.equipment(hero));
+    for _ in 0..64u32 {
+        let _ = world.player_struck_by_monster(hero, mob);
+        let worn = world
+            .drain_wear_events()
+            .into_iter()
+            .any(|event| match event {
+                WearEvent::Worn { slot, .. } | WearEvent::Broken { slot } => {
+                    assert_eq!(slot, EquipmentSlot::Armor, "only the plate can wear");
+                    true
+                }
+                WearEvent::Destroyed { slot } => or_abort(Err::<bool, String>(format!(
+                    "wear never destroys gear, yet {slot:?} was destroyed"
+                ))),
+            });
+        if worn {
+            assert_ne!(
+                wire(world.equipment(hero)),
+                before_bite,
+                "the plate's wear ledger advanced on the persisted worn set"
+            );
+            // The bitten hero walks on whole — the shopping beats read vitals.
+            world.set_health(hero, Pool::full(500));
+            return Some(());
+        }
+    }
+    None
+}
+
 /// Walks to the merchant, buys, sells, and crafts (BEATS 9-11): the potion cost is
 /// debited from the threaded wallet, the cape's proceeds credited, and the chaos
 /// mix's fee charged against the same wallet. Returns the created item and its bag
@@ -3259,6 +3568,8 @@ fn play_full_session(seed: u64) -> Option<()> {
     let (pile, mob_pos) = farm_first_kill(&mut world, hero, mob_tile)?;
     // BEATS 6-8 — Pick up the money and item, and gear up.
     loot_and_gear(&mut world, hero, pile, mob_pos)?;
+    // BEAT 8b — The worn plate folds into defense and wears under a real bite.
+    geared_bite(&mut world, hero, mob_tile)?;
     // BEATS 9-11 — Walk to the merchant, buy, sell, and craft.
     let (created, created_anchor) = shop_and_craft(&mut world, hero, merchant_tile)?;
     // BEAT 12 — Trade the crafted item to a second actor.

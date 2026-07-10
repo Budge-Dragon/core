@@ -372,6 +372,13 @@ impl Percent {
     /// a fabricated default.
     pub const ZERO: Self = Self(0);
 
+    /// [`Self::ZERO`] as a function — the serde deserialize-default path for
+    /// gearless-zero profile fields (`#[serde(default = "...")]` needs a fn).
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self::ZERO
+    }
+
     /// Builds a percentage; values above 100 are rejected.
     ///
     /// # Errors
@@ -468,6 +475,17 @@ impl ItemLevel {
     #[must_use]
     pub fn enhance_level(self) -> Option<EnhanceLevel> {
         EnhanceLevel::try_from(self.0).ok()
+    }
+
+    /// The enhancement level this wire level denotes, with the box-tier levels
+    /// (12..=15, which carry no enhancement row) folded to the +0 curve entry —
+    /// the total read every enhancement-curve lookup shares.
+    #[must_use]
+    pub fn enhance_level_or_zero(self) -> EnhanceLevel {
+        match self.enhance_level() {
+            Some(enhance) => enhance,
+            None => EnhanceLevel::L0,
+        }
     }
 }
 

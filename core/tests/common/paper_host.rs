@@ -50,7 +50,7 @@ use mu_core::data::atlas::Atlas;
 use mu_core::data::common::{MonsterNumber, SkillNumber};
 use mu_core::data::effects::Ailment;
 use mu_core::data::gates_warps::WarpIndex;
-use mu_core::data::item_definitions::ItemKind;
+use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::option_roll::OptionRollPolicy;
@@ -73,13 +73,13 @@ use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightOutcome, StepOutcome};
 use mu_core::events::party::{MemberAward, PartyEvent};
 use mu_core::events::progression::GrowthEvent;
-use mu_core::events::shop::{BuyOutcome, SellOutcome};
+use mu_core::events::shop::{BuyOutcome, RepairOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
 use mu_core::events::travel::{
     EnterGateOutcome, TownPortalOutcome, WarpEntryStatus, WarpTravelOutcome,
 };
-use mu_core::services::combat::{StrikeBasis, resolve_attack};
+use mu_core::services::combat::StrikeBasis;
 use mu_core::services::consume::use_consumable;
 use mu_core::services::death::{resolve_death, respawn};
 use mu_core::services::effects::{
@@ -87,14 +87,15 @@ use mu_core::services::effects::{
 };
 use mu_core::services::experience::apply_experience;
 use mu_core::services::inventory::{
-    PickupOutcome, PlaceIntent, ZenPickupOutcome, equip, place_item, remove_item,
+    PickupOutcome, PlaceIntent, Wearer, ZenPickupOutcome, equip, place_item, remove_item,
 };
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::kill::resolve_kill;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::movement::resolve_step;
 use mu_core::services::party;
-use mu_core::services::profile::{character_profile, monster_profile};
+use mu_core::services::profile::{effective_profile, equipped_profile, monster_profile};
+use mu_core::services::shop::{RepairSite, RepairSubject, repair};
 use mu_core::services::skills::{DamagingSkill, SkillRouting, cast, cast_heal, route};
 use mu_core::services::spawn::{SpawnResult, place_spawn};
 use mu_core::services::trade::{
@@ -102,6 +103,7 @@ use mu_core::services::trade::{
     offer_item, offer_zen, request,
 };
 use mu_core::services::travel::{resolve_warp, traverse_enter_gate, use_town_portal, warp_menu};
+use mu_core::services::wear::{WearEvent, resolve_strike_with_wear, wear_from_strike};
 
 pub use dataset::or_abort;
 use dataset::{real_atlas, real_static_data};
@@ -147,6 +149,11 @@ pub struct World {
     /// The pending party invites, addressed by index — owned data with a TTL,
     /// reaped independently of any session.
     pending_invites: Vec<PartyInvite>,
+    /// The delivery log for durability-wear events — the host's outward route
+    /// for the [`WearEvent`]s each strike or cast returns (a monster side wears
+    /// nothing, so every logged event belongs to a character). Scenarios drain
+    /// it with [`World::drain_wear_events`].
+    delivered_wear: Vec<WearEvent>,
 }
 
 /// The persist seam — the database write/read boundary abstracted. Serialises a
@@ -224,7 +231,14 @@ impl World {
             sessions: Vec::new(),
             parties: Vec::new(),
             pending_invites: Vec::new(),
+            delivered_wear: Vec::new(),
         }
+    }
+
+    /// Drains the delivered durability-wear events in occurrence order — the
+    /// scenario-side read of the host's wear delivery log.
+    pub fn drain_wear_events(&mut self) -> Vec<WearEvent> {
+        std::mem::take(&mut self.delivered_wear)
     }
 
     /// The held static data index — passed to services, never persisted.
@@ -349,13 +363,24 @@ impl World {
     }
 
     /// Drives one physical strike from the character at `attacker_index` onto
-    /// the monster at `target_index`: derives both combat profiles from held
-    /// state, resolves the strike over the world's stream, writes the returned
-    /// health back onto the monster *through* the persist seam, and returns the
-    /// outcome for the scenario to assert on.
+    /// the monster at `target_index`: derives the attacker's strike view as
+    /// `effective_profile(equipped_profile(..))` — gear folds first, active
+    /// effects onto the gear-inclusive base — and the monster's as
+    /// `effective_profile(monster_profile(..))`, then resolves the strike WITH
+    /// durability wear through the core [`resolve_strike_with_wear`]
+    /// composition (the monster side wears [`Equipment::empty`]). The returned
+    /// health is written back onto the monster and the attacker's worn set
+    /// back onto the attacker, both *through* the persist seam; the wear
+    /// events are routed to the delivery log. A gearless, effect-free exchange
+    /// is byte-identical to the bare strike (empty fold + empty pools).
     pub fn strike(&mut self, attacker_index: usize, target_index: usize) -> AttackOutcome {
         let attacker = or_abort(self.characters.get(attacker_index).ok_or("no attacker"));
-        let (attacker_profile, _maxima) = character_profile(attacker);
+        let attacker_worn =
+            or_abort(self.equipment.get(attacker_index).ok_or("no worn set")).clone();
+        let attacker_view = effective_profile(
+            equipped_profile(attacker, &attacker_worn, &self.atlas),
+            &attacker.active_effects(),
+        );
 
         let monster = *or_abort(self.monsters.get(target_index).ok_or("no target"));
         let def = or_abort(
@@ -385,14 +410,24 @@ impl World {
                 ));
             }
         };
+        let target_view = effective_profile(target_profile, &monster.active_effects);
 
-        let (new_health, outcome) = resolve_attack(
-            &attacker_profile,
-            &target_profile,
+        let (new_health, outcome, wear) = resolve_strike_with_wear(
+            &attacker_view,
+            attacker_worn,
+            &target_view,
+            Equipment::empty(),
             monster.health,
             &StrikeBasis::PlainSwing,
+            &self.atlas,
             &mut self.rng,
         );
+
+        let persisted_worn = persist(wear.attacker_worn);
+        let worn_slot = or_abort(self.equipment.get_mut(attacker_index).ok_or("no worn slot"));
+        *worn_slot = persisted_worn;
+        self.delivered_wear.extend(wear.attacker_events);
+        self.delivered_wear.extend(wear.defender_events);
 
         let mut updated = monster;
         updated.health = new_health;
@@ -574,12 +609,15 @@ impl World {
     /// Equips `item` onto the character at `char_index`, into the first slot the
     /// equip service accepts it in (seam 1): the core [`equip`] service is the
     /// slot oracle — a host auto-equip tries slots and keeps the one that takes.
-    /// On success the new worn set is written back through the persist seam; a
-    /// non-equippable item is handed back in the returned rejection.
+    /// The wearer view is derived from the seated character, so the class and
+    /// requirement gates decide with real eligibility. On success the new worn
+    /// set is written back through the persist seam; a non-equippable or
+    /// ineligible item is handed back in the returned rejection.
     pub fn equip_first_available(&mut self, char_index: usize, item: ItemInstance) -> EquipOutcome {
         let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let wearer = wearer_of(self.character(char_index));
         let def = or_abort(self.atlas.item(item.item).ok_or("unknown item to equip"));
-        let (new_worn, outcome) = equip_into_first_slot(worn, item, &def.kind, &self.atlas);
+        let (new_worn, outcome) = equip_into_first_slot(worn, item, def, &self.atlas, &wearer);
         let persisted = persist(new_worn);
         let slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
         *slot = persisted;
@@ -588,17 +626,19 @@ impl World {
 
     /// Equips `item` onto the character at `char_index` into a NAMED `slot`
     /// (seam 1): the core [`equip`] service decides — accepting the item, or
-    /// rejecting it with the reason its kind and the slot's occupancy dictate
-    /// ([`EquipRejection::IncompatibleSlot`], [`EquipRejection::SlotOccupied`], or
-    /// [`EquipRejection::TwoHandedConflict`]). On a rejection the worn set is
-    /// returned unchanged and the bounced item rides the outcome — the failure
-    /// branch [`Self::equip_first_available`] cannot reach, since that oracle only
-    /// ever surfaces `IncompatibleSlot`. The returned worn set is written back
-    /// *through* the persist seam either way.
+    /// rejecting it with the reason its kind, the slot's occupancy, or the
+    /// wearer's eligibility dictate
+    /// ([`EquipRejection::IncompatibleSlot`], [`EquipRejection::SlotOccupied`],
+    /// [`EquipRejection::TwoHandedConflict`], [`EquipRejection::ClassMismatch`],
+    /// or [`EquipRejection::RequirementsNotMet`]). On a rejection the worn set
+    /// is returned unchanged and the bounced item rides the outcome. The
+    /// returned worn set is written back *through* the persist seam either way.
     ///
     /// [`EquipRejection::IncompatibleSlot`]: mu_core::events::inventory::EquipRejection::IncompatibleSlot
     /// [`EquipRejection::SlotOccupied`]: mu_core::events::inventory::EquipRejection::SlotOccupied
     /// [`EquipRejection::TwoHandedConflict`]: mu_core::events::inventory::EquipRejection::TwoHandedConflict
+    /// [`EquipRejection::ClassMismatch`]: mu_core::events::inventory::EquipRejection::ClassMismatch
+    /// [`EquipRejection::RequirementsNotMet`]: mu_core::events::inventory::EquipRejection::RequirementsNotMet
     pub fn equip_into(
         &mut self,
         char_index: usize,
@@ -606,11 +646,50 @@ impl World {
         slot: EquipmentSlot,
     ) -> EquipOutcome {
         let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let wearer = wearer_of(self.character(char_index));
         let def = or_abort(self.atlas.item(item.item).ok_or("unknown item to equip"));
-        let (new_worn, outcome) = equip(worn, item, &def.kind, slot, &self.atlas);
+        let (new_worn, outcome) = equip(worn, item, def, slot, &self.atlas, &wearer);
         let persisted = persist(new_worn);
         let worn_slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
         *worn_slot = persisted;
+        outcome
+    }
+
+    /// Repairs the worn item at `slot` on the character at `char_index`
+    /// through the shipped W-SHOP repair service at the self-repair site
+    /// (seam 2): reads the live worn set and wallet, lets the core service
+    /// gate, price, and refill, and writes the returned worn set and balance
+    /// back through the persist seam. The repair RULE — the refill to the
+    /// item's own stored max, the wear-ledger zeroing, the 5/2 self-repair
+    /// surcharge — lives in core; this is a thin persist-and-deliver driver.
+    pub fn self_repair_worn(&mut self, char_index: usize, slot: EquipmentSlot) -> RepairOutcome {
+        let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let wallet = self.character(char_index).zen();
+        let position = self.character(char_index).placement().position;
+        let (subject, outcome) = repair(
+            RepairSubject::Equipped {
+                equipment: worn,
+                slot,
+            },
+            wallet,
+            RepairSite::SelfRepair,
+            position,
+            &self.atlas,
+        );
+        let equipment = match subject {
+            RepairSubject::Equipped { equipment, .. } => equipment,
+            RepairSubject::Stored { .. } => {
+                return or_abort(Err::<RepairOutcome, _>(
+                    "the equipped repair subject threads back as equipped",
+                ));
+            }
+        };
+        let persisted = persist(equipment);
+        let worn_slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
+        *worn_slot = persisted;
+        if let RepairOutcome::Repaired { balance, .. } = outcome {
+            self.set_wallet(char_index, balance);
+        }
         outcome
     }
 
@@ -674,12 +753,21 @@ impl World {
                 ));
             }
             let caster = or_abort(self.characters.get(caster_index).ok_or("no caster"));
+            let caster_worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set"));
             let grid = or_abort(
                 self.atlas
                     .walk_grid(caster.placement().map)
                     .ok_or("no walk grid"),
             );
-            cast(caster, damaging, aim, &targets, grid, &mut self.rng)
+            cast(
+                caster,
+                &equipped_profile(caster, caster_worn, &self.atlas),
+                damaging,
+                aim,
+                &targets,
+                grid,
+                &mut self.rng,
+            )
         };
         let vitals_value = or_abort(serde_json::to_value(spent_vitals));
         self.persist_character_with(caster_index, "vitals", vitals_value);
@@ -687,8 +775,40 @@ impl World {
             for hit in hits {
                 self.write_back_target_hit(target_indices, hit);
             }
+            self.wear_caster_weapon(caster_index, hits);
         }
         outcome
+    }
+
+    /// Composes the cast path's offensive wear: one [`wear_from_strike`] per
+    /// landed damaging [`TargetHit`], in the cast's returned hits order (the
+    /// core-produced order, so the RNG stream stays a core contract). The
+    /// struck monsters carry no gear, so only the caster's weapon side wears;
+    /// the threaded worn set is persisted back and the events logged. A miss
+    /// wears nothing — the cast path spends no ammunition on it either (no
+    /// swing resolution reaches the wear seam without a landed hit).
+    fn wear_caster_weapon(&mut self, caster_index: usize, hits: &[TargetHit]) {
+        let mut worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set")).clone();
+        for hit in hits {
+            let landed = match hit {
+                TargetHit::Landed { hit, .. } | TargetHit::Killed { hit, .. } => {
+                    AttackOutcome::Landed { hit: *hit }
+                }
+                TargetHit::Missed { .. } => continue,
+            };
+            let wear = wear_from_strike(
+                &landed,
+                worn,
+                Equipment::empty(),
+                &self.atlas,
+                &mut self.rng,
+            );
+            worn = wear.attacker_worn;
+            self.delivered_wear.extend(wear.attacker_events);
+        }
+        let persisted = persist(worn);
+        let worn_slot = or_abort(self.equipment.get_mut(caster_index).ok_or("no worn slot"));
+        *worn_slot = persisted;
     }
 
     /// Writes one struck target's [`TargetHit`] back onto its monster: maps the
@@ -759,20 +879,27 @@ impl World {
     }
 
     /// Drives one monster strike onto the player (seam 7, V6): the forwarded
-    /// `MonsterIntent::Attack` is resolved with the monster's profile as attacker,
-    /// the player's `character_profile` as target, and the player's current health
-    /// `Pool` as `target_health` — the three inputs V6 pins. The returned health
-    /// is written back onto the player by serde-editing its `vitals.health` (the
-    /// reverse-direction twin of the growth writeback), and the outcome is
-    /// returned. `resolve_attack` is symmetric: the same service that kills
-    /// monsters kills a player, only the profiles swapped.
+    /// `MonsterIntent::Attack` is resolved with the monster's effective profile
+    /// as attacker, the player's `effective_profile(equipped_profile(..))` —
+    /// gear folds first, active effects onto the gear-inclusive base — as
+    /// target, and the player's current health `Pool` as `target_health`. The
+    /// exchange runs through the core [`resolve_strike_with_wear`] composition
+    /// (the monster side wears [`Equipment::empty`]), so a landed bite wears
+    /// the player's gear. The returned health is written back by serde-editing
+    /// `vitals.health`, the player's worn set through the persist seam, the
+    /// wear events to the delivery log. The strike service is symmetric: the
+    /// same service that kills monsters kills a player, only the views swapped.
     pub fn player_struck_by_monster(
         &mut self,
         player_index: usize,
         monster_index: usize,
     ) -> AttackOutcome {
         let player = or_abort(self.characters.get(player_index).ok_or("no player"));
-        let (target_profile, _maxima) = character_profile(player);
+        let player_worn = or_abort(self.equipment.get(player_index).ok_or("no worn set")).clone();
+        let target_view = effective_profile(
+            equipped_profile(player, &player_worn, &self.atlas),
+            &player.active_effects(),
+        );
         let target_health = player.vitals().health;
 
         let monster = *or_abort(self.monsters.get(monster_index).ok_or("no attacker"));
@@ -799,14 +926,24 @@ impl World {
                 ));
             }
         };
+        let attacker_view = effective_profile(attacker_profile, &monster.active_effects);
 
-        let (new_health, outcome) = resolve_attack(
-            &attacker_profile,
-            &target_profile,
+        let (new_health, outcome, wear) = resolve_strike_with_wear(
+            &attacker_view,
+            Equipment::empty(),
+            &target_view,
+            player_worn,
             target_health,
             &StrikeBasis::PlainSwing,
+            &self.atlas,
             &mut self.rng,
         );
+
+        let persisted_worn = persist(wear.defender_worn);
+        let worn_slot = or_abort(self.equipment.get_mut(player_index).ok_or("no worn slot"));
+        *worn_slot = persisted_worn;
+        self.delivered_wear.extend(wear.attacker_events);
+        self.delivered_wear.extend(wear.defender_events);
 
         self.set_health(player_index, new_health);
         outcome
@@ -2090,6 +2227,28 @@ pub fn pressing_monster(atlas: &Atlas) -> MonsterNumber {
     )
 }
 
+/// The number and combat block of the first fighting monster whose defense is
+/// at least `min_defense` — the armored kill target the geared-vs-gearless
+/// standing gate pins the gearless level-floor on. Re-found from the roster on
+/// every run, never a hard-coded number.
+#[must_use]
+pub fn armored_monster_from(atlas: &Atlas, min_defense: u16) -> (MonsterNumber, MonsterCombat) {
+    or_abort(
+        atlas
+            .monsters()
+            .find_map(|definition| match &definition.role {
+                MonsterRole::Monster { combat, .. } => (combat.defense >= min_defense
+                    && combat.hp > 0)
+                    .then_some((definition.number, *combat)),
+                MonsterRole::Guard { .. }
+                | MonsterRole::Trap { .. }
+                | MonsterRole::Npc { .. }
+                | MonsterRole::SoccerBall => None,
+            })
+            .ok_or("the dataset has no fighting monster at that defense"),
+    )
+}
+
 /// The number of the first passive definition — a town NPC or the soccer ball —
 /// whose placement resolves to a [`mu_core::entities::spawned::Spawned::Placed`],
 /// never a fightable mob.
@@ -2251,47 +2410,69 @@ const EQUIP_SLOTS: [EquipmentSlot; 12] = [
 ];
 
 /// Equips `item` into the first slot the core [`equip`] service accepts it in —
-/// the service is the compatibility oracle, so no kind→slot rule is re-derived
-/// here. When no slot accepts (a non-equippable drop), the item rides back an
-/// `IncompatibleSlot` rejection.
+/// the service is the compatibility AND eligibility oracle, so no kind→slot or
+/// class/requirement rule is re-derived here. When no slot accepts (a
+/// non-equippable drop, or one the wearer is ineligible for), the item rides
+/// back the last rejection.
 fn equip_into_first_slot(
     worn: Equipment,
     item: ItemInstance,
-    kind: &ItemKind,
+    def: &ItemDefinition,
     atlas: &Atlas,
+    wearer: &Wearer,
 ) -> (Equipment, EquipOutcome) {
     let mut worn = worn;
     let mut item = item;
+    let mut last_reason = EquipRejection::IncompatibleSlot;
     for slot in EQUIP_SLOTS {
-        let (updated, outcome) = equip(worn, item, kind, slot, atlas);
+        let (updated, outcome) = equip(worn, item, def, slot, atlas, wearer);
         match outcome {
             EquipOutcome::Equipped { slot } => return (updated, EquipOutcome::Equipped { slot }),
-            EquipOutcome::Rejected { item: bounced, .. } => {
+            EquipOutcome::Rejected {
+                item: bounced,
+                reason,
+            } => {
                 worn = updated;
                 item = bounced;
+                last_reason = reason;
             }
         }
     }
     (
         worn,
         EquipOutcome::Rejected {
-            reason: EquipRejection::IncompatibleSlot,
+            reason: last_reason,
             item,
         },
     )
 }
 
-/// Whether the core equip service accepts item `id` into any worn slot — the
-/// host's "is this a wearable drop" test, with the service itself as the slot
-/// oracle (a jewel or consumable is a `Drop::Item` too, but wearable by none).
+/// The eligibility view a host derives from a seated character before an
+/// equip: class, raw level, and total stats (base stats pre-S3 — no worn item
+/// grants a stat).
 #[must_use]
-pub fn is_equippable(atlas: &Atlas, id: ItemRef) -> bool {
+pub fn wearer_of(character: &Character) -> Wearer {
+    Wearer {
+        class: character.class(),
+        level: character.level(),
+        stats: character.stats(),
+    }
+}
+
+/// Whether the core equip service accepts item `id` into any worn slot FOR
+/// `wearer` — the host's "is this drop wearable by this character" test, with
+/// the service itself as the slot and eligibility oracle (a jewel or
+/// consumable is a `Drop::Item` too, but wearable by none; an elf bow is
+/// wearable but not by a knight).
+#[must_use]
+pub fn is_equippable(atlas: &Atlas, id: ItemRef, wearer: &Wearer) -> bool {
     let def = or_abort(atlas.item(id).ok_or("unknown item"));
     let (_, outcome) = equip_into_first_slot(
         Equipment::empty(),
         item_instance(atlas, id),
-        &def.kind,
+        def,
         atlas,
+        wearer,
     );
     matches!(outcome, EquipOutcome::Equipped { .. })
 }

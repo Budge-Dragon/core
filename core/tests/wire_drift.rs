@@ -14,6 +14,7 @@ use mu_core::components::active_effect::{
 };
 use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
+use mu_core::components::combat_profile::{CombatProfile, WeaponMode};
 use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, PlacementRejection};
@@ -75,6 +76,7 @@ use mu_core::events::travel::{
 use mu_core::services::inventory::ZenPickupOutcome;
 use mu_core::services::party;
 use mu_core::services::trade::{AcceptOutcome, LockResult, RequestOutcome, TradeAvailability};
+use mu_core::services::wear::WearEvent;
 
 /// The canonical mobile-entity placement reused by every event that nests one.
 /// Position is the centre of tile (2, 3); facing east; grounded; map 0.
@@ -843,6 +845,119 @@ fn ancient_item_instance_wire_is_pinned() {
         serde_json::to_string(&instance).unwrap(),
         r#"{"item":{"group":7,"number":0},"level":5,"roll":{"kind":"ancient","bonus":2},"normal_option":{"option":"defense","level":4},"luck":"plain","skill":"no_skill","durability":{"current":40,"max":40},"augment":{"kind":"none"}}"#
     );
+}
+
+#[test]
+fn durability_wear_ledger_wire_is_pinned() {
+    // The shipped {current, max} form is byte-identical while the persisted
+    // wear ledger is empty — a fresh gauge carries no third field.
+    assert_eq!(
+        serde_json::to_string(&Durability::full(30)).unwrap(),
+        r#"{"current":30,"max":30}"#
+    );
+    // A sub-divisor wear advance rides the wire as `wear_progress`.
+    let divisor = core::num::NonZeroU32::new(2000).unwrap();
+    let worn = Durability::full(30).worn(1500, divisor);
+    assert_eq!(
+        serde_json::to_string(&worn).unwrap(),
+        r#"{"current":30,"max":30,"wear_progress":1500}"#
+    );
+    // The ledger form round-trips and the next crossing lands exactly where
+    // the pre-persist gauge would have: 1500 + 500 crosses one point and the
+    // zeroed ledger leaves the wire again.
+    let reloaded: Durability =
+        serde_json::from_str(&serde_json::to_string(&worn).unwrap()).unwrap();
+    assert_eq!(reloaded, worn);
+    assert_eq!(
+        serde_json::to_string(&reloaded.worn(500, divisor)).unwrap(),
+        r#"{"current":29,"max":30}"#
+    );
+    // Every shipped pre-ledger persisted form still parses — to the empty
+    // ledger (the two-field equality against a fresh construction proves it).
+    let shipped: Durability = serde_json::from_str(r#"{"current":12,"max":30}"#).unwrap();
+    assert_eq!(shipped, Durability::new(12, 30).unwrap());
+}
+
+#[test]
+fn wear_event_wire_shapes_are_pinned() {
+    let divisor = core::num::NonZeroU32::new(2000).unwrap();
+    let worn = WearEvent::Worn {
+        slot: EquipmentSlot::Helm,
+        durability: Durability::full(30).worn(1500, divisor),
+    };
+    assert_eq!(
+        serde_json::to_string(&worn).unwrap(),
+        r#"{"kind":"worn","slot":"helm","durability":{"current":30,"max":30,"wear_progress":1500}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WearEvent::Broken {
+            slot: EquipmentSlot::LeftHand
+        })
+        .unwrap(),
+        r#"{"kind":"broken","slot":"left_hand"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WearEvent::Destroyed {
+            slot: EquipmentSlot::Pet
+        })
+        .unwrap(),
+        r#"{"kind":"destroyed","slot":"pet"}"#
+    );
+}
+
+#[test]
+fn wear_event_every_kind_tag_is_pinned() {
+    for event in [
+        WearEvent::Worn {
+            slot: EquipmentSlot::Helm,
+            durability: Durability::full(30),
+        },
+        WearEvent::Broken {
+            slot: EquipmentSlot::Helm,
+        },
+        WearEvent::Destroyed {
+            slot: EquipmentSlot::Helm,
+        },
+    ] {
+        let expected = match &event {
+            WearEvent::Worn { .. } => "worn",
+            WearEvent::Broken { .. } => "broken",
+            WearEvent::Destroyed { .. } => "destroyed",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(event).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+/// The shipped pre-W-EQUIP `CombatProfile` wire form — no gear-magnitude
+/// fields — as a persisted host row would carry it.
+const GEARLESS_PROFILE_JSON: &str = r#"{"level":50,"physical":{"min":33,"max":50},"wizardry":null,"defense":20,"attack_rate":480,"defense_rate":40,"resistances":{"ice":0,"poison":0,"lightning":0,"fire":0,"earth":0,"wind":0,"water":0},"critical_chance":0,"excellent_chance":0,"defense_ignore_chance":0,"double_damage_chance":0,"incoming_damage_reduction":0,"flat_damage_add":0}"#;
+
+#[test]
+fn combat_profile_wire_carries_the_gear_magnitudes_and_parses_shipped_forms() {
+    // Every shipped persisted profile (no gear fields) still parses — each
+    // W-EQUIP field serde-defaults to its gearless zero/identity.
+    let profile: CombatProfile = serde_json::from_str(GEARLESS_PROFILE_JSON).unwrap();
+    assert_eq!(profile.wizardry_rise_x2(), 0);
+    assert_eq!(profile.incoming_dd_pct().points(), 0);
+    assert_eq!(profile.wing_damage_pct().points(), 0);
+    assert_eq!(profile.wing_absorb_pct().points(), 0);
+    assert_eq!(profile.weapon_mode(), WeaponMode::Single);
+    // Contains-based (the shipped `combat_profile_wire_round_trips` idiom):
+    // the re-serialized profile carries each gear magnitude under its name,
+    // and the typed weapon mode rides as a snake_case string, never a bool.
+    let wire = serde_json::to_string(&profile).unwrap();
+    for expected in [
+        r#""wizardry_rise_x2":0"#,
+        r#""incoming_dd_pct":0"#,
+        r#""wing_damage_pct":0"#,
+        r#""wing_absorb_pct":0"#,
+        r#""weapon_mode":"single""#,
+    ] {
+        assert!(wire.contains(expected), "missing {expected} in {wire}");
+    }
 }
 
 #[test]

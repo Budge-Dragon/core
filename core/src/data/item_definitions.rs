@@ -421,6 +421,75 @@ impl ItemKind {
             | Self::StatFruit => None,
         }
     }
+
+    /// The qualified-class list of a WEARABLE kind — the equip gate's class
+    /// rule. Total over every variant: a non-wearable kind has no wear-class
+    /// gate and answers `None` (an orb/scroll's class list gates learning, not
+    /// wearing).
+    #[must_use]
+    pub fn classes(&self) -> Option<ClassSet> {
+        match self {
+            Self::Weapon { classes, .. }
+            | Self::Bow { classes, .. }
+            | Self::Crossbow { classes, .. }
+            | Self::Arrows { classes }
+            | Self::Bolts { classes }
+            | Self::Staff { classes, .. }
+            | Self::Shield { classes, .. }
+            | Self::Helm { classes, .. }
+            | Self::BodyArmor { classes, .. }
+            | Self::Pants { classes, .. }
+            | Self::Gloves { classes, .. }
+            | Self::Boots { classes, .. }
+            | Self::Wings { classes, .. }
+            | Self::Pet { classes, .. }
+            | Self::Ring { classes, .. }
+            | Self::Pendant { classes, .. }
+            | Self::TransformationRing { classes, .. } => Some(*classes),
+            Self::Orb { .. }
+            | Self::SkillScroll { .. }
+            | Self::Jewel { .. }
+            | Self::Consumable { .. }
+            | Self::LuckyBox
+            | Self::EventTicket { .. }
+            | Self::MixMaterial
+            | Self::StatFruit => None,
+        }
+    }
+
+    /// The wear-requirement block of a kind that carries one — the equip
+    /// gate's scaled-requirement input. Total over every variant: ammunition
+    /// and non-wearable kinds carry no wear columns and answer `None`.
+    #[must_use]
+    pub fn wear(&self) -> Option<WearRequirements> {
+        match self {
+            Self::Weapon { wear, .. }
+            | Self::Bow { wear, .. }
+            | Self::Crossbow { wear, .. }
+            | Self::Staff { wear, .. }
+            | Self::Shield { wear, .. }
+            | Self::Helm { wear, .. }
+            | Self::BodyArmor { wear, .. }
+            | Self::Pants { wear, .. }
+            | Self::Gloves { wear, .. }
+            | Self::Boots { wear, .. }
+            | Self::Wings { wear, .. }
+            | Self::Pet { wear, .. }
+            | Self::Ring { wear, .. }
+            | Self::Pendant { wear, .. }
+            | Self::TransformationRing { wear, .. } => Some(*wear),
+            Self::Arrows { .. }
+            | Self::Bolts { .. }
+            | Self::Orb { .. }
+            | Self::SkillScroll { .. }
+            | Self::Jewel { .. }
+            | Self::Consumable { .. }
+            | Self::LuckyBox
+            | Self::EventTicket { .. }
+            | Self::MixMaterial
+            | Self::StatFruit => None,
+        }
+    }
 }
 
 /// How a melee weapon is wielded. One-handed melee wields in either hand and

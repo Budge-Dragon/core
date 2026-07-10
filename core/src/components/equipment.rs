@@ -44,6 +44,26 @@ pub enum EquipmentSlot {
     Ring2,
 }
 
+impl EquipmentSlot {
+    /// Every slot, in declaration order — the one canonical enumeration every
+    /// full-set walk and random-pool index shares, so a positional pick maps
+    /// to the same slot bit-for-bit on every host.
+    pub(crate) const ALL: [Self; 12] = [
+        Self::LeftHand,
+        Self::RightHand,
+        Self::Helm,
+        Self::Armor,
+        Self::Pants,
+        Self::Gloves,
+        Self::Boots,
+        Self::Wings,
+        Self::Pet,
+        Self::Pendant,
+        Self::Ring1,
+        Self::Ring2,
+    ];
+}
+
 /// A character's worn items: one independent slot per [`EquipmentSlot`]. Each
 /// field is genuinely optional (the slot may be empty); a sparse wire omits
 /// empty slots.
@@ -166,21 +186,6 @@ mod tests {
     use crate::components::item_ref::ItemRef;
     use crate::components::units::ItemLevel;
 
-    const ALL_SLOTS: [EquipmentSlot; 12] = [
-        EquipmentSlot::LeftHand,
-        EquipmentSlot::RightHand,
-        EquipmentSlot::Helm,
-        EquipmentSlot::Armor,
-        EquipmentSlot::Pants,
-        EquipmentSlot::Gloves,
-        EquipmentSlot::Boots,
-        EquipmentSlot::Wings,
-        EquipmentSlot::Pet,
-        EquipmentSlot::Pendant,
-        EquipmentSlot::Ring1,
-        EquipmentSlot::Ring2,
-    ];
-
     fn item(number: u16) -> ItemInstance {
         ItemInstance {
             item: ItemRef { group: 0, number },
@@ -197,7 +202,7 @@ mod tests {
     #[test]
     fn empty_has_every_slot_free() {
         let equipment = Equipment::empty();
-        for slot in ALL_SLOTS {
+        for slot in EquipmentSlot::ALL {
             assert!(equipment.get(slot).is_none());
         }
     }
@@ -211,7 +216,7 @@ mod tests {
                 .map(|item| item.item.number),
             Some(7)
         );
-        for slot in ALL_SLOTS {
+        for slot in EquipmentSlot::ALL {
             if slot != EquipmentSlot::Helm {
                 assert!(equipment.get(slot).is_none());
             }
