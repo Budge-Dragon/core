@@ -35,6 +35,7 @@ use mu_core::components::trade_window::Side;
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Zen};
 use mu_core::data::common::MonsterNumber;
 use mu_core::data::effects::Ailment;
+use mu_core::data::gates_warps::WarpIndex;
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::party_session::{PartyMember, PartySession};
@@ -57,6 +58,9 @@ use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
 use mu_core::events::trade::{CancelReason, OfferOutcome, ZenOfferOutcome};
+use mu_core::events::travel::{
+    EnterGateOutcome, TownPortalOutcome, WarpAvailability, WarpLockReason, WarpTravelOutcome,
+};
 use mu_core::services::effects::ApplicableBuff;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
 use mu_core::services::party;
@@ -67,8 +71,8 @@ use mu_core::services::trade::LockResult;
 use paper_host::{
     World, aggressive_monster, cell, dark_knight, dark_knight_in_band, direct_hit_skill,
     fighting_monster_from, first_passive_monster, footprint_of, heal_skill, is_equippable,
-    item_at_level, item_instance, low_level_monster, monster_instance, nova_skill, or_abort,
-    persist, pos, pressing_monster, tile, walkable_run, wire, zen,
+    item_at_level, item_instance, low_level_monster, magic_gladiator, monster_instance, nova_skill,
+    or_abort, persist, pos, pressing_monster, tile, walkable_run, wire, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -2269,6 +2273,370 @@ fn a_bought_potion_is_drunk_to_heal_after_a_monster_bite_closing_the_consume_loo
     );
 }
 
+// --- Warp / travel: menu, discovery, fees, and the scroll (seam W-WARP). -----
+
+/// The Lorencia warp entry (Move.txt index 2): level 10, 2,000 zen, map 0.
+const LORENCIA_WARP: WarpIndex = WarpIndex(2);
+
+/// The first Lost Tower warp entry (Move.txt index 8): level 50, 5,000 zen,
+/// map 4.
+const LOST_TOWER_WARP: WarpIndex = WarpIndex(8);
+
+/// Town Portal Scroll (group 14 number 10, durability 1) — Elf Lala shelves
+/// it at slot 21 for 750 zen.
+const TOWN_PORTAL: ItemRef = ItemRef {
+    group: 14,
+    number: 10,
+};
+
+/// The persisted menu's Lost Tower annotation for the character at `hero`.
+fn lost_tower_status(world: &World, hero: usize) -> WarpAvailability {
+    or_abort(
+        world
+            .warp_menu(hero)
+            .into_iter()
+            .find(|status| status.index == LOST_TOWER_WARP)
+            .ok_or("the menu lists the Lost Tower entry"),
+    )
+    .availability
+}
+
+#[test]
+fn a_hero_earns_attempts_a_warp_too_poor_then_earns_enough_and_warps() {
+    // The WARP-COMMAND debt record's pre-written scenario, driven end-to-end:
+    // earn → invoke a warp too poor (rejected, wallet intact) → earn enough →
+    // warp (fee debited, arrived on a walkable tile of the target map).
+    let mut world = World::new(31, MapNumber(0));
+    let hero = world.seat_character(dark_knight(60, 150, tile(10, 10)));
+
+    // Earn: a money pile picked off the ground — below the 2,000-zen fee.
+    let pile = world.seat_ground_zen(Zen(1_500), pos(10, 10), Tick(1_000));
+    assert_eq!(world.pickup_zen(hero, pile), ZenPickupOutcome::PickedUp);
+    assert_eq!(world.character(hero).zen(), zen(1_500));
+
+    // Too poor: refused with the authoritative numbers, the persisted wallet
+    // intact, the hero unmoved.
+    assert_eq!(
+        world.warp(hero, LORENCIA_WARP),
+        WarpTravelOutcome::NotEnoughZen {
+            required: Zen(2_000),
+            available: zen(1_500),
+        }
+    );
+    assert_eq!(
+        world.character(hero).zen(),
+        zen(1_500),
+        "never partially spent"
+    );
+
+    // Earn past the fee and warp: the fee comes off the persisted wallet and
+    // the hero stands on a walkable tile of the target map.
+    let pile = world.seat_ground_zen(Zen(3_000), pos(10, 10), Tick(1_000));
+    assert_eq!(world.pickup_zen(hero, pile), ZenPickupOutcome::PickedUp);
+    match world.warp(hero, LORENCIA_WARP) {
+        WarpTravelOutcome::Arrived { placement, balance } => {
+            assert_eq!(balance, zen(2_500), "4,500 earned minus the 2,000 fee");
+            assert_eq!(world.character(hero).zen(), balance);
+            assert_eq!(world.character(hero).placement(), placement);
+            let grid = or_abort(
+                world
+                    .atlas()
+                    .walk_grid(placement.map)
+                    .ok_or("the target map has a walk grid"),
+            );
+            assert!(grid.walkable(placement.position), "a walkable landing");
+        }
+        outcome @ (WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding) => panic!("the funded warp lands: {outcome:?}"),
+    }
+}
+
+#[test]
+fn discovery_locks_the_menu_until_a_walk_in_and_the_menu_warp_returns() {
+    let mut world = World::new(32, MapNumber(0));
+    // Seated on the Lorencia → Devias door's trigger (gate 18 at (5,38)).
+    let hero = world.seat_character(dark_knight(60, 150, tile(5, 38)));
+    world.set_wallet(hero, zen(20_000));
+
+    // LOCKED: unvisited Lost Tower is closed for exactly one reason —
+    // discovery — and the command agrees without touching the wallet.
+    match lost_tower_status(&world, hero) {
+        WarpAvailability::Locked { reasons } => {
+            assert_eq!(
+                reasons.iter().copied().collect::<Vec<_>>(),
+                vec![WarpLockReason::NotDiscovered]
+            );
+        }
+        WarpAvailability::Available => panic!("an unvisited map is locked"),
+    }
+    assert_eq!(
+        world.warp(hero, LOST_TOWER_WARP),
+        WarpTravelOutcome::NotDiscovered
+    );
+    assert_eq!(world.character(hero).zen(), zen(20_000));
+
+    // WALK IN: through the world's own doors — Lorencia → Devias, then the
+    // Devias → Lost Tower door at (2,248). Discovery never blocks a door.
+    assert!(matches!(
+        world.traverse_gate(hero),
+        EnterGateOutcome::Arrived { .. }
+    ));
+    assert_eq!(world.character(hero).placement().map, MapNumber(2));
+    world.place_at(hero, tile(2, 248));
+    assert!(matches!(
+        world.traverse_gate(hero),
+        EnterGateOutcome::Arrived { .. }
+    ));
+    assert_eq!(world.character(hero).placement().map, MapNumber(4));
+    assert!(world.character(hero).discovered().contains(MapNumber(4)));
+
+    // UNLOCKED: the persisted discovered set flips the menu; the warp home
+    // and the menu warp back both execute, each fee off the same wallet.
+    assert!(matches!(
+        lost_tower_status(&world, hero),
+        WarpAvailability::Available
+    ));
+    match world.warp(hero, LORENCIA_WARP) {
+        WarpTravelOutcome::Arrived { balance, .. } => assert_eq!(balance, zen(18_000)),
+        outcome @ (WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding) => panic!("the home warp lands: {outcome:?}"),
+    }
+    assert_eq!(world.character(hero).placement().map, MapNumber(0));
+    match world.warp(hero, LOST_TOWER_WARP) {
+        WarpTravelOutcome::Arrived { placement, balance } => {
+            assert_eq!(balance, zen(13_000), "the 5,000 fee off the wallet");
+            assert_eq!(placement.map, MapNumber(4));
+            let grid = or_abort(
+                world
+                    .atlas()
+                    .walk_grid(placement.map)
+                    .ok_or("Lost Tower has a walk grid"),
+            );
+            assert!(grid.walkable(placement.position));
+        }
+        outcome @ (WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding) => {
+            panic!("the unlocked menu entry warps: {outcome:?}")
+        }
+    }
+
+    // The traveled character — multi-map discovered set and all — survives
+    // the persist round-trip byte-for-byte and re-drives cleanly.
+    let stored = world.character(hero);
+    assert_eq!(
+        serde_json::to_string(stored).unwrap(),
+        serde_json::to_string(&persist(stored.clone())).unwrap(),
+    );
+}
+
+#[test]
+fn a_magic_gladiator_warps_a_gate_its_plain_level_misses_and_pays_the_full_fee() {
+    let mut world = World::new(33, MapNumber(0));
+    let gladiator = world.seat_character(magic_gladiator(40, tile(5, 38)));
+    world.set_wallet(gladiator, zen(10_000));
+    let knight = world.seat_character(dark_knight(40, 150, tile(5, 38)));
+    world.set_wallet(knight, zen(10_000));
+
+    // Both walk the same physical chain to Lost Tower — the doors' posted 15
+    // and 40 are met by both (the MG through its 2/3 fraction, the DK exactly).
+    for hero in [gladiator, knight] {
+        assert!(matches!(
+            world.traverse_gate(hero),
+            EnterGateOutcome::Arrived { .. }
+        ));
+        world.place_at(hero, tile(2, 248));
+        assert!(matches!(
+            world.traverse_gate(hero),
+            EnterGateOutcome::Arrived { .. }
+        ));
+        assert_eq!(world.character(hero).placement().map, MapNumber(4));
+    }
+
+    // The MG's effective floor(50·2/3) = 33 opens the level-50 menu entry —
+    // and the persisted wallet shows the FULL, un-reduced fee.
+    match world.warp(gladiator, LOST_TOWER_WARP) {
+        WarpTravelOutcome::Arrived { balance, .. } => {
+            assert_eq!(balance, zen(5_000), "10,000 minus the whole 5,000 fee");
+            assert_eq!(world.character(gladiator).zen(), balance);
+        }
+        outcome @ (WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding) => {
+            panic!("the MG's fraction opens the gate: {outcome:?}")
+        }
+    }
+    // The Dark Knight at the very same level faces the posted 50 and is
+    // refused, its persisted wallet intact.
+    assert_eq!(
+        world.warp(knight, LOST_TOWER_WARP),
+        WarpTravelOutcome::LevelTooLow { required: 50 }
+    );
+    assert_eq!(world.character(knight).zen(), zen(10_000));
+}
+
+#[test]
+fn a_bought_town_portal_scroll_carries_the_hero_home_with_everything_kept() {
+    let mut world = World::new(34, MapNumber(0));
+    // Seated on the Lorencia → Dungeon door's trigger (gate 1 at (121,232)).
+    let hero = world.seat_character(dark_knight(60, 150, tile(121, 232)));
+    world.set_wallet(hero, zen(1_000));
+
+    // Buy the scroll from Elf Lala (shelf slot 21, 750 zen) before leaving.
+    let merchant = world.character(hero).placement().position;
+    let slot = ShelfSlot::new(21).expect("shelf slot 21 is valid");
+    let scroll_cell = match world.buy(hero, ELF_LALA, slot, merchant) {
+        BuyOutcome::NewItem { at, .. } => at,
+        outcome @ (BuyOutcome::Merged { .. }
+        | BuyOutcome::OutOfRange
+        | BuyOutcome::UnknownShelfSlot
+        | BuyOutcome::InventoryFull
+        | BuyOutcome::InsufficientZen) => {
+            panic!("the funded, in-range scroll buy lands: {outcome:?}")
+        }
+    };
+    assert_eq!(world.character(hero).zen(), zen(250));
+    let bought = or_abort(
+        world
+            .inventory(hero)
+            .occupant(scroll_cell)
+            .ok_or("the bag holds the bought scroll"),
+    );
+    assert_eq!(
+        bought.item.item, TOWN_PORTAL,
+        "the shelf sold a real scroll"
+    );
+
+    // Walk into the Dungeon (the door's posted 20 is met) and buff up below.
+    assert!(matches!(
+        world.traverse_gate(hero),
+        EnterGateOutcome::Arrived { .. }
+    ));
+    assert_eq!(world.character(hero).placement().map, MapNumber(1));
+    let _buff = world.apply_buff_to(hero, ApplicableBuff::Defense, 30, Tick(10));
+    let vitals_before = world.character(hero).vitals();
+
+    // Read the scroll: home in Lorencia (the Dungeon's town), alive, buff and
+    // vitals intact, exactly one scroll consumed, the town in the persisted
+    // discovered set.
+    match world.use_town_portal(hero, scroll_cell) {
+        TownPortalOutcome::Arrived { placement } => {
+            assert_eq!(placement.map, MapNumber(0), "Lorencia, the Dungeon's town");
+            assert_eq!(world.character(hero).placement(), placement);
+        }
+        outcome @ (TownPortalOutcome::NotAlive | TownPortalOutcome::NoScroll) => {
+            panic!("a held scroll teleports: {outcome:?}")
+        }
+    }
+    let home = world.character(hero);
+    assert_eq!(home.life(), LifeState::Alive);
+    assert_eq!(home.vitals(), vitals_before, "no refill, no penalty");
+    assert!(
+        home.active_effects().defense().is_some(),
+        "the buff rode home"
+    );
+    assert!(home.discovered().contains(MapNumber(1)), "the field kept");
+    assert!(home.discovered().contains(MapNumber(0)), "the town held");
+    assert!(
+        world.inventory(hero).occupant(scroll_cell).is_none(),
+        "the single-use scroll left the bag — no zero-count ghost"
+    );
+}
+
+#[test]
+fn scroll_rejections_consume_nothing() {
+    let mut world = World::new(35, MapNumber(0));
+    let hero = world.seat_character(dark_knight(60, 150, tile(10, 10)));
+
+    // An empty cell is refused NoScroll.
+    assert_eq!(
+        world.use_town_portal(hero, cell(0, 0)),
+        TownPortalOutcome::NoScroll
+    );
+
+    // Hold a scroll, then die: the dead hero's scroll does nothing and the
+    // persisted stack is whole.
+    let scroll = item_instance(world.atlas(), TOWN_PORTAL);
+    let footprint = footprint_of(world.atlas(), TOWN_PORTAL);
+    let anchor = or_abort(
+        world
+            .inventory(hero)
+            .first_fit(footprint)
+            .ok_or("the empty bag fits a scroll"),
+    );
+    assert!(matches!(
+        world.place_in_bag(hero, scroll, footprint, anchor),
+        PlaceOutcome::Placed { .. }
+    ));
+    let _events = world.resolve_player_death(hero, Tick(100));
+    assert!(matches!(
+        world.character(hero).life(),
+        LifeState::Dead { .. }
+    ));
+    assert_eq!(
+        world.use_town_portal(hero, anchor),
+        TownPortalOutcome::NotAlive
+    );
+    assert!(
+        world.inventory(hero).occupant(anchor).is_some(),
+        "the scroll is whole"
+    );
+}
+
+#[test]
+fn the_menu_and_the_command_agree_for_the_persisted_character() {
+    let mut world = World::new(36, MapNumber(0));
+    // A novice with a thin wallet: every one of the 13 entries is locked for
+    // at least one reason, so sweeping the whole menu through the command
+    // leaves the world unmoved while proving the two readers share one rule.
+    let hero = world.seat_character(dark_knight(15, 150, tile(10, 10)));
+    world.set_wallet(hero, zen(100));
+
+    let menu = world.warp_menu(hero);
+    assert_eq!(menu.len(), 13, "one status per surviving entry");
+    for status in menu {
+        let reasons = match status.availability {
+            WarpAvailability::Locked { reasons } => reasons,
+            WarpAvailability::Available => panic!("a broke novice opens no entry"),
+        };
+        let outcome = world.warp(hero, status.index);
+        let member = match outcome {
+            WarpTravelOutcome::NotDiscovered => {
+                reasons.iter().any(|r| *r == WarpLockReason::NotDiscovered)
+            }
+            WarpTravelOutcome::LevelTooLow { required } => reasons
+                .iter()
+                .any(|r| *r == WarpLockReason::LevelTooLow { required }),
+            WarpTravelOutcome::NotEnoughZen { required, .. } => reasons
+                .iter()
+                .any(|r| *r == WarpLockReason::InsufficientZen { cost: required }),
+            WarpTravelOutcome::Arrived { .. }
+            | WarpTravelOutcome::NotAlive
+            | WarpTravelOutcome::NoWalkableLanding => false,
+        };
+        assert!(
+            member,
+            "entry {:?}: the command's {outcome:?} is in the projected lock set",
+            status.index
+        );
+    }
+    assert_eq!(
+        world.character(hero).zen(),
+        zen(100),
+        "no locked entry charged the persisted wallet"
+    );
+}
+
 // --- The canonical golden path: one identity + one wallet, front to back. ----
 
 /// Farms the first kill of the golden path (BEATS 1-5): spawns a fightable mob at
@@ -2640,6 +3008,13 @@ fn a_full_session_plays_start_to_finish_with_sensible_state_at_every_beat() {
     // live heroes and a shared kill); the full party flow — form, share one kill's
     // exp, disband — is proven front-to-back in
     // `a_full_party_flow_forms_shares_a_kill_and_disbands` in the Party section below.
+    // Travel likewise does not compose here (warping the hero off Lorencia would
+    // strand it away from the mob corridor and the merchant that the later beats
+    // thread through); the full travel flow — discovery lock, the walk-in unlock,
+    // the fee-debited menu warp, and the scroll home — is proven front-to-back in
+    // `discovery_locks_the_menu_until_a_walk_in_and_the_menu_warp_returns` and
+    // `a_bought_town_portal_scroll_carries_the_hero_home_with_everything_kept`
+    // in the Warp/travel section above.
     let played = (0u64..1024).any(|seed| play_full_session(seed).is_some());
     assert!(
         played,

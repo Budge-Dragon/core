@@ -574,6 +574,9 @@ fn respawn_sends_a_map_10_icarus_death_down_to_lost_tower_gate_42() {
     );
     assert_eq!(revived.life(), LifeState::Alive);
     assert_eq!(respawned.map(|r| r.map), Some(MapNumber(4)));
+    // The cross-map respawn discovers Lost Tower alongside the Icarus origin.
+    assert!(revived.discovered().contains(MapNumber(4)));
+    assert!(revived.discovered().contains(MapNumber(10)));
 }
 
 #[test]
@@ -606,6 +609,10 @@ fn respawn_sends_a_map_9_devil_square_death_out_to_noria_not_the_arena() {
         "not seated back inside Devil Square's own gate 58"
     );
     assert_eq!(respawned.map(|r| r.map), Some(MapNumber(3)));
+    // Arrival is arrival: waking up in unfamiliar Noria discovers it, and the
+    // died-on map stays a member.
+    assert!(revived.discovered().contains(MapNumber(3)));
+    assert!(revived.discovered().contains(MapNumber(9)));
 }
 
 #[test]
@@ -632,6 +639,8 @@ fn respawn_seats_a_map_2_devias_death_in_devias_unchanged() {
         gate_rect(197, 35, 218, 50),
     );
     assert_eq!(respawned.map(|r| r.map), Some(MapNumber(2)));
+    // A same-map respawn discovers nothing new — the insert is idempotent.
+    assert_eq!(revived.discovered(), hero.discovered());
 }
 
 #[test]
@@ -727,7 +736,7 @@ fn respawn_on_a_map_outside_the_eleven_falls_back_to_lorencia() {
         dead(1),
     );
     assert!(
-        atlas.respawn_gate_for_death_map(MapNumber(200)).is_none(),
+        atlas.town_gate_for_map(MapNumber(200)).is_none(),
         "map 200 has no respawn destination"
     );
 
@@ -972,5 +981,6 @@ fn every_gated_map_resolves_a_walkable_respawn_gate_over_real_data() {
             assert!(grid.walkable(landing), "map {map} landing tile is walkable");
         }
     }
-    assert_eq!(atlas.fallback_spawn_gate().map, MapNumber(0));
+    let (fallback, _env) = atlas.fallback_town_gate();
+    assert_eq!(fallback.map, MapNumber(0));
 }

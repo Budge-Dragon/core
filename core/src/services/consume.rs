@@ -80,22 +80,35 @@ fn refuse(
     )
 }
 
-/// The consume effect of the item covering `cell`, or the refusal a wrong cell
-/// or a non-consumable earns. An occupant the atlas cannot identify is nothing
-/// this service can drink — the equip/sell services' unknown-occupant fold.
-fn resolve_effect(
+/// What the item covering a cell is to a consuming service: nothing at all, a
+/// non-consumable, or a consumable's classified effect. The single source of
+/// item-consume identity, shared with the travel service so the two agree on
+/// what (for instance) a town-portal scroll is.
+pub(crate) enum ConsumeLookup {
+    /// No item covers the cell.
+    Empty,
+    /// The covering item is not a consumable (or the atlas cannot identify it).
+    NotConsumable,
+    /// The covering item is a consumable with this classified effect.
+    Effect(ConsumeEffect),
+}
+
+/// Classifies the item covering `cell` for consumption. An occupant the atlas
+/// cannot identify is nothing any consuming service can use — the equip/sell
+/// services' unknown-occupant fold.
+pub(crate) fn item_consume_effect(
     inventory: &Inventory,
     cell: Cell,
     atlas: &Atlas,
-) -> Result<ConsumeEffect, ConsumeRejection> {
+) -> ConsumeLookup {
     let Some(occupant) = inventory.occupant(cell) else {
-        return Err(ConsumeRejection::NoItem);
+        return ConsumeLookup::Empty;
     };
     let Some(def) = atlas.item(occupant.item.item) else {
-        return Err(ConsumeRejection::NotConsumable);
+        return ConsumeLookup::NotConsumable;
     };
     match &def.kind {
-        ItemKind::Consumable { effect } => Ok(*effect),
+        ItemKind::Consumable { effect } => ConsumeLookup::Effect(*effect),
         ItemKind::Weapon { .. }
         | ItemKind::Bow { .. }
         | ItemKind::Crossbow { .. }
@@ -119,7 +132,22 @@ fn resolve_effect(
         | ItemKind::LuckyBox
         | ItemKind::EventTicket { .. }
         | ItemKind::MixMaterial
-        | ItemKind::StatFruit => Err(ConsumeRejection::NotConsumable),
+        | ItemKind::StatFruit => ConsumeLookup::NotConsumable,
+    }
+}
+
+/// The consume effect of the item covering `cell`, or the refusal a wrong cell
+/// or a non-consumable earns — the shared lookup folded onto this service's
+/// own rejection roster.
+fn resolve_effect(
+    inventory: &Inventory,
+    cell: Cell,
+    atlas: &Atlas,
+) -> Result<ConsumeEffect, ConsumeRejection> {
+    match item_consume_effect(inventory, cell, atlas) {
+        ConsumeLookup::Empty => Err(ConsumeRejection::NoItem),
+        ConsumeLookup::NotConsumable => Err(ConsumeRejection::NotConsumable),
+        ConsumeLookup::Effect(effect) => Ok(effect),
     }
 }
 

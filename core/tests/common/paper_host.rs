@@ -49,6 +49,7 @@ use mu_core::components::units::{
 use mu_core::data::atlas::Atlas;
 use mu_core::data::common::{MonsterNumber, SkillNumber};
 use mu_core::data::effects::Ailment;
+use mu_core::data::gates_warps::WarpIndex;
 use mu_core::data::item_definitions::ItemKind;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
@@ -75,6 +76,9 @@ use mu_core::events::progression::GrowthEvent;
 use mu_core::events::shop::{BuyOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
+use mu_core::events::travel::{
+    EnterGateOutcome, TownPortalOutcome, WarpEntryStatus, WarpTravelOutcome,
+};
 use mu_core::services::combat::resolve_attack;
 use mu_core::services::consume::use_consumable;
 use mu_core::services::death::{resolve_death, respawn};
@@ -97,6 +101,7 @@ use mu_core::services::trade::{
     AcceptOutcome, Holdings, LockResult, RequestOutcome, TradeAvailability, accept, cancel, lock,
     offer_item, offer_zen, request,
 };
+use mu_core::services::travel::{resolve_warp, traverse_enter_gate, use_town_portal, warp_menu};
 
 pub use dataset::or_abort;
 use dataset::{real_atlas, real_static_data};
@@ -1080,6 +1085,93 @@ impl World {
         events
     }
 
+    /// Executes the warp-menu command for the character at `char_index` (the
+    /// W-WARP seam): the host-parsed menu `index` resolves to its atlas-proven
+    /// `WarpView` (an unknown index is a host parse failure core never sees —
+    /// `or_abort` here), the real [`resolve_warp`] decides, and the returned
+    /// character — debited wallet, sampled placement, grown discovered set —
+    /// is written back *through* the persist seam. No discovery, level,
+    /// fraction, or fee rule is authored host-side. Returns the outcome.
+    pub fn warp(&mut self, char_index: usize, index: WarpIndex) -> WarpTravelOutcome {
+        let character = self.character(char_index).clone();
+        let entry = or_abort(self.atlas.warp_by_index(index).ok_or("unknown warp index"));
+        let (moved, outcome) = resolve_warp(&character, entry, &self.atlas, &mut self.rng);
+        let persisted = persist(moved);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        outcome
+    }
+
+    /// The warp-menu availability projection for the character at `char_index`
+    /// — the pure [`warp_menu`] query over the live character and the held
+    /// atlas. Reads only; nothing to persist.
+    #[must_use]
+    pub fn warp_menu(&self, char_index: usize) -> Vec<WarpEntryStatus> {
+        warp_menu(self.character(char_index), &self.atlas)
+    }
+
+    /// Walks the character at `char_index` through the enter gate whose
+    /// trigger covers its own position (the W-WARP seam): the host's
+    /// positional trigger query resolves the gate view — a character standing
+    /// on no trigger is a host dispatch failure, `or_abort` here — and the
+    /// real [`traverse_enter_gate`] decides. The returned character (new map,
+    /// grown discovered set) is written back *through* the persist seam.
+    pub fn traverse_gate(&mut self, char_index: usize) -> EnterGateOutcome {
+        let character = self.character(char_index).clone();
+        let placement = character.placement();
+        let gate = or_abort(
+            self.atlas
+                .enter_gate_at(placement.map, placement.position)
+                .ok_or("no enter gate trigger covers the traveler"),
+        );
+        let (moved, outcome) = traverse_enter_gate(&character, gate, &self.atlas, &mut self.rng);
+        let persisted = persist(moved);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        outcome
+    }
+
+    /// Reads the Town Portal Scroll covering `cell` in the bag of the
+    /// character at `char_index` (the W-WARP seam): the real
+    /// [`use_town_portal`] decides — scroll identity, the single-piece
+    /// consume, the town-gate landing — and BOTH the returned character and
+    /// bag are written back *through* the persist seam. Returns the outcome.
+    pub fn use_town_portal(&mut self, char_index: usize, cell: Cell) -> TownPortalOutcome {
+        let character = self.character(char_index).clone();
+        let inventory = self.inventory(char_index).clone();
+        let (moved, new_inventory, outcome) =
+            use_town_portal(&character, inventory, cell, &self.atlas, &mut self.rng);
+        let persisted = persist(moved);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        self.store_inventory(char_index, new_inventory);
+        outcome
+    }
+
+    /// Re-seats the character at `char_index` on tile `at` of its current map
+    /// — the persist seam in the load direction for position (the
+    /// [`Self::set_wallet`] twin): a host loading a saved character restores
+    /// where it stood. Same-map only by construction (the map rides along
+    /// unchanged), so the current-map discovery invariant re-proves on load.
+    pub fn place_at(&mut self, char_index: usize, at: TileCoord) {
+        let mut placement = self.character(char_index).placement();
+        placement.position = at.to_world();
+        let value = or_abort(serde_json::to_value(placement));
+        self.persist_character_with(char_index, "placement", value);
+    }
+
     /// Sells the item covering `cell` from the bag of the character at
     /// `char_index` to any merchant at `merchant_pos` (seam 2/8): reads the
     /// character's wallet and placement (range gate), runs [`sell`] over the held
@@ -1738,6 +1830,29 @@ pub fn dark_knight(level: u16, strength: u16, at: TileCoord) -> Character {
             "health": {"current": 500, "max": 500},
             "mana": {"current": 400, "max": 400},
             "ability": {"current": 400, "max": 400}
+        }
+    });
+    or_abort(serde_json::from_value(json))
+}
+
+/// A plausible gearless Magic Gladiator at the given level and tile — the
+/// class whose 2/3 warp fraction the travel scenarios exercise — built the
+/// only way a character can be, by deserialising its wire form.
+#[must_use]
+pub fn magic_gladiator(level: u16, at: TileCoord) -> Character {
+    let position = or_abort(serde_json::to_value(at.to_world()));
+    let json = serde_json::json!({
+        "class": "magic_gladiator",
+        "level": level,
+        "experience": 0,
+        "stats": {"kind": "standard", "strength": 90, "agility": 60, "vitality": 60, "energy": 60},
+        "unspent_points": 0,
+        "zen": 0,
+        "placement": {"position": position, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
+        "vitals": {
+            "health": {"current": 400, "max": 400},
+            "mana": {"current": 300, "max": 300},
+            "ability": {"current": 300, "max": 300}
         }
     });
     or_abort(serde_json::from_value(json))

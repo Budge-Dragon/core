@@ -102,7 +102,7 @@ macro_rules! static_data {
     () => {
         StaticData {
             maps: load!(MapDefinition, "map_definitions", 11),
-            gates_warps: load!(GateWarpRecord, "gates_warps", 71),
+            gates_warps: load!(GateWarpRecord, "gates_warps", 70),
             monsters: load!(MonsterDefinition, "monster_definitions", 100),
             spawns: load!(Spawn, "spawns", 1847),
             skills: load!(Skill, "skills", 51),
@@ -126,7 +126,7 @@ fn every_v2_file_parses_with_expected_record_count() {
     // all thirteen files deserialize into their record types.
     let data = static_data!();
     assert_eq!(data.maps.records.len(), 11);
-    assert_eq!(data.gates_warps.records.len(), 71);
+    assert_eq!(data.gates_warps.records.len(), 70);
     assert_eq!(data.monsters.records.len(), 100);
     assert_eq!(data.spawns.records.len(), 1847);
     assert_eq!(data.skills.records.len(), 51);
@@ -195,11 +195,14 @@ fn game_config_and_special_drops_build_from_real_data() {
 fn atlas_resolves_the_whole_real_dataset() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     assert_eq!(atlas.maps().count(), 11);
-    // 71 gate/warp records include exactly 14 warp entries.
-    assert_eq!(atlas.warps().count(), 14);
-    // Lorencia's spawn gate is proven present by construction.
-    let fallback = atlas.fallback_spawn_gate();
+    // 70 gate/warp records include exactly 13 warp entries (Arena warp
+    // index 1 is producer-excluded at the generator).
+    assert_eq!(atlas.warps().count(), 13);
+    // Lorencia's town gate is proven present by construction, its environment
+    // read from Lorencia's own record.
+    let (fallback, env) = atlas.fallback_town_gate();
     assert_eq!(fallback.map.0, 0);
+    assert_eq!(env, MapEnvironment::Ground);
 }
 
 #[test]
@@ -242,7 +245,7 @@ fn every_death_map_resolves_a_destination_gate_spanning_the_town_set() {
     // destination (it redirects to Noria, map 3).
     let mut destinations = std::collections::BTreeSet::new();
     for map in 0u8..=10 {
-        let view = atlas.respawn_gate_for_death_map(MapNumber(map)).unwrap();
+        let (view, env) = atlas.town_gate_for_map(MapNumber(map)).unwrap();
         let grid = atlas.walk_grid(view.map).unwrap();
         for &landing in view.landing.iter() {
             assert!(
@@ -250,14 +253,22 @@ fn every_death_map_resolves_a_destination_gate_spanning_the_town_set() {
                 "map {map} destination landing walkable"
             );
         }
+        // The environment travels with the gate and is the destination town's
+        // own (Atlans respawns underwater, every other town on the ground) —
+        // never the died-on map's.
+        assert_eq!(
+            env,
+            atlas.map_handle(view.map).unwrap().definition().environment,
+            "map {map} town environment"
+        );
         destinations.insert(view.map.0);
     }
     assert_eq!(
         destinations,
         std::collections::BTreeSet::from([0u8, 2, 3, 4, 6, 7, 8])
     );
-    // An arbitrary map no record carries has no respawn destination.
-    assert!(atlas.respawn_gate_for_death_map(MapNumber(200)).is_none());
+    // An arbitrary map no record carries has no town destination.
+    assert!(atlas.town_gate_for_map(MapNumber(200)).is_none());
 }
 
 #[test]
@@ -835,7 +846,7 @@ fn every_real_warp_and_an_enter_gate_landing_resolve() {
             handle.definition().environment,
         );
     }
-    assert_eq!(warps, 14);
+    assert_eq!(warps, 13);
 
     let enter = first_enter_gate_landing(&atlas).expect("the dataset has an enter gate");
     let handle = atlas.map_handle(enter.map).unwrap();

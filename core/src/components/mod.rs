@@ -9,6 +9,7 @@ pub mod bonus;
 pub mod class;
 pub mod collections;
 pub mod combat_profile;
+pub mod discovered_maps;
 pub mod element;
 pub mod equipment;
 pub mod interval;

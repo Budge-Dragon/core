@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
+use crate::components::discovered_maps::DiscoveredMaps;
 use crate::components::life::LifeState;
 use crate::components::placement::Placement;
 use crate::components::stats::Stats;
-use crate::components::units::{CarriedZen, Exp, Level};
+use crate::components::units::{CarriedZen, Exp, Level, MapNumber};
 use crate::components::vitals::Vitals;
 
 /// A live player character. Private fields: construction (serde or otherwise)
@@ -31,6 +32,7 @@ pub struct Character {
     vitals: Vitals,
     active_effects: ActiveEffects,
     life: LifeState,
+    discovered: DiscoveredMaps,
 }
 
 /// Wire mirror of [`Character`]. The invariant gate re-proves on the way in,
@@ -55,6 +57,13 @@ struct RawCharacter {
     /// (`Alive`), not a fabricated default.
     #[serde(default = "LifeState::alive")]
     life: LifeState,
+    /// A record that predates map discovery carries no set at all; the gate
+    /// seeds `{placement.map}`, the real "no discoveries recorded yet" value.
+    /// `Option` rather than an empty default because a *present* set must
+    /// contain the placement map or the record is rejected — absence and
+    /// present-but-empty are different answers.
+    #[serde(default)]
+    discovered: Option<DiscoveredMaps>,
 }
 
 impl TryFrom<RawCharacter> for Character {
@@ -62,25 +71,38 @@ impl TryFrom<RawCharacter> for Character {
 
     fn try_from(raw: RawCharacter) -> Result<Self, Self::Error> {
         match (raw.class.has_command(), raw.stats) {
-            (true, Stats::WithCommand { .. }) | (false, Stats::Standard { .. }) => Ok(Self {
-                class: raw.class,
-                level: raw.level,
-                experience: raw.experience,
-                stats: raw.stats,
-                unspent_points: raw.unspent_points,
-                zen: raw.zen,
-                placement: raw.placement,
-                vitals: raw.vitals,
-                active_effects: raw.active_effects,
-                life: raw.life,
-            }),
+            (true, Stats::WithCommand { .. }) | (false, Stats::Standard { .. }) => {}
             (true, Stats::Standard { .. }) => {
-                Err(CharacterError::StandardStatsOnCommandClass(raw.class))
+                return Err(CharacterError::StandardStatsOnCommandClass(raw.class));
             }
             (false, Stats::WithCommand { .. }) => {
-                Err(CharacterError::CommandStatsOutsideCommandClass(raw.class))
+                return Err(CharacterError::CommandStatsOutsideCommandClass(raw.class));
             }
         }
+        let discovered = match raw.discovered {
+            None => DiscoveredMaps::single(raw.placement.map),
+            Some(set) => {
+                if !set.contains(raw.placement.map) {
+                    return Err(CharacterError::DiscoveredMissingCurrentMap {
+                        map: raw.placement.map,
+                    });
+                }
+                set
+            }
+        };
+        Ok(Self {
+            class: raw.class,
+            level: raw.level,
+            experience: raw.experience,
+            stats: raw.stats,
+            unspent_points: raw.unspent_points,
+            zen: raw.zen,
+            placement: raw.placement,
+            vitals: raw.vitals,
+            active_effects: raw.active_effects,
+            life: raw.life,
+            discovered,
+        })
     }
 }
 
@@ -97,6 +119,7 @@ impl From<Character> for RawCharacter {
             vitals: character.vitals,
             active_effects: character.active_effects,
             life: character.life,
+            discovered: Some(character.discovered),
         }
     }
 }
@@ -162,6 +185,13 @@ impl Character {
         self.life
     }
 
+    /// The maps the character has discovered by arriving on them. Always
+    /// contains the current placement map, by construction.
+    #[must_use]
+    pub fn discovered(&self) -> &DiscoveredMaps {
+        &self.discovered
+    }
+
     /// This character with its leveling scalars advanced; every other field —
     /// class, stats, zen, placement, vitals, active effects — carried unchanged.
     pub(crate) fn with_progress(
@@ -215,24 +245,36 @@ impl Character {
         }
     }
 
-    /// This character with its placement reseated; every other field carried
-    /// unchanged. Respawn reseats the town landing the gate resolved.
-    pub(crate) fn with_placement(&self, placement: Placement) -> Character {
+    /// This character arrived at `placement`: the placement is reseated AND
+    /// the destination map joins the discovered set in one move, so "arrive
+    /// without discovering" is unrepresentable. The shared writeback every
+    /// map-crossing funnels through — warp, enter-gate traversal, respawn,
+    /// town portal. Idempotent on the set for a same-map arrival; every other
+    /// field carried unchanged.
+    pub(crate) fn arrived_at(&self, placement: Placement) -> Character {
         Character {
             placement,
+            discovered: self.discovered.inserted(placement.map),
             ..self.clone()
         }
     }
 }
 
-/// Rejection of a class-to-stats pairing that contradicts the command-class
-/// rule, at construction or the data-load boundary.
+/// Rejection of a record that contradicts a character invariant — the
+/// class-to-stats command pairing, or a discovered set missing the map the
+/// character stands on — at construction or the data-load boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CharacterError {
     /// Command stats on a class that does not train command.
     CommandStatsOutsideCommandClass(CharacterClass),
     /// Standard stats on a command class, which must train command.
     StandardStatsOnCommandClass(CharacterClass),
+    /// A present discovered set that does not contain the placement map — a
+    /// character standing on an undiscovered map is unrepresentable.
+    DiscoveredMissingCurrentMap {
+        /// The placement map the set fails to contain.
+        map: MapNumber,
+    },
 }
 
 impl core::fmt::Display for CharacterError {
@@ -243,6 +285,9 @@ impl core::fmt::Display for CharacterError {
             }
             Self::StandardStatsOnCommandClass(class) => {
                 write!(f, "standard stats on command class {class:?}")
+            }
+            Self::DiscoveredMissingCurrentMap { map } => {
+                write!(f, "discovered set does not contain the current map {map:?}")
             }
         }
     }
@@ -288,6 +333,7 @@ mod tests {
             vitals: vitals(),
             active_effects: ActiveEffects::EMPTY,
             life: LifeState::Alive,
+            discovered: None,
         }
     }
 
@@ -491,6 +537,7 @@ mod tests {
         assert_eq!(reseated.experience(), base.experience());
         assert_eq!(reseated.stats(), base.stats());
         assert_eq!(reseated.unspent_points(), base.unspent_points());
+        assert_eq!(reseated.discovered(), base.discovered());
         // Persist round-trip — the class↔stats gate re-proves on load.
         assert_eq!(
             serde_json::from_str::<Character>(&serde_json::to_string(reseated).unwrap()).unwrap(),
@@ -549,7 +596,7 @@ mod tests {
     }
 
     #[test]
-    fn with_placement_reseats_only_placement() {
+    fn arrived_at_reseats_placement_and_discovers() {
         let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
         let landing = Placement {
             position: TileCoord::new(174, 112).to_world(),
@@ -557,12 +604,90 @@ mod tests {
             movement: Movement::Grounded,
             map: MapNumber(3),
         };
-        let moved = character.with_placement(landing);
+        let moved = character.arrived_at(landing);
         assert_eq!(moved.placement(), landing);
-        assert_carries_all_but(&moved, &character);
+        // The destination map joined the set; the home map is still a member.
+        assert!(moved.discovered().contains(MapNumber(3)));
+        assert!(moved.discovered().contains(MapNumber(0)));
+        // Every other field is carried verbatim.
+        assert_eq!(moved.class(), character.class());
+        assert_eq!(moved.level(), character.level());
+        assert_eq!(moved.experience(), character.experience());
+        assert_eq!(moved.stats(), character.stats());
+        assert_eq!(moved.unspent_points(), character.unspent_points());
         assert_eq!(moved.life(), character.life());
         assert_eq!(moved.zen(), character.zen());
         assert_eq!(moved.vitals(), character.vitals());
         assert_eq!(moved.active_effects(), character.active_effects());
+        // Persist round-trip — the parse gates re-prove on load.
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(&moved).unwrap()).unwrap(),
+            moved
+        );
+    }
+
+    #[test]
+    fn arrived_at_the_current_map_is_idempotent_on_the_discovered_set() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let reseated = character.arrived_at(Placement {
+            position: TileCoord::new(174, 112).to_world(),
+            facing: Facing::POS_X,
+            movement: Movement::Grounded,
+            map: MapNumber(0),
+        });
+        assert_eq!(reseated.discovered(), character.discovered());
+        assert_eq!(reseated.placement().map, MapNumber(0));
+    }
+
+    #[test]
+    fn an_absent_discovered_field_seeds_the_placement_map() {
+        // The raw fixture carries no set (a legacy record); the gate seeds
+        // exactly {placement.map}.
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        assert_eq!(
+            *character.discovered(),
+            DiscoveredMaps::single(MapNumber(0))
+        );
+
+        // The same absence on the wire: a persisted record that omits the
+        // field still parses and seeds its own map.
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("discovered");
+        let legacy: Character = serde_json::from_value(value).unwrap();
+        assert_eq!(*legacy.discovered(), DiscoveredMaps::single(MapNumber(0)));
+    }
+
+    #[test]
+    fn a_present_discovered_set_missing_the_current_map_fails_to_parse() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+        // Present but not containing the placement map (0) — rejected; an
+        // empty array is the same "present but not containing" refusal.
+        for corrupted in [serde_json::json!([3, 4]), serde_json::json!([])] {
+            value["discovered"] = corrupted;
+            assert!(serde_json::from_value::<Character>(value.clone()).is_err());
+        }
+    }
+
+    #[test]
+    fn a_present_discovered_set_containing_the_current_map_round_trips() {
+        let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&character).unwrap()).unwrap();
+        value["discovered"] = serde_json::json!([0, 2, 4]);
+        let traveled: Character = serde_json::from_value(value).unwrap();
+        assert_eq!(
+            *traveled.discovered(),
+            DiscoveredMaps::single(MapNumber(0))
+                .inserted(MapNumber(2))
+                .inserted(MapNumber(4))
+        );
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(&traveled).unwrap()).unwrap(),
+            traveled
+        );
     }
 }

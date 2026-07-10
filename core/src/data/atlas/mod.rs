@@ -24,7 +24,7 @@ use crate::data::exp_tables::{ExpCurve, ExpTable, ExpTableError};
 use crate::data::game_config::{GameConfig, ProgressionConfig};
 use crate::data::gates_warps::{GateWarpRecord, Warp, WarpIndex};
 use crate::data::item_definitions::ItemDefinition;
-use crate::data::map_definitions::MapDefinition;
+use crate::data::map_definitions::{MapDefinition, MapEnvironment};
 use crate::data::monster_definitions::MonsterDefinition;
 use crate::data::npc_shops::{MerchantShop, ShelfSlot};
 use crate::data::skills::Skill;
@@ -101,6 +101,7 @@ pub struct Atlas {
     enter_gates_by_map: BTreeMap<MapNumber, Vec<ResolvedEnterGate>>,
     warps: Vec<(Warp, Landing)>,
     fallback: ResolvedSpawnGate,
+    fallback_env: MapEnvironment,
     walk_grids: BTreeMap<MapNumber, WalkGrid>,
     items: BTreeMap<ItemRef, ItemDefinition>,
     monsters: BTreeMap<MonsterNumber, MonsterDefinition>,
@@ -175,6 +176,13 @@ impl Atlas {
             .get(&FALLBACK_MAP)
             .cloned()
             .ok_or(AtlasError::FallbackSpawnGateMissing)?;
+        // A gate resolves only on a known map, so the fallback gate's presence
+        // proves the fallback map record exists; the `ok_or` keeps the read
+        // total without a suppressor.
+        let fallback_env = maps
+            .get(&FALLBACK_MAP)
+            .map(|definition| definition.environment)
+            .ok_or(AtlasError::FallbackSpawnGateMissing)?;
         check_respawn_destinations(&maps, &respawn_gate_by_map)?;
 
         Ok(Self {
@@ -184,6 +192,7 @@ impl Atlas {
             enter_gates_by_map,
             warps,
             fallback,
+            fallback_env,
             walk_grids,
             items,
             monsters,
@@ -247,10 +256,11 @@ impl Atlas {
     /// A map's own first spawn gate — the first gate in file order, its walkable
     /// landing set proven non-empty at parse; `None` for a map that carries no
     /// spawn gate. This is the gated-map walkability invariant's view (every
-    /// gate-owning map resolves a walkable first gate); the respawn service
-    /// reaches a destination through [`respawn_gate_for_death_map`](Self::respawn_gate_for_death_map),
-    /// not here. A map's later gates are travel-landing targets resolved through
-    /// the warp/enter-gate path, not respawn points, so they are not exposed here.
+    /// gate-owning map resolves a walkable first gate); the respawn and
+    /// town-portal services reach a destination through
+    /// [`town_gate_for_map`](Self::town_gate_for_map), not here. A map's later
+    /// gates are travel-landing targets resolved through the warp/enter-gate
+    /// path, not respawn points, so they are not exposed here.
     #[must_use]
     pub fn spawn_gate(&self, map: MapNumber) -> Option<SpawnGateView<'_>> {
         self.respawn_gate_by_map
@@ -258,27 +268,31 @@ impl Atlas {
             .map(ResolvedSpawnGate::view)
     }
 
-    /// The respawn destination gate for a death on `map` — a two-hop read over
+    /// The town destination gate for `map` — a two-hop read over
     /// already-retained state: the map's `respawn_map` town (the map itself, an
     /// override town, or Lorencia), then that town's own spawn gate, its walkable
-    /// landing proven non-empty at parse. Total over the map set: parse proves
-    /// every one of the 11 maps names a gate-owning town, so for a known `map`
-    /// the second hop always resolves. `None` for a `MapNumber` no record carries
-    /// — honest optionality of an arbitrary `Placement.map`, where respawn falls
-    /// back to Lorencia.
+    /// landing proven non-empty at parse — paired with the town's own traversal
+    /// environment. Total over the map set: parse proves every one of the 11
+    /// maps names a gate-owning town, so for a known `map` the hops always
+    /// resolve. `None` for a `MapNumber` no record carries — honest optionality
+    /// of an arbitrary `Placement.map`, where respawn and town portal fall back
+    /// to Lorencia. Shared by the death respawn and the Town Portal Scroll.
     #[must_use]
-    pub fn respawn_gate_for_death_map(&self, map: MapNumber) -> Option<SpawnGateView<'_>> {
+    pub fn town_gate_for_map(&self, map: MapNumber) -> Option<(SpawnGateView<'_>, MapEnvironment)> {
         let respawn_map = self.maps.get(&map)?.respawn_map;
-        self.respawn_gate_by_map
+        let gate = self
+            .respawn_gate_by_map
             .get(&respawn_map)
-            .map(ResolvedSpawnGate::view)
+            .map(ResolvedSpawnGate::view)?;
+        let env = self.maps.get(&respawn_map)?.environment;
+        Some((gate, env))
     }
 
-    /// The fallback spawn gate on Lorencia, its walkable landing resolved at
-    /// parse — presence proven by `parse`.
+    /// The fallback town gate on Lorencia with its environment, both resolved
+    /// at parse — presence proven by `parse`.
     #[must_use]
-    pub fn fallback_spawn_gate(&self) -> SpawnGateView<'_> {
-        self.fallback.view()
+    pub fn fallback_town_gate(&self) -> (SpawnGateView<'_>, MapEnvironment) {
+        (self.fallback.view(), self.fallback_env)
     }
 
     /// The enter gate whose world trigger area covers a position, if any. The
@@ -310,6 +324,20 @@ impl Atlas {
             warp,
             landing: *landing,
         })
+    }
+
+    /// The warp entry carrying `index`; `None` when no entry does — genuine
+    /// optionality of an open menu index, the host's parse boundary for a
+    /// client-claimed warp pick.
+    #[must_use]
+    pub fn warp_by_index(&self, index: WarpIndex) -> Option<WarpView<'_>> {
+        self.warps
+            .iter()
+            .find(|(warp, _)| warp.index == index)
+            .map(|(warp, landing)| WarpView {
+                warp,
+                landing: *landing,
+            })
     }
 
     /// The item definition for an identity; `None` when no record carries it —
