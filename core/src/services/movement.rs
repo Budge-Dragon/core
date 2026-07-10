@@ -2,11 +2,14 @@
 //! an entity crosses the ground plane. Flight-mode changes gate on host-supplied
 //! eligibility facts then transition; grounded/flying steps resolve a greedy
 //! seek-with-arrival move against the walk grid; warp/gate arrivals pick a
-//! walkable landing tile. Every outcome is a returned event value.
+//! walkable landing tile; spawn-gate landings seat a traveler on a town gate's
+//! parse-proven walkable set. Every outcome is a returned event value.
 //!
-//! Determinism: only [`resolve_arrival`] draws randomness — exactly one word
-//! (the landing-tile pick) when the area has a walkable tile, none otherwise —
-//! routed through [`crate::services::chance`]. The other functions draw nothing.
+//! Determinism: only the two landing primitives draw randomness —
+//! [`resolve_arrival`] exactly one word (the landing-tile pick) when the area
+//! has a walkable tile and none otherwise, [`resolve_spawn_gate_landing`]
+//! always exactly one — routed through [`crate::services::chance`]. The other
+//! functions draw nothing.
 
 use rand_core::RngCore;
 
@@ -15,10 +18,16 @@ use crate::components::movement::{CombatLock, FlightChange, Movement, Wings};
 use crate::components::placement::Placement;
 use crate::components::spatial::{Displacement, Facing, Fixed, WorldPos, WorldVec};
 use crate::components::tile::WalkGrid;
-use crate::data::atlas::Landing;
+use crate::data::atlas::{Landing, SpawnGateView};
 use crate::data::map_definitions::MapEnvironment;
 use crate::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
 use crate::services::chance::pick_one;
+
+/// The heading a spawn-gate landing seats when the gate carries no authored
+/// direction — the common MU spawn heading. An engineering pin; every real
+/// gate is direction-less today, so this is the facing every such landing
+/// produces.
+const DEFAULT_FACING: Facing = Facing::POS_Y;
 
 /// The eligibility decision made before a flight-mode transition.
 enum FlightGate {
@@ -221,6 +230,35 @@ pub fn resolve_arrival(
                 },
             }
         }
+    }
+}
+
+/// Seats a traveler on a spawn gate: one uniform pick over the gate's
+/// parse-proven non-empty walkable landing set — exactly one RNG draw, always
+/// total, never a no-landing case — facing the gate's authored direction or
+/// [`DEFAULT_FACING`], in the mode the destination environment forces (Sky →
+/// Flying, Ground/Underwater → Grounded). The town-arrival primitive the death
+/// respawn and the Town Portal Scroll share.
+#[must_use]
+pub fn resolve_spawn_gate_landing(
+    gate: SpawnGateView<'_>,
+    env: MapEnvironment,
+    rng: &mut impl RngCore,
+) -> Placement {
+    let position = *pick_one(gate.landing, rng);
+    let facing = match gate.facing {
+        Some(authored) => authored,
+        None => DEFAULT_FACING,
+    };
+    let movement = match env {
+        MapEnvironment::Sky => Movement::Flying,
+        MapEnvironment::Ground | MapEnvironment::Underwater => Movement::Grounded,
+    };
+    Placement {
+        position,
+        facing,
+        movement,
+        map: gate.map,
     }
 }
 
@@ -578,5 +616,66 @@ mod tests {
         assert_eq!(ra, rb);
         // One draw consumed: the next word still agrees.
         assert_eq!(a.next_u64(), b.next_u64());
+    }
+
+    fn gate_view(landing: &OneOrMore<WorldPos>, facing: Option<Facing>) -> SpawnGateView<'_> {
+        SpawnGateView {
+            map: MapNumber(4),
+            landing,
+            facing,
+        }
+    }
+
+    #[test]
+    fn spawn_gate_landing_is_total_and_seats_inside_the_retained_set() {
+        let tiles = OneOrMore::new(vec![
+            TileCoord::new(171, 108).to_world(),
+            TileCoord::new(172, 109).to_world(),
+            TileCoord::new(173, 110).to_world(),
+        ])
+        .unwrap();
+        let mut rng = TestRng::new(11);
+        let seated =
+            resolve_spawn_gate_landing(gate_view(&tiles, None), MapEnvironment::Ground, &mut rng);
+        assert!(tiles.iter().any(|&tile| tile == seated.position));
+        assert_eq!(seated.map, MapNumber(4));
+        assert_eq!(seated.facing, DEFAULT_FACING);
+        assert_eq!(seated.movement, Movement::Grounded);
+    }
+
+    #[test]
+    fn spawn_gate_landing_takes_the_authored_facing_and_the_forced_mode() {
+        let tiles = OneOrMore::new(vec![TileCoord::new(50, 50).to_world()]).unwrap();
+        let mut rng = TestRng::new(3);
+        let seated = resolve_spawn_gate_landing(
+            gate_view(&tiles, Some(Facing::NEG_X)),
+            MapEnvironment::Sky,
+            &mut rng,
+        );
+        assert_eq!(seated.facing, Facing::NEG_X);
+        assert_eq!(seated.movement, Movement::Flying);
+    }
+
+    #[test]
+    fn spawn_gate_landing_draws_exactly_one_word_and_is_deterministic() {
+        let tiles = OneOrMore::new(vec![
+            TileCoord::new(1, 1).to_world(),
+            TileCoord::new(2, 2).to_world(),
+        ])
+        .unwrap();
+        let mut a = TestRng::new(9);
+        let mut b = TestRng::new(9);
+        let sa =
+            resolve_spawn_gate_landing(gate_view(&tiles, None), MapEnvironment::Ground, &mut a);
+        let sb =
+            resolve_spawn_gate_landing(gate_view(&tiles, None), MapEnvironment::Ground, &mut b);
+        assert_eq!(sa, sb);
+        // One draw consumed: the next word still agrees.
+        assert_eq!(a.next_u64(), b.next_u64());
+    }
+
+    #[test]
+    fn the_default_spawn_facing_pin_holds() {
+        assert_eq!(DEFAULT_FACING, Facing::POS_Y);
     }
 }

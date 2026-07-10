@@ -39,6 +39,7 @@ use mu_core::components::tile::TileCoord;
 use mu_core::components::trade_window::{Side, TradeWindow};
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
 use mu_core::data::common::{ItemRef, MonsterNumber};
+use mu_core::data::gates_warps::WarpIndex;
 use mu_core::data::item_definitions::{ItemPrice, PerLevelPrice};
 use mu_core::data::special_drops::SpecialDrop;
 use mu_core::entities::character::Character;
@@ -66,6 +67,10 @@ use mu_core::events::spawn::SpawnEvent;
 use mu_core::events::trade::{
     BouncedProof, CancelReason, OfferOutcome, RearrangeOutcome, RequestRejection, SideFailure,
     TradeEvent, UnlockOutcome, WithdrawOutcome, ZenOfferOutcome,
+};
+use mu_core::events::travel::{
+    EnterGateOutcome, TownPortalOutcome, WarpAvailability, WarpEntryStatus, WarpLockReason,
+    WarpTravelOutcome,
 };
 use mu_core::services::inventory::ZenPickupOutcome;
 use mu_core::services::party;
@@ -611,6 +616,130 @@ fn warp_outcome_every_kind_tag_is_pinned() {
 }
 
 #[test]
+fn warp_travel_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        WarpTravelOutcome::Arrived {
+            placement: placement(),
+            balance: CarriedZen::new(5000).unwrap(),
+        },
+        WarpTravelOutcome::NotAlive,
+        WarpTravelOutcome::NotDiscovered,
+        WarpTravelOutcome::LevelTooLow { required: 33 },
+        WarpTravelOutcome::NotEnoughZen {
+            required: Zen(5000),
+            available: CarriedZen::new(4999).unwrap(),
+        },
+        WarpTravelOutcome::NoWalkableLanding,
+    ] {
+        let expected = match &outcome {
+            WarpTravelOutcome::Arrived { .. } => "arrived",
+            WarpTravelOutcome::NotAlive => "not_alive",
+            WarpTravelOutcome::NotDiscovered => "not_discovered",
+            WarpTravelOutcome::LevelTooLow { .. } => "level_too_low",
+            WarpTravelOutcome::NotEnoughZen { .. } => "not_enough_zen",
+            WarpTravelOutcome::NoWalkableLanding => "no_walkable_landing",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn warp_projection_wire_shapes_are_pinned() {
+    // Every WarpLockReason and WarpAvailability discriminator, plus the flat
+    // per-entry status shape the menu returns.
+    for reason in [
+        WarpLockReason::NotDiscovered,
+        WarpLockReason::LevelTooLow { required: 50 },
+        WarpLockReason::InsufficientZen { cost: Zen(5000) },
+    ] {
+        let expected = match &reason {
+            WarpLockReason::NotDiscovered => "not_discovered",
+            WarpLockReason::LevelTooLow { .. } => "level_too_low",
+            WarpLockReason::InsufficientZen { .. } => "insufficient_zen",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(reason).unwrap()),
+            Some(expected)
+        );
+    }
+    for availability in [
+        WarpAvailability::Available,
+        WarpAvailability::Locked {
+            reasons: OneOrMore::with_head(WarpLockReason::NotDiscovered, Vec::new()),
+        },
+    ] {
+        let expected = match &availability {
+            WarpAvailability::Available => "available",
+            WarpAvailability::Locked { .. } => "locked",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(availability).unwrap()),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        serde_json::to_string(&WarpEntryStatus {
+            index: WarpIndex(8),
+            availability: WarpAvailability::Locked {
+                reasons: OneOrMore::with_head(
+                    WarpLockReason::LevelTooLow { required: 33 },
+                    vec![WarpLockReason::InsufficientZen { cost: Zen(5000) }],
+                ),
+            },
+        })
+        .unwrap(),
+        r#"{"index":8,"availability":{"kind":"locked","reasons":[{"kind":"level_too_low","required":33},{"kind":"insufficient_zen","cost":5000}]}}"#
+    );
+}
+
+#[test]
+fn town_portal_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        TownPortalOutcome::Arrived {
+            placement: placement(),
+        },
+        TownPortalOutcome::NotAlive,
+        TownPortalOutcome::NoScroll,
+    ] {
+        let expected = match &outcome {
+            TownPortalOutcome::Arrived { .. } => "arrived",
+            TownPortalOutcome::NotAlive => "not_alive",
+            TownPortalOutcome::NoScroll => "no_scroll",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn enter_gate_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        EnterGateOutcome::Arrived {
+            placement: placement(),
+        },
+        EnterGateOutcome::NotAlive,
+        EnterGateOutcome::LevelTooLow { required: 40 },
+        EnterGateOutcome::NoWalkableLanding,
+    ] {
+        let expected = match &outcome {
+            EnterGateOutcome::Arrived { .. } => "arrived",
+            EnterGateOutcome::NotAlive => "not_alive",
+            EnterGateOutcome::LevelTooLow { .. } => "level_too_low",
+            EnterGateOutcome::NoWalkableLanding => "no_walkable_landing",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
 fn spawn_event_every_kind_tag_is_pinned() {
     let at = TileCoord::new(2, 3).to_world();
     for event in [
@@ -779,9 +908,34 @@ fn character_wire_is_pinned() {
     assert_eq!(
         serde_json::to_string(&character).unwrap(),
         format!(
-            r#"{{"class":"dark_knight","level":42,"experience":1234,"stats":{{"kind":"standard","strength":60,"agility":40,"vitality":50,"energy":30}},"unspent_points":15,"zen":250000,"placement":{PLACEMENT_JSON},"vitals":{{"health":{{"current":500,"max":500}},"mana":{{"current":200,"max":200}},"ability":{{"current":1,"max":1}}}},"active_effects":[],"life":{{"kind":"alive"}}}}"#
+            r#"{{"class":"dark_knight","level":42,"experience":1234,"stats":{{"kind":"standard","strength":60,"agility":40,"vitality":50,"energy":30}},"unspent_points":15,"zen":250000,"placement":{PLACEMENT_JSON},"vitals":{{"health":{{"current":500,"max":500}},"mana":{{"current":200,"max":200}},"ability":{{"current":1,"max":1}}}},"active_effects":[],"life":{{"kind":"alive"}},"discovered":[0]}}"#
         )
     );
+}
+
+#[test]
+fn character_multi_map_discovered_set_round_trips_as_bare_map_numbers() {
+    // A traveled character's persisted set is a flat, sorted array of bare map
+    // numbers, and the record re-loads through the current-map parse gate.
+    let character: Character = serde_json::from_value(serde_json::json!({
+        "class": "dark_knight",
+        "level": 60,
+        "experience": 1234,
+        "stats": {"kind": "standard", "strength": 60, "agility": 40, "vitality": 50, "energy": 30},
+        "unspent_points": 0,
+        "zen": 10_000,
+        "placement": serde_json::from_str::<serde_json::Value>(PLACEMENT_JSON).unwrap(),
+        "vitals": {
+            "health": {"current": 500, "max": 500},
+            "mana": {"current": 200, "max": 200},
+            "ability": {"current": 1, "max": 1}
+        },
+        "discovered": [4, 0, 2]
+    }))
+    .unwrap();
+    let json = serde_json::to_string(&character).unwrap();
+    assert!(json.ends_with(r#""discovered":[0,2,4]}"#), "{json}");
+    assert_eq!(serde_json::from_str::<Character>(&json).unwrap(), character);
 }
 
 #[test]

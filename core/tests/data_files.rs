@@ -198,9 +198,11 @@ fn atlas_resolves_the_whole_real_dataset() {
     // 70 gate/warp records include exactly 13 warp entries (Arena warp
     // index 1 is producer-excluded at the generator).
     assert_eq!(atlas.warps().count(), 13);
-    // Lorencia's spawn gate is proven present by construction.
-    let fallback = atlas.fallback_spawn_gate();
+    // Lorencia's town gate is proven present by construction, its environment
+    // read from Lorencia's own record.
+    let (fallback, env) = atlas.fallback_town_gate();
     assert_eq!(fallback.map.0, 0);
+    assert_eq!(env, MapEnvironment::Ground);
 }
 
 #[test]
@@ -243,7 +245,7 @@ fn every_death_map_resolves_a_destination_gate_spanning_the_town_set() {
     // destination (it redirects to Noria, map 3).
     let mut destinations = std::collections::BTreeSet::new();
     for map in 0u8..=10 {
-        let view = atlas.respawn_gate_for_death_map(MapNumber(map)).unwrap();
+        let (view, env) = atlas.town_gate_for_map(MapNumber(map)).unwrap();
         let grid = atlas.walk_grid(view.map).unwrap();
         for &landing in view.landing.iter() {
             assert!(
@@ -251,14 +253,22 @@ fn every_death_map_resolves_a_destination_gate_spanning_the_town_set() {
                 "map {map} destination landing walkable"
             );
         }
+        // The environment travels with the gate and is the destination town's
+        // own (Atlans respawns underwater, every other town on the ground) —
+        // never the died-on map's.
+        assert_eq!(
+            env,
+            atlas.map_handle(view.map).unwrap().definition().environment,
+            "map {map} town environment"
+        );
         destinations.insert(view.map.0);
     }
     assert_eq!(
         destinations,
         std::collections::BTreeSet::from([0u8, 2, 3, 4, 6, 7, 8])
     );
-    // An arbitrary map no record carries has no respawn destination.
-    assert!(atlas.respawn_gate_for_death_map(MapNumber(200)).is_none());
+    // An arbitrary map no record carries has no town destination.
+    assert!(atlas.town_gate_for_map(MapNumber(200)).is_none());
 }
 
 #[test]

@@ -6,20 +6,17 @@
 //! [`resolve_death`] draws **no** randomness — the penalty is pure integer ratio
 //! math floored at the current level's threshold, so it never de-levels — and is
 //! idempotent on an already-dead character. [`respawn`] draws exactly the landing
-//! sample: one uniform pick over the death map's respawn-destination gate's
-//! retained walkable set (else the Lorencia fallback), refills the three vitals to
-//! the class-formula maxima,
-//! clears every active effect, and returns the character alive. Both mirror the
+//! sample: one uniform pick over the death map's town gate's retained walkable
+//! set (else the Lorencia fallback), refills the three vitals to the
+//! class-formula maxima, clears every active effect, and returns the character
+//! alive on a now-discovered town. Both mirror the
 //! [`crate::services::experience::apply_experience`] writeback template.
 
 use rand_core::RngCore;
 
 use crate::components::active_effect::ActiveEffects;
 use crate::components::life::LifeState;
-use crate::components::movement::Movement;
-use crate::components::placement::Placement;
 use crate::components::pool::Pool;
-use crate::components::spatial::Facing;
 use crate::components::units::{
     CarriedZen, DebitOutcome, DurationMs, Exp, Level, Tick, TickDuration, Zen,
 };
@@ -27,18 +24,13 @@ use crate::components::vitals::Vitals;
 use crate::data::atlas::Atlas;
 use crate::entities::character::Character;
 use crate::events::death::{DeathEvent, Respawned};
-use crate::services::chance::pick_one;
+use crate::services::movement::resolve_spawn_gate_landing;
 use crate::services::profile::character_profile;
 use crate::services::ratio::{nonzero_u64, scale_ratio_u64};
 
 /// The dead beat before respawn — an OUR-pin, 3 seconds, converted to whole
 /// ticks against the host's tick base so no tick rate is baked in.
 const RESPAWN_DELAY_MS: DurationMs = DurationMs(3_000);
-
-/// The heading a respawn seats when its gate carries no authored direction —
-/// the common MU spawn heading. An engineering pin; every real gate is
-/// direction-less today, so this is the facing every respawn produces.
-const DEFAULT_FACING: Facing = Facing::POS_Y;
 
 /// Below this level a death is free — neither experience nor zen is docked.
 const PENALTY_FREE_BELOW_LEVEL: u16 = 10;
@@ -95,12 +87,14 @@ pub fn resolve_death(
 }
 
 /// The respawn step: seats a dead character back in town and returns it alive.
-/// Selects the death map's respawn-destination gate (its own town, an override
-/// town, or Lorencia), else the Lorencia fallback for a map outside the 11;
-/// samples one walkable landing tile from the gate's retained set; refills the three
-/// vitals to the class-formula maxima; clears every active effect. Draws exactly
-/// one random word — the landing pick. On an already-alive character it is a
-/// no-op that returns before touching the RNG, so the stream is untouched.
+/// Selects the death map's town gate (its own town, an override town, or
+/// Lorencia), else the Lorencia fallback for a map outside the 11; seats one
+/// walkable landing from the gate's retained set via the shared spawn-gate
+/// primitive; refills the three vitals to the class-formula maxima; clears
+/// every active effect; and — arrival being arrival — the respawn town joins
+/// the discovered set. Draws exactly one random word — the landing pick. On an
+/// already-alive character it is a no-op that returns before touching the RNG,
+/// so the stream is untouched.
 #[must_use]
 pub fn respawn(
     character: &Character,
@@ -110,16 +104,11 @@ pub fn respawn(
     match character.life() {
         LifeState::Alive => (character.clone(), None),
         LifeState::Dead { .. } => {
-            let gate = match atlas.respawn_gate_for_death_map(character.placement().map) {
-                Some(view) => view,
-                None => atlas.fallback_spawn_gate(),
+            let (gate, env) = match atlas.town_gate_for_map(character.placement().map) {
+                Some(destination) => destination,
+                None => atlas.fallback_town_gate(),
             };
-            let position = *pick_one(gate.landing, rng);
-            let facing = match gate.facing {
-                Some(authored) => authored,
-                None => DEFAULT_FACING,
-            };
-            let map = gate.map;
+            let placement = resolve_spawn_gate_landing(gate, env, rng);
 
             let (_profile, maxima) = character_profile(character);
             let refilled = Vitals {
@@ -129,12 +118,7 @@ pub fn respawn(
             };
 
             let revived = character
-                .with_placement(Placement {
-                    position,
-                    facing,
-                    movement: Movement::Grounded,
-                    map,
-                })
+                .arrived_at(placement)
                 .with_vitals(refilled)
                 .with_effects(ActiveEffects::EMPTY)
                 .with_life(LifeState::Alive);
@@ -142,9 +126,9 @@ pub fn respawn(
             (
                 revived,
                 Some(Respawned {
-                    map,
-                    position,
-                    facing,
+                    map: placement.map,
+                    position: placement.position,
+                    facing: placement.facing,
                 }),
             )
         }
@@ -299,7 +283,6 @@ mod tests {
 
     #[test]
     fn the_our_pins_hold_their_values() {
-        assert_eq!(DEFAULT_FACING, Facing::POS_Y);
         assert_eq!(RESPAWN_DELAY_MS, DurationMs(3_000));
     }
 }
