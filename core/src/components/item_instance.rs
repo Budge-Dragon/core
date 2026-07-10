@@ -12,7 +12,7 @@
 //! than a silent dupe. A rejected operation must therefore hand the item back
 //! through its outcome, never drop it.
 
-use core::num::{NonZeroU8, NonZeroU16};
+use core::num::{NonZeroU8, NonZeroU16, NonZeroU32};
 
 use serde::{Deserialize, Serialize};
 
@@ -585,15 +585,57 @@ impl core::fmt::Display for DinorantOptionSetError {
 
 impl core::error::Error for DinorantOptionSetError {}
 
+/// An item's persistent wear-progress ledger — the scaled-integer accumulator
+/// that carries the sub-durability-point remainder of combat wear across hits,
+/// sessions, and hosts, so a fractional per-event rate (HealthDamage/2000,
+/// 1 hit/10000, HealthDamage/100000) never floors to nothing and never
+/// silently drops between calls. Units follow the item's single wear path
+/// (damage for the defensive/pet pools, hits for the offensive pool); each
+/// worn item wears on exactly one path, so one ledger is unambiguous.
+/// `u32`-wide (the pet divisor 100000 exceeds `u16`). A fresh roll and a
+/// repaired item carry [`WearLedger::EMPTY`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct WearLedger(u32);
+
+impl WearLedger {
+    /// The empty ledger — a fresh roll's and a repaired item's real value.
+    pub const EMPTY: Self = Self(0);
+
+    /// Whether the ledger carries no progress — the outbound wire conversion
+    /// drops an empty ledger so shipped `{current, max}` forms stay
+    /// byte-identical.
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Advances by `amount` units at `divisor` units-per-point, splitting off
+    /// the whole durability points crossed: the returned ledger holds the
+    /// carried remainder (`< divisor`), the `u32` the points to subtract. Pure
+    /// modular arithmetic; the divisor is the wear path's constant supplied by
+    /// the service, so the ledger holds no rule of its own.
+    #[must_use]
+    pub fn advanced(self, amount: u32, divisor: NonZeroU32) -> (Self, u32) {
+        let total = self.0.saturating_add(amount);
+        (Self(total % divisor.get()), total / divisor.get())
+    }
+}
+
 /// Wire mirror of [`Durability`]; `current <= max` is re-proven on the way in,
-/// since a persisted value loaded from a host is untrusted.
+/// since a persisted value loaded from a host is untrusted. The wear ledger is
+/// skipped when empty, so every shipped `{current, max}` form stays
+/// byte-identical on the way out and still parses on the way in.
 #[derive(Serialize, Deserialize)]
 struct DurabilityWire {
     current: u8,
     max: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wear_progress: Option<WearLedger>,
 }
 
-/// An item's wear gauge — a dedicated `u8` proving the authentic 255 wire cap.
+/// An item's wear gauge — a dedicated `u8` proving the authentic 255 wire cap,
+/// plus the persisted [`WearLedger`] carrying sub-point combat-wear progress.
 /// The invariant `current <= max` holds by construction: [`Durability::new`]
 /// rejects an over-full gauge and [`Durability::full`] cannot produce one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -601,10 +643,12 @@ struct DurabilityWire {
 pub struct Durability {
     current: u8,
     max: u8,
+    wear_progress: WearLedger,
 }
 
 impl Durability {
-    /// Builds a durability gauge, rejecting a current value above the maximum.
+    /// Builds a durability gauge with an empty wear ledger, rejecting a
+    /// current value above the maximum.
     ///
     /// # Errors
     /// Returns [`DurabilityError::CurrentExceedsMax`] when `current > max`.
@@ -612,14 +656,23 @@ impl Durability {
         if current > max {
             return Err(DurabilityError::CurrentExceedsMax { current, max });
         }
-        Ok(Self { current, max })
+        Ok(Self {
+            current,
+            max,
+            wear_progress: WearLedger::EMPTY,
+        })
     }
 
-    /// A full gauge: `current == max` — a freshly rolled item is at full
-    /// durability.
+    /// A full gauge: `current == max`, empty ledger — a freshly rolled item is
+    /// at full durability, and a repair-to-max wipes any carried wear progress
+    /// (the scaled-integer mirror of the classic set-to-max).
     #[must_use]
     pub fn full(max: u8) -> Self {
-        Self { current: max, max }
+        Self {
+            current: max,
+            max,
+            wear_progress: WearLedger::EMPTY,
+        }
     }
 
     /// The current value.
@@ -647,11 +700,36 @@ impl Durability {
         let scaled = u16::from(new_max).saturating_mul(u16::from(self.current)) / old_max;
         // The saturating narrow of a quotient bounded by `new_max` — saturating
         // to the bound itself keeps `current <= max` structural, never a masked
-        // lookup absence.
+        // lookup absence. The wear ledger is untouched: its divisor is
+        // path-based, never max-based, so a crafting max change carries the
+        // remainder forward.
         let current = u8::try_from(scaled).unwrap_or(new_max);
         Self {
             current,
             max: new_max,
+            wear_progress: self.wear_progress,
+        }
+    }
+
+    /// This gauge after `amount` units of wear at `divisor` units-per-point:
+    /// advances the persisted ledger, subtracts the whole points crossed from
+    /// `current` SATURATING at 0 (a broken gauge stays worn — never removed),
+    /// and carries the remainder. The wear-toward-broken twin of
+    /// [`Durability::decremented`] (which returns `None` at the last point,
+    /// removing the item): gear wears to a broken 0 and stays; ammunition and
+    /// non-trainable pets decrement to removal. The two decrement seams are
+    /// type-distinct — the 0-count-vs-broken distinction is which method the
+    /// wear pool calls, never a runtime branch.
+    #[must_use]
+    pub fn worn(self, amount: u32, divisor: NonZeroU32) -> Self {
+        let (ledger, points) = self.wear_progress.advanced(amount, divisor);
+        // Boundary saturation of the crossed-points count into the gauge's u8
+        // home (the `rescaled` grain), not a lookup absence.
+        let lost = u8::try_from(points).unwrap_or(u8::MAX);
+        Self {
+            current: self.current.saturating_sub(lost),
+            max: self.max,
+            wear_progress: ledger,
         }
     }
 
@@ -666,6 +744,7 @@ impl Durability {
         NonZeroU8::new(self.current.saturating_sub(1)).map(|current| Self {
             current: current.get(),
             max: self.max,
+            wear_progress: self.wear_progress,
         })
     }
 }
@@ -674,7 +753,19 @@ impl TryFrom<DurabilityWire> for Durability {
     type Error = DurabilityError;
 
     fn try_from(wire: DurabilityWire) -> Result<Self, Self::Error> {
-        Self::new(wire.current, wire.max)
+        if wire.current > wire.max {
+            return Err(DurabilityError::CurrentExceedsMax {
+                current: wire.current,
+                max: wire.max,
+            });
+        }
+        Ok(Self {
+            current: wire.current,
+            max: wire.max,
+            // Parse-boundary default for a genuinely-optional wire field: an
+            // absent ledger IS the empty ledger.
+            wear_progress: wire.wear_progress.unwrap_or(WearLedger::EMPTY),
+        })
     }
 }
 
@@ -683,6 +774,8 @@ impl From<Durability> for DurabilityWire {
         Self {
             current: durability.current,
             max: durability.max,
+            wear_progress: (!durability.wear_progress.is_empty())
+                .then_some(durability.wear_progress),
         }
     }
 }
@@ -837,6 +930,83 @@ mod tests {
             durability
         );
         assert!(serde_json::from_str::<Durability>(r#"{"current":31,"max":30}"#).is_err());
+    }
+
+    fn per_2000() -> NonZeroU32 {
+        NonZeroU32::new(2000).unwrap()
+    }
+
+    #[test]
+    fn wear_ledger_carries_the_remainder_and_splits_whole_points() {
+        // EQ-WEAR-4: 1500 → no point (rem 1500); +1500 → acc 3000 → one point,
+        // remainder 1000. Integer end-to-end.
+        let (ledger, points) = WearLedger::EMPTY.advanced(1500, per_2000());
+        assert_eq!(points, 0);
+        let (ledger, points) = ledger.advanced(1500, per_2000());
+        assert_eq!(points, 1);
+        assert_eq!(ledger.advanced(1000, per_2000()), (WearLedger::EMPTY, 1));
+    }
+
+    #[test]
+    fn wear_ledger_flat_hit_counter_never_floors_to_nothing() {
+        // EQ-WEAR-5: hit 1 advances the counter; the 10000th crossing yields
+        // the point with the counter back to empty.
+        let per_10000 = NonZeroU32::new(10_000).unwrap();
+        let mut ledger = WearLedger::EMPTY;
+        for _ in 0..9_999u32 {
+            let (next, points) = ledger.advanced(1, per_10000);
+            assert_eq!(points, 0);
+            ledger = next;
+        }
+        assert_eq!(ledger.advanced(1, per_10000), (WearLedger::EMPTY, 1));
+    }
+
+    #[test]
+    fn worn_wears_toward_broken_and_keeps_the_gauge_at_zero() {
+        // Sub-point wear leaves the gauge; a crossing subtracts; a broken
+        // gauge saturates at 0 and stays representable (never removed).
+        let gauge = Durability::new(1, 22).unwrap();
+        let sub_point = gauge.worn(1500, per_2000());
+        assert_eq!(sub_point.current(), 1);
+        let broken = sub_point.worn(1500, per_2000());
+        assert_eq!(broken.current(), 0);
+        assert_eq!(broken.max(), 22);
+        // Further wear on a broken gauge stays at 0.
+        assert_eq!(broken.worn(4000, per_2000()).current(), 0);
+    }
+
+    #[test]
+    fn wear_progress_rides_the_wire_only_when_non_empty() {
+        // A carried remainder is persisted item state: the round trip preserves
+        // it, so the next crossing is identical after a save/load.
+        let worn = Durability::full(22).worn(1500, per_2000());
+        let json = serde_json::to_string(&worn).unwrap();
+        assert_eq!(json, r#"{"current":22,"max":22,"wear_progress":1500}"#);
+        let reloaded = serde_json::from_str::<Durability>(&json).unwrap();
+        assert_eq!(reloaded, worn);
+        assert_eq!(reloaded.worn(500, per_2000()).current(), 21);
+        // The shipped {current, max} wire form still parses (ledger defaults
+        // empty), and a full gauge serializes without the ledger field.
+        let shipped = serde_json::from_str::<Durability>(r#"{"current":22,"max":22}"#).unwrap();
+        assert_eq!(shipped, Durability::full(22));
+        assert_eq!(
+            serde_json::to_string(&Durability::full(22)).unwrap(),
+            r#"{"current":22,"max":22}"#
+        );
+    }
+
+    #[test]
+    fn repair_to_full_zeroes_the_ledger_and_rescale_keeps_it() {
+        let worn = Durability::full(22).worn(1500, per_2000());
+        // Repair-to-max is `Durability::full(max)` — a fresh EMPTY ledger.
+        assert_eq!(
+            serde_json::to_string(&Durability::full(worn.max())).unwrap(),
+            r#"{"current":22,"max":22}"#
+        );
+        // A crafting max change carries the remainder (path-based divisor,
+        // never max-based).
+        let rescaled = worn.rescaled(30);
+        assert_eq!(rescaled.worn(500, per_2000()).current(), 29);
     }
 
     #[test]

@@ -7,9 +7,11 @@
 //! collapsed `[0, 0]`, keeping the RNG consumption constant across every branch
 //! and every basis.
 
+use core::num::NonZeroU32;
+
 use rand_core::RngCore;
 
-use crate::components::combat_profile::CombatProfile;
+use crate::components::combat_profile::{CombatProfile, WeaponMode};
 use crate::components::interval::Interval;
 use crate::components::pool::Pool;
 use crate::components::units::{ChancePer10000, Percent};
@@ -126,6 +128,7 @@ pub fn resolve_attack(
         quality,
         excellent_order,
         effective_defense,
+        attacker.weapon_mode(),
     );
     let damage = strike_tail(after_defense, attacker, target, basis, doubled);
     let new_health = target_health.reduced(damage);
@@ -167,10 +170,22 @@ fn hit_chance(attacker: &CombatProfile, target: &CombatProfile) -> ChancePer1000
     ChancePer10000::clamped(u64::from(numerator))
 }
 
-/// The quality-selected base minus defense, in the basis's order. Normal reads
-/// the rolled span; critical the augmented max; excellent applies the 6/5
-/// either side of the defense subtraction per `order`. Exhaustive over
-/// [`HitQuality`] and [`ExcellentOrder`] — no wildcard.
+/// The quality-selected base minus defense, in the basis's order — the
+/// per-type head, organized order-first so the physical branch can apply the
+/// double-wield ×2 before subtracting defense. Normal reads the rolled span;
+/// critical the augmented max; excellent applies the 6/5 either side of the
+/// defense subtraction per `order`. Exhaustive over [`ExcellentOrder`] ×
+/// [`HitQuality`] × [`WeaponMode`] — no wildcard.
+// W-SRC: excellent 1.2× max — CONFIRMED on-era against MuEmu 0.97k C++ source
+// (independent of OpenMU): `damage = (DamageMax * 120) / 100`, and OpenMU S6;
+// every era 0.75→S6 uses 1.2×, and it holds under the skill-augmented base.
+// The 1.1× in some fan guides is a rate-vs-magnitude confusion (the +10%
+// Excellent Damage RATE option is a proc chance, not the hit magnitude).
+// Physical multiplies then subtracts; wizardry subtracts then multiplies
+// (AttackableExtensions.cs:106/136 vs :159-160). The double-wield ×2 is
+// physical-only and PRE-defense — applied to the quality base after the
+// excellent 6/5, before the subtraction (AttackableExtensions.cs:130-134);
+// the span already carries the fold's ×55/100, so the net is 110%.
 fn quality_after_defense(
     augmented_max: u16,
     rolled_span: u16,
@@ -178,36 +193,44 @@ fn quality_after_defense(
     order: ExcellentOrder,
     // Already 0 when the strike ignored defense.
     defense: u16,
+    weapon_mode: WeaponMode,
 ) -> u32 {
     let max = u32::from(augmented_max);
     let def = u32::from(defense);
-    match quality {
-        HitQuality::Normal => u32::from(rolled_span).saturating_sub(def),
-        HitQuality::Critical => max.saturating_sub(def),
-        // W-SRC: 1.2× max — CONFIRMED on-era against MuEmu 0.97k C++ source
-        // (independent of OpenMU): `damage = (DamageMax * 120) / 100`, and
-        // OpenMU S6; every era 0.75→S6 uses 1.2×, and it holds under the
-        // skill-augmented base. The 1.1× in some fan guides is a
-        // rate-vs-magnitude confusion (the +10% Excellent Damage RATE option is
-        // a proc chance, not the hit magnitude). Physical multiplies then
-        // subtracts; wizardry subtracts then multiplies
-        // (AttackableExtensions.cs:106/136 vs :159-160).
-        HitQuality::Excellent => match order {
-            ExcellentOrder::MultiplyThenDefense => {
-                scale_ratio(max, 6, nonzero(5)).saturating_sub(def)
-            }
-            ExcellentOrder::DefenseThenMultiply => {
-                scale_ratio(max.saturating_sub(def), 6, nonzero(5))
-            }
+    match order {
+        // Physical: select/multiply the quality base, double a double-wield,
+        // then subtract defense.
+        ExcellentOrder::MultiplyThenDefense => {
+            let base = match quality {
+                HitQuality::Normal => u32::from(rolled_span),
+                HitQuality::Critical => max,
+                HitQuality::Excellent => scale_ratio(max, 6, nonzero(5)),
+            };
+            let doubled = match weapon_mode {
+                WeaponMode::Single => base,
+                WeaponMode::DoubleWield => base.saturating_mul(2),
+            };
+            doubled.saturating_sub(def)
+        }
+        // Wizardry: subtract defense, then the excellent 6/5. Never doubled —
+        // the weapon-independent span carries no double-wield ×55/100, so no
+        // ×2 exists to balance it.
+        ExcellentOrder::DefenseThenMultiply => match quality {
+            HitQuality::Normal => u32::from(rolled_span).saturating_sub(def),
+            HitQuality::Critical => max.saturating_sub(def),
+            HitQuality::Excellent => scale_ratio(max.saturating_sub(def), 6, nonzero(5)),
         },
     }
 }
 
 /// The shared post-head fold: + flat Greater-Damage add → overrate ×3/10 →
-/// level floor → × skill multiplier → ×2 double → defender %-reduction.
-/// Defense is already out (the head owns it); this never subtracts it again.
-/// The multiplier step matches the basis, so a plain swing skips it
-/// structurally (no field to read).
+/// defender excellent `DamageDecrease` (PRE-floor) → level floor → attacker wing
+/// increase → defender wing absorb (both POST-floor; absorb skipped when the
+/// damage is 1 or less) → × skill multiplier → ×2 double → defender
+/// %-reduction. Defense is already out (the head owns it); this never
+/// subtracts it again. The multiplier step matches the basis, so a plain
+/// swing skips it structurally (no field to read). Every gear step is the
+/// exact identity at its gearless zero percent.
 fn strike_tail(
     after_defense: u32,
     attacker: &CombatProfile,
@@ -215,6 +238,7 @@ fn strike_tail(
     basis: &StrikeBasis,
     doubled: bool,
 ) -> u32 {
+    let pct_den = u32::from(Percent::DENOMINATOR);
     // W-SRC: the attacker's Greater-Damage add is a FLAT add applied here, after
     // defense and before the floor — never a raise of the strike span, since the
     // quality base is already fixed, so crit/excellent cannot amplify it.
@@ -227,16 +251,42 @@ fn strike_tail(
     } else {
         after_greater
     };
+    // W-SRC: the defender's excellent DamageDecrease applies BEFORE the level
+    // floor (AttackableExtensions.cs:209) — distinct from the POST-floor wing
+    // absorb; the two must never merge onto one reduction field.
+    let dd = u32::from(target.incoming_dd_pct().points());
+    let after_dd = scale_ratio(after_overrate, pct_den.saturating_sub(dd), nonzero(pct_den));
     let floor = (u32::from(attacker.level().get()) / MIN_DAMAGE_FLOOR_DIVISOR).max(1);
-    let floored = after_overrate.max(floor);
+    let floored = after_dd.max(floor);
+    // W-SRC: wing multipliers sit AFTER the floor and BEFORE the skill
+    // multiplier — the attacker's increase first, the defender's absorb second
+    // (AttackableExtensions.cs:211-223,246).
+    let wing_damage = u32::from(attacker.wing_damage_pct().points());
+    let after_wing_damage = scale_ratio(
+        floored,
+        pct_den.saturating_add(wing_damage),
+        nonzero(pct_den),
+    );
+    // W-SRC: the absorb is skipped when the damage is 1 or less
+    // (AttackableExtensions.cs:218-222) — folded on the surplus above 1, not
+    // guarded.
+    let wing_absorb = u32::from(target.wing_absorb_pct().points());
+    let after_absorb = match NonZeroU32::new(after_wing_damage.saturating_sub(1)) {
+        None => after_wing_damage,
+        Some(_) => scale_ratio(
+            after_wing_damage,
+            pct_den.saturating_sub(wing_absorb),
+            nonzero(pct_den),
+        ),
+    };
     // Skill strikes only: a plain swing carries no multiplier to apply.
     let after_multiplier = match basis {
-        StrikeBasis::PlainSwing => floored,
+        StrikeBasis::PlainSwing => after_absorb,
         StrikeBasis::Skill {
             multiplier_per_mille,
             ..
         } => scale_ratio(
-            floored,
+            after_absorb,
             *multiplier_per_mille,
             nonzero(SKILL_MULTIPLIER_DENOMINATOR),
         ),
@@ -338,6 +388,11 @@ mod tests {
             double_damage_chance: Percent::ZERO,
             incoming_damage_reduction: Percent::ZERO,
             flat_damage_add: 0,
+            wizardry_rise_x2: 0,
+            incoming_dd_pct: Percent::ZERO,
+            wing_damage_pct: Percent::ZERO,
+            wing_absorb_pct: Percent::ZERO,
+            weapon_mode: WeaponMode::Single,
         }
     }
 
@@ -883,5 +938,178 @@ mod tests {
             saw_max |= damage == 125;
         }
         assert!(saw_max, "the inclusive max must be reachable");
+    }
+
+    // ── Gear positions: pre-floor DD, post-floor wings, double-wield ──
+
+    /// The base profile with its gear strike magnitudes set (percent points).
+    fn with_gear(base: CombatProfile, dd: u8, wing_damage: u8, wing_absorb: u8) -> CombatProfile {
+        CombatProfile {
+            incoming_dd_pct: Percent::new(dd).unwrap(),
+            wing_damage_pct: Percent::new(wing_damage).unwrap(),
+            wing_absorb_pct: Percent::new(wing_absorb).unwrap(),
+            ..base
+        }
+    }
+
+    /// The base profile with its weapon mode set.
+    fn with_mode(base: CombatProfile, weapon_mode: WeaponMode) -> CombatProfile {
+        CombatProfile {
+            weapon_mode,
+            ..base
+        }
+    }
+
+    #[test]
+    fn wing_damage_and_absorb_apply_after_the_floor_and_dd_before_it() {
+        // EQ-WING-1: after-defense 100 → DD 96 (pre-floor) → floor max(5,96)
+        // → attacker wing ×116/100 = 111 → defender absorb ×84/100 = 93.
+        let attacker = with_gear(plain(50, 100, 100, 0, 10_000, 0), 0, 16, 0);
+        let target = with_gear(plain(50, 0, 0, 0, 0, 0), 4, 0, 16);
+        assert_eq!(
+            struck_damage(&attacker, &target, &StrikeBasis::PlainSwing, 3),
+            93
+        );
+    }
+
+    #[test]
+    fn dd_is_pre_floor_while_wing_absorb_is_post_floor() {
+        // EQ-WING-2: after-defense 3 → DD floor(3·96/100) = 2 → floor
+        // max(5, 2) = 5 → wing floor(5·116/100) = 5 → absorb floor(5·84/100)
+        // = 4. A post-floor DD (the merged-field bug) would land 3 — the
+        // 4-vs-3 gap proves the two positions are distinct.
+        let attacker = with_gear(plain(50, 3, 3, 0, 10_000, 0), 0, 16, 0);
+        let target = with_gear(plain(50, 0, 0, 0, 0, 0), 4, 0, 16);
+        assert_eq!(
+            struck_damage(&attacker, &target, &StrikeBasis::PlainSwing, 3),
+            4
+        );
+    }
+
+    #[test]
+    fn wing_absorb_is_skipped_when_the_damage_is_one() {
+        // EQ-WING-3: a floor-value 1 hit keeps its 1 — the absorb never
+        // applies at damage ≤ 1.
+        let attacker = plain(10, 1, 1, 0, 10_000, 0);
+        let target = with_gear(plain(10, 0, 0, 0, 0, 0), 0, 0, 16);
+        assert_eq!(
+            struck_damage(&attacker, &target, &StrikeBasis::PlainSwing, 3),
+            1
+        );
+    }
+
+    #[test]
+    fn the_gear_positions_are_the_identity_at_their_gearless_zero() {
+        // Zero DD / wing percents and Single mode reproduce the bare strike
+        // byte-for-byte across a seed sweep (E4).
+        let bare_attacker = plain(50, 20, 40, 0, 10_000, 0);
+        let bare_target = plain(50, 0, 0, 5, 0, 0);
+        let geared_attacker = with_mode(with_gear(bare_attacker, 0, 0, 0), WeaponMode::Single);
+        let geared_target = with_gear(bare_target, 0, 0, 0);
+        for seed in 0u64..32 {
+            assert_eq!(
+                struck_damage(&bare_attacker, &bare_target, &StrikeBasis::PlainSwing, seed),
+                struck_damage(
+                    &geared_attacker,
+                    &geared_target,
+                    &StrikeBasis::PlainSwing,
+                    seed
+                ),
+                "seed {seed}"
+            );
+        }
+    }
+
+    #[test]
+    fn double_wield_doubles_before_defense_and_is_distinct_from_the_random_double() {
+        // EQ-DW-2: the ×0.55-folded span max 110 doubles to 220 BEFORE the 20
+        // defense — (110×2) − 20 = 200, never (110−20)×2 = 180.
+        let attacker = with_mode(plain(10, 110, 110, 0, 10_000, 0), WeaponMode::DoubleWield);
+        let target = plain(10, 0, 0, 20, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &StrikeBasis::PlainSwing, 3),
+            200
+        );
+        // Against zero defense the net is 110% of the summed max 200 (EQ-DW-1).
+        let bare = plain(10, 0, 0, 0, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &bare, &StrikeBasis::PlainSwing, 3),
+            220
+        );
+        // A strike that ALSO rolls the random double doubles again at the
+        // post-multiplier position: ((110×2) − 20) × 2 = 400.
+        let doubled = with_chances(
+            with_mode(plain(10, 110, 110, 0, 10_000, 0), WeaponMode::DoubleWield),
+            0,
+            0,
+            0,
+            100,
+        );
+        assert_eq!(
+            struck_damage(&doubled, &target, &StrikeBasis::PlainSwing, 3),
+            400
+        );
+    }
+
+    #[test]
+    fn the_excellent_multiplier_precedes_the_double_wield_doubling() {
+        // Order pin: ×6/5 THEN ×2 in the physical head —
+        // floor(110·6/5) = 132 → ×2 = 264 → −20 = 244.
+        let attacker = with_chances(
+            with_mode(plain(10, 110, 110, 0, 10_000, 0), WeaponMode::DoubleWield),
+            100,
+            0,
+            0,
+            0,
+        );
+        let target = plain(10, 0, 0, 20, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &StrikeBasis::PlainSwing, 3),
+            244
+        );
+    }
+
+    #[test]
+    fn a_double_wielded_wizardry_strike_never_doubles() {
+        // The wizardry order has no ×2 — a double-wielding caster's spell span
+        // stands as selected: 100 − 0 = 100, never 200.
+        let attacker = with_mode(plain(10, 5, 10, 0, 10_000, 0), WeaponMode::DoubleWield);
+        let target = plain(10, 0, 0, 0, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &wizardry_basis(100, 100, 1000), 3),
+            100
+        );
+    }
+
+    #[test]
+    fn the_gear_steps_draw_no_extra_rng_words() {
+        // The DD/wing steps are pure arithmetic: a fully geared strike draws
+        // exactly the bare strike's word count.
+        let bare_attacker = plain(50, 33, 50, 0, 10_000, 0);
+        let geared_attacker = with_mode(
+            with_gear(plain(50, 33, 50, 0, 10_000, 0), 0, 16, 0),
+            WeaponMode::DoubleWield,
+        );
+        let bare_target = plain(50, 0, 0, 0, 0, 0);
+        let geared_target = with_gear(plain(50, 0, 0, 0, 0, 0), 4, 0, 16);
+        let words = |attacker: &CombatProfile, target: &CombatProfile| {
+            let mut rng = CountingRng {
+                inner: TestRng::new(5),
+                words: 0,
+            };
+            let (_, outcome) = resolve_attack(
+                attacker,
+                target,
+                Pool::full(10_000),
+                &StrikeBasis::PlainSwing,
+                &mut rng,
+            );
+            assert!(!matches!(outcome, AttackOutcome::Missed));
+            rng.words
+        };
+        assert_eq!(
+            words(&bare_attacker, &bare_target),
+            words(&geared_attacker, &geared_target)
+        );
     }
 }

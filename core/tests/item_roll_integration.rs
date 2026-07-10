@@ -22,6 +22,7 @@ use rand_core::RngCore;
 use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::ActiveEffects;
+use mu_core::components::class::CharacterClass;
 use mu_core::components::equipment::Equipment;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
@@ -35,6 +36,7 @@ use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::Facing;
+use mu_core::components::stats::Stats;
 use mu_core::components::tile::TileCoord;
 use mu_core::components::units::{ChancePer10000, Exp, ItemLevel, Level, MapNumber, Tick};
 use mu_core::data::ancient_sets::AncientSet;
@@ -59,7 +61,7 @@ use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::inventory::{EquipOutcome, EquipRejection};
 use mu_core::events::loot::Drop;
 use mu_core::services::inventory::{
-    EquipmentConflict, PlaceIntent, equip, place_item, reconcile_equipment,
+    EquipmentConflict, PlaceIntent, Wearer, equip, place_item, reconcile_equipment,
 };
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::loot::resolve_kill_drops;
@@ -301,11 +303,14 @@ fn has_skill(kind: &ItemKind) -> bool {
 /// One equipment slot a kind is expected to accept, if it is equippable.
 fn a_valid_slot(kind: &ItemKind) -> Option<EquipmentSlot> {
     match kind {
+        // Ammunition rides a hand slot beside its bow/crossbow (W-EQUIP).
         ItemKind::Weapon { .. }
         | ItemKind::Bow { .. }
         | ItemKind::Crossbow { .. }
         | ItemKind::Staff { .. }
-        | ItemKind::Shield { .. } => Some(EquipmentSlot::LeftHand),
+        | ItemKind::Shield { .. }
+        | ItemKind::Arrows { .. }
+        | ItemKind::Bolts { .. } => Some(EquipmentSlot::LeftHand),
         ItemKind::Helm { .. } => Some(EquipmentSlot::Helm),
         ItemKind::BodyArmor { .. } => Some(EquipmentSlot::Armor),
         ItemKind::Pants { .. } => Some(EquipmentSlot::Pants),
@@ -315,9 +320,7 @@ fn a_valid_slot(kind: &ItemKind) -> Option<EquipmentSlot> {
         ItemKind::Pet { .. } => Some(EquipmentSlot::Pet),
         ItemKind::Pendant { .. } => Some(EquipmentSlot::Pendant),
         ItemKind::Ring { .. } | ItemKind::TransformationRing { .. } => Some(EquipmentSlot::Ring1),
-        ItemKind::Arrows { .. }
-        | ItemKind::Bolts { .. }
-        | ItemKind::Orb { .. }
+        ItemKind::Orb { .. }
         | ItemKind::SkillScroll { .. }
         | ItemKind::Jewel { .. }
         | ItemKind::Consumable { .. }
@@ -326,6 +329,45 @@ fn a_valid_slot(kind: &ItemKind) -> Option<EquipmentSlot> {
         | ItemKind::MixMaterial
         | ItemKind::StatFruit => None,
     }
+}
+
+/// The eight-class roster in declaration order — the sweep an eligible wearer
+/// is picked from.
+const ROSTER: [CharacterClass; 8] = [
+    CharacterClass::DarkWizard,
+    CharacterClass::SoulMaster,
+    CharacterClass::DarkKnight,
+    CharacterClass::BladeKnight,
+    CharacterClass::FairyElf,
+    CharacterClass::MuseElf,
+    CharacterClass::MagicGladiator,
+    CharacterClass::DarkLord,
+];
+
+/// A maxed-out wearer of `class` — level cap, every stat at the u16 ceiling —
+/// so only geometry or the class list can refuse.
+fn maxed(class: CharacterClass) -> Wearer {
+    Wearer {
+        class,
+        level: or_abort(Level::new(400)),
+        stats: Stats::Standard {
+            strength: u16::MAX,
+            agility: u16::MAX,
+            vitality: u16::MAX,
+            energy: u16::MAX,
+        },
+    }
+}
+
+/// The most-qualified wearer for `def`: its first admitted class, maxed.
+/// `None` when the qualified list is empty (the Red Wing Summoner backports —
+/// wearable by no pre-S3 class) or the kind is non-wearable.
+fn an_eligible_wearer(def: &ItemDefinition) -> Option<Wearer> {
+    let classes = def.kind.classes()?;
+    ROSTER
+        .into_iter()
+        .find(|&class| classes.allows(class))
+        .map(maxed)
 }
 
 fn droppable(atlas: &Atlas) -> impl Iterator<Item = &ItemDefinition> {
@@ -587,19 +629,45 @@ fn every_equippable_item_equips_into_its_slot_and_rejects_a_wrong_one() {
             &always(),
             &mut rng,
         );
+        let Some(wearer) = an_eligible_wearer(def) else {
+            // An empty qualified-class list (the Red Wing Summoner backports)
+            // is wearable by NO pre-S3 class — the live gate refuses every
+            // wearer with ClassMismatch, an authentic data fact.
+            let (_, outcome) = equip(
+                Equipment::empty(),
+                instance,
+                def,
+                valid,
+                &atlas,
+                &maxed(CharacterClass::DarkKnight),
+            );
+            assert!(
+                matches!(
+                    outcome,
+                    EquipOutcome::Rejected {
+                        reason: EquipRejection::ClassMismatch,
+                        ..
+                    }
+                ),
+                "empty-class item {:?} is wearable by no one",
+                def.id
+            );
+            continue;
+        };
         let (equipment, outcome) = equip(
             Equipment::empty(),
             instance.clone(),
-            &def.kind,
+            def,
             valid,
             &atlas,
+            &wearer,
         );
         assert!(
             matches!(
                 outcome,
                 mu_core::events::inventory::EquipOutcome::Equipped { .. }
             ),
-            "item {:?} equips into its slot",
+            "item {:?} equips into its slot for an eligible wearer",
             def.id
         );
         // The item now occupies the translated slot.
@@ -607,13 +675,14 @@ fn every_equippable_item_equips_into_its_slot_and_rejects_a_wrong_one() {
         if worn {
             assert!(equipment.get(EquipmentSlot::LeftHand).is_some());
         }
-        // An incompatible slot is rejected.
+        // An incompatible slot is rejected — capability outranks eligibility,
+        // so the reason is IncompatibleSlot even for the eligible wearer.
         let wrong = if matches!(def.kind, ItemKind::Helm { .. }) {
             EquipmentSlot::LeftHand
         } else {
             EquipmentSlot::Helm
         };
-        let (_, outcome) = equip(Equipment::empty(), instance, &def.kind, wrong, &atlas);
+        let (_, outcome) = equip(Equipment::empty(), instance, def, wrong, &atlas, &wearer);
         assert!(
             matches!(
                 outcome,
@@ -753,18 +822,20 @@ fn a_two_handed_weapon_requires_a_free_paired_hand() {
     let (equipment, occupied) = equip(
         Equipment::empty(),
         instance_of(one_handed, 1),
-        &one_handed.kind,
+        one_handed,
         EquipmentSlot::RightHand,
         &atlas,
+        &or_abort(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
     );
     assert!(matches!(occupied, EquipOutcome::Equipped { .. }));
 
     let (equipment, outcome) = equip(
         equipment,
         instance_of(two_handed, 2),
-        &two_handed.kind,
+        two_handed,
         EquipmentSlot::LeftHand,
         &atlas,
+        &or_abort(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
     );
     assert!(
         matches!(
@@ -786,9 +857,10 @@ fn a_two_handed_weapon_equips_into_a_fully_empty_pair() {
     let (equipment, outcome) = equip(
         Equipment::empty(),
         instance_of(two_handed, 3),
-        &two_handed.kind,
+        two_handed,
         EquipmentSlot::LeftHand,
         &atlas,
+        &or_abort(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
     );
     assert!(matches!(
         outcome,
@@ -808,16 +880,18 @@ fn an_offhand_cannot_join_a_hand_paired_with_a_two_hander() {
     let (equipment, _) = equip(
         Equipment::empty(),
         instance_of(two_handed, 4),
-        &two_handed.kind,
+        two_handed,
         EquipmentSlot::LeftHand,
         &atlas,
+        &or_abort(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
     );
     let (equipment, outcome) = equip(
         equipment,
         instance_of(shield, 5),
-        &shield.kind,
+        shield,
         EquipmentSlot::RightHand,
         &atlas,
+        &or_abort(an_eligible_wearer(shield).ok_or("shield has a class")),
     );
     assert!(
         matches!(
@@ -833,6 +907,117 @@ fn an_offhand_cannot_join_a_hand_paired_with_a_two_hander() {
 }
 
 #[test]
+fn a_bow_admits_ammunition_beside_it_but_never_a_shield() {
+    // The SANCTIONED ammo geometry: a bow is two-handed EXCEPT that its
+    // paired hand carries the quiver — bow+ammo equips (either order), while
+    // bow+shield still conflicts and a sword never sits beside arrows.
+    let atlas = real_atlas();
+    let bow = find_kind(&atlas, |kind| matches!(kind, ItemKind::Bow { .. }));
+    let arrows = find_kind(&atlas, |kind| matches!(kind, ItemKind::Arrows { .. }));
+    let shield = find_kind(&atlas, |kind| matches!(kind, ItemKind::Shield { .. }));
+    let one_handed = find_kind(&atlas, is_one_handed_weapon);
+    let elf = or_abort(an_eligible_wearer(bow).ok_or("bow has a class"));
+
+    // Bow first, then ammunition into the paired hand.
+    let (equipment, worn_bow) = equip(
+        Equipment::empty(),
+        instance_of(bow, 20),
+        bow,
+        EquipmentSlot::RightHand,
+        &atlas,
+        &elf,
+    );
+    assert!(matches!(worn_bow, EquipOutcome::Equipped { .. }));
+    let (equipment, worn_ammo) = equip(
+        equipment,
+        instance_of(arrows, 21),
+        arrows,
+        EquipmentSlot::LeftHand,
+        &atlas,
+        &elf,
+    );
+    assert!(
+        matches!(worn_ammo, EquipOutcome::Equipped { .. }),
+        "ammunition rides the hand paired with a bow"
+    );
+    assert!(equipment.get(EquipmentSlot::LeftHand).is_some());
+    assert_eq!(reconcile_equipment(&equipment, &atlas), Ok(()));
+
+    // Ammunition first, then the bow into the paired hand.
+    let (equipment, worn_ammo) = equip(
+        Equipment::empty(),
+        instance_of(arrows, 22),
+        arrows,
+        EquipmentSlot::LeftHand,
+        &atlas,
+        &elf,
+    );
+    assert!(matches!(worn_ammo, EquipOutcome::Equipped { .. }));
+    let (_, worn_bow) = equip(
+        equipment,
+        instance_of(bow, 23),
+        bow,
+        EquipmentSlot::RightHand,
+        &atlas,
+        &elf,
+    );
+    assert!(
+        matches!(worn_bow, EquipOutcome::Equipped { .. }),
+        "a bow accepts the hand paired with its ammunition"
+    );
+
+    // A shield beside the bow is still the two-handed conflict.
+    let (with_bow, _) = equip(
+        Equipment::empty(),
+        instance_of(bow, 24),
+        bow,
+        EquipmentSlot::RightHand,
+        &atlas,
+        &elf,
+    );
+    let (_, refused) = equip(
+        with_bow,
+        instance_of(shield, 25),
+        shield,
+        EquipmentSlot::LeftHand,
+        &atlas,
+        &or_abort(an_eligible_wearer(shield).ok_or("shield has a class")),
+    );
+    assert!(matches!(
+        refused,
+        EquipOutcome::Rejected {
+            reason: EquipRejection::TwoHandedConflict,
+            ..
+        }
+    ));
+
+    // A sword cannot sit beside arrows either.
+    let (with_ammo, _) = equip(
+        Equipment::empty(),
+        instance_of(arrows, 26),
+        arrows,
+        EquipmentSlot::LeftHand,
+        &atlas,
+        &elf,
+    );
+    let (_, refused) = equip(
+        with_ammo,
+        instance_of(one_handed, 27),
+        one_handed,
+        EquipmentSlot::RightHand,
+        &atlas,
+        &or_abort(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
+    );
+    assert!(matches!(
+        refused,
+        EquipOutcome::Rejected {
+            reason: EquipRejection::TwoHandedConflict,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn two_one_handed_items_fill_both_hands() {
     let atlas = real_atlas();
     let one_handed = find_kind(&atlas, is_one_handed_weapon);
@@ -841,17 +1026,19 @@ fn two_one_handed_items_fill_both_hands() {
     let (equipment, first) = equip(
         Equipment::empty(),
         instance_of(one_handed, 6),
-        &one_handed.kind,
+        one_handed,
         EquipmentSlot::LeftHand,
         &atlas,
+        &or_abort(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
     );
     assert!(matches!(first, EquipOutcome::Equipped { .. }));
     let (equipment, second) = equip(
         equipment,
         instance_of(shield, 7),
-        &shield.kind,
+        shield,
         EquipmentSlot::RightHand,
         &atlas,
+        &or_abort(an_eligible_wearer(shield).ok_or("shield has a class")),
     );
     assert!(
         matches!(second, EquipOutcome::Equipped { .. }),
@@ -865,13 +1052,15 @@ fn two_one_handed_items_fill_both_hands() {
 fn equipping_an_occupied_slot_is_rejected() {
     let atlas = real_atlas();
     let helm = find_kind(&atlas, |kind| matches!(kind, ItemKind::Helm { .. }));
+    let wearer = or_abort(an_eligible_wearer(helm).ok_or("helm has a class"));
 
     let (equipment, first) = equip(
         Equipment::empty(),
         instance_of(helm, 8),
-        &helm.kind,
+        helm,
         EquipmentSlot::Helm,
         &atlas,
+        &wearer,
     );
     assert!(matches!(
         first,
@@ -882,9 +1071,10 @@ fn equipping_an_occupied_slot_is_rejected() {
     let (equipment, second) = equip(
         equipment,
         instance_of(helm, 9),
-        &helm.kind,
+        helm,
         EquipmentSlot::Helm,
         &atlas,
+        &wearer,
     );
     assert!(matches!(
         second,

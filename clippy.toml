@@ -25,6 +25,15 @@ too-many-arguments-threshold = 8
 # call site.
 too-many-lines-threshold = 130
 
+# services::shop::RepairSubject::Equipped carries a whole worn Equipment set
+# (twelve Option<ItemInstance> slots) beside the cell-addressed Stored variant —
+# the domain shape of "repair the item worn in this slot". W-EQUIP's persisted
+# WearLedger widened ItemInstance past the 200-byte default; boxing a pure
+# domain value to appease a performance hint would put a heap indirection
+# inside the hexagon's plain data, so the threshold is raised at the config
+# layer instead.
+enum-variant-size-threshold = 512
+
 # components::class::ClassSet is the total membership structure over the
 # eight-class roster: eight named bools whose exhaustive `allows` match makes
 # an out-of-roster query unrepresentable (the spec's total-structure pattern).

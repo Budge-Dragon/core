@@ -145,6 +145,7 @@ fn cast_damage(caster: &Character, skill: &Skill, seed: u64) -> Option<u32> {
     let aim = TileCoord::new(tile.0, tile.1).to_world();
     let (_, outcome) = cast(
         caster,
+        &character_profile(caster).0,
         damaging_ref(skill),
         aim,
         &targets,
@@ -595,6 +596,7 @@ fn counted_cast(hero: &Character, skill: &Skill, seed: u64) -> (u32, bool) {
     };
     let (_, outcome) = cast(
         hero,
+        &character_profile(hero).0,
         damaging_ref(skill),
         aim,
         &targets,
@@ -671,6 +673,7 @@ fn identical_inputs_and_seeds_replay_byte_identical() {
     let run = || {
         let (vitals, outcome) = cast(
             &wizard,
+            &character_profile(&wizard).0,
             damaging_ref(skill),
             aim,
             &targets,

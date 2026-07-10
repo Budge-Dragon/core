@@ -11,17 +11,20 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::class::CharacterClass;
 use crate::components::equipment::{Equipment, EquipmentSlot};
 use crate::components::inventory::{Cell, Footprint, Inventory, PlacementRejection};
-use crate::components::item_instance::ItemInstance;
-use crate::components::units::{CarriedZen, CreditOutcome};
+use crate::components::item_instance::{ItemInstance, RolledNormalOption};
+use crate::components::stats::Stats;
+use crate::components::units::{CarriedZen, CreditOutcome, Level};
 use crate::data::atlas::Atlas;
-use crate::data::item_definitions::{ItemKind, WeaponHandling};
+use crate::data::item_definitions::{ItemDefinition, ItemKind, WeaponHandling, WearRequirements};
 use crate::entities::world_item::WorldItem;
 use crate::entities::world_zen::WorldZen;
 use crate::events::inventory::{
     EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
 };
+use crate::services::item_rules::effective_drop_level;
 
 /// The parsed request to place an item: where, how large, and the move-only
 /// item itself. Built by the host from the definition's footprint (its Atlas
@@ -159,19 +162,37 @@ pub fn pickup_zen(world_zen: WorldZen, zen: CarriedZen) -> (CarriedZen, ZenPicku
     }
 }
 
-/// Equips an item into a slot. Capability outranks transient state: an
-/// incompatible slot is rejected before an occupied one, and two-handed
-/// dual-hand occupancy is checked last against the paired hand (resolved through
-/// the atlas). On rejection the item rides the outcome back.
+/// A would-be wearer's eligibility view: class, raw level, and TOTAL stats
+/// (base plus any bonus from ALREADY-worn gear). Pre-S3 no worn item grants a
+/// stat, so `stats` is the character's base stats today — the `total` framing
+/// is the seam an ancient stat-gear wave plugs into without reshaping the
+/// gate. The item being equipped never qualifies itself: the host builds this
+/// from the OTHER worn pieces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Wearer {
+    /// The wearer's class, matched against the item's qualified-class list.
+    pub class: CharacterClass,
+    /// The wearer's raw character level (never scaled).
+    pub level: Level,
+    /// The wearer's TOTAL stats (base + worn-gear bonuses).
+    pub stats: Stats,
+}
+
+/// Equips an item into a slot. Capability outranks transient state, and both
+/// outrank eligibility: an incompatible slot is rejected before an occupied
+/// one, two-handed dual-hand occupancy is checked against the paired hand
+/// (resolved through the atlas), and the class/requirement gate runs last. On
+/// rejection the item rides the outcome back.
 #[must_use]
 pub fn equip(
     equipment: Equipment,
     item: ItemInstance,
-    def_kind: &ItemKind,
+    def: &ItemDefinition,
     slot: EquipmentSlot,
     atlas: &Atlas,
+    wearer: &Wearer,
 ) -> (Equipment, EquipOutcome) {
-    if !slot_accepts(def_kind, slot) {
+    if !slot_accepts(&def.kind, slot) {
         return (
             equipment,
             EquipOutcome::Rejected {
@@ -189,7 +210,7 @@ pub fn equip(
             },
         );
     }
-    if two_handed_conflict(&equipment, hand_occupation(def_kind), slot, atlas) {
+    if two_handed_conflict(&equipment, hand_occupation(&def.kind), slot, atlas) {
         return (
             equipment,
             EquipOutcome::Rejected {
@@ -198,7 +219,139 @@ pub fn equip(
             },
         );
     }
+    if let Some(reason) = eligibility(wearer, &item, def) {
+        return (equipment, EquipOutcome::Rejected { reason, item });
+    }
     (equipment.with(slot, item), EquipOutcome::Equipped { slot })
+}
+
+// W-SRC: the equip eligibility gate mirrors OpenMU's `CompliesRequirements`
+// (GameLogic/Player.cs:926-939): every stat requirement compares the wearer's
+// TOTAL attribute against the scaled value
+// `(mult × effectiveDropLevel × base / 100) + 20` (ItemExtensions.cs:270-289,
+// 404-414; mult 3 for strength/agility/vitality/command, 4 for energy), the
+// strength requirement additionally +4 × normal-option level when the scaled
+// value is > 0 (:290-297), the level requirement compares RAW (:22-29,317),
+// every compare is inclusive (fails only on attribute < required, :932), and
+// the class rule is list-contains over the data-materialized qualified list
+// (Player.cs:938). Checked at equip only — never rechecked on stat loss.
+/// The stat-requirement scaling multiplier for strength/agility/vitality/
+/// command columns.
+const REQUIREMENT_MULT_PHYSICAL: u32 = 3;
+/// The stat-requirement scaling multiplier for the energy column.
+const REQUIREMENT_MULT_ENERGY: u32 = 4;
+/// The flat tail every nonzero scaled requirement lands on.
+const REQUIREMENT_FLAT_ADD: u32 = 20;
+/// The scaled-requirement percent divisor.
+const REQUIREMENT_DIVISOR: u32 = 100;
+/// The strength requirement's per-normal-option-level surcharge.
+const REQUIREMENT_PER_OPTION_LEVEL: u32 = 4;
+
+/// The first failing eligibility precondition, or `None` when the wearer may
+/// equip the item — the `cast_rejection` idiom. Class first, then requirements
+/// (the order is not load-bearing: one reason surfaces per equip). A
+/// non-wearable kind carries no class list, which [`slot_accepts`] already
+/// excluded — the `?` folds it to eligible.
+fn eligibility(
+    wearer: &Wearer,
+    item: &ItemInstance,
+    def: &ItemDefinition,
+) -> Option<EquipRejection> {
+    let classes = def.kind.classes()?;
+    if !classes.allows(wearer.class) {
+        return Some(EquipRejection::ClassMismatch);
+    }
+    let wear = def.kind.wear()?;
+    let edl = effective_drop_level(
+        def.drop_level,
+        item.level.enhance_level_or_zero(),
+        item.roll.rarity(),
+    );
+    requirements_unmet(wear, wearer, edl, item.normal_option)
+        .then_some(EquipRejection::RequirementsNotMet)
+}
+
+/// Whether any scaled stat requirement, or the raw level, exceeds the wearer's
+/// total. `edl` is the effective drop level (rarity/enhance surcharge already
+/// in). Every compare is inclusive — a requirement fails only on
+/// `total < required`.
+fn requirements_unmet(
+    wear: WearRequirements,
+    wearer: &Wearer,
+    edl: u16,
+    option: Option<RolledNormalOption>,
+) -> bool {
+    let (strength, agility, vitality, energy, command) = totals(wearer.stats);
+    let below = |base_col: u16, mult: u32, total: u16| match scaled(base_col, mult, edl) {
+        // A 0 column is NO requirement — never scaled to the flat 20.
+        None => false,
+        Some(required) => u32::from(total) < required,
+    };
+    wearer.level.get() < wear.level
+        || strength_below(wear.strength, strength, edl, option)
+        || below(wear.agility, REQUIREMENT_MULT_PHYSICAL, agility)
+        || below(wear.vitality, REQUIREMENT_MULT_PHYSICAL, vitality)
+        || below(wear.energy, REQUIREMENT_MULT_ENERGY, energy)
+        || below(wear.command, REQUIREMENT_MULT_PHYSICAL, command)
+}
+
+/// `(mult × edl × base_col) / 100 + 20`, or `None` when the column is 0 (no
+/// requirement).
+fn scaled(base_col: u16, mult: u32, edl: u16) -> Option<u32> {
+    if base_col == 0 {
+        return None;
+    }
+    Some(
+        (mult
+            .saturating_mul(u32::from(edl))
+            .saturating_mul(u32::from(base_col))
+            / REQUIREMENT_DIVISOR)
+            .saturating_add(REQUIREMENT_FLAT_ADD),
+    )
+}
+
+/// Whether the wearer's total strength is below the scaled strength
+/// requirement, folding the normal-option surcharge: +4 per option level, only
+/// when the pre-+20 scaled value is already positive.
+fn strength_below(base_col: u16, total: u16, edl: u16, option: Option<RolledNormalOption>) -> bool {
+    if base_col == 0 {
+        return false;
+    }
+    let pre20 = REQUIREMENT_MULT_PHYSICAL
+        .saturating_mul(u32::from(edl))
+        .saturating_mul(u32::from(base_col))
+        / REQUIREMENT_DIVISOR;
+    let option_term = match option {
+        Some(rolled) if pre20 > 0 => {
+            REQUIREMENT_PER_OPTION_LEVEL.saturating_mul(u32::from(rolled.level.wire()))
+        }
+        Some(_) | None => 0,
+    };
+    let required = pre20
+        .saturating_add(REQUIREMENT_FLAT_ADD)
+        .saturating_add(option_term);
+    u32::from(total) < required
+}
+
+/// The five trainable stat totals `(strength, agility, vitality, energy,
+/// command)`; command is 0 for the four non-command classes — a real domain
+/// zero (they train none), not a fabricated default.
+fn totals(stats: Stats) -> (u16, u16, u16, u16, u16) {
+    match stats {
+        Stats::Standard {
+            strength,
+            agility,
+            vitality,
+            energy,
+        } => (strength, agility, vitality, energy, 0),
+        Stats::WithCommand {
+            strength,
+            agility,
+            vitality,
+            energy,
+            command,
+        } => (strength, agility, vitality, energy, command),
+    }
 }
 
 /// Unequips a slot, folding the component result into an [`UnequipOutcome`]. On
@@ -214,15 +367,19 @@ pub fn unequip(equipment: Equipment, slot: EquipmentSlot) -> (Equipment, Unequip
 
 /// Whether an item of `kind` may be worn in `slot` — the exhaustive
 /// `(ItemKind x EquipmentSlot)` compatibility rule. Non-equippable kinds accept
-/// no slot. Two-handed dual-hand occupancy is a separate rule, enforced by the
-/// equip service's two-handed check and by [`reconcile_equipment`] at reload.
+/// no slot; ammunition rides a hand slot beside its bow/crossbow (the fold and
+/// the wear service both read it there). Two-handed dual-hand occupancy is a
+/// separate rule, enforced by the equip service's two-handed check and by
+/// [`reconcile_equipment`] at reload.
 fn slot_accepts(kind: &ItemKind, slot: EquipmentSlot) -> bool {
     match kind {
         ItemKind::Weapon { .. }
         | ItemKind::Bow { .. }
         | ItemKind::Crossbow { .. }
         | ItemKind::Staff { .. }
-        | ItemKind::Shield { .. } => {
+        | ItemKind::Shield { .. }
+        | ItemKind::Arrows { .. }
+        | ItemKind::Bolts { .. } => {
             matches!(slot, EquipmentSlot::LeftHand | EquipmentSlot::RightHand)
         }
         ItemKind::Helm { .. } => matches!(slot, EquipmentSlot::Helm),
@@ -236,9 +393,7 @@ fn slot_accepts(kind: &ItemKind, slot: EquipmentSlot) -> bool {
         ItemKind::Ring { .. } | ItemKind::TransformationRing { .. } => {
             matches!(slot, EquipmentSlot::Ring1 | EquipmentSlot::Ring2)
         }
-        ItemKind::Arrows { .. }
-        | ItemKind::Bolts { .. }
-        | ItemKind::Orb { .. }
+        ItemKind::Orb { .. }
         | ItemKind::SkillScroll { .. }
         | ItemKind::Jewel { .. }
         | ItemKind::Consumable { .. }
@@ -249,34 +404,41 @@ fn slot_accepts(kind: &ItemKind, slot: EquipmentSlot) -> bool {
     }
 }
 
-/// How many hands a hand item claims when worn: a two-handed weapon claims both,
-/// everything else claims one.
+/// How a hand item occupies the hand pair: one hand, both hands, a launcher
+/// (both hands, except the paired hand may hold ammunition), or ammunition
+/// (rides the paired hand of a launcher).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HandOccupation {
     /// Claims a single hand; the paired hand stays free for another one-hander.
     OneHand,
     /// Claims both hands; the paired hand must stay empty.
     TwoHands,
+    /// A bow/crossbow: two-handed, except the paired hand may hold ammunition.
+    Launcher,
+    /// Arrows/bolts: legal only beside a launcher (or into an empty pair,
+    /// awaiting one).
+    Ammunition,
 }
 
-/// How many hands an item claims in a hand slot. Total over [`ItemKind`];
-/// non-hand kinds never reach a hand slot ([`slot_accepts`] gates them), so
+/// How an item claims a hand slot. Total over [`ItemKind`]; non-hand kinds
+/// never reach a hand slot ([`slot_accepts`] gates them), so
 /// [`HandOccupation::OneHand`] is a harmless total answer for them.
 // W-SRC: two-handedness is structural, not a stored flag. Melee weapons carry an
 // explicit `WeaponHandling`; bows and crossbows have no handling field because
-// they are two-handed by construction (they leave no hand for a shield) — an
-// authentic game fact, not an invented column. Staves are treated one-handed for
-// want of a two-handed flag; a handling distinction for staves (and any
-// two-handed staff) is a possible future data-model refinement, deliberately not
-// fabricated here.
+// they are two-handed by construction — except that the paired hand carries
+// their ammunition (AmmunitionConsumptionRate 1,
+// Version075/Items/Weapons.cs:327-330), which is what `Launcher` encodes.
+// Staves are treated one-handed for want of a two-handed flag; a handling
+// distinction for staves (and any two-handed staff) is a possible future
+// data-model refinement, deliberately not fabricated here.
 fn hand_occupation(kind: &ItemKind) -> HandOccupation {
     match kind {
         ItemKind::Weapon {
             handling: WeaponHandling::TwoHanded,
             ..
-        }
-        | ItemKind::Bow { .. }
-        | ItemKind::Crossbow { .. } => HandOccupation::TwoHands,
+        } => HandOccupation::TwoHands,
+        ItemKind::Bow { .. } | ItemKind::Crossbow { .. } => HandOccupation::Launcher,
+        ItemKind::Arrows { .. } | ItemKind::Bolts { .. } => HandOccupation::Ammunition,
         ItemKind::Weapon {
             handling: WeaponHandling::OneHanded,
             ..
@@ -293,8 +455,6 @@ fn hand_occupation(kind: &ItemKind) -> HandOccupation {
         | ItemKind::Ring { .. }
         | ItemKind::Pendant { .. }
         | ItemKind::TransformationRing { .. }
-        | ItemKind::Arrows { .. }
-        | ItemKind::Bolts { .. }
         | ItemKind::Orb { .. }
         | ItemKind::SkillScroll { .. }
         | ItemKind::Jewel { .. }
@@ -325,20 +485,22 @@ fn paired_hand(slot: EquipmentSlot) -> Option<EquipmentSlot> {
     }
 }
 
-/// Whether a worn hand occupant is a two-handed weapon, resolved through the
-/// atlas. An occupant the atlas cannot identify is not a known two-handed weapon
-/// — a total fold of genuine optionality, never a should-never-happen panic.
-fn is_two_handed(occupant: &ItemInstance, atlas: &Atlas) -> bool {
+/// A worn hand occupant's occupation, resolved through the atlas. An occupant
+/// the atlas cannot identify claims one hand — a total fold of genuine
+/// optionality, never a should-never-happen panic.
+fn occupant_occupation(occupant: &ItemInstance, atlas: &Atlas) -> HandOccupation {
     match atlas.item(occupant.item) {
-        Some(def) => hand_occupation(&def.kind) == HandOccupation::TwoHands,
-        None => false,
+        Some(def) => hand_occupation(&def.kind),
+        None => HandOccupation::OneHand,
     }
 }
 
-/// Whether wearing an `incoming`-occupancy item in `slot` would break two-handed
-/// dual-hand occupancy: a two-handed item needs its paired hand empty, and no
-/// item may share a hand pair with a worn two-handed weapon. A non-hand slot has
-/// no paired hand, so it never conflicts.
+/// Whether wearing an `incoming`-occupancy item in `slot` would break hand-pair
+/// occupancy: a two-handed melee weapon needs its paired hand empty; a launcher
+/// needs it empty or holding ammunition; ammunition needs it empty or holding a
+/// launcher; and a one-hander may not share the pair with a two-handed weapon,
+/// a launcher, or ammunition. A non-hand slot has no paired hand, so it never
+/// conflicts.
 fn two_handed_conflict(
     equipment: &Equipment,
     incoming: HandOccupation,
@@ -351,27 +513,58 @@ fn two_handed_conflict(
     let Some(occupant) = equipment.get(paired) else {
         return false;
     };
-    match incoming {
-        HandOccupation::TwoHands => true,
-        HandOccupation::OneHand => is_two_handed(occupant, atlas),
+    hand_pair_conflicts(incoming, occupant_occupation(occupant, atlas))
+}
+
+/// The exhaustive hand-pair legality rule over both occupations. The only
+/// legal occupied pairs are one-hander beside one-hander and launcher beside
+/// ammunition (either order).
+fn hand_pair_conflicts(incoming: HandOccupation, paired: HandOccupation) -> bool {
+    match (incoming, paired) {
+        (HandOccupation::OneHand, HandOccupation::OneHand)
+        | (HandOccupation::Launcher, HandOccupation::Ammunition)
+        | (HandOccupation::Ammunition, HandOccupation::Launcher) => false,
+        (
+            HandOccupation::OneHand,
+            HandOccupation::TwoHands | HandOccupation::Launcher | HandOccupation::Ammunition,
+        )
+        | (
+            HandOccupation::TwoHands,
+            HandOccupation::OneHand
+            | HandOccupation::TwoHands
+            | HandOccupation::Launcher
+            | HandOccupation::Ammunition,
+        )
+        | (
+            HandOccupation::Launcher,
+            HandOccupation::OneHand | HandOccupation::TwoHands | HandOccupation::Launcher,
+        )
+        | (
+            HandOccupation::Ammunition,
+            HandOccupation::OneHand | HandOccupation::TwoHands | HandOccupation::Ammunition,
+        ) => true,
     }
 }
 
-/// Re-proves two-handed dual-hand occupancy at the reload boundary — the
+/// Re-proves hand-pair occupancy at the reload boundary — the
 /// instance×definition cross-reference the [`Equipment`] component cannot hold
 /// alone (a slot carries an [`ItemInstance`], whose handedness lives in the
-/// definition). A hand wearing a two-handed weapon requires the other hand empty.
+/// definition). A hand wearing a two-handed weapon requires the other hand
+/// empty; a launcher admits only ammunition beside it.
 ///
 /// # Errors
-/// Returns [`EquipmentConflict::TwoHandedWithOffhand`] when a hand wears a
-/// two-handed weapon while the other hand is also occupied.
+/// Returns [`EquipmentConflict::TwoHandedWithOffhand`] when both hands are
+/// occupied by an illegal pairing.
 pub fn reconcile_equipment(equipment: &Equipment, atlas: &Atlas) -> Result<(), EquipmentConflict> {
     match (
         equipment.get(EquipmentSlot::LeftHand),
         equipment.get(EquipmentSlot::RightHand),
     ) {
         (Some(left), Some(right)) => {
-            if is_two_handed(left, atlas) || is_two_handed(right, atlas) {
+            if hand_pair_conflicts(
+                occupant_occupation(left, atlas),
+                occupant_occupation(right, atlas),
+            ) {
                 Err(EquipmentConflict::TwoHandedWithOffhand)
             } else {
                 Ok(())
@@ -381,10 +574,12 @@ pub fn reconcile_equipment(equipment: &Equipment, atlas: &Atlas) -> Result<(), E
     }
 }
 
-/// Why a reloaded equipment set violates two-handed dual-hand occupancy.
+/// Why a reloaded equipment set violates hand-pair occupancy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EquipmentConflict {
-    /// A hand wears a two-handed weapon while the other hand is also occupied.
+    /// Both hands are occupied by an illegal pairing: a two-handed weapon
+    /// beside anything, a launcher beside a non-ammunition item, or ammunition
+    /// beside a non-launcher item.
     TwoHandedWithOffhand,
 }
 
@@ -602,5 +797,218 @@ mod tests {
             UnequipOutcome::SlotEmpty => panic!("the slot held an item"),
         }
         assert!(equipment.get(EquipmentSlot::Helm).is_none());
+    }
+
+    // --- The eligibility gate (white-box over hand-built wearer + wear
+    // columns; hand-derived numbers from the equipment spec §0.5). -----------
+
+    use crate::components::class::ClassSet;
+    use crate::components::item_instance::{ExcellentOptions, ExcellentWeaponSet};
+    use crate::components::item_options::{ExcellentWeaponOption, NormalOption};
+    use crate::components::levels::OptionLevel;
+    use crate::data::common::Provenance;
+    use crate::data::common::SourceVersion;
+    use crate::data::item_definitions::ItemPrice;
+
+    fn dk_only() -> ClassSet {
+        ClassSet {
+            dark_knight: true,
+            ..ClassSet::NONE
+        }
+    }
+
+    fn wear_columns(level: u16, strength: u16, energy: u16) -> WearRequirements {
+        WearRequirements {
+            level,
+            strength,
+            agility: 0,
+            vitality: 0,
+            energy,
+            command: 0,
+        }
+    }
+
+    fn weapon_definition(drop_level: u8, wear: WearRequirements) -> ItemDefinition {
+        ItemDefinition {
+            id: ItemRef {
+                group: 0,
+                number: 1,
+            },
+            provenance: Provenance {
+                source_version: SourceVersion::V075,
+                review: None,
+            },
+            width: 1,
+            height: 3,
+            drops_from_monsters: true,
+            drop_level,
+            max_item_level: ItemLevel::new(11).unwrap(),
+            durability: 30,
+            price: ItemPrice::Formula,
+            kind: ItemKind::Weapon {
+                handling: WeaponHandling::OneHanded,
+                min_damage: 10,
+                max_damage: 20,
+                attack_speed: 0,
+                skill: None,
+                classes: dk_only(),
+                wear,
+            },
+        }
+    }
+
+    fn knight(level: u16, strength: u16, energy: u16) -> Wearer {
+        Wearer {
+            class: CharacterClass::DarkKnight,
+            level: Level::new(level).unwrap(),
+            stats: Stats::Standard {
+                strength,
+                agility: 0,
+                vitality: 0,
+                energy,
+            },
+        }
+    }
+
+    #[test]
+    fn a_class_outside_the_items_list_is_rejected_class_mismatch() {
+        let def = weapon_definition(20, wear_columns(0, 0, 0));
+        let elf = Wearer {
+            class: CharacterClass::FairyElf,
+            ..knight(50, 200, 0)
+        };
+        assert_eq!(
+            eligibility(&elf, &item(1), &def),
+            Some(EquipRejection::ClassMismatch)
+        );
+        assert_eq!(eligibility(&knight(50, 200, 0), &item(1), &def), None);
+    }
+
+    #[test]
+    fn the_scaled_strength_requirement_is_inclusive() {
+        // EQ-GATE-2: base 120 at edl 20 → (3·20·120)/100 + 20 = 92.
+        let def = weapon_definition(20, wear_columns(0, 120, 0));
+        assert_eq!(
+            eligibility(&knight(50, 91, 0), &item(1), &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        assert_eq!(eligibility(&knight(50, 92, 0), &item(1), &def), None);
+    }
+
+    #[test]
+    fn the_plus_twenty_floor_makes_the_stated_column_never_the_compared_number() {
+        // EQ-GATE-3: base 20 at edl 6 → (3·6·20)/100 + 20 = 23.
+        let def = weapon_definition(6, wear_columns(0, 20, 0));
+        assert_eq!(
+            eligibility(&knight(50, 22, 0), &item(1), &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        assert_eq!(eligibility(&knight(50, 23, 0), &item(1), &def), None);
+    }
+
+    #[test]
+    fn rarity_and_enhancement_raise_the_requirement_through_the_drop_level() {
+        // EQ-GATE-4: the 92-requirement weapon re-rolled Excellent +5 →
+        // edl 20 + 15 + 25 = 60 → (3·60·120)/100 + 20 = 236.
+        let def = weapon_definition(20, wear_columns(0, 120, 0));
+        let mut excellent = item(1);
+        excellent.level = ItemLevel::new(5).unwrap();
+        excellent.roll = RarityRoll::Excellent {
+            options: ExcellentOptions::Weapon {
+                options: ExcellentWeaponSet::with_first(ExcellentWeaponOption::DamagePct, []),
+            },
+        };
+        assert_eq!(
+            eligibility(&knight(50, 235, 0), &excellent, &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        assert_eq!(eligibility(&knight(50, 236, 0), &excellent, &def), None);
+    }
+
+    #[test]
+    fn the_strength_requirement_gains_four_per_normal_option_level() {
+        // EQ-GATE-5: pre-+20 scaled 72 > 0, option level 3 → 72 + 12 + 20 = 104.
+        let def = weapon_definition(20, wear_columns(0, 120, 0));
+        let mut optioned = item(1);
+        optioned.normal_option = Some(RolledNormalOption {
+            option: NormalOption::PhysicalDamage,
+            level: OptionLevel::L3,
+        });
+        assert_eq!(
+            eligibility(&knight(50, 103, 0), &optioned, &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        assert_eq!(eligibility(&knight(50, 104, 0), &optioned, &def), None);
+        // The +4·level term never fires when the strength column is 0.
+        let no_strength = weapon_definition(20, wear_columns(0, 0, 0));
+        let mut optioned = item(1);
+        optioned.normal_option = Some(RolledNormalOption {
+            option: NormalOption::PhysicalDamage,
+            level: OptionLevel::L3,
+        });
+        assert_eq!(eligibility(&knight(1, 0, 0), &optioned, &no_strength), None);
+    }
+
+    #[test]
+    fn a_zero_column_is_no_requirement_never_scaled_to_twenty() {
+        // EQ-GATE-6: an all-0-column item equips for a level-1 minimal wearer.
+        let def = weapon_definition(20, wear_columns(0, 0, 0));
+        assert_eq!(eligibility(&knight(1, 0, 0), &item(1), &def), None);
+    }
+
+    #[test]
+    fn the_gate_reads_total_stats_so_worn_gear_qualifies_further_gear() {
+        // EQ-GATE-7: a base-90 wearer with a +2 strength ring presents total
+        // 92 — a synthetic total-stats wearer, the seam ancient stat gear
+        // fills; the gate itself never aggregates.
+        let def = weapon_definition(20, wear_columns(0, 120, 0));
+        let base_only = knight(50, 90, 0);
+        assert_eq!(
+            eligibility(&base_only, &item(1), &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        let with_ring_total = knight(50, 92, 0);
+        assert_eq!(eligibility(&with_ring_total, &item(1), &def), None);
+    }
+
+    #[test]
+    fn the_level_requirement_compares_raw_and_inclusive() {
+        // EQ-GATE-8: level 180 wings — 179 rejected, 180 equipped; the level
+        // column never scales with drop level or rarity.
+        let def = weapon_definition(100, wear_columns(180, 0, 0));
+        assert_eq!(
+            eligibility(&knight(179, 0, 0), &item(1), &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        assert_eq!(eligibility(&knight(180, 0, 0), &item(1), &def), None);
+    }
+
+    #[test]
+    fn the_energy_column_scales_with_multiplier_four() {
+        // §0.5 A6: base energy 40 at edl 20 → (4·20·40)/100 + 20 = 52.
+        let def = weapon_definition(20, wear_columns(0, 0, 40));
+        assert_eq!(
+            eligibility(&knight(50, 0, 51), &item(1), &def),
+            Some(EquipRejection::RequirementsNotMet)
+        );
+        assert_eq!(eligibility(&knight(50, 0, 52), &item(1), &def), None);
+    }
+
+    #[test]
+    fn hand_pair_legality_admits_only_one_handers_and_launcher_with_ammo() {
+        use HandOccupation::{Ammunition, Launcher, OneHand, TwoHands};
+        assert!(!hand_pair_conflicts(OneHand, OneHand));
+        assert!(!hand_pair_conflicts(Launcher, Ammunition));
+        assert!(!hand_pair_conflicts(Ammunition, Launcher));
+        // A sword cannot sit beside arrows, arrows cannot pair with arrows,
+        // and a launcher still conflicts with everything but ammunition.
+        assert!(hand_pair_conflicts(OneHand, Ammunition));
+        assert!(hand_pair_conflicts(Ammunition, OneHand));
+        assert!(hand_pair_conflicts(Ammunition, Ammunition));
+        assert!(hand_pair_conflicts(Launcher, OneHand));
+        assert!(hand_pair_conflicts(Launcher, Launcher));
+        assert!(hand_pair_conflicts(TwoHands, Ammunition));
+        assert!(hand_pair_conflicts(TwoHands, OneHand));
+        assert!(hand_pair_conflicts(OneHand, TwoHands));
     }
 }

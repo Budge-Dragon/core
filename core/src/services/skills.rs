@@ -13,7 +13,7 @@ use rand_core::RngCore;
 
 use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
-use crate::components::combat_profile::{CombatProfile, CombatTarget};
+use crate::components::combat_profile::{CombatProfile, CombatTarget, WeaponMode};
 use crate::components::element::Element;
 use crate::components::interval::Interval;
 use crate::components::placement::Placement;
@@ -37,7 +37,7 @@ use crate::services::chance::{draw_cardinal, roll_apply_elemental};
 use crate::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 use crate::services::effects::{ApplicableBuff, apply_buff};
 use crate::services::movement::{resolve_drift, resolve_step};
-use crate::services::profile::{character_profile, effective_profile};
+use crate::services::profile::effective_profile;
 use crate::services::ratio::{nonzero, scale_ratio};
 
 // W-SRC: invented movement grains — no data file carries a skill knockback or
@@ -355,9 +355,16 @@ fn bounding_rect(corners: [WorldPos; 4]) -> WorldRect {
 /// covered candidate), applies elemental ailments and knockback, dashes the
 /// caster on a lunge, then spends the cost. Returns the caster's vitals after the
 /// spend (health unchanged) and the [`SkillOutcome`].
+///
+/// `caster_profile` is the caster's BASE strike view, pre-derived by the host —
+/// the equipment fold's output for a geared caster, or the bare
+/// `character_profile` for a gearless one; the cast folds the caster's live
+/// timed effects onto it internally, mirroring the defender side. Passing the
+/// profile keeps `Equipment`/`Atlas` out of the combat path.
 #[must_use]
 pub fn cast(
     caster: &Character,
+    caster_profile: &CombatProfile,
     skill: DamagingSkillRef<'_>,
     aim: WorldPos,
     targets: &[CombatTarget],
@@ -387,18 +394,12 @@ pub fn cast(
         );
     }
 
-    let caster_profile = effective_profile(character_profile(caster).0, &caster.active_effects());
-    let basis = skill_strike_basis(caster, &caster_profile, skill);
+    let effective = effective_profile(*caster_profile, &caster.active_effects());
+    let basis = skill_strike_basis(caster, &effective, skill);
     let mut hits = Vec::with_capacity(struck.len());
     for &(index, target) in &struck {
         hits.push(resolve_target_hit(
-            index,
-            &caster_profile,
-            target,
-            skill,
-            &basis,
-            grid,
-            rng,
+            index, &effective, target, skill, &basis, grid, rng,
         ));
     }
 
@@ -548,15 +549,22 @@ pub(crate) fn skill_multiplier_per_mille(class: CharacterClass, energy: u16) -> 
 /// Selects a skill's augmented strike span and excellent order from the
 /// `DamageType`, and pairs it with the caster's class multiplier — the whole span
 /// source of a skill strike (`CombatProfile.wizardry` + `Skill.attack_damage` +
-/// `Skill.damage_type` read together). Exhaustive over [`DamageType`]; `None`
-/// is a totality arm. Pure, draws no RNG.
+/// `Skill.damage_type` read together). A double-wielded skill halves its flat
+/// `D` (the head's ×2 restores the skill's authored punch at net ×1); a worn
+/// staff's rise multiplies the whole augmented wizardry span. Exhaustive over
+/// [`DamageType`]; `None` is a totality arm. Pure, draws no RNG.
 pub(crate) fn skill_strike_basis(
     caster: &Character,
     caster_profile: &CombatProfile,
     skill: DamagingSkillRef<'_>,
 ) -> StrikeBasis {
     let multiplier_per_mille = skill_multiplier_per_mille(caster.class(), caster_energy(caster));
-    let d = skill.attack_damage();
+    // W-SRC: a double-wielded skill's flat damage D is halved before the
+    // strike head's post-roll ×2 (AttackableExtensions.cs:765-769).
+    let d = match caster_profile.weapon_mode() {
+        WeaponMode::Single => skill.attack_damage(),
+        WeaponMode::DoubleWield => skill.attack_damage() / 2,
+    };
     match skill.damage_type() {
         DamageType::Physical => StrikeBasis::Skill {
             span: augmented_span(caster_profile.physical(), d),
@@ -568,7 +576,10 @@ pub(crate) fn skill_strike_basis(
             // (missing attributes read 0, AttributeSystem.cs:111-126); D is
             // discarded, never a physical fallback.
             span: match caster_profile.wizardry() {
-                Some(wizardry) => augmented_span(wizardry, d),
+                Some(wizardry) => rise_applied(
+                    augmented_span(wizardry, d),
+                    caster_profile.wizardry_rise_x2(),
+                ),
                 None => zero_span(),
             },
             excellent_order: ExcellentOrder::DefenseThenMultiply,
@@ -584,6 +595,29 @@ pub(crate) fn skill_strike_basis(
             multiplier_per_mille,
         },
     }
+}
+
+// W-SRC: the staff rise multiplies the WHOLE wizardry parenthesis including
+// the skill damage — `(WizBase + D) × (1 + rise/100)` on both ends
+// (AttackableExtensions.cs:808-810; ClassDarkWizard.cs:81,113). The ×2 carrier
+// keeps odd-magic-power half-points integral; 2 (carrier) × 100 (percent).
+/// The rise multiplier's denominator: `× (200 + rise_x2) / 200`.
+const RISE_DENOMINATOR: u32 = 200;
+
+/// Multiplies a wizardry span by the staff rise, both ends floored — the
+/// single divide of the ×2-carried rise. `rise_x2 = 0` is the ×1 identity
+/// (200/200), so a staffless caster's span is untouched.
+fn rise_applied(span: Interval<u16>, rise_x2: u16) -> Interval<u16> {
+    let num = u32::from(rise_x2).saturating_add(RISE_DENOMINATOR);
+    let scale =
+        |end: u16| narrow_span_end(scale_ratio(u32::from(end), num, nonzero(RISE_DENOMINATOR)));
+    Interval::spanning(scale(span.min()), scale(span.max()))
+}
+
+/// Saturating narrow of a scaled span end back into its `u16` home — boundary
+/// saturation of a combat magnitude, never a masked lookup.
+fn narrow_span_end(value: u32) -> u16 {
+    u16::try_from(value).unwrap_or(u16::MAX)
 }
 
 /// Augments a base span by a skill's damage `D`: min += D, max += D + D/2
@@ -728,7 +762,7 @@ mod tests {
     use crate::components::units::{MapNumber, Resistance};
     use crate::data::common::{Provenance, SkillNumber, SourceVersion};
     use crate::data::skills::{DamageType, LearnRequirement};
-    use crate::services::profile::monster_profile;
+    use crate::services::profile::{character_profile, monster_profile};
 
     /// Deterministic `SplitMix64` for replayable tests.
     struct TestRng {
@@ -859,6 +893,12 @@ mod tests {
         let mut value = serde_json::to_value(caster).unwrap();
         value["active_effects"] = serde_json::to_value(ActiveEffects::EMPTY.with(effect)).unwrap();
         serde_json::from_value(value).unwrap()
+    }
+
+    /// The caster's gearless base profile — what a host without an equipment
+    /// fold pre-derives and passes into [`cast`].
+    fn base_profile_of(caster: &Character) -> CombatProfile {
+        character_profile(caster).0
     }
 
     fn resistances(lightning: u8) -> PerElement<Resistance> {
@@ -1061,7 +1101,15 @@ mod tests {
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(1);
-        let (vitals, outcome) = cast(&caster, damaging, aim, &targets, &all_walkable(), &mut rng);
+        let (vitals, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         assert_eq!(vitals, caster.vitals());
         assert_eq!(
             outcome,
@@ -1079,7 +1127,15 @@ mod tests {
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(1);
-        let (_, outcome) = cast(&caster, damaging, aim, &targets, &all_walkable(), &mut rng);
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         assert_eq!(
             outcome,
             SkillOutcome::Rejected {
@@ -1096,7 +1152,15 @@ mod tests {
         let targets = [target_at((30, 10), 0)];
         let aim = TileCoord::new(30, 10).to_world();
         let mut rng = TestRng::new(1);
-        let (vitals, outcome) = cast(&caster, damaging, aim, &targets, &all_walkable(), &mut rng);
+        let (vitals, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         assert_eq!(vitals, caster.vitals());
         assert_eq!(
             outcome,
@@ -1124,7 +1188,15 @@ mod tests {
         let targets = [target_at((40, 40), 0)];
         let aim = TileCoord::new(10, 10).to_world();
         let mut rng = TestRng::new(1);
-        let (vitals, outcome) = cast(&caster, damaging, aim, &targets, &all_walkable(), &mut rng);
+        let (vitals, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         assert_eq!(vitals, caster.vitals());
         assert_eq!(
             outcome,
@@ -1142,7 +1214,15 @@ mod tests {
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(2);
-        let (vitals, outcome) = cast(&caster, damaging, aim, &targets, &all_walkable(), &mut rng);
+        let (vitals, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         assert_eq!(vitals.mana.current(), 70);
         assert_eq!(vitals.ability.current(), 30);
         assert_eq!(vitals.health, caster.vitals().health);
@@ -1190,6 +1270,7 @@ mod tests {
             let plain_dmg = landed_damage(
                 cast(
                     &plain,
+                    &base_profile_of(&plain),
                     damaging,
                     aim,
                     &targets,
@@ -1201,6 +1282,7 @@ mod tests {
             let buffed_dmg = landed_damage(
                 cast(
                     &buffed,
+                    &base_profile_of(&buffed),
                     damaging,
                     aim,
                     &targets,
@@ -1263,6 +1345,7 @@ mod tests {
             landed_damage(
                 cast(
                     &caster,
+                    &base_profile_of(&caster),
                     damaging,
                     aim,
                     targets,
@@ -1321,6 +1404,7 @@ mod tests {
         for seed in 0u64..16 {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
+                &base_profile_of(&caster),
                 damaging,
                 aim,
                 &targets,
@@ -1357,8 +1441,16 @@ mod tests {
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(3);
-        if let SkillOutcome::Cast { hits, .. } =
-            cast(&caster, plain, aim, &targets, &all_walkable(), &mut rng).1
+        if let SkillOutcome::Cast { hits, .. } = cast(
+            &caster,
+            &base_profile_of(&caster),
+            plain,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        )
+        .1
         {
             if let TargetHit::Landed { inflicted, .. } = hits[0] {
                 assert_eq!(inflicted, Some(Ailment::Frozen));
@@ -1376,8 +1468,16 @@ mod tests {
         let icy = damaging_ref(&icy_def);
         let immune = [target_at((11, 10), 255)];
         let mut rng = TestRng::new(3);
-        if let SkillOutcome::Cast { hits, .. } =
-            cast(&caster, icy, aim, &immune, &all_walkable(), &mut rng).1
+        if let SkillOutcome::Cast { hits, .. } = cast(
+            &caster,
+            &base_profile_of(&caster),
+            icy,
+            aim,
+            &immune,
+            &all_walkable(),
+            &mut rng,
+        )
+        .1
         {
             if let TargetHit::Landed { inflicted, .. } = hits[0] {
                 assert_eq!(inflicted, None);
@@ -1400,7 +1500,15 @@ mod tests {
         let targets = [target_at((11, 10), 0)];
         let aim = TileCoord::new(11, 10).to_world();
         let mut rng = TestRng::new(4);
-        let (_, outcome) = cast(&caster, bolt, aim, &targets, &all_walkable(), &mut rng);
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            bolt,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         match outcome {
             SkillOutcome::Cast { hits, .. } => match hits[0] {
                 TargetHit::Landed { displacement, .. } => {
@@ -1421,7 +1529,15 @@ mod tests {
         let targets = [target_at((13, 10), 0)];
         let aim = TileCoord::new(13, 10).to_world();
         let mut rng = TestRng::new(5);
-        let (_, outcome) = cast(&caster, lunge, aim, &targets, &all_walkable(), &mut rng);
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            lunge,
+            aim,
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
         match outcome {
             SkillOutcome::Cast {
                 caster_placement,
@@ -1464,8 +1580,16 @@ mod tests {
         // Seeds whose heading draws off-row must report no displacement.
         for seed in 0u64..16 {
             let mut rng = TestRng::new(seed);
-            if let SkillOutcome::Cast { hits, .. } =
-                cast(&caster, bolt, aim, &targets, &grid, &mut rng).1
+            if let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                bolt,
+                aim,
+                &targets,
+                &grid,
+                &mut rng,
+            )
+            .1
             {
                 if let TargetHit::Landed {
                     displacement: Some(moved),
@@ -1495,7 +1619,15 @@ mod tests {
         let aim = TileCoord::new(12, 10).to_world();
         let run = |seed: u64| {
             let mut rng = TestRng::new(seed);
-            cast(&caster, lunge, aim, &targets, &all_walkable(), &mut rng)
+            cast(
+                &caster,
+                &base_profile_of(&caster),
+                lunge,
+                aim,
+                &targets,
+                &all_walkable(),
+                &mut rng,
+            )
         };
         assert_eq!(run(9), run(9));
     }
@@ -1787,6 +1919,118 @@ mod tests {
     }
 
     #[test]
+    fn the_staff_rise_multiplies_the_whole_augmented_span() {
+        // EQ-STAFF-1/2: DW wizardry [11, 25]; Legendary Staff rise_x2 = 67 →
+        // ×267/200. A plain (D = 0) span scales to [14, 33]; the D = 45
+        // augmented span [56, 92] scales to [74, 122] — the rise wraps the
+        // WHOLE (WizBase + D) parenthesis, after augmented_span.
+        let caster = caster_of("dark_wizard", 40, 100, (10, 10));
+        let geared = CombatProfile {
+            wizardry_rise_x2: 67,
+            ..character_profile(&caster).0
+        };
+        assert_eq!(
+            skill_strike_basis(
+                &caster,
+                &geared,
+                damaging_ref(&typed_skill(DamageType::Wizardry, 0))
+            ),
+            StrikeBasis::Skill {
+                span: Interval::new(14, 33).unwrap(),
+                excellent_order: ExcellentOrder::DefenseThenMultiply,
+                multiplier_per_mille: 1000,
+            }
+        );
+        assert_eq!(
+            skill_strike_basis(
+                &caster,
+                &geared,
+                damaging_ref(&typed_skill(DamageType::Wizardry, 45))
+            ),
+            StrikeBasis::Skill {
+                span: Interval::new(74, 122).unwrap(),
+                excellent_order: ExcellentOrder::DefenseThenMultiply,
+                multiplier_per_mille: 1000,
+            }
+        );
+        // The gearless rise (0) is the ×1 identity — W-SKILLDMG's [56, 92].
+        assert_eq!(
+            basis_of(&caster, &typed_skill(DamageType::Wizardry, 45)),
+            StrikeBasis::Skill {
+                span: Interval::new(56, 92).unwrap(),
+                excellent_order: ExcellentOrder::DefenseThenMultiply,
+                multiplier_per_mille: 1000,
+            }
+        );
+    }
+
+    #[test]
+    fn the_rise_never_touches_a_physical_skill_span() {
+        // A rise-carrying profile (an MG with a staff and a physical skill)
+        // leaves the physical basis exactly as augmented.
+        let caster = caster_of("dark_knight", 200, 30, (10, 10));
+        let geared = CombatProfile {
+            wizardry_rise_x2: 67,
+            ..character_profile(&caster).0
+        };
+        assert_eq!(
+            skill_strike_basis(
+                &caster,
+                &geared,
+                damaging_ref(&typed_skill(DamageType::Physical, 60))
+            ),
+            StrikeBasis::Skill {
+                span: Interval::new(93, 140).unwrap(),
+                excellent_order: ExcellentOrder::MultiplyThenDefense,
+                multiplier_per_mille: 2030,
+            }
+        );
+    }
+
+    #[test]
+    fn a_double_wielded_skill_halves_its_flat_d() {
+        // EQ-DW-3: Rageful-Blow-shaped D = 60 uses D = 30 when double-wielding
+        // — over the ×0.55-folded span [55, 110]: [85, 155] (min +30, max
+        // +30+15), so the head's ×2 keeps the skill's punch at net ×1.
+        let caster = caster_of("dark_knight", 200, 30, (10, 10));
+        let base = character_profile(&caster).0;
+        let dual = CombatProfile {
+            physical: Interval::new(55, 110).unwrap(),
+            weapon_mode: WeaponMode::DoubleWield,
+            ..base
+        };
+        assert_eq!(
+            skill_strike_basis(
+                &caster,
+                &dual,
+                damaging_ref(&typed_skill(DamageType::Physical, 60))
+            ),
+            StrikeBasis::Skill {
+                span: Interval::new(85, 155).unwrap(),
+                excellent_order: ExcellentOrder::MultiplyThenDefense,
+                multiplier_per_mille: 2030,
+            }
+        );
+        // Single-wielding the same span keeps the full D: [115, 200].
+        let single = CombatProfile {
+            physical: Interval::new(55, 110).unwrap(),
+            ..base
+        };
+        assert_eq!(
+            skill_strike_basis(
+                &caster,
+                &single,
+                damaging_ref(&typed_skill(DamageType::Physical, 60))
+            ),
+            StrikeBasis::Skill {
+                span: Interval::new(115, 200).unwrap(),
+                excellent_order: ExcellentOrder::MultiplyThenDefense,
+                multiplier_per_mille: 2030,
+            }
+        );
+    }
+
+    #[test]
     fn the_basis_selection_is_pure() {
         // No RngCore in any signature on the seam; two derivations from the
         // same inputs are identical values.
@@ -1812,6 +2056,7 @@ mod tests {
         for seed in 0u64..32 {
             let outcome = cast(
                 &caster,
+                &base_profile_of(&caster),
                 damaging,
                 aim,
                 &targets,
@@ -1847,6 +2092,7 @@ mod tests {
             let skill_dmg = landed_damage(
                 cast(
                     &caster,
+                    &base_profile_of(&caster),
                     damaging,
                     aim,
                     &targets,
