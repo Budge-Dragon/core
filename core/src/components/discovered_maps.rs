@@ -30,14 +30,6 @@ impl DiscoveredMaps {
         self.0.contains(&map)
     }
 
-    /// Whether the set holds no map at all — a parse-gate sentinel only. A
-    /// live character's set always contains its current map, so this is never
-    /// true of a held value.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
     /// This set with `map` inserted — monotone and idempotent: inserting a
     /// member returns an equal set.
     #[must_use]
@@ -62,7 +54,6 @@ mod tests {
         let set = DiscoveredMaps::single(MapNumber(3));
         assert!(set.contains(MapNumber(3)));
         assert!(!set.contains(MapNumber(0)));
-        assert!(!set.is_empty());
         assert_eq!(set.iter().collect::<Vec<_>>(), vec![MapNumber(3)]);
     }
 

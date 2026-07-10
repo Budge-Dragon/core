@@ -44,7 +44,7 @@ use crate::services::ratio::{nonzero, scale_ratio};
 /// fraction (MG/DL 2/3) otherwise. A plain `u16`, not a [`Level`] — the floor
 /// of a fraction can be zero, which a 1-based level must never hold.
 #[must_use]
-pub fn effective_level_requirement(min_level: Level, requirement: WarpRequirement) -> u16 {
+pub(crate) fn effective_level_requirement(min_level: Level, requirement: WarpRequirement) -> u16 {
     match requirement {
         WarpRequirement::Full => min_level.get(),
         WarpRequirement::Fraction {
