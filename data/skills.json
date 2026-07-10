@@ -203,7 +203,7 @@
     },
     {
       "number": 9,
-      "source_version": "075",
+      "source_version": "095d",
       "attack_damage": 45,
       "damage_type": "wizardry",
       "element": null,
@@ -225,7 +225,8 @@
       "classes": [
         "dark_wizard",
         "magic_gladiator"
-      ]
+      ],
+      "review": "carries the 095d values (range 6, magic_gladiator included); the true 075 record is range 7 and dark_wizard-only - labeled by value provenance"
     },
     {
       "number": 10,

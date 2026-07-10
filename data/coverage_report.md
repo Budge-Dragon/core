@@ -25,7 +25,7 @@ files (`character_classes.json`, `stats.json`, `stat_map` imports, `item_options
 | items | `item_definitions.json` | 196 | 14 | 33 | 243 |
 | monsters | `monster_definitions.json` | 73 | 27 | 0 | 100 |
 | monsters | `spawns.json` | 1563 | 284 | 0 | 1847 |
-| skills | `skills.json` | 30 | 5 | 16 | 51 |
+| skills | `skills.json` | 29 | 6 | 16 | 51 |
 | maps | `map_definitions.json` | 7 | 4 | 0 | 11 |
 | maps | `gates_warps.json` | 65 | 4 | 13 | 82 |
 | maps | `terrain/` binaries | — | — | — | 11 files |
@@ -35,7 +35,7 @@ files (`character_classes.json`, `stats.json`, `stat_map` imports, `item_options
 | chaos | `chaos_mixes.json` | 1 | 5 | 4 | 10 |
 | constants+exp | `exp_tables.json` | 1 | 0 | 0 | 1 |
 | constants+exp | `game_config.json` | 1 | 0 | 0 | 1 |
-| **Total (JSON records)** | | **1940** | **350** | **110** | **2400** |
+| **Total (JSON records)** | | **1939** | **351** | **110** | **2400** |
 
 Plus 11 terrain binaries (`terrain/0.bin`..`terrain/10.bin`, 65536 bytes each; keyed by
 map number, not versioned JSON records).
@@ -51,7 +51,7 @@ Structural breakdowns:
   jewel 5, orb 5, mix_material 5, pet 4, event_ticket 2, arrows 1, bolts 1, stat_fruit 1,
   transformation_ring 1, lucky_box 1, consumable 10, skill_scroll 14.
 
-## 2. Review-flagged values (197 review strings total)
+## 2. Review-flagged values (198 review strings total)
 
 Every OpenMU-default / OpenMU-modeling / era-doubtful value carries a `review` string,
 grouped into named families, each slated for independent re-sourcing against on-era
@@ -62,7 +62,7 @@ references. Counts per file:
 | `monster_definitions.json` | 48 | water→lightning remap (48); phantom skill-150 (14 ⊂); golden-era doubt (2 ⊂) |
 | `item_definitions.json` | 41 | 33 S6 backports + 8 durability-3 potions |
 | `ancient_sets.json` | 36 | S6-transcribed set ordering (all 36); Kantata data-bug fix note |
-| `skills.json` | 17 | 16 S6 backports + cometfall AoE-encoding doubt |
+| `skills.json` | 18 | 16 S6 backports + cometfall AoE-encoding doubt + evil-spirit 095d value-provenance pin |
 | `gates_warps.json` | 26 | 095d warp fee/level list reused from 0.75 (13); s6 gate/warp backports for Tarkan/Icarus reachability + Tarkan spawn gate 57 (13) |
 | `classes.json` | 8 | ability seed, fruit divisor, MG/DL warp fraction, S6 second tiers |
 | `special_drops.json` | 7 | drop chances + band edges; box encoding + Feather/Crest era doubt |

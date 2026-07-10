@@ -1,13 +1,16 @@
-//! The single physical-strike resolver: attacker profile against defender
-//! profile and health, one authoritative outcome. Pure and deterministic — the
+//! The single strike resolver: attacker profile against defender profile and
+//! health, struck on a [`StrikeBasis`] (a plain weapon swing or a skill's
+//! pre-selected span), one authoritative outcome. Pure and deterministic — the
 //! RNG is drawn in a fixed order (hit, damage span, then the four special-hit
 //! rolls) so the same seed replays bit-for-bit, and the damage span is *always*
-//! rolled even when a critical or excellent overrides it, keeping the RNG
-//! consumption constant across every branch.
+//! rolled even when a critical or excellent overrides it or the span is a
+//! collapsed `[0, 0]`, keeping the RNG consumption constant across every branch
+//! and every basis.
 
 use rand_core::RngCore;
 
 use crate::components::combat_profile::CombatProfile;
+use crate::components::interval::Interval;
 use crate::components::pool::Pool;
 use crate::components::units::{ChancePer10000, Percent};
 use crate::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
@@ -26,26 +29,77 @@ const OVERRATE_NUM: u32 = 3;
 const OVERRATE_DEN: u32 = 10;
 /// Divisor of the level-scaled minimum-damage floor (`max(1, level / 10)`).
 const MIN_DAMAGE_FLOOR_DIVISOR: u32 = 10;
+/// Per-mille divisor of the class skill multiplier (`× multiplier / 1000`).
+const SKILL_MULTIPLIER_DENOMINATOR: u32 = 1000;
 
-/// Resolves one physical strike: rolls to hit, then — on a hit — the damage
-/// span and the four special-hit rolls, applies defense, the attacker's flat
-/// Greater-Damage add, the minimum-damage floor, the overrate penalty, doubling,
-/// and the defender's timed %-reduction, and reduces the defender's health.
-/// Returns the defender's health after the strike and the [`AttackOutcome`].
+/// Which basis a strike resolves against: a plain weapon swing, or a skill's
+/// DamageType-selected span. The one input [`resolve_attack`] reads to pick the
+/// span it draws, the excellent-head order, and whether a class multiplier
+/// applies. A transient service intent — never persisted, never a wire type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrikeBasis {
+    /// A weapon swing: the attacker's physical span, physical excellent order,
+    /// and NO class multiplier. Monster attacks and player basic attacks pass
+    /// this. The missing multiplier is structural — there is no field to
+    /// fabricate.
+    PlainSwing,
+    /// A skill strike: a pre-selected augmented span, the type-selected
+    /// excellent order, and the caster's class multiplier (per-mille). Minted
+    /// only by the skills service's span selection, so span/order/multiplier
+    /// are always mutually consistent.
+    Skill {
+        /// The DamageType-augmented span the strike draws from — `[0, 0]` for a
+        /// None-type skill or a wizardry cast by a caster with no wizardry
+        /// interval.
+        span: Interval<u16>,
+        /// Whether the excellent tier multiplies before or after defense — the
+        /// sole per-type difference in the fold.
+        excellent_order: ExcellentOrder,
+        /// The class `SkillMultiplier`, per-mille (÷1000). Applied at the
+        /// multiplier step to skill strikes only.
+        multiplier_per_mille: u32,
+    },
+}
+
+/// The order the excellent ×6/5 applies relative to defense subtraction — the
+/// one behavior that differs by damage type. Physical multiplies then
+/// subtracts; wizardry subtracts then multiplies. Carries no type identity
+/// beyond this order, so no span/type contradiction is representable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExcellentOrder {
+    /// Physical: `(aug_max × 6/5) − defense`.
+    MultiplyThenDefense,
+    /// Wizardry: `(aug_max − defense) × 6/5`.
+    DefenseThenMultiply,
+}
+
+/// Resolves one strike on its basis: rolls to hit, then — on a hit — the
+/// basis-selected damage span and the four special-hit rolls, folds the quality
+/// head (defense in the basis's excellent order), the attacker's flat
+/// Greater-Damage add, the overrate penalty, the minimum-damage floor, the
+/// class skill multiplier (skill bases only), doubling, and the defender's
+/// timed %-reduction, and reduces the defender's health. Returns the defender's
+/// health after the strike and the [`AttackOutcome`].
 #[must_use]
 pub fn resolve_attack(
     attacker: &CombatProfile,
     target: &CombatProfile,
     target_health: Pool,
+    basis: &StrikeBasis,
     rng: &mut impl RngCore,
 ) -> (Pool, AttackOutcome) {
     if !roll_per_10000(hit_chance(attacker, target), rng) {
         return (target_health, AttackOutcome::Missed);
     }
 
+    let interval = match basis {
+        StrikeBasis::PlainSwing => attacker.physical(),
+        StrikeBasis::Skill { span, .. } => *span,
+    };
     // The span is always drawn, even when a critical/excellent overrides the
-    // base, so RNG consumption is constant across every damage branch.
-    let span = uniform_in_inclusive(attacker.physical(), rng);
+    // base and even on a collapsed [0, 0] span, so RNG consumption is constant
+    // across every damage branch and every basis.
+    let span = uniform_in_inclusive(interval, rng);
     let excellent = roll_percent(attacker.excellent_chance(), rng);
     let critical = roll_percent(attacker.critical_chance(), rng);
     let defense_ignored = roll_percent(attacker.defense_ignore_chance(), rng);
@@ -58,7 +112,22 @@ pub fn resolve_attack(
     } else {
         HitQuality::Normal
     };
-    let damage = damage_dealt(attacker, target, span, quality, defense_ignored, doubled);
+    let excellent_order = match basis {
+        // A plain weapon swing is a physical strike.
+        StrikeBasis::PlainSwing => ExcellentOrder::MultiplyThenDefense,
+        StrikeBasis::Skill {
+            excellent_order, ..
+        } => *excellent_order,
+    };
+    let effective_defense = if defense_ignored { 0 } else { target.defense() };
+    let after_defense = quality_after_defense(
+        interval.max(),
+        span,
+        quality,
+        excellent_order,
+        effective_defense,
+    );
+    let damage = strike_tail(after_defense, attacker, target, basis, doubled);
     let new_health = target_health.reduced(damage);
     let hit = Hit {
         damage: Damage(damage),
@@ -98,58 +167,91 @@ fn hit_chance(attacker: &CombatProfile, target: &CombatProfile) -> ChancePer1000
     ChancePer10000::clamped(u64::from(numerator))
 }
 
-/// The damage magnitude of a landed hit, in the OpenMU `AttackableExtensions`
-/// fold order: the quality-selected base, minus the defender's defense (unless
-/// ignored, EARLY), plus the attacker's flat Greater-Damage add (MIDDLE), floored
-/// at `max(1, level / 10)`, then the attacker's damage multipliers (overrate
-/// penalty, doubling), then the defender's timed %-reduction (LATE). The floor is
-/// applied before the multipliers and the %-reduction and is *not* re-applied, so
-/// a ×1/2 defensive buff can push the final below it.
-fn damage_dealt(
-    attacker: &CombatProfile,
-    target: &CombatProfile,
-    span: u16,
+/// The quality-selected base minus defense, in the basis's order. Normal reads
+/// the rolled span; critical the augmented max; excellent applies the 6/5
+/// either side of the defense subtraction per `order`. Exhaustive over
+/// [`HitQuality`] and [`ExcellentOrder`] — no wildcard.
+fn quality_after_defense(
+    augmented_max: u16,
+    rolled_span: u16,
     quality: HitQuality,
-    defense_ignored: bool,
-    doubled: bool,
+    order: ExcellentOrder,
+    // Already 0 when the strike ignored defense.
+    defense: u16,
 ) -> u32 {
-    let max_physical = u32::from(attacker.physical().max());
-    let base = match quality {
+    let max = u32::from(augmented_max);
+    let def = u32::from(defense);
+    match quality {
+        HitQuality::Normal => u32::from(rolled_span).saturating_sub(def),
+        HitQuality::Critical => max.saturating_sub(def),
         // W-SRC: 1.2× max — CONFIRMED on-era against MuEmu 0.97k C++ source
         // (independent of OpenMU): `damage = (DamageMax * 120) / 100`, and
-        // OpenMU S6; every era 0.75→S6 uses 1.2×. The 1.1× in some fan guides is
-        // a rate-vs-magnitude confusion (the +10% Excellent Damage RATE option is
-        // a proc chance, not the hit magnitude).
-        HitQuality::Excellent => scale_ratio(max_physical, 6, nonzero(5)),
-        HitQuality::Critical => max_physical,
-        HitQuality::Normal => u32::from(span),
-    };
-    let after_defense = if defense_ignored {
-        base
-    } else {
-        base.saturating_sub(u32::from(target.defense()))
-    };
+        // OpenMU S6; every era 0.75→S6 uses 1.2×, and it holds under the
+        // skill-augmented base. The 1.1× in some fan guides is a
+        // rate-vs-magnitude confusion (the +10% Excellent Damage RATE option is
+        // a proc chance, not the hit magnitude). Physical multiplies then
+        // subtracts; wizardry subtracts then multiplies
+        // (AttackableExtensions.cs:106/136 vs :159-160).
+        HitQuality::Excellent => match order {
+            ExcellentOrder::MultiplyThenDefense => {
+                scale_ratio(max, 6, nonzero(5)).saturating_sub(def)
+            }
+            ExcellentOrder::DefenseThenMultiply => {
+                scale_ratio(max.saturating_sub(def), 6, nonzero(5))
+            }
+        },
+    }
+}
+
+/// The shared post-head fold: + flat Greater-Damage add → overrate ×3/10 →
+/// level floor → × skill multiplier → ×2 double → defender %-reduction.
+/// Defense is already out (the head owns it); this never subtracts it again.
+/// The multiplier step matches the basis, so a plain swing skips it
+/// structurally (no field to read).
+fn strike_tail(
+    after_defense: u32,
+    attacker: &CombatProfile,
+    target: &CombatProfile,
+    basis: &StrikeBasis,
+    doubled: bool,
+) -> u32 {
     // W-SRC: the attacker's Greater-Damage add is a FLAT add applied here, after
-    // defense and before the floor — never a raise of the physical span, since the
-    // quality base above is already fixed, so crit/excellent cannot amplify it.
+    // defense and before the floor — never a raise of the strike span, since the
+    // quality base is already fixed, so crit/excellent cannot amplify it.
     let after_greater = after_defense.saturating_add(attacker.flat_damage_add());
-    let floor = (u32::from(attacker.level().get()) / MIN_DAMAGE_FLOOR_DIVISOR).max(1);
-    let floored = after_greater.max(floor);
+    // W-SRC: the overrate penalty applies BEFORE the level floor
+    // (AttackableExtensions.cs:204-217), so an overrated hit still lands at
+    // least max(1, level/10).
     let after_overrate = if target.defense_rate() > attacker.attack_rate() {
-        scale_ratio(floored, OVERRATE_NUM, nonzero(OVERRATE_DEN))
+        scale_ratio(after_greater, OVERRATE_NUM, nonzero(OVERRATE_DEN))
     } else {
-        floored
+        after_greater
+    };
+    let floor = (u32::from(attacker.level().get()) / MIN_DAMAGE_FLOOR_DIVISOR).max(1);
+    let floored = after_overrate.max(floor);
+    // Skill strikes only: a plain swing carries no multiplier to apply.
+    let after_multiplier = match basis {
+        StrikeBasis::PlainSwing => floored,
+        StrikeBasis::Skill {
+            multiplier_per_mille,
+            ..
+        } => scale_ratio(
+            floored,
+            *multiplier_per_mille,
+            nonzero(SKILL_MULTIPLIER_DENOMINATOR),
+        ),
     };
     let after_double = if doubled {
-        after_overrate.saturating_mul(2)
+        after_multiplier.saturating_mul(2)
     } else {
-        after_overrate
+        after_multiplier
     };
-    // The defender's timed damage-reduction is the final step, applied after the
-    // floor: `damage × (100 - reduction) / 100`. A zero reduction (the gearless
-    // and effect-free case) is the identity, so this is byte-identical to a
-    // reduction-free strike. The caller passes the effect-folded profile, so the
-    // reduction field already reflects any active defensive buff.
+    // OUR-pin: the defender's timed %-reduction is the final step, applied
+    // after the double (OpenMU applies it before the multiplier/double block) —
+    // commutative in scope modulo per-step integer truncation. A zero reduction
+    // (the gearless and effect-free case) is the identity. The caller passes
+    // the effect-folded profile, so the reduction field already reflects any
+    // active defensive buff.
     let reduction = u32::from(target.incoming_damage_reduction().points());
     scale_ratio(
         after_double,
@@ -265,7 +367,13 @@ mod tests {
         let mut rng = TestRng::new(1);
         let mut misses = 0;
         for _ in 0..200 {
-            let (health, outcome) = resolve_attack(&attacker, &target, Pool::full(100), &mut rng);
+            let (health, outcome) = resolve_attack(
+                &attacker,
+                &target,
+                Pool::full(100),
+                &StrikeBasis::PlainSwing,
+                &mut rng,
+            );
             if matches!(outcome, AttackOutcome::Missed) {
                 assert_eq!(health.current(), 100);
                 misses += 1;
@@ -287,7 +395,13 @@ mod tests {
         let attacker = plain(10, 20, 20, 0, 10_000, 0);
         let target = plain(10, 0, 0, 5, 0, 0);
         let mut rng = TestRng::new(3);
-        let (_, outcome) = resolve_attack(&attacker, &target, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &attacker,
+            &target,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(15)),
             AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
@@ -300,14 +414,26 @@ mod tests {
         let l50 = plain(50, 1, 1, 0, 10_000, 0);
         let strong = plain(50, 0, 0, 100, 0, 0);
         let mut rng = TestRng::new(4);
-        let (_, outcome) = resolve_attack(&l50, &strong, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &l50,
+            &strong,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(5)),
             AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
         }
         let l4 = plain(4, 1, 1, 0, 10_000, 0);
         let mut rng = TestRng::new(4);
-        let (_, outcome) = resolve_attack(&l4, &strong, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &l4,
+            &strong,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(1)),
             AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
@@ -324,9 +450,13 @@ mod tests {
         let mut rng = TestRng::new(5);
         let mut landed = 0;
         for _ in 0..2000 {
-            if let (_, AttackOutcome::Landed { hit }) =
-                resolve_attack(&attacker, &target, Pool::full(500), &mut rng)
-            {
+            if let (_, AttackOutcome::Landed { hit }) = resolve_attack(
+                &attacker,
+                &target,
+                Pool::full(500),
+                &StrikeBasis::PlainSwing,
+                &mut rng,
+            ) {
                 assert_eq!(hit.damage, Damage(30));
                 landed += 1;
             }
@@ -335,6 +465,32 @@ mod tests {
             landed > 0,
             "a 3% hit chance must land at least once in 2000 tries"
         );
+    }
+
+    #[test]
+    fn the_level_floor_wins_over_the_overrate_penalty() {
+        // W-SRC reorder corner (AttackableExtensions.cs:204-217): span [3,3]
+        // overrated to 3×3/10 = 0, then floored to max(1, 50/10) = 5. The
+        // pre-reorder fold floored first (max(3,5) = 5) and overrated after
+        // (5×3/10 = 1). The out-rating defender floors the hit chance at 3%, so
+        // landed hits are sampled across a seed sweep.
+        let attacker = plain(50, 3, 3, 0, 100, 0);
+        let target = plain(50, 0, 0, 0, 0, 200);
+        let mut rng = TestRng::new(17);
+        let mut landed = 0;
+        for _ in 0..2000 {
+            if let (_, AttackOutcome::Landed { hit }) = resolve_attack(
+                &attacker,
+                &target,
+                Pool::full(500),
+                &StrikeBasis::PlainSwing,
+                &mut rng,
+            ) {
+                assert_eq!(hit.damage, Damage(5), "the floor has the last word");
+                landed += 1;
+            }
+        }
+        assert!(landed > 0, "a 3% hit chance lands in 2000 tries");
     }
 
     #[test]
@@ -347,6 +503,7 @@ mod tests {
             &critical,
             &plain(10, 0, 0, 0, 0, 0),
             Pool::full(200),
+            &StrikeBasis::PlainSwing,
             &mut rng,
         );
         match outcome {
@@ -362,6 +519,7 @@ mod tests {
             &excellent,
             &plain(10, 0, 0, 0, 0, 0),
             Pool::full(200),
+            &StrikeBasis::PlainSwing,
             &mut rng,
         );
         match outcome {
@@ -378,7 +536,13 @@ mod tests {
         let attacker = with_chances(plain(10, 20, 20, 0, 10_000, 0), 0, 0, 100, 0);
         let target = plain(10, 0, 0, 15, 0, 0);
         let mut rng = TestRng::new(7);
-        let (_, outcome) = resolve_attack(&attacker, &target, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &attacker,
+            &target,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => {
                 assert!(
@@ -396,7 +560,13 @@ mod tests {
         let attacker = with_chances(plain(10, 20, 20, 0, 10_000, 0), 0, 0, 0, 100);
         let target = plain(10, 0, 0, 5, 0, 0);
         let mut rng = TestRng::new(8);
-        let (_, outcome) = resolve_attack(&attacker, &target, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &attacker,
+            &target,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => {
                 // (20 - 5) * 2 = 30.
@@ -415,7 +585,13 @@ mod tests {
         let attacker = plain(10, 100, 100, 0, 10_000, 0);
         let target = plain(10, 0, 0, 0, 0, 0);
         let mut rng = TestRng::new(9);
-        let (health, outcome) = resolve_attack(&attacker, &target, Pool::full(10), &mut rng);
+        let (health, outcome) = resolve_attack(
+            &attacker,
+            &target,
+            Pool::full(10),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         assert_eq!(health.current(), 0);
         assert!(matches!(outcome, AttackOutcome::Killed { .. }));
     }
@@ -443,7 +619,13 @@ mod tests {
         // Normal strike: (20 - 5) + 8 flat = 23.
         let normal = with_flat_add(plain(10, 20, 20, 0, 10_000, 0), 8);
         let mut rng = TestRng::new(31);
-        let (_, outcome) = resolve_attack(&normal, &target, Pool::full(200), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &normal,
+            &target,
+            Pool::full(200),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(23)),
             AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
@@ -459,7 +641,13 @@ mod tests {
             0,
         );
         let mut rng = TestRng::new(31);
-        let (_, outcome) = resolve_attack(&excellent, &target, Pool::full(200), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &excellent,
+            &target,
+            Pool::full(200),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => {
                 assert_eq!(hit.quality, HitQuality::Excellent);
@@ -475,7 +663,13 @@ mod tests {
         let attacker = plain(10, 20, 20, 0, 10_000, 0);
         let plain_target = plain(10, 0, 0, 0, 0, 0);
         let mut rng = TestRng::new(21);
-        let (_, outcome) = resolve_attack(&attacker, &plain_target, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &attacker,
+            &plain_target,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(20)),
             AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
@@ -483,7 +677,13 @@ mod tests {
         // The same strike against a defender reducing incoming damage 50%: 20 → 10.
         let halved = with_reduction(plain(10, 0, 0, 0, 0, 0), 50);
         let mut rng = TestRng::new(21);
-        let (_, outcome) = resolve_attack(&attacker, &halved, Pool::full(100), &mut rng);
+        let (_, outcome) = resolve_attack(
+            &attacker,
+            &halved,
+            Pool::full(100),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         match outcome {
             AttackOutcome::Landed { hit } => assert_eq!(hit.damage, Damage(10)),
             AttackOutcome::Missed | AttackOutcome::Killed { .. } => panic!("expected a landed hit"),
@@ -494,10 +694,194 @@ mod tests {
     fn same_seed_is_bit_identical() {
         let attacker = with_chances(plain(30, 10, 40, 3, 500, 100), 20, 20, 20, 20);
         let target = plain(30, 0, 0, 10, 200, 200);
-        let run = |seed: u64| {
-            let mut rng = TestRng::new(seed);
-            resolve_attack(&attacker, &target, Pool::full(300), &mut rng)
+        let skill_basis = StrikeBasis::Skill {
+            span: Interval::new(56, 92).unwrap(),
+            excellent_order: ExcellentOrder::DefenseThenMultiply,
+            multiplier_per_mille: 2030,
         };
-        assert_eq!(run(42), run(42));
+        let run = |seed: u64, basis: &StrikeBasis| {
+            let mut rng = TestRng::new(seed);
+            resolve_attack(&attacker, &target, Pool::full(300), basis, &mut rng)
+        };
+        assert_eq!(
+            run(42, &StrikeBasis::PlainSwing),
+            run(42, &StrikeBasis::PlainSwing)
+        );
+        assert_eq!(run(42, &skill_basis), run(42, &skill_basis));
+    }
+
+    /// A skill basis over `span` with the physical excellent order.
+    fn physical_basis(min: u16, max: u16, multiplier_per_mille: u32) -> StrikeBasis {
+        StrikeBasis::Skill {
+            span: Interval::new(min, max).unwrap(),
+            excellent_order: ExcellentOrder::MultiplyThenDefense,
+            multiplier_per_mille,
+        }
+    }
+
+    /// A skill basis over `span` with the wizardry excellent order.
+    fn wizardry_basis(min: u16, max: u16, multiplier_per_mille: u32) -> StrikeBasis {
+        StrikeBasis::Skill {
+            span: Interval::new(min, max).unwrap(),
+            excellent_order: ExcellentOrder::DefenseThenMultiply,
+            multiplier_per_mille,
+        }
+    }
+
+    /// The damage of a landed/killed strike, or a test failure on a miss.
+    fn struck_damage(
+        attacker: &CombatProfile,
+        target: &CombatProfile,
+        basis: &StrikeBasis,
+        seed: u64,
+    ) -> u32 {
+        let mut rng = TestRng::new(seed);
+        let (_, outcome) = resolve_attack(attacker, target, Pool::full(100_000), basis, &mut rng);
+        match outcome {
+            AttackOutcome::Landed { hit } | AttackOutcome::Killed { hit } => hit.damage.0,
+            AttackOutcome::Missed => panic!("a 100% hit chance never misses"),
+        }
+    }
+
+    #[test]
+    fn a_skill_critical_reads_the_augmented_max_and_multiplies() {
+        // Aug max 140, critical forced, DK multiplier 2030: 140 × 2030/1000 = 284.
+        let attacker = with_chances(plain(50, 33, 50, 0, 10_000, 0), 0, 100, 0, 0);
+        let target = plain(50, 0, 0, 0, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &physical_basis(93, 140, 2030), 6),
+            284
+        );
+    }
+
+    #[test]
+    fn a_physical_excellent_multiplies_then_subtracts_defense() {
+        // (92 × 6/5) − 30 = 110 − 30 = 80.
+        let attacker = with_chances(plain(10, 5, 10, 0, 10_000, 0), 100, 0, 0, 0);
+        let target = plain(10, 0, 0, 30, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &physical_basis(56, 92, 1000), 6),
+            80
+        );
+    }
+
+    #[test]
+    fn a_wizardry_excellent_subtracts_defense_then_multiplies() {
+        // (92 − 30) × 6/5 = 62 × 6/5 = 74 — six below the physical order's 80.
+        let attacker = with_chances(plain(10, 5, 10, 0, 10_000, 0), 100, 0, 0, 0);
+        let target = plain(10, 0, 0, 30, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &wizardry_basis(56, 92, 1000), 6),
+            74
+        );
+    }
+
+    #[test]
+    fn a_collapsed_span_lands_the_floor_times_the_multiplier() {
+        // [0,0] span, level 50 → floor 5, × 2030/1000 = 10; doubled → 20.
+        let attacker = plain(50, 20, 20, 0, 10_000, 0);
+        let target = plain(50, 0, 0, 0, 0, 0);
+        assert_eq!(
+            struck_damage(&attacker, &target, &wizardry_basis(0, 0, 2030), 3),
+            10
+        );
+        let doubled = with_chances(plain(50, 20, 20, 0, 10_000, 0), 0, 0, 0, 100);
+        assert_eq!(
+            struck_damage(&doubled, &target, &wizardry_basis(0, 0, 2030), 3),
+            20
+        );
+    }
+
+    #[test]
+    fn incoming_reduction_folds_last_after_the_skill_multiplier() {
+        // OUR-pin truncation pin: the %-reduction is the LAST step — 21 ×
+        // 2030/1000 = 42 (42.63 truncated), × 50/100 = 21; reduction-first
+        // would truncate to 10 and land 20.
+        let attacker = plain(10, 5, 10, 0, 10_000, 0);
+        let target = with_reduction(plain(10, 0, 0, 0, 0, 0), 50);
+        assert_eq!(
+            struck_damage(&attacker, &target, &physical_basis(21, 21, 2030), 6),
+            21
+        );
+    }
+
+    #[test]
+    fn a_thousand_per_mille_multiplier_is_the_identity() {
+        // A Skill basis over the attacker's own span at ×1000 folds identically
+        // to a PlainSwing under the same seed.
+        let attacker = with_chances(plain(30, 10, 40, 3, 10_000, 0), 20, 20, 20, 20);
+        let target = plain(30, 0, 0, 10, 0, 0);
+        for seed in 0u64..32 {
+            let run = |basis: &StrikeBasis| {
+                let mut rng = TestRng::new(seed);
+                resolve_attack(&attacker, &target, Pool::full(300), basis, &mut rng)
+            };
+            assert_eq!(
+                run(&physical_basis(10, 40, 1000)),
+                run(&StrikeBasis::PlainSwing),
+                "seed {seed}"
+            );
+        }
+    }
+
+    /// An RNG that counts the words it hands out, for draw-count invariants.
+    struct CountingRng {
+        inner: TestRng,
+        words: u32,
+    }
+
+    impl RngCore for CountingRng {
+        fn next_u64(&mut self) -> u64 {
+            self.words += 1;
+            self.inner.next_u64()
+        }
+
+        fn next_u32(&mut self) -> u32 {
+            self.words += 1;
+            let [b0, b1, b2, b3, _, _, _, _] = self.inner.next_u64().to_le_bytes();
+            u32::from_le_bytes([b0, b1, b2, b3])
+        }
+
+        fn fill_bytes(&mut self, dst: &mut [u8]) {
+            self.inner.fill_bytes(dst);
+        }
+    }
+
+    #[test]
+    fn every_basis_draws_the_same_word_count_on_a_landed_strike() {
+        // A landed strike is hit + span + four special rolls on every basis —
+        // the span is drawn even on a collapsed [0,0].
+        let attacker = plain(50, 33, 50, 0, 10_000, 0);
+        let target = plain(50, 0, 0, 0, 0, 0);
+        let words = |basis: &StrikeBasis| {
+            let mut rng = CountingRng {
+                inner: TestRng::new(5),
+                words: 0,
+            };
+            let (_, outcome) =
+                resolve_attack(&attacker, &target, Pool::full(1000), basis, &mut rng);
+            assert!(!matches!(outcome, AttackOutcome::Missed));
+            rng.words
+        };
+        let plain_words = words(&StrikeBasis::PlainSwing);
+        assert_eq!(plain_words, words(&physical_basis(93, 140, 2030)));
+        assert_eq!(plain_words, words(&wizardry_basis(56, 92, 1000)));
+        assert_eq!(plain_words, words(&wizardry_basis(0, 0, 2030)));
+        assert_eq!(plain_words, words(&physical_basis(0, 0, 2030)));
+    }
+
+    #[test]
+    fn a_normal_skill_hit_reaches_the_inclusive_augmented_max() {
+        // OUR-pin: the roll is max-INCLUSIVE — 140 − 15 = 125 is reachable,
+        // and nothing beyond it ever lands.
+        let attacker = plain(10, 33, 50, 0, 10_000, 0);
+        let target = plain(10, 0, 0, 15, 0, 0);
+        let mut saw_max = false;
+        for seed in 0u64..4000 {
+            let damage = struck_damage(&attacker, &target, &physical_basis(93, 140, 1000), seed);
+            assert!(damage <= 125, "seed {seed}: {damage} beyond the max");
+            saw_max |= damage == 125;
+        }
+        assert!(saw_max, "the inclusive max must be reachable");
     }
 }

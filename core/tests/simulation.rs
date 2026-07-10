@@ -69,10 +69,11 @@ use mu_core::services::profile::character_profile;
 use mu_core::services::trade::LockResult;
 
 use paper_host::{
-    World, aggressive_monster, cell, dark_knight, dark_knight_in_band, direct_hit_skill,
-    fighting_monster_from, first_passive_monster, footprint_of, heal_skill, is_equippable,
-    item_at_level, item_instance, low_level_monster, magic_gladiator, monster_instance, nova_skill,
-    or_abort, persist, pos, pressing_monster, tile, walkable_run, wire, zen,
+    World, aggressive_monster, cell, dark_knight, dark_knight_in_band, dark_wizard,
+    direct_hit_skill, fighting_monster_from, first_passive_monster, footprint_of, heal_skill,
+    is_equippable, item_at_level, item_instance, low_level_monster, magic_gladiator,
+    monster_instance, none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile,
+    walkable_run, wire, wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -2005,6 +2006,131 @@ fn a_nova_cast_kills_a_cluster_and_each_kill_pays_out_its_own_reward() {
         break;
     }
     assert!(proven, "a seed in 0..64 lands a lethal nova on both mobs");
+}
+
+// --- W-SKILLDMG standing gate: Energy-scaled wizardry drives a wizard kill. ---
+
+/// One wizard's single cast of the shared spell at a 60-HP mob: the world, the
+/// seated indices, and whether the cast landed. Both energies run the identical
+/// construction under the identical seed, so the dice are shared and only the
+/// Energy-derived wizardry span separates the outcomes.
+fn wizard_cast(seed: u64, energy: u16) -> (World, usize, usize, bool) {
+    let mut world = World::new(seed, MapNumber(0));
+    let wizard = world.seat_character(dark_wizard(50, energy, tile(10, 10)));
+    let spell = wizardry_direct_skill(world.atlas());
+    let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let victim = world.seat_monster(monster_instance(number, 60, tile(11, 10)));
+    let aim = pos(11, 10);
+    let landed = match world.cast_damaging(wizard, spell, aim, &[victim]) {
+        SkillOutcome::Cast { hits, .. } => hits
+            .iter()
+            .any(|hit| matches!(hit, TargetHit::Landed { .. } | TargetHit::Killed { .. })),
+        SkillOutcome::Rejected { .. } => false,
+    };
+    (world, wizard, victim, landed)
+}
+
+#[test]
+fn a_high_energy_wizard_kills_the_mob_a_low_energy_wizard_only_wounds() {
+    // The wizard-kill gate: the DW multiplier is ×1, so the kill is driven
+    // end-to-end (through persist) by the Energy-scaled wizardry span alone —
+    // identical spell, identical mob, identical seed, only Energy differs.
+    // Low energy 90 → span [10, 22] + add; high energy 900 → [100, 225] + add.
+    let mut proven = false;
+    for seed in 0u64..64 {
+        let (low_world, _, low_victim, low_landed) = wizard_cast(seed, 90);
+        let (mut high_world, high_wizard, high_victim, high_landed) = wizard_cast(seed, 900);
+        if !(low_landed && high_landed) {
+            continue;
+        }
+        // The low-Energy hit wounds: persisted health fell but stayed alive.
+        let wounded = low_world.monster(low_victim).health.current();
+        assert!(wounded > 0, "seed {seed}: the apprentice only wounds");
+        assert!(
+            wounded < 60,
+            "seed {seed}: the apprentice's hit still bites"
+        );
+        // The high-Energy hit kills through the same persisted writeback.
+        assert_eq!(
+            high_world.monster(high_victim).health.current(),
+            0,
+            "seed {seed}: the master's identical spell kills"
+        );
+        // The wizard-kill produces a real reward through the same loot chain
+        // the DK skill-kill uses.
+        let resolution = high_world.resolve_kill_of(high_wizard, high_victim);
+        assert!(
+            resolution.experience.gained.0 > 0,
+            "the wizard-kill grants experience"
+        );
+        if item_drops(&resolution).is_empty() {
+            continue;
+        }
+        proven = true;
+        break;
+    }
+    assert!(
+        proven,
+        "a seed in 0..64 lands both casts, kills on Energy, and drops an item"
+    );
+}
+
+#[test]
+fn a_wizardry_absent_or_none_type_cast_persists_the_scratch_never_a_weapon_hit() {
+    // A DK (no wizardry interval) casting a wizardry spell, and the same DK
+    // casting the None-type skill 50 (authored damage 120), both persist the
+    // exact floor × multiplier scratch: max(1, 80/10) = 8, × 2030/1000 = 16 —
+    // never the [50, 75] weapon span, never the authored 120.
+    let mut world = World::new(77, MapNumber(0));
+    let knight = world.seat_character(dark_knight(80, 300, tile(10, 10)));
+    let wizardry = wizardry_direct_skill(world.atlas());
+    let none_type = none_type_skill(world.atlas());
+    let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+
+    // Wizardry-absent: target ahead, aimed at its own tile.
+    let far_victim = world.seat_monster(monster_instance(number, 300, tile(11, 10)));
+    let mut scratched = false;
+    for _ in 0..64 {
+        let before = world.monster(far_victim).health.current();
+        match world.cast_damaging(knight, wizardry, pos(11, 10), &[far_victim]) {
+            SkillOutcome::Cast { .. } => {}
+            SkillOutcome::Rejected { .. } => break,
+        }
+        let after = world.monster(far_victim).health.current();
+        if after < before {
+            assert_eq!(
+                before - after,
+                16,
+                "the collapsed cast is the exact scratch"
+            );
+            scratched = true;
+            break;
+        }
+    }
+    assert!(scratched, "a wizardry-absent cast lands within 64 tries");
+
+    // None-type: skill 50 has range 0, so the knight strikes a mob seated on
+    // its own tile with a self-aimed cast.
+    let near_victim = world.seat_monster(monster_instance(number, 300, tile(10, 10)));
+    let mut scratched = false;
+    for _ in 0..64 {
+        let before = world.monster(near_victim).health.current();
+        match world.cast_damaging(knight, none_type, pos(10, 10), &[near_victim]) {
+            SkillOutcome::Cast { .. } => {}
+            SkillOutcome::Rejected { .. } => break,
+        }
+        let after = world.monster(near_victim).health.current();
+        if after < before {
+            assert_eq!(
+                before - after,
+                16,
+                "the None-type cast discards its authored 120 and lands the scratch"
+            );
+            scratched = true;
+            break;
+        }
+    }
+    assert!(scratched, "a None-type cast lands within 64 tries");
 }
 
 // --- Equip gating: the refused branch W-SIM never asserted (seam 1). ---------

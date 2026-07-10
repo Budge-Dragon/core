@@ -2,13 +2,14 @@
   "skills": {
     "records": 51,
     "by_source_version": {
-      "075": 30,
-      "095d": 5,
+      "075": 29,
+      "095d": 6,
       "s6": 16
     }
   },
-  "review_count": 17,
+  "review_count": 18,
   "reviews": {
+    "skills/9": "carries the 095d values (range 6, magic_gladiator included); the true 075 record is range 7 and dark_wizard-only - labeled by value provenance",
     "skills/13": "095d source marks it a plain direct hit yet attaches area-of-effect settings; encoded as an area skill (AoE intent; the S6 dataset also treats it as an area skill)",
     "skills/16": "retail 0.97/1.0 Soul Master skill; values from the S6 initializer; S6 allows casting on party members - retail may be self-only",
     "skills/39": "retail 1.0-era Soul Master AoE; absent from 075/095d, values from S6",
@@ -36,7 +37,7 @@
     "nova per-stage damage, and the Hellfire/Inferno/Nova caster-centered radii, are OpenMU engine-default resolved values with no authentic source - named open review items in services::area/skill_damage (W-SRC), no number invented into the data"
   ],
   "notes": [
-    "records tagged 075 carry the approved 095d baseline values; 075/095d deltas (evil_spirit range, triple_shot projectile fan, summon energy requirements, MG class masks) are the same facts v1 recorded, now emitted only as range/element/damage/cost/learn columns",
+    "records tagged 075 carry the approved 095d baseline values; 075/095d deltas (triple_shot projectile fan, summon energy requirements, MG class masks) are the same facts v1 recorded, now emitted only as range/element/damage/cost/learn columns; evil_spirit (9) is tagged 095d because its range/classes are uniquely 0.95d values",
     "magic_effects.json is deleted - the closed pre-S3 effect roster became the Buff and Ailment Rust enums; every effect magnitude, duration, stacking slot, and tick rule became a bespoke services constant/function",
     "buff skills carry their Buff inside the shape variant (buff_self / buff_player / buff_party_member / buff_party); ailment-inflicting hits carry inflicts: Ailment (1->poisoned, 7->iced, 39->iced, 51->frozen, 55->defense_reduction). heal is instantaneous - no effect identity",
     "generic_monster_skill (150) is dropped: it was OpenMU's placeholder for its own dangling monster attack_skill=150 refs; monsters_spawns models monster attacks natively and the phantom referencers ship as plain",

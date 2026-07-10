@@ -1,8 +1,9 @@
 //! Skill casting: the one resolver that turns a caster, a damaging skill, an aim
 //! point, and a batch of candidate targets into a rejection or a resolved cast.
 //! It composes the profile, combat, and movement services — deriving the
-//! caster's profile, striking each target the skill's region covers, applying
-//! elemental ailments and knockback, and dashing the caster on a lunge — and
+//! caster's profile and the skill's DamageType-selected strike basis once per
+//! cast, striking each covered target on that basis, applying elemental
+//! ailments and knockback, and dashing the caster on a lunge — and
 //! spends the skill's cost only once the cast commits. Pure and deterministic:
 //! the RNG is drawn per target in a fixed order (the strike, then the element
 //! application roll, then the knockback heading), and the caster's dash is
@@ -11,8 +12,10 @@
 use rand_core::RngCore;
 
 use crate::components::active_effect::ActiveEffects;
+use crate::components::class::CharacterClass;
 use crate::components::combat_profile::{CombatProfile, CombatTarget};
 use crate::components::element::Element;
+use crate::components::interval::Interval;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::{
@@ -24,14 +27,14 @@ use crate::components::tile::WalkGrid;
 use crate::components::units::{Tick, TickDuration};
 use crate::components::vitals::Vitals;
 use crate::data::effects::{Ailment, Buff};
-use crate::data::skills::{AreaPattern, CastCost, Skill, SkillShape};
+use crate::data::skills::{AreaPattern, CastCost, DamageType, Skill, SkillShape};
 use crate::entities::character::Character;
 use crate::events::combat::AttackOutcome;
 use crate::events::effect::BuffCastOutcome;
 use crate::events::movement::StepOutcome;
 use crate::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use crate::services::chance::{draw_cardinal, roll_apply_elemental};
-use crate::services::combat::resolve_attack;
+use crate::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 use crate::services::effects::{ApplicableBuff, apply_buff};
 use crate::services::movement::{resolve_drift, resolve_step};
 use crate::services::profile::{character_profile, effective_profile};
@@ -53,6 +56,26 @@ const SINGLE_TARGET_RADIUS_TILES: u8 = 1;
 const HEAL_BASE: u32 = 5;
 /// Heal energy divisor: `+ Energy / 5`.
 const HEAL_ENERGY_DEN: u32 = 5;
+
+// W-SRC: OpenMU class SkillMultiplier — the ~2x every DK/MG/DL *skill* hit
+// carries (never a plain swing), per-mille. DW/SM & FE/ME 1.0
+// (ClassDarkWizard.cs:112, ClassFairyElf.cs:120); MG 2.0
+// (ClassMagicGladiator.cs:123); DK/BK 2.0 + 0.001*Energy
+// (ClassDarkKnight.cs:106,:72); DL 2.0 + 0.0005*Energy
+// (ClassDarkLord.cs:130,:83). Energy terms are era-uniform (shared by every
+// version config incl. 0.75, Version075/CharacterClassInitialization.cs:13,
+// 31-33); the ADOPT + energy-micro-term rulings are pinned producer decisions
+// (authentic-YES precedent), not defaults.
+/// The ×1.0 skill multiplier base, per-mille.
+const SKILL_MULTIPLIER_BASE_UNIT: u32 = 1000;
+/// The ×2.0 skill multiplier base, per-mille.
+const SKILL_MULTIPLIER_BASE_DOUBLE: u32 = 2000;
+
+/// The `[0, 0]` collapsed span for a None-type skill or a wizardry-absent
+/// caster.
+fn zero_span() -> Interval<u16> {
+    Interval::spanning(0, 0)
+}
 
 /// A damaging skill's spatial shape — the closed set the cast resolver handles.
 /// Non-damaging skill shapes never reach here; [`route`] sorts them out.
@@ -107,6 +130,18 @@ impl DamagingSkillRef<'_> {
     #[must_use]
     pub fn inflicts(self) -> Option<Ailment> {
         self.skill.inflicts
+    }
+
+    /// Which damage calculation the skill uses.
+    #[must_use]
+    pub fn damage_type(self) -> DamageType {
+        self.skill.damage_type
+    }
+
+    /// The skill's base damage `D` (Skill.txt Damage column).
+    #[must_use]
+    pub fn attack_damage(self) -> u16 {
+        self.skill.attack_damage
     }
 }
 
@@ -353,6 +388,7 @@ pub fn cast(
     }
 
     let caster_profile = effective_profile(character_profile(caster).0, &caster.active_effects());
+    let basis = skill_strike_basis(caster, &caster_profile, skill);
     let mut hits = Vec::with_capacity(struck.len());
     for &(index, target) in &struck {
         hits.push(resolve_target_hit(
@@ -360,6 +396,7 @@ pub fn cast(
             &caster_profile,
             target,
             skill,
+            &basis,
             grid,
             rng,
         ));
@@ -490,6 +527,74 @@ fn caster_energy(caster: &Character) -> u16 {
     }
 }
 
+/// The class `SkillMultiplier` as per-mille (÷1000), applied to skill strikes
+/// only. Pure arithmetic over the caster's class and total energy.
+pub(crate) fn skill_multiplier_per_mille(class: CharacterClass, energy: u16) -> u32 {
+    match class {
+        CharacterClass::DarkWizard
+        | CharacterClass::SoulMaster
+        | CharacterClass::FairyElf
+        | CharacterClass::MuseElf => SKILL_MULTIPLIER_BASE_UNIT,
+        CharacterClass::MagicGladiator => SKILL_MULTIPLIER_BASE_DOUBLE,
+        CharacterClass::DarkKnight | CharacterClass::BladeKnight => {
+            SKILL_MULTIPLIER_BASE_DOUBLE.saturating_add(u32::from(energy))
+        }
+        CharacterClass::DarkLord => {
+            SKILL_MULTIPLIER_BASE_DOUBLE.saturating_add(u32::from(energy) / 2)
+        }
+    }
+}
+
+/// Selects a skill's augmented strike span and excellent order from the
+/// `DamageType`, and pairs it with the caster's class multiplier — the whole span
+/// source of a skill strike (`CombatProfile.wizardry` + `Skill.attack_damage` +
+/// `Skill.damage_type` read together). Exhaustive over [`DamageType`]; `None`
+/// is a totality arm. Pure, draws no RNG.
+pub(crate) fn skill_strike_basis(
+    caster: &Character,
+    caster_profile: &CombatProfile,
+    skill: DamagingSkillRef<'_>,
+) -> StrikeBasis {
+    let multiplier_per_mille = skill_multiplier_per_mille(caster.class(), caster_energy(caster));
+    let d = skill.attack_damage();
+    match skill.damage_type() {
+        DamageType::Physical => StrikeBasis::Skill {
+            span: augmented_span(caster_profile.physical(), d),
+            excellent_order: ExcellentOrder::MultiplyThenDefense,
+            multiplier_per_mille,
+        },
+        DamageType::Wizardry => StrikeBasis::Skill {
+            // W-SRC: a missing wizardry interval collapses base AND add to zero
+            // (missing attributes read 0, AttributeSystem.cs:111-126); D is
+            // discarded, never a physical fallback.
+            span: match caster_profile.wizardry() {
+                Some(wizardry) => augmented_span(wizardry, d),
+                None => zero_span(),
+            },
+            excellent_order: ExcellentOrder::DefenseThenMultiply,
+            multiplier_per_mille,
+        },
+        DamageType::None => StrikeBasis::Skill {
+            // W-SRC: None selects no span (AttackableExtensions.cs:824-826);
+            // attack_damage discarded, no physical fallback. The excellent
+            // order is moot on a [0,0] span; the physical order is the neutral
+            // choice.
+            span: zero_span(),
+            excellent_order: ExcellentOrder::MultiplyThenDefense,
+            multiplier_per_mille,
+        },
+    }
+}
+
+/// Augments a base span by a skill's damage `D`: min += D, max += D + D/2
+/// (integer floor) — the asymmetric add (AttackableExtensions.cs:735-736).
+/// `spanning` is total: `min <= max` holds because `D/2 >= 0`.
+fn augmented_span(base: Interval<u16>, d: u16) -> Interval<u16> {
+    let min = base.min().saturating_add(d);
+    let max = base.max().saturating_add(d).saturating_add(d / 2);
+    Interval::spanning(min, max)
+}
+
 fn is_single_target(shape: DamagingSkill) -> bool {
     match shape {
         DamagingSkill::DirectHit | DamagingSkill::Lunge => true,
@@ -509,20 +614,22 @@ fn skill_region(skill: DamagingSkillRef<'_>, caster: Placement, aim: WorldPos) -
 
 /// Resolves one target's hit: folds the target's own defensive effects into the
 /// profile it is struck against (so the two-sided fold is authoritative in core),
-/// then the strike, then — only on a landed (non-lethal) hit — the elemental
-/// ailment and the single knockback. A lethal strike clears the victim's whole
-/// effect store (every effect is `StopByDeath`). RNG order: strike, element
-/// application roll, knockback heading.
+/// then the strike on the cast-wide basis, then — only on a landed (non-lethal)
+/// hit — the elemental ailment and the single knockback. A lethal strike clears
+/// the victim's whole effect store (every effect is `StopByDeath`). RNG order:
+/// strike, element application roll, knockback heading.
 fn resolve_target_hit(
     index: usize,
     caster_profile: &CombatProfile,
     target: &CombatTarget,
     skill: DamagingSkillRef<'_>,
+    basis: &StrikeBasis,
     grid: &WalkGrid,
     rng: &mut impl RngCore,
 ) -> TargetHit {
     let target_profile = effective_profile(*target.profile(), &target.active_effects());
-    let (health, outcome) = resolve_attack(caster_profile, &target_profile, target.health(), rng);
+    let (health, outcome) =
+        resolve_attack(caster_profile, &target_profile, target.health(), basis, rng);
     match outcome {
         AttackOutcome::Missed => TargetHit::Missed {
             target_index: index,
@@ -710,6 +817,37 @@ mod tests {
                 "health": {"current": 500, "max": 500},
                 "mana": {"current": mana, "max": mana.max(1)},
                 "ability": {"current": ability, "max": ability.max(1)}
+            }
+        });
+        serde_json::from_value(json).unwrap()
+    }
+
+    /// A gearless caster of any class/stat mix at a tile — built the only way a
+    /// character can be, by deserialising its wire form. Command classes get
+    /// the `with_command` stat shape.
+    fn caster_of(class: &str, strength: u16, energy: u16, tile: (u8, u8)) -> Character {
+        let stats = if class == "dark_lord" {
+            serde_json::json!({"kind": "with_command", "strength": strength, "agility": 100, "vitality": 100, "energy": energy, "command": 50})
+        } else {
+            serde_json::json!({"kind": "standard", "strength": strength, "agility": 100, "vitality": 100, "energy": energy})
+        };
+        let json = serde_json::json!({
+            "class": class,
+            "level": 50,
+            "experience": 0,
+            "stats": stats,
+            "unspent_points": 0,
+            "zen": 0,
+            "placement": {
+                "position": serde_json::to_value(TileCoord::new(tile.0, tile.1).to_world()).unwrap(),
+                "facing": {"x": 1, "y": 0},
+                "movement": "grounded",
+                "map": 0
+            },
+            "vitals": {
+                "health": {"current": 500, "max": 500},
+                "mana": {"current": 400, "max": 400},
+                "ability": {"current": 400, "max": 400}
             }
         });
         serde_json::from_value(json).unwrap()
@@ -1519,5 +1657,225 @@ mod tests {
                 reason: CastRejection::InsufficientMana
             }
         );
+    }
+
+    /// A direct-hit skill of the given damage type and authored damage `D`.
+    fn typed_skill(damage_type: DamageType, attack_damage: u16) -> Skill {
+        let mut definition = skill(SkillShape::DirectHit, None, None, 6, 0, 0);
+        definition.damage_type = damage_type;
+        definition.attack_damage = attack_damage;
+        definition
+    }
+
+    /// The strike basis a caster/skill pair selects, derived exactly as
+    /// `cast()` derives it — through the caster's own effect-folded profile.
+    fn basis_of(caster: &Character, definition: &Skill) -> StrikeBasis {
+        let profile = effective_profile(character_profile(caster).0, &caster.active_effects());
+        skill_strike_basis(caster, &profile, damaging_ref(definition))
+    }
+
+    #[test]
+    fn a_physical_skill_augments_the_weapon_span_asymmetrically() {
+        // DK str 200 → weapon span [33, 50]; D = 60 adds +60/+90.
+        let caster = caster_of("dark_knight", 200, 30, (10, 10));
+        assert_eq!(
+            basis_of(&caster, &typed_skill(DamageType::Physical, 60)),
+            StrikeBasis::Skill {
+                span: Interval::new(93, 140).unwrap(),
+                excellent_order: ExcellentOrder::MultiplyThenDefense,
+                multiplier_per_mille: 2030,
+            }
+        );
+        // A zero-damage weapon skill rolls the bare weapon span.
+        assert_eq!(
+            basis_of(&caster, &typed_skill(DamageType::Physical, 0)),
+            StrikeBasis::Skill {
+                span: Interval::new(33, 50).unwrap(),
+                excellent_order: ExcellentOrder::MultiplyThenDefense,
+                multiplier_per_mille: 2030,
+            }
+        );
+    }
+
+    #[test]
+    fn a_wizardry_skill_selects_the_energy_scaled_wizardry_span() {
+        // DW energy 100 → wizardry [11, 25]; + D = 45 → [56, 92]. The physical
+        // span (str 40 → [5, 10]) never enters.
+        let low = caster_of("dark_wizard", 40, 100, (10, 10));
+        assert_eq!(
+            basis_of(&low, &typed_skill(DamageType::Wizardry, 45)),
+            StrikeBasis::Skill {
+                span: Interval::new(56, 92).unwrap(),
+                excellent_order: ExcellentOrder::DefenseThenMultiply,
+                multiplier_per_mille: 1000,
+            }
+        );
+        // Energy 400 → wizardry [44, 100]; both span ends scale with Energy.
+        let high = caster_of("dark_wizard", 40, 400, (10, 10));
+        assert_eq!(
+            basis_of(&high, &typed_skill(DamageType::Wizardry, 45)),
+            StrikeBasis::Skill {
+                span: Interval::new(89, 167).unwrap(),
+                excellent_order: ExcellentOrder::DefenseThenMultiply,
+                multiplier_per_mille: 1000,
+            }
+        );
+    }
+
+    #[test]
+    fn a_wizardry_cast_without_wizardry_collapses_the_whole_span() {
+        // A DK carries no wizardry interval: base AND add collapse to [0, 0];
+        // the D = 45 is discarded, never a physical fallback.
+        let caster = caster_of("dark_knight", 200, 30, (10, 10));
+        assert_eq!(
+            basis_of(&caster, &typed_skill(DamageType::Wizardry, 45)),
+            StrikeBasis::Skill {
+                span: Interval::new(0, 0).unwrap(),
+                excellent_order: ExcellentOrder::DefenseThenMultiply,
+                multiplier_per_mille: 2030,
+            }
+        );
+    }
+
+    #[test]
+    fn a_none_type_skill_selects_no_span_and_discards_its_damage() {
+        let caster = caster_of("dark_knight", 200, 30, (10, 10));
+        assert_eq!(
+            basis_of(&caster, &typed_skill(DamageType::None, 120)),
+            StrikeBasis::Skill {
+                span: Interval::new(0, 0).unwrap(),
+                excellent_order: ExcellentOrder::MultiplyThenDefense,
+                multiplier_per_mille: 2030,
+            }
+        );
+    }
+
+    #[test]
+    fn the_skill_multiplier_is_per_mille_and_integer_per_class() {
+        use crate::components::class::CharacterClass as Class;
+        assert_eq!(skill_multiplier_per_mille(Class::DarkWizard, 300), 1000);
+        assert_eq!(skill_multiplier_per_mille(Class::SoulMaster, 300), 1000);
+        assert_eq!(skill_multiplier_per_mille(Class::FairyElf, 300), 1000);
+        assert_eq!(skill_multiplier_per_mille(Class::MuseElf, 300), 1000);
+        assert_eq!(skill_multiplier_per_mille(Class::MagicGladiator, 300), 2000);
+        assert_eq!(skill_multiplier_per_mille(Class::DarkKnight, 30), 2030);
+        assert_eq!(skill_multiplier_per_mille(Class::BladeKnight, 500), 2500);
+        // DL is + Energy/2, integer floor: 101/2 = 50.
+        assert_eq!(skill_multiplier_per_mille(Class::DarkLord, 101), 2050);
+    }
+
+    #[test]
+    fn the_multiplier_reads_total_energy_on_both_stat_shapes() {
+        // Standard shape (DK) and WithCommand shape (DL) both feed the energy
+        // micro-term through the same caster_energy read.
+        let knight = caster_of("dark_knight", 200, 500, (10, 10));
+        assert!(matches!(
+            basis_of(&knight, &typed_skill(DamageType::Physical, 0)),
+            StrikeBasis::Skill {
+                multiplier_per_mille: 2500,
+                ..
+            }
+        ));
+        let lord = caster_of("dark_lord", 200, 100, (10, 10));
+        assert!(matches!(
+            basis_of(&lord, &typed_skill(DamageType::Physical, 0)),
+            StrikeBasis::Skill {
+                multiplier_per_mille: 2050,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn the_basis_selection_is_pure() {
+        // No RngCore in any signature on the seam; two derivations from the
+        // same inputs are identical values.
+        let caster = caster_of("dark_wizard", 40, 100, (10, 10));
+        let definition = typed_skill(DamageType::Wizardry, 45);
+        assert_eq!(
+            basis_of(&caster, &definition),
+            basis_of(&caster, &definition)
+        );
+    }
+
+    #[test]
+    fn a_wizardry_cast_strikes_the_selected_span_through_cast() {
+        // DW energy 100, physical span [5, 10]: a landed wizardry D=45 hit lies
+        // in the augmented wizardry span [56, 92] (multiplier 1000, defense 0)
+        // — far above the weapon span it never reads.
+        let caster = caster_of("dark_wizard", 40, 100, (10, 10));
+        let definition = typed_skill(DamageType::Wizardry, 45);
+        let damaging = damaging_ref(&definition);
+        let targets = [target_at((11, 10), 0)];
+        let aim = TileCoord::new(11, 10).to_world();
+        let mut landed = 0u32;
+        for seed in 0u64..32 {
+            let outcome = cast(
+                &caster,
+                damaging,
+                aim,
+                &targets,
+                &all_walkable(),
+                &mut TestRng::new(seed),
+            )
+            .1;
+            let Some(damage) = landed_damage(outcome) else {
+                continue;
+            };
+            assert!(
+                (56..=92).contains(&damage),
+                "seed {seed}: {damage} outside the augmented wizardry span"
+            );
+            landed += 1;
+        }
+        assert!(landed > 0, "a seed in 0..32 lands a wizardry hit");
+    }
+
+    #[test]
+    fn a_physical_cast_exceeds_the_same_casters_plain_swing() {
+        // Rageful-Blow-shaped D=60 on a DK: the skill's span add and the class
+        // multiplier both raise a landed hit above the plain swing of the same
+        // weapon under the identical seed and target.
+        let caster = caster_of("dark_knight", 200, 30, (10, 10));
+        let definition = typed_skill(DamageType::Physical, 60);
+        let damaging = damaging_ref(&definition);
+        let targets = [target_at((11, 10), 0)];
+        let aim = TileCoord::new(11, 10).to_world();
+        let caster_profile = character_profile(&caster).0;
+        let mut compared = 0u32;
+        for seed in 0u64..32 {
+            let skill_dmg = landed_damage(
+                cast(
+                    &caster,
+                    damaging,
+                    aim,
+                    &targets,
+                    &all_walkable(),
+                    &mut TestRng::new(seed),
+                )
+                .1,
+            );
+            let mut rng = TestRng::new(seed);
+            let (_, plain_outcome) = resolve_attack(
+                &caster_profile,
+                targets[0].profile(),
+                targets[0].health(),
+                &StrikeBasis::PlainSwing,
+                &mut rng,
+            );
+            let plain_dmg = match plain_outcome {
+                AttackOutcome::Landed { hit } | AttackOutcome::Killed { hit } => Some(hit.damage.0),
+                AttackOutcome::Missed => None,
+            };
+            let (Some(skill_dmg), Some(plain_dmg)) = (skill_dmg, plain_dmg) else {
+                continue;
+            };
+            assert!(
+                skill_dmg > plain_dmg,
+                "seed {seed}: skill {skill_dmg} must exceed plain {plain_dmg}"
+            );
+            compared += 1;
+        }
+        assert!(compared > 0, "a seed in 0..32 lands both strikes");
     }
 }

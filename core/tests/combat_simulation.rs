@@ -59,7 +59,7 @@ use mu_core::events::loot::{Drop, DropResolution};
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::progression::ExpAward;
 use mu_core::events::skills::{SkillOutcome, TargetHit};
-use mu_core::services::combat::resolve_attack;
+use mu_core::services::combat::{StrikeBasis, resolve_attack};
 use mu_core::services::experience::award_kill_experience;
 use mu_core::services::kill::resolve_kill;
 use mu_core::services::loot::resolve_kill_drops;
@@ -292,7 +292,13 @@ fn beat_to_death(
     let mut health = Pool::full(combat.hp);
     let mut strikes = 0u32;
     while health.current() > 0 {
-        let (next, outcome) = resolve_attack(&attacker, &target, health, &mut rng);
+        let (next, outcome) = resolve_attack(
+            &attacker,
+            &target,
+            health,
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
         health = next;
         strikes += 1;
         assert!(strikes < 1_000_000, "a real kill must terminate");
@@ -305,6 +311,39 @@ fn beat_to_death(
 }
 
 // --- End-to-end kill. ---
+
+#[test]
+fn no_plain_swing_acquires_a_skill_multiplier() {
+    // A real character's basic attack on a real monster stays within its own
+    // weapon span: the W-SKILLDMG class ferocity (~2× for a DK's SKILLS)
+    // never touches the PlainSwing path.
+    let atlas = real_atlas();
+    let killer = dark_knight(30, 150, TileCoord::new(10, 10));
+    let (attacker, _) = character_profile(&killer);
+    let span_max = u32::from(attacker.physical().max());
+    let (_, combat, resistances) = low_level_monster(&atlas, 20);
+    let target = monster_profile(&combat, &resistances, combat.level);
+    let mut rng = TestRng::new(11);
+    let mut landed = 0u32;
+    for _ in 0..500 {
+        let (_, outcome) = resolve_attack(
+            &attacker,
+            &target,
+            Pool::full(1_000_000),
+            &StrikeBasis::PlainSwing,
+            &mut rng,
+        );
+        if let AttackOutcome::Landed { hit } | AttackOutcome::Killed { hit } = outcome {
+            assert!(
+                hit.damage.0 <= span_max,
+                "a plain swing stays within its span: {} > {span_max}",
+                hit.damage.0
+            );
+            landed += 1;
+        }
+    }
+    assert!(landed > 0, "the knight lands hits in 500 tries");
+}
 
 #[test]
 fn a_real_character_kills_a_real_monster_and_collects_a_well_formed_reward() {
