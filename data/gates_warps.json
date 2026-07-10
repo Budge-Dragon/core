@@ -751,15 +751,6 @@
     },
     {
       "kind": "warp",
-      "index": 1,
-      "cost_zen": 2000,
-      "min_level": 50,
-      "target_gate": 50,
-      "source_version": "075",
-      "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
-    },
-    {
-      "kind": "warp",
       "index": 2,
       "cost_zen": 2000,
       "min_level": 10,

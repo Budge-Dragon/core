@@ -4,8 +4,10 @@
 Outputs:
   data/map_definitions.json    11 records (maps 0-10; Devil Square collapsed
                                to one map-9 record)
-  data/gates_warps.json        71 records, kind-tagged:
+  data/gates_warps.json        70 records, kind-tagged:
                                spawn_gate | target_gate | enter_gate | warp
+                               (the Arena warp, index 1, is producer-excluded;
+                               see ARENA_WARP_EXCLUSION)
   data/terrain/0.bin..10.bin   11 sidecars, keyed by map number (re-encoded
                                from OpenMU .att; the four byte-identical Devil
                                Square blobs collapse to terrain/9.bin)
@@ -115,6 +117,16 @@ WARP_REVIEW = (
     "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its "
     "initializer carries a todo to update it); no authentic 0.95 fee/level "
     "table has been sourced")
+
+# Producer pin (2026-07-10): the Arena warp (index 1) is dropped from the warp
+# menu — a STATED exclusion, not an extraction accident.
+ARENA_WARP_EXCLUSION = (
+    "Arena warp (index 1) deliberately excluded, producer-pinned 2026-07-10: "
+    "Arena has no walk-in entrance, so under the discovery rule (a "
+    "destination must be visited on foot before it can be warped to) it "
+    "could never be visited first and its warp could never unlock; the entry "
+    "returns when a future duel/event wave gives Arena a real entrance. "
+    "Surviving warps keep their authentic indices 2-14 — no renumbering")
 
 
 def read(rel_path):
@@ -335,6 +347,11 @@ def main():
     enters = tag_gate_versions(enters_095d, enters_075, "number")
     warps = tag_gate_versions(warps_095d, warps_075, "index")
     assert len(warps) == 14, len(warps)
+    # Producer pin (2026-07-10): drop the Arena warp; see ARENA_WARP_EXCLUSION.
+    excluded = [w for w in warps if w["index"] == 1]
+    assert [w["name"] for w in excluded] == ["Arena"], excluded
+    warps = [w for w in warps if w["index"] != 1]
+    assert [w["index"] for w in warps] == list(range(2, 15)), warps
 
     # Curated backport: Tarkan's town spawn gate lives only in
     # VersionSeasonSix/Gates.cs:198 (CreateExitGate(maps[8], 187,63,203,69, 0,
@@ -404,7 +421,7 @@ def main():
                     + [emit_warp(w) for w in warps])
     for record in gate_records:
         assert record["map"] in map_numbers if "map" in record else True, record
-    assert len(gate_records) == 71, len(gate_records)
+    assert len(gate_records) == 70, len(gate_records)
 
     # Display names -> host-owned sidecars; the core files carry only
     # identities and rules. Map names key by number; warp names by list index
@@ -435,6 +452,8 @@ def main():
                for r in map_records if "review" in r]
     reviews.append({"file": "gates_warps.json", "kind": "warp",
                     "records": len(warp_records), "review": WARP_REVIEW})
+    reviews.append({"file": "gates_warps.json", "kind": "warp",
+                    "excluded_index": 1, "review": ARENA_WARP_EXCLUSION})
 
     coverage_path = coverage("maps", {
         "files": {
@@ -460,7 +479,8 @@ def main():
             "its four arrival gates (spawn gates 58-61) ARE extracted",
             "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 "
             "warp list verbatim with a 'todo: update for 0.95d'; adopted as-is, "
-            "all 14 warp records tagged 075 with a review note",
+            "all 13 shipped warp records tagged 075 with a review note (the "
+            "14th, Arena index 1, is producer-excluded - see review)",
             "S6/1.0-era maps (Blood Castle, Kalima, ...) are outside the "
             "approved 11-map 0.95d scope of this wave - no map backports",
         ],
