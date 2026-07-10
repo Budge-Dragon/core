@@ -12,7 +12,10 @@ initializers named below (identical to v1; only the emit shape changed):
 
   Version095d/SkillsInitializer.cs   -> 075 / 095d roster (skills already in
                                         Version075 tagged "075", the five 095d
-                                        additions tagged "095d")
+                                        additions tagged "095d"; Evil Spirit
+                                        (9) is also tagged "095d" - its
+                                        carried range/classes are uniquely
+                                        0.95d values, see its review)
   VersionSeasonSix/...SkillsInitializer -> curated 0.97/1.0 backports, tagged
                                         "s6", each carrying a review line
 
@@ -150,9 +153,12 @@ SKILLS = [
     skill(8, "Twister", "075", area("twister"), DW_MG, attack_damage=35,
           damage_type="wizardry", element="wind", rng=6, mana=60,
           energy=180),
-    skill(9, "Evil Spirit", "075", area("evil_spirit"), DW_MG,
+    skill(9, "Evil Spirit", "095d", area("evil_spirit"), DW_MG,
           attack_damage=45, damage_type="wizardry", rng=6, mana=90,
-          energy=220),
+          energy=220,
+          review="carries the 095d values (range 6, magic_gladiator "
+                 "included); the true 075 record is range 7 and "
+                 "dark_wizard-only - labeled by value provenance"),
     skill(10, "Hellfire", "075", area("hellfire"), DW_MG, attack_damage=120,
           damage_type="wizardry", element="fire", mana=160, energy=260),
     skill(11, "Power Wave", "075", direct_hit(), DW_MG, attack_damage=14,
@@ -316,9 +322,10 @@ GAPS = [
 
 NOTES = [
     "records tagged 075 carry the approved 095d baseline values; 075/095d "
-    "deltas (evil_spirit range, triple_shot projectile fan, summon energy "
-    "requirements, MG class masks) are the same facts v1 recorded, now "
-    "emitted only as range/element/damage/cost/learn columns",
+    "deltas (triple_shot projectile fan, summon energy requirements, MG "
+    "class masks) are the same facts v1 recorded, now emitted only as "
+    "range/element/damage/cost/learn columns; evil_spirit (9) is tagged "
+    "095d because its range/classes are uniquely 0.95d values",
     "magic_effects.json is deleted - the closed pre-S3 effect roster became "
     "the Buff and Ailment Rust enums; every effect magnitude, duration, "
     "stacking slot, and tick rule became a bespoke services constant/function",

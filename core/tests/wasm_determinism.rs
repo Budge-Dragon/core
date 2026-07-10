@@ -198,6 +198,66 @@ fn always() -> OptionRollPolicy {
     }
 }
 
+// -- A fixed skill strike resolves identically on native and wasm. ------------
+
+use mu_core::components::combat_profile::CombatProfile;
+use mu_core::components::pool::Pool;
+use mu_core::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
+
+/// A hand-pinned combat profile, built through the wire (the only door an
+/// external test has) so the fixture needs no filesystem.
+fn fixed_profile(
+    level: u16,
+    span: (u16, u16),
+    defense: u16,
+    rates: (u16, u16),
+    chances: u8,
+) -> CombatProfile {
+    or_abort(serde_json::from_value(serde_json::json!({
+        "level": level,
+        "physical": {"min": span.0, "max": span.1},
+        "wizardry": null,
+        "defense": defense,
+        "attack_rate": rates.0,
+        "defense_rate": rates.1,
+        "resistances": {
+            "ice": 0, "poison": 0, "lightning": 0, "fire": 0,
+            "earth": 0, "wind": 0, "water": 0
+        },
+        "critical_chance": chances,
+        "excellent_chance": chances,
+        "defense_ignore_chance": chances,
+        "double_damage_chance": chances,
+        "incoming_damage_reduction": 0,
+        "flat_damage_add": 0
+    })))
+}
+
+#[test]
+fn a_fixed_skill_strike_serializes_identically_across_targets() {
+    // A wizardry-order skill basis with the DK ×2030 multiplier over a fixed
+    // seed: the strike's six draws and the whole re-based fold must reproduce
+    // this exact outcome on native and wasm alike.
+    let attacker = fixed_profile(50, (33, 50), 0, (10_000, 0), 20);
+    let target = fixed_profile(20, (1, 2), 30, (0, 0), 0);
+    let basis = StrikeBasis::Skill {
+        span: or_abort(Interval::new(56u16, 92u16)),
+        excellent_order: ExcellentOrder::DefenseThenMultiply,
+        multiplier_per_mille: 2030,
+    };
+    let mut rng = SplitMix64::new(SEED);
+    let (health, outcome) = resolve_attack(&attacker, &target, Pool::full(500), &basis, &mut rng);
+    assert_eq!(health.current(), 314);
+    // Draw-by-draw under SEED: hit lands, span rolled, critical procs (and no
+    // excellent), defense-ignore procs, no double — so the head is the
+    // augmented max 92 with defense zeroed (the level floor 5 doesn't bind),
+    // × 2030/1000 = 186.
+    assert_eq!(
+        or_abort(serde_json::to_string(&outcome)),
+        r#"{"kind":"landed","hit":{"damage":186,"quality":"critical","modifiers":["defense_ignored"]}}"#
+    );
+}
+
 #[test]
 fn a_fixed_item_roll_serializes_identically_across_targets() {
     let mut rng = SplitMix64::new(SEED);

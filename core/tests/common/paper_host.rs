@@ -54,7 +54,7 @@ use mu_core::data::item_definitions::ItemKind;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::option_roll::OptionRollPolicy;
-use mu_core::data::skills::AreaPattern;
+use mu_core::data::skills::{AreaPattern, DamageType};
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
@@ -79,7 +79,7 @@ use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOut
 use mu_core::events::travel::{
     EnterGateOutcome, TownPortalOutcome, WarpEntryStatus, WarpTravelOutcome,
 };
-use mu_core::services::combat::resolve_attack;
+use mu_core::services::combat::{StrikeBasis, resolve_attack};
 use mu_core::services::consume::use_consumable;
 use mu_core::services::death::{resolve_death, respawn};
 use mu_core::services::effects::{
@@ -390,6 +390,7 @@ impl World {
             &attacker_profile,
             &target_profile,
             monster.health,
+            &StrikeBasis::PlainSwing,
             &mut self.rng,
         );
 
@@ -803,6 +804,7 @@ impl World {
             &attacker_profile,
             &target_profile,
             target_health,
+            &StrikeBasis::PlainSwing,
             &mut self.rng,
         );
 
@@ -1849,6 +1851,30 @@ pub fn dark_knight(level: u16, strength: u16, at: TileCoord) -> Character {
     or_abort(serde_json::from_value(json))
 }
 
+/// A plausible gearless Dark Wizard at the given level and energy, seated at a
+/// tile — the spellcaster whose Energy-scaled wizardry span the skill-damage
+/// scenarios drive — built the only way a character can be, by deserialising
+/// its wire form.
+#[must_use]
+pub fn dark_wizard(level: u16, energy: u16, at: TileCoord) -> Character {
+    let position = or_abort(serde_json::to_value(at.to_world()));
+    let json = serde_json::json!({
+        "class": "dark_wizard",
+        "level": level,
+        "experience": 0,
+        "stats": {"kind": "standard", "strength": 40, "agility": 40, "vitality": 60, "energy": energy},
+        "unspent_points": 0,
+        "zen": 0,
+        "placement": {"position": position, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
+        "vitals": {
+            "health": {"current": 500, "max": 500},
+            "mana": {"current": 400, "max": 400},
+            "ability": {"current": 400, "max": 400}
+        }
+    });
+    or_abort(serde_json::from_value(json))
+}
+
 /// A plausible gearless Magic Gladiator at the given level and tile — the
 /// class whose 2/3 warp fraction the travel scenarios exercise — built the
 /// only way a character can be, by deserialising its wire form.
@@ -2142,6 +2168,46 @@ pub fn direct_hit_skill(atlas: &Atlas) -> SkillNumber {
                 SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
             })
             .ok_or("the dataset has no non-elemental direct-hit skill"),
+    )
+}
+
+/// The number of the first non-elemental wizardry direct-hit skill — the spell
+/// whose Energy-scaled span the wizard-kill gate drives, chosen non-elemental so
+/// a landed hit inflicts no ailment and triggers no knockback. Re-found from the
+/// catalog, never hard-coded.
+#[must_use]
+pub fn wizardry_direct_skill(atlas: &Atlas) -> SkillNumber {
+    or_abort(
+        atlas
+            .skills()
+            .find_map(|skill| match route(skill) {
+                SkillRouting::Damaging(reference) => {
+                    (matches!(reference.shape(), DamagingSkill::DirectHit)
+                        && reference.damage_type() == DamageType::Wizardry
+                        && skill.element.is_none())
+                    .then_some(skill.number)
+                }
+                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
+            })
+            .ok_or("the dataset has no non-elemental wizardry direct-hit skill"),
+    )
+}
+
+/// The number of the first None-type damaging skill (record 50, the monster
+/// Flame of Evil) — the skill whose authored damage is discarded and whose cast
+/// lands the floor-times-multiplier scratch. Re-found from the catalog.
+#[must_use]
+pub fn none_type_skill(atlas: &Atlas) -> SkillNumber {
+    or_abort(
+        atlas
+            .skills()
+            .find_map(|skill| match route(skill) {
+                SkillRouting::Damaging(reference) => {
+                    (reference.damage_type() == DamageType::None).then_some(skill.number)
+                }
+                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
+            })
+            .ok_or("the dataset has no None-type damaging skill"),
     )
 }
 
