@@ -102,7 +102,7 @@ macro_rules! static_data {
     () => {
         StaticData {
             maps: load!(MapDefinition, "map_definitions", 11),
-            gates_warps: load!(GateWarpRecord, "gates_warps", 70),
+            gates_warps: load!(GateWarpRecord, "gates_warps", 82),
             monsters: load!(MonsterDefinition, "monster_definitions", 100),
             spawns: load!(Spawn, "spawns", 1847),
             skills: load!(Skill, "skills", 51),
@@ -126,7 +126,7 @@ fn every_v2_file_parses_with_expected_record_count() {
     // all thirteen files deserialize into their record types.
     let data = static_data!();
     assert_eq!(data.maps.records.len(), 11);
-    assert_eq!(data.gates_warps.records.len(), 70);
+    assert_eq!(data.gates_warps.records.len(), 82);
     assert_eq!(data.monsters.records.len(), 100);
     assert_eq!(data.spawns.records.len(), 1847);
     assert_eq!(data.skills.records.len(), 51);
@@ -195,9 +195,18 @@ fn game_config_and_special_drops_build_from_real_data() {
 fn atlas_resolves_the_whole_real_dataset() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     assert_eq!(atlas.maps().count(), 11);
-    // 70 gate/warp records include exactly 13 warp entries (Arena warp
-    // index 1 is producer-excluded at the generator).
-    assert_eq!(atlas.warps().count(), 13);
+    // 82 gate/warp records include exactly 16 warp entries (Arena warp
+    // index 1 is producer-excluded at the generator; 21-23 are the s6
+    // Tarkan/Icarus backports).
+    assert_eq!(atlas.warps().count(), 16);
+    // Exactly seven distinct maps are warp-reachable: Lorencia, Dungeon,
+    // Devias, Noria, Lost Tower, Tarkan, Icarus.
+    let reachable: std::collections::BTreeSet<u8> =
+        atlas.warps().map(|view| view.landing.map.0).collect();
+    assert_eq!(
+        reachable.into_iter().collect::<Vec<_>>(),
+        vec![0, 1, 2, 3, 4, 8, 10]
+    );
     // Lorencia's town gate is proven present by construction, its environment
     // read from Lorencia's own record.
     let (fallback, env) = atlas.fallback_town_gate();
@@ -846,11 +855,25 @@ fn every_real_warp_and_an_enter_gate_landing_resolve() {
             handle.definition().environment,
         );
     }
-    assert_eq!(warps, 13);
+    assert_eq!(warps, 16);
 
     let enter = first_enter_gate_landing(&atlas).expect("the dataset has an enter gate");
     let handle = atlas.map_handle(enter.map).unwrap();
     assert_landing_resolves(&enter, handle.walk_grid(), handle.definition().environment);
+
+    // The four s6-backported doors (Atlans↔Tarkan 53/55, LostTower↔Icarus
+    // 62/64), addressed by their trigger tiles, each seat their landing.
+    for (map, x, y) in [(7u8, 14u8, 225u8), (8, 246, 40), (4, 17, 250), (10, 14, 12)] {
+        let view = atlas
+            .enter_gate_at(MapNumber(map), TileCoord::new(x, y).to_world())
+            .expect("the s6 door's trigger covers its tile");
+        let handle = atlas.map_handle(view.landing.map).unwrap();
+        assert_landing_resolves(
+            &view.landing,
+            handle.walk_grid(),
+            handle.definition().environment,
+        );
+    }
 }
 
 #[test]

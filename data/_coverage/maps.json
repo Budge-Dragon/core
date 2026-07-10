@@ -1,7 +1,7 @@
 {
   "files": {
     "map_definitions.json": 11,
-    "gates_warps.json": 70,
+    "gates_warps.json": 82,
     "terrain_binaries": 11
   },
   "counts_by_source_version": {
@@ -16,13 +16,16 @@
         "s6": 1
       },
       "target_gate": {
-        "075": 22
+        "075": 22,
+        "s6": 5
       },
       "enter_gate": {
-        "075": 22
+        "075": 22,
+        "s6": 4
       },
       "warp": {
-        "075": 13
+        "075": 13,
+        "s6": 3
       }
     }
   },
@@ -52,15 +55,16 @@
       "file": "gates_warps.json",
       "kind": "warp",
       "excluded_index": 1,
-      "review": "Arena warp (index 1) deliberately excluded, producer-pinned 2026-07-10: Arena has no walk-in entrance, so under the discovery rule (a destination must be visited on foot before it can be warped to) it could never be visited first and its warp could never unlock; the entry returns when a future duel/event wave gives Arena a real entrance. Surviving warps keep their authentic indices 2-14 — no renumbering"
+      "review": "Arena warp (index 1) deliberately excluded, producer-pinned 2026-07-10: Arena has no walk-in entrance, so under the discovery rule (a destination must be visited on foot before it can be warped to) it could never be visited first and its warp could never unlock; the entry returns when a future duel/event wave gives Arena a real entrance. Surviving warps keep their authentic indices — 2-14 from the 0.95d list plus the s6-backported 21-23 — no renumbering"
     }
   ],
   "gaps": [
     "Devil Square mini-game event config (per-square entry level brackets, waves, rewards, timers, in-event death, ticket item, max 10 players; Version095d/Events/DevilSquareInitializer.cs) is W-DS scope, not maps data; the single collapsed map-9 record and its four arrival gates (spawn gates 58-61) ARE extracted",
-    "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 warp list verbatim with a 'todo: update for 0.95d'; adopted as-is, all 13 shipped warp records tagged 075 with a review note (the 14th, Arena index 1, is producer-excluded - see review)",
+    "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 warp list verbatim with a 'todo: update for 0.95d'; adopted as-is, 13 warp records tagged 075 with a review note + 3 tagged s6 backport (the 14th 0.75 entry, Arena index 1, is producer-excluded - see review)",
     "S6/1.0-era maps (Blood Castle, Kalima, ...) are outside the approved 11-map 0.95d scope of this wave - no map backports"
   ],
   "notes": [
+    "s6 gate/warp backport for Tarkan+Icarus reachability: warps 21 (Tarkan), 22 (Tarkan2), 23 (Icarus), enter gates 53/55 (Atlans↔Tarkan) and 62/64 (LostTower↔Icarus), target gates 54/56/63/65/77 — maps 8 and 10 already exist, so this is a gate/warp backport, not a map backport; every landing rect walkability-verified on its terrain sidecar",
     "Devil Square: OpenMU's four discriminator records (map 9 disc 1-4, names 'Devil Square 1'..'4') collapse to ONE map-9 record named 'Devil Square'; the four Terrain10_{1..4}.att blobs are byte-identical (verified md5) and collapse to terrain/9.bin",
     "Devias (map 2) tagged 095d: its record fields are the 0.75 map, but the shipped terrain sidecar (terrain/2.bin) is the 0.95d Terrain3.att (only town whose initializer overrides the 075_ prefix); the v1 record-level terrain field is gone in v2, so the 095d tag now reflects the sidecar, not a record-field difference",
     "environment derived from the initializer: Atlans (7) = underwater (AddUnderwaterMovementPowerUp), Icarus (10) = sky (CanFly entry requirement), all other maps = ground; OpenMU's IsUnderwater stat and CanFly stat-requirement mechanisms are dropped (become W-CMB / services rules on the typed environment)",

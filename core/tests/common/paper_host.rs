@@ -994,6 +994,16 @@ impl World {
         outcome
     }
 
+    /// The host-derived `Wings` eligibility fact for the character at
+    /// `char_index`: worn wings in the dedicated slot flip it to `Equipped`
+    /// (the I1-style derivation the flight and travel drives share).
+    fn wings(&self, char_index: usize) -> Wings {
+        match self.equipment(char_index).get(EquipmentSlot::Wings) {
+            Some(_) => Wings::Equipped,
+            None => Wings::None,
+        }
+    }
+
     /// Changes the flight mode of the character at `char_index` (seam 8): the
     /// host derives the `Wings` eligibility fact from whether a wing is worn in
     /// the character's own equipment (I1-style host derivation), reads the map's
@@ -1005,10 +1015,7 @@ impl World {
     /// [`change_flight`]: mu_core::services::movement::change_flight
     pub fn change_flight(&mut self, char_index: usize, change: FlightChange) -> Vec<FlightOutcome> {
         let placement = self.character(char_index).placement();
-        let wings = match self.equipment(char_index).get(EquipmentSlot::Wings) {
-            Some(_) => Wings::Equipped,
-            None => Wings::None,
-        };
+        let wings = self.wings(char_index);
         let env = or_abort(self.atlas.map_handle(placement.map).ok_or("no map handle"))
             .definition()
             .environment;
@@ -1094,8 +1101,9 @@ impl World {
     /// fraction, or fee rule is authored host-side. Returns the outcome.
     pub fn warp(&mut self, char_index: usize, index: WarpIndex) -> WarpTravelOutcome {
         let character = self.character(char_index).clone();
+        let wings = self.wings(char_index);
         let entry = or_abort(self.atlas.warp_by_index(index).ok_or("unknown warp index"));
-        let (moved, outcome) = resolve_warp(&character, entry, &self.atlas, &mut self.rng);
+        let (moved, outcome) = resolve_warp(&character, entry, &self.atlas, wings, &mut self.rng);
         let persisted = persist(moved);
         let slot = or_abort(
             self.characters
@@ -1107,11 +1115,15 @@ impl World {
     }
 
     /// The warp-menu availability projection for the character at `char_index`
-    /// — the pure [`warp_menu`] query over the live character and the held
-    /// atlas. Reads only; nothing to persist.
+    /// — the pure [`warp_menu`] query over the live character, the held atlas,
+    /// and the host-derived wings fact. Reads only; nothing to persist.
     #[must_use]
     pub fn warp_menu(&self, char_index: usize) -> Vec<WarpEntryStatus> {
-        warp_menu(self.character(char_index), &self.atlas)
+        warp_menu(
+            self.character(char_index),
+            &self.atlas,
+            self.wings(char_index),
+        )
     }
 
     /// Walks the character at `char_index` through the enter gate whose
@@ -1122,13 +1134,15 @@ impl World {
     /// grown discovered set) is written back *through* the persist seam.
     pub fn traverse_gate(&mut self, char_index: usize) -> EnterGateOutcome {
         let character = self.character(char_index).clone();
+        let wings = self.wings(char_index);
         let placement = character.placement();
         let gate = or_abort(
             self.atlas
                 .enter_gate_at(placement.map, placement.position)
                 .ok_or("no enter gate trigger covers the traveler"),
         );
-        let (moved, outcome) = traverse_enter_gate(&character, gate, &self.atlas, &mut self.rng);
+        let (moved, outcome) =
+            traverse_enter_gate(&character, gate, &self.atlas, wings, &mut self.rng);
         let persisted = persist(moved);
         let slot = or_abort(
             self.characters

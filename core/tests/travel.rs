@@ -3,7 +3,7 @@
 //! traversal [`traverse_enter_gate`], and the Town Portal Scroll
 //! [`use_town_portal`], applied against the shipped warp list, class table,
 //! enter gates, and town gates. Proves the authentic check order (discovery →
-//! level → zen, the fee charged last and atomically), the class warp fraction
+//! level → wings → zen, the fee charged last and atomically), the class warp fraction
 //! (level gate only, never the fee), discovery's lock → walk-in → unlock loop,
 //! projection/command agreement from one rule, the scroll's
 //! keep-everything town hop with its single-piece consume, and the one-draw
@@ -27,7 +27,7 @@ use mu_core::components::item_instance::{
 };
 use mu_core::components::item_ref::ItemRef;
 use mu_core::components::life::LifeState;
-use mu_core::components::movement::Movement;
+use mu_core::components::movement::{Movement, Wings};
 use mu_core::components::placement::Placement;
 use mu_core::components::tile::{TileArea, TileCoord};
 use mu_core::components::units::{CarriedZen, ItemLevel, Level, MapNumber, Zen};
@@ -49,6 +49,15 @@ use rng::TestRng;
 const LOST_TOWER_ENTRY: u16 = 8;
 /// The Lorencia entry — level 10, 2,000 zen.
 const LORENCIA_ENTRY: u16 = 2;
+/// The first Tarkan entry (s6 backport, index 21) — level 140, 8,000 zen,
+/// landing on the Tarkan town gate 57.
+const TARKAN_ENTRY: u16 = 21;
+/// The second Tarkan entry (s6 backport, index 22) — level 140, 8,500 zen,
+/// landing on gate 77.
+const TARKAN2_ENTRY: u16 = 22;
+/// The Icarus entry (s6 backport, index 23) — level 170, 10,000 zen, the one
+/// Sky destination in the list.
+const ICARUS_ENTRY: u16 = 23;
 
 /// Town Portal Scroll (group 14 number 10, durability 1 — single use).
 const TOWN_PORTAL: ItemRef = ItemRef {
@@ -252,7 +261,7 @@ fn zen(value: u64) -> CarriedZen {
     or_abort(CarriedZen::new(value))
 }
 
-// --- Warp check order: discovery → level → zen, charged last, atomic. --------
+// --- Warp check order: discovery → level → wings → zen, charged last, atomic.
 
 #[test]
 fn a_discovered_qualified_solvent_warp_arrives_and_debits_exactly_the_fee() {
@@ -267,7 +276,8 @@ fn a_discovered_qualified_solvent_warp_arrives_and_debits_exactly_the_fee() {
     assert_eq!(entry.warp.min_level.get(), 50);
 
     let traveler = hero("dark_knight", 60, 10_000, 0, &[0, 4]);
-    let (arrived, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (arrived, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     match outcome {
         WarpTravelOutcome::Arrived { placement, balance } => {
@@ -279,6 +289,7 @@ fn a_discovered_qualified_solvent_warp_arrives_and_debits_exactly_the_fee() {
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => panic!("a qualified warp arrives: {outcome:?}"),
     }
@@ -293,7 +304,8 @@ fn an_undiscovered_target_is_refused_not_discovered_with_the_wallet_untouched() 
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
     let traveler = hero("dark_knight", 60, 10_000, 0, &[0]);
 
-    let (unchanged, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     assert_eq!(outcome, WarpTravelOutcome::NotDiscovered);
     assert_eq!(unchanged.zen(), zen(10_000), "nothing charged");
@@ -310,7 +322,8 @@ fn an_under_level_warp_is_refused_before_zen_even_when_also_too_poor() {
     // the reject names the bar and the wallet is never touched.
     let traveler = hero("dark_knight", 40, 3_000, 0, &[0, 4]);
 
-    let (unchanged, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     assert_eq!(outcome, WarpTravelOutcome::LevelTooLow { required: 50 });
     assert_eq!(unchanged.zen(), zen(3_000));
@@ -322,7 +335,8 @@ fn an_unaffordable_warp_is_refused_atomically() {
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
     let traveler = hero("dark_knight", 60, 4_999, 0, &[0, 4]);
 
-    let (unchanged, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     assert_eq!(
         outcome,
@@ -341,7 +355,8 @@ fn a_wallet_exactly_equal_to_the_fee_warps_and_lands_at_zero() {
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
     let traveler = hero("dark_knight", 60, 5_000, 0, &[0, 4]);
 
-    let (arrived, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (arrived, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     match outcome {
         WarpTravelOutcome::Arrived { balance, .. } => {
@@ -351,6 +366,7 @@ fn a_wallet_exactly_equal_to_the_fee_warps_and_lands_at_zero() {
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => {
             panic!("the affordability edge is inclusive: {outcome:?}")
@@ -368,7 +384,8 @@ fn a_dead_character_is_refused_not_alive_before_any_other_check() {
         json!({"kind": "dead", "respawn_at": 903}),
     );
 
-    let (unchanged, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     assert_eq!(outcome, WarpTravelOutcome::NotAlive);
     assert_eq!(
@@ -413,7 +430,8 @@ fn a_magic_gladiator_clears_a_gate_its_plain_level_misses_and_pays_the_full_fee(
     // MG at 40: effective requirement floor(50 * 2/3) = 33 <= 40 — the gate
     // opens, and the fee is the full 5,000, never a fraction of it.
     let gladiator = hero("magic_gladiator", 40, 10_000, 0, &[0, 4]);
-    let (arrived, outcome) = resolve_warp(&gladiator, entry, &atlas, &mut TestRng::new(7));
+    let (arrived, outcome) =
+        resolve_warp(&gladiator, entry, &atlas, Wings::None, &mut TestRng::new(7));
     match outcome {
         WarpTravelOutcome::Arrived { balance, .. } => {
             assert_eq!(balance, zen(5_000), "the FULL fee, not a fraction");
@@ -422,6 +440,7 @@ fn a_magic_gladiator_clears_a_gate_its_plain_level_misses_and_pays_the_full_fee(
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => {
             panic!("the MG's effective 33 opens the gate: {outcome:?}")
@@ -431,7 +450,7 @@ fn a_magic_gladiator_clears_a_gate_its_plain_level_misses_and_pays_the_full_fee(
     // The same level, the same entry, a Full class: the posted 50 applies
     // unreduced and the gate refuses.
     let knight = hero("dark_knight", 40, 10_000, 0, &[0, 4]);
-    let (_, refused) = resolve_warp(&knight, entry, &atlas, &mut TestRng::new(7));
+    let (_, refused) = resolve_warp(&knight, entry, &atlas, Wings::None, &mut TestRng::new(7));
     assert_eq!(refused, WarpTravelOutcome::LevelTooLow { required: 50 });
 }
 
@@ -441,7 +460,7 @@ fn the_level_too_low_reject_carries_the_class_effective_requirement() {
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
     let gladiator = hero("magic_gladiator", 30, 10_000, 0, &[0, 4]);
 
-    let (_, outcome) = resolve_warp(&gladiator, entry, &atlas, &mut TestRng::new(7));
+    let (_, outcome) = resolve_warp(&gladiator, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     // floor(50 * 2/3) = 33 — the bar THIS character faces, not the posted 50.
     assert_eq!(outcome, WarpTravelOutcome::LevelTooLow { required: 33 });
@@ -454,12 +473,18 @@ fn every_real_entry_warps_a_fully_qualified_hero_debiting_its_real_fee() {
         .warps()
         .map(|view| (view.warp.index, view.warp.cost_zen, view.landing.map))
         .collect();
-    assert_eq!(entries.len(), 13, "the surviving warp list");
+    assert_eq!(entries.len(), 16, "the surviving warp list");
 
     for (index, cost, map) in entries {
-        let traveler = hero("dark_knight", 400, 100_000, 0, &[0, 1, 2, 3, 4]);
+        let traveler = hero("dark_knight", 400, 100_000, 0, &[0, 1, 2, 3, 4, 8, 10]);
         let entry = warp_view(&atlas, index.0);
-        let (arrived, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(11));
+        let (arrived, outcome) = resolve_warp(
+            &traveler,
+            entry,
+            &atlas,
+            Wings::Equipped,
+            &mut TestRng::new(11),
+        );
         match outcome {
             WarpTravelOutcome::Arrived { placement, balance } => {
                 assert_seated(&atlas, &entry.landing, placement);
@@ -470,6 +495,7 @@ fn every_real_entry_warps_a_fully_qualified_hero_debiting_its_real_fee() {
             WarpTravelOutcome::NotAlive
             | WarpTravelOutcome::NotDiscovered
             | WarpTravelOutcome::LevelTooLow { .. }
+            | WarpTravelOutcome::CannotFly
             | WarpTravelOutcome::NotEnoughZen { .. }
             | WarpTravelOutcome::NoWalkableLanding => {
                 panic!("warp {index:?} arrives for a level-400 funded hero: {outcome:?}")
@@ -485,12 +511,19 @@ fn arrival_forces_the_destination_environment_movement_mode() {
     let atlas = real_atlas();
 
     // A synthetic entry landing on Icarus (map 10, Sky): a grounded traveler
-    // arrives FLYING — the destination environment forces the mode.
+    // arrives FLYING — the destination environment forces the mode. Winged,
+    // so the Sky entry gate passes.
     let (x, y) = first_walkable_tile(&atlas, 10);
     let record = synthetic_warp(1_000, 1);
     let sky = synthetic_view(&record, 10, (x, y, x, y));
     let grounded = hero("dark_knight", 60, 10_000, 0, &[0, 10]);
-    let (_, outcome) = resolve_warp(&grounded, sky, &atlas, &mut TestRng::new(7));
+    let (_, outcome) = resolve_warp(
+        &grounded,
+        sky,
+        &atlas,
+        Wings::Equipped,
+        &mut TestRng::new(7),
+    );
     match outcome {
         WarpTravelOutcome::Arrived { placement, .. } => {
             assert_eq!(placement.map, MapNumber(10));
@@ -499,6 +532,7 @@ fn arrival_forces_the_destination_environment_movement_mode() {
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => {
             panic!("the Icarus tile is walkable: {outcome:?}")
@@ -512,7 +546,7 @@ fn arrival_forces_the_destination_environment_movement_mode() {
         json!({"position": {"x": 0, "y": 0}, "facing": {"x": 1, "y": 0}, "movement": "flying", "map": 10}),
     );
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
-    let (_, outcome) = resolve_warp(&flyer, entry, &atlas, &mut TestRng::new(7));
+    let (_, outcome) = resolve_warp(&flyer, entry, &atlas, Wings::None, &mut TestRng::new(7));
     match outcome {
         WarpTravelOutcome::Arrived { placement, .. } => {
             assert_eq!(placement.movement, Movement::Grounded, "Ground grounds");
@@ -520,6 +554,7 @@ fn arrival_forces_the_destination_environment_movement_mode() {
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => panic!("a qualified warp arrives: {outcome:?}"),
     }
@@ -538,7 +573,8 @@ fn a_same_map_warp_is_allowed_and_charges_the_fee() {
     // current map is always a member), the fee is charged, the hero re-places.
     let traveler = hero("dark_knight", 60, 10_000, 0, &[0]);
 
-    let (arrived, outcome) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (arrived, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     match outcome {
         WarpTravelOutcome::Arrived { placement, balance } => {
@@ -549,6 +585,7 @@ fn a_same_map_warp_is_allowed_and_charges_the_fee() {
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => panic!("a same-map warp arrives: {outcome:?}"),
     }
@@ -565,7 +602,7 @@ fn an_unseatable_target_folds_to_no_walkable_landing_with_the_wallet_untouched()
     let record = synthetic_warp(2_000, 1);
     let walled = synthetic_view(&record, 0, (0, 0, 0, 0));
     let mut rng = CountingRng::new(7);
-    let (unchanged, outcome) = resolve_warp(&traveler, walled, &atlas, &mut rng);
+    let (unchanged, outcome) = resolve_warp(&traveler, walled, &atlas, Wings::None, &mut rng);
     assert_eq!(outcome, WarpTravelOutcome::NoWalkableLanding);
     assert_eq!(unchanged.zen(), zen(10_000), "prove-then-commit: no charge");
     assert_eq!(unchanged.placement(), traveler.placement());
@@ -575,8 +612,13 @@ fn an_unseatable_target_folds_to_no_walkable_landing_with_the_wallet_untouched()
     let traveler = hero("dark_knight", 60, 10_000, 0, &[0]);
     let ghost_discovered = with_field(&traveler, "discovered", json!([0, 200]));
     let off_atlas = synthetic_view(&record, 200, (10, 10, 20, 20));
-    let (unchanged, outcome) =
-        resolve_warp(&ghost_discovered, off_atlas, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) = resolve_warp(
+        &ghost_discovered,
+        off_atlas,
+        &atlas,
+        Wings::None,
+        &mut TestRng::new(7),
+    );
     assert_eq!(outcome, WarpTravelOutcome::NoWalkableLanding);
     assert_eq!(unchanged.zen(), zen(10_000));
 }
@@ -599,7 +641,8 @@ fn buffs_and_vitals_cross_a_warp_untouched() {
         }),
     );
 
-    let (arrived, outcome) = resolve_warp(&buffed, entry, &atlas, &mut TestRng::new(7));
+    let (arrived, outcome) =
+        resolve_warp(&buffed, entry, &atlas, Wings::None, &mut TestRng::new(7));
 
     assert!(matches!(outcome, WarpTravelOutcome::Arrived { .. }));
     assert_eq!(
@@ -635,7 +678,8 @@ fn walking_an_enter_gate_is_never_blocked_by_discovery_and_discovers_the_landing
     assert_eq!(gate.landing.map, MapNumber(2), "the door lands on Devias");
     let traveler = hero("dark_knight", 60, 0, 0, &[0]);
 
-    let (crossed, outcome) = traverse_enter_gate(&traveler, gate, &atlas, &mut TestRng::new(7));
+    let (crossed, outcome) =
+        traverse_enter_gate(&traveler, gate, &atlas, Wings::None, &mut TestRng::new(7));
 
     match outcome {
         EnterGateOutcome::Arrived { placement } => {
@@ -644,6 +688,7 @@ fn walking_an_enter_gate_is_never_blocked_by_discovery_and_discovers_the_landing
         }
         EnterGateOutcome::NotAlive
         | EnterGateOutcome::LevelTooLow { .. }
+        | EnterGateOutcome::CannotFly
         | EnterGateOutcome::NoWalkableLanding => {
             panic!("discovery never blocks a physical door: {outcome:?}")
         }
@@ -659,14 +704,21 @@ fn an_enter_gate_is_gated_by_its_classic_level_rule_with_the_class_fraction() {
 
     // A level-10 knight misses the door's posted 15.
     let low_knight = hero("dark_knight", 10, 0, 0, &[0]);
-    let (unchanged, outcome) = traverse_enter_gate(&low_knight, gate, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) =
+        traverse_enter_gate(&low_knight, gate, &atlas, Wings::None, &mut TestRng::new(7));
     assert_eq!(outcome, EnterGateOutcome::LevelTooLow { required: 15 });
     assert_eq!(unchanged.placement(), low_knight.placement());
 
     // The same level-10 as a Magic Gladiator: effective floor(15 * 2/3) = 10,
     // and the door opens — the fraction applies to enter gates too.
     let low_gladiator = hero("magic_gladiator", 10, 0, 0, &[0]);
-    let (_, outcome) = traverse_enter_gate(&low_gladiator, gate, &atlas, &mut TestRng::new(7));
+    let (_, outcome) = traverse_enter_gate(
+        &low_gladiator,
+        gate,
+        &atlas,
+        Wings::None,
+        &mut TestRng::new(7),
+    );
     assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
 
     // A dead traveler cannot use a door at all.
@@ -675,7 +727,7 @@ fn an_enter_gate_is_gated_by_its_classic_level_rule_with_the_class_fraction() {
         "life",
         json!({"kind": "dead", "respawn_at": 903}),
     );
-    let (_, outcome) = traverse_enter_gate(&dead, gate, &atlas, &mut TestRng::new(7));
+    let (_, outcome) = traverse_enter_gate(&dead, gate, &atlas, Wings::None, &mut TestRng::new(7));
     assert_eq!(outcome, EnterGateOutcome::NotAlive);
 }
 
@@ -688,7 +740,7 @@ fn the_lock_walk_in_unlock_loop_over_real_data() {
 
     // LOCKED: the menu names discovery as the ONLY unmet requirement, and the
     // command agrees.
-    let menu = warp_menu(&traveler, &atlas);
+    let menu = warp_menu(&traveler, &atlas, Wings::None);
     let status = or_abort(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
@@ -701,7 +753,7 @@ fn the_lock_walk_in_unlock_loop_over_real_data() {
         }
         WarpAvailability::Available => panic!("an unvisited map is locked"),
     }
-    let (_, refused) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(7));
+    let (_, refused) = resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
     assert_eq!(refused, WarpTravelOutcome::NotDiscovered);
 
     // WALK IN: Lorencia → Devias (gate 18), then Devias → Lost Tower (gate 28
@@ -710,25 +762,32 @@ fn the_lock_walk_in_unlock_loop_over_real_data() {
         &traveler,
         gate_at(&atlas, 0, 5, 38),
         &atlas,
+        Wings::None,
         &mut TestRng::new(7),
     );
     assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
     let tower_door = gate_at(&atlas, 2, 2, 248);
     assert_eq!(tower_door.landing.map, MapNumber(4));
-    let (on_tower, outcome) =
-        traverse_enter_gate(&on_devias, tower_door, &atlas, &mut TestRng::new(7));
+    let (on_tower, outcome) = traverse_enter_gate(
+        &on_devias,
+        tower_door,
+        &atlas,
+        Wings::None,
+        &mut TestRng::new(7),
+    );
     assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
     assert!(on_tower.discovered().contains(MapNumber(4)));
 
     // UNLOCKED: the menu flips and the same entry now warps, fee debited.
-    let menu = warp_menu(&on_tower, &atlas);
+    let menu = warp_menu(&on_tower, &atlas, Wings::None);
     let status = or_abort(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
     );
     assert!(matches!(status.availability, WarpAvailability::Available));
-    let (warped, outcome) = resolve_warp(&on_tower, entry, &atlas, &mut TestRng::new(7));
+    let (warped, outcome) =
+        resolve_warp(&on_tower, entry, &atlas, Wings::None, &mut TestRng::new(7));
     match outcome {
         WarpTravelOutcome::Arrived { balance, .. } => {
             assert_eq!(balance, zen(15_000), "the 5,000 fee came off the wallet");
@@ -737,6 +796,7 @@ fn the_lock_walk_in_unlock_loop_over_real_data() {
         WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding => panic!("the unlocked entry warps: {outcome:?}"),
     }
@@ -763,14 +823,22 @@ fn a_cross_map_respawn_discovers_the_town() {
 // --- Menu availability projection: one rule, all failures. -------------------
 
 #[test]
-fn the_projection_annotates_all_thirteen_entries_in_warp_index_order() {
+fn the_projection_annotates_all_sixteen_entries_in_warp_index_order() {
     let atlas = real_atlas();
-    let veteran = hero("dark_knight", 100, 100_000, 0, &[0, 1, 2, 3, 4]);
+    // Discovered everywhere (all seven warp destinations), level 400 over
+    // every bar including Icarus's 170, funded past the priciest fee, winged
+    // for the one Sky entry — all sixteen open.
+    let veteran = hero("dark_knight", 400, 200_000, 0, &[0, 1, 2, 3, 4, 8, 10]);
 
-    let menu = warp_menu(&veteran, &atlas);
+    let menu = warp_menu(&veteran, &atlas, Wings::Equipped);
 
     let expected: Vec<WarpIndex> = atlas.warps().map(|view| view.warp.index).collect();
-    assert_eq!(expected.len(), 13);
+    assert_eq!(expected.len(), 16);
+    assert_eq!(
+        expected,
+        [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21, 22, 23].map(WarpIndex),
+        "the surviving indices: 2-14 plus the s6-backported 21-23"
+    );
     assert_eq!(
         menu.iter().map(|status| status.index).collect::<Vec<_>>(),
         expected,
@@ -779,7 +847,7 @@ fn the_projection_annotates_all_thirteen_entries_in_warp_index_order() {
     for status in &menu {
         assert!(
             matches!(status.availability, WarpAvailability::Available),
-            "every entry is open to a discovered, leveled, funded veteran: {status:?}"
+            "every entry is open to a discovered, leveled, funded, winged veteran: {status:?}"
         );
     }
 }
@@ -789,7 +857,7 @@ fn a_locked_entry_carries_the_complete_reason_set_in_check_order() {
     let atlas = real_atlas();
     let novice = hero("dark_knight", 15, 1_000, 0, &[0]);
 
-    let menu = warp_menu(&novice, &atlas);
+    let menu = warp_menu(&novice, &atlas, Wings::None);
 
     // Lost Tower: undiscovered, under-leveled, unaffordable — all three, in
     // check order.
@@ -835,18 +903,27 @@ fn a_locked_entry_carries_the_complete_reason_set_in_check_order() {
 fn projection_and_command_agree_for_a_sweep_of_characters() {
     let atlas = real_atlas();
     let sweep = [
-        hero("dark_knight", 15, 1_000, 0, &[0]),
-        hero("dark_knight", 60, 10_000, 0, &[0, 4]),
-        hero("magic_gladiator", 40, 4_000, 0, &[0, 2, 4]),
-        hero("dark_knight", 400, 100_000, 0, &[0, 1, 2, 3, 4]),
-        hero("fairy_elf", 45, 3_000, 3, &[3, 0]),
+        (hero("dark_knight", 15, 1_000, 0, &[0]), Wings::None),
+        (hero("dark_knight", 60, 10_000, 0, &[0, 4]), Wings::None),
+        (
+            hero("magic_gladiator", 40, 4_000, 0, &[0, 2, 4]),
+            Wings::None,
+        ),
+        (
+            hero("dark_knight", 400, 100_000, 0, &[0, 1, 2, 3, 4, 8, 10]),
+            Wings::Equipped,
+        ),
+        (hero("fairy_elf", 45, 3_000, 3, &[3, 0]), Wings::None),
+        // Qualified for Icarus in every axis but wings: the Sky entry locks
+        // on CannotFly alone, and the command agrees.
+        (hero("fairy_elf", 200, 50_000, 0, &[0, 10]), Wings::None),
     ];
 
-    for traveler in &sweep {
-        let menu = warp_menu(traveler, &atlas);
+    for (traveler, wings) in &sweep {
+        let menu = warp_menu(traveler, &atlas, *wings);
         for status in &menu {
             let entry = warp_view(&atlas, status.index.0);
-            let (_, outcome) = resolve_warp(traveler, entry, &atlas, &mut TestRng::new(3));
+            let (_, outcome) = resolve_warp(traveler, entry, &atlas, *wings, &mut TestRng::new(3));
             match &status.availability {
                 WarpAvailability::Available => {
                     // Real /data has a walkable landing for every entry, so an
@@ -867,6 +944,9 @@ fn projection_and_command_agree_for_a_sweep_of_characters() {
                         WarpTravelOutcome::LevelTooLow { required } => reasons
                             .iter()
                             .any(|r| *r == WarpLockReason::LevelTooLow { required }),
+                        WarpTravelOutcome::CannotFly => {
+                            reasons.iter().any(|r| *r == WarpLockReason::CannotFly)
+                        }
                         WarpTravelOutcome::NotEnoughZen { required, .. } => reasons
                             .iter()
                             .any(|r| *r == WarpLockReason::InsufficientZen { cost: required }),
@@ -890,7 +970,7 @@ fn the_class_effective_requirement_is_identical_in_projection_and_command() {
     let atlas = real_atlas();
     let gladiator = hero("magic_gladiator", 30, 10_000, 0, &[0, 4]);
 
-    let menu = warp_menu(&gladiator, &atlas);
+    let menu = warp_menu(&gladiator, &atlas, Wings::None);
     let tower = or_abort(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
@@ -904,13 +984,13 @@ fn the_class_effective_requirement_is_identical_in_projection_and_command() {
         WarpAvailability::Available => panic!("level 30 misses the effective 33"),
     }
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
-    let (_, outcome) = resolve_warp(&gladiator, entry, &atlas, &mut TestRng::new(7));
+    let (_, outcome) = resolve_warp(&gladiator, entry, &atlas, Wings::None, &mut TestRng::new(7));
     assert_eq!(outcome, WarpTravelOutcome::LevelTooLow { required: 33 });
 
     // A level-40 MG sees the same entry Available — the projection carries
     // the fraction exactly as the command applies it.
     let older = hero("magic_gladiator", 40, 10_000, 0, &[0, 4]);
-    let menu = warp_menu(&older, &atlas);
+    let menu = warp_menu(&older, &atlas, Wings::None);
     let tower = or_abort(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
@@ -925,7 +1005,7 @@ fn a_stale_menu_cannot_buy_a_warp_the_character_no_longer_qualifies_for() {
     let funded = hero("dark_knight", 60, 10_000, 0, &[0, 4]);
 
     // The snapshot says Available...
-    let menu = warp_menu(&funded, &atlas);
+    let menu = warp_menu(&funded, &atlas, Wings::None);
     let tower = or_abort(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
@@ -937,7 +1017,8 @@ fn a_stale_menu_cannot_buy_a_warp_the_character_no_longer_qualifies_for() {
     // live: the stale menu buys nothing.
     let spent = with_field(&funded, "zen", json!(4_000));
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
-    let (unchanged, outcome) = resolve_warp(&spent, entry, &atlas, &mut TestRng::new(7));
+    let (unchanged, outcome) =
+        resolve_warp(&spent, entry, &atlas, Wings::None, &mut TestRng::new(7));
     assert_eq!(
         outcome,
         WarpTravelOutcome::NotEnoughZen {
@@ -1032,7 +1113,10 @@ fn an_in_town_scroll_re_seats_at_the_towns_own_gate() {
 fn a_sky_scroll_lands_grounded_in_lost_tower_and_discovers_it() {
     let atlas = real_atlas();
     // Flying over Icarus (map 10, Sky), whose town table points at Lost Tower
-    // (map 4, Ground): the flyer comes down to earth.
+    // (map 4, Ground): the flyer comes down to earth. Also the WF-TP-1
+    // regression pin: use_town_portal takes NO wings fact and checks no wings
+    // gate — leaving Icarus is authentically ungated, and the hero here is
+    // gearless (wingless) by construction.
     let flyer = with_field(
         &hero("fairy_elf", 90, 0, 10, &[10]),
         "placement",
@@ -1161,7 +1245,7 @@ fn warp_draws_exactly_one_word_on_arrival_and_zero_on_every_rejection() {
     // Arrived: exactly one word — the landing pick.
     let qualified = hero("dark_knight", 60, 10_000, 0, &[0, 4]);
     let mut rng = CountingRng::new(7);
-    let (_, outcome) = resolve_warp(&qualified, entry, &atlas, &mut rng);
+    let (_, outcome) = resolve_warp(&qualified, entry, &atlas, Wings::None, &mut rng);
     assert!(matches!(outcome, WarpTravelOutcome::Arrived { .. }));
     assert_eq!(rng.words, 1);
 
@@ -1178,13 +1262,27 @@ fn warp_draws_exactly_one_word_on_arrival_and_zero_on_every_rejection() {
     ];
     for traveler in &rejections {
         let mut rng = CountingRng::new(7);
-        let (_, outcome) = resolve_warp(traveler, entry, &atlas, &mut rng);
+        let (_, outcome) = resolve_warp(traveler, entry, &atlas, Wings::None, &mut rng);
         assert!(
             !matches!(outcome, WarpTravelOutcome::Arrived { .. }),
             "{outcome:?}"
         );
         assert_eq!(rng.words, 0, "a rejection never touches the stream");
     }
+
+    // A wingless Icarus attempt joins the zero-draw set: the wings gate sits
+    // before the landing draw, so CannotFly never touches the stream.
+    let wingless = hero("fairy_elf", 200, 20_000, 0, &[0, 10]);
+    let mut rng = CountingRng::new(7);
+    let (_, outcome) = resolve_warp(
+        &wingless,
+        warp_view(&atlas, ICARUS_ENTRY),
+        &atlas,
+        Wings::None,
+        &mut rng,
+    );
+    assert_eq!(outcome, WarpTravelOutcome::CannotFly);
+    assert_eq!(rng.words, 0, "a wings refusal never touches the stream");
 }
 
 #[test]
@@ -1214,13 +1312,23 @@ fn portal_and_gate_draw_exactly_one_word_on_arrival_and_zero_on_rejection() {
     // Enter-gate traversal: one on arrival, zero on a level refusal.
     let gate = gate_at(&atlas, 0, 5, 38);
     let mut rng = CountingRng::new(7);
-    let (_, outcome) =
-        traverse_enter_gate(&hero("dark_knight", 60, 0, 0, &[0]), gate, &atlas, &mut rng);
+    let (_, outcome) = traverse_enter_gate(
+        &hero("dark_knight", 60, 0, 0, &[0]),
+        gate,
+        &atlas,
+        Wings::None,
+        &mut rng,
+    );
     assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
     assert_eq!(rng.words, 1);
     let mut rng = CountingRng::new(7);
-    let (_, outcome) =
-        traverse_enter_gate(&hero("dark_knight", 10, 0, 0, &[0]), gate, &atlas, &mut rng);
+    let (_, outcome) = traverse_enter_gate(
+        &hero("dark_knight", 10, 0, 0, &[0]),
+        gate,
+        &atlas,
+        Wings::None,
+        &mut rng,
+    );
     assert_eq!(outcome, EnterGateOutcome::LevelTooLow { required: 15 });
     assert_eq!(rng.words, 0);
 }
@@ -1231,8 +1339,8 @@ fn identical_inputs_and_seed_produce_a_byte_identical_character() {
     let entry = warp_view(&atlas, LOST_TOWER_ENTRY);
     let traveler = hero("dark_knight", 60, 10_000, 0, &[0, 4]);
 
-    let (a, outcome_a) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(21));
-    let (b, outcome_b) = resolve_warp(&traveler, entry, &atlas, &mut TestRng::new(21));
+    let (a, outcome_a) = resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(21));
+    let (b, outcome_b) = resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(21));
     assert_eq!(outcome_a, outcome_b);
     assert_eq!(
         or_abort(serde_json::to_string(&a)),
@@ -1262,11 +1370,410 @@ fn identical_inputs_and_seed_produce_a_byte_identical_character() {
     );
 }
 
+// --- Wings and the s6 backport: Tarkan/Icarus reachable, Sky entry gated. ----
+
+#[test]
+fn a_wingless_qualified_hero_warps_to_tarkan_debiting_the_fee() {
+    // WF-TARK-1: Tarkan is Ground, so the wings fact is immaterial.
+    let atlas = real_atlas();
+    let entry = warp_view(&atlas, TARKAN_ENTRY);
+    assert_eq!(entry.landing.map, MapNumber(8), "the entry lands on Tarkan");
+    assert_eq!(entry.warp.cost_zen, Zen(8_000));
+    assert_eq!(entry.warp.min_level.get(), 140);
+
+    let traveler = hero("dark_knight", 150, 20_000, 0, &[0, 8]);
+    let (arrived, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
+
+    match outcome {
+        WarpTravelOutcome::Arrived { placement, balance } => {
+            assert_seated(&atlas, &entry.landing, placement);
+            assert_eq!(balance, zen(12_000), "debited by exactly the fee");
+            assert_eq!(arrived.zen(), balance);
+            assert_eq!(placement.movement, Movement::Grounded, "Tarkan is Ground");
+        }
+        WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding => {
+            panic!("a wingless hero enters a Ground map: {outcome:?}")
+        }
+    }
+}
+
+#[test]
+fn the_second_tarkan_entry_lands_at_its_own_gate_for_its_own_fee() {
+    // WF-TARK-2: index 22 targets gate 77's rect (91,160)-(93,161) at 8,500.
+    let atlas = real_atlas();
+    let entry = warp_view(&atlas, TARKAN2_ENTRY);
+    assert_eq!(entry.landing.map, MapNumber(8));
+    assert_eq!(entry.warp.cost_zen, Zen(8_500));
+
+    let traveler = hero("dark_knight", 150, 20_000, 0, &[0, 8]);
+    let (arrived, outcome) =
+        resolve_warp(&traveler, entry, &atlas, Wings::None, &mut TestRng::new(7));
+
+    match outcome {
+        WarpTravelOutcome::Arrived { placement, balance } => {
+            assert_seated(&atlas, &entry.landing, placement);
+            assert_eq!(balance, zen(11_500));
+            assert_eq!(arrived.zen(), balance);
+        }
+        WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding => {
+            panic!("the second Tarkan entry arrives: {outcome:?}")
+        }
+    }
+}
+
+#[test]
+fn a_wingless_qualified_hero_is_refused_icarus_with_the_wallet_untouched() {
+    // WF-ICA-1: discovery, level, and zen are all met; only wings is unmet —
+    // and a wings failure costs nothing and draws nothing.
+    let atlas = real_atlas();
+    let entry = warp_view(&atlas, ICARUS_ENTRY);
+    assert_eq!(
+        entry.landing.map,
+        MapNumber(10),
+        "the entry lands on Icarus"
+    );
+    assert_eq!(entry.warp.cost_zen, Zen(10_000));
+    assert_eq!(entry.warp.min_level.get(), 170);
+
+    let traveler = hero("fairy_elf", 200, 20_000, 0, &[0, 10]);
+    let mut rng = CountingRng::new(7);
+    let (unchanged, outcome) = resolve_warp(&traveler, entry, &atlas, Wings::None, &mut rng);
+
+    assert_eq!(outcome, WarpTravelOutcome::CannotFly);
+    assert_eq!(unchanged.zen(), zen(20_000), "nothing charged");
+    assert_eq!(unchanged.placement(), traveler.placement(), "nothing moved");
+    assert_eq!(rng.words, 0, "the wings gate sits before the landing draw");
+}
+
+#[test]
+fn the_same_hero_with_wings_warps_to_icarus_lands_flying_and_pays() {
+    // WF-ICA-2: wings flip the one unmet gate; the Sky arrival forces Flying.
+    let atlas = real_atlas();
+    let entry = warp_view(&atlas, ICARUS_ENTRY);
+    let traveler = hero("fairy_elf", 200, 20_000, 0, &[0, 10]);
+
+    let mut rng = CountingRng::new(7);
+    let (arrived, outcome) = resolve_warp(&traveler, entry, &atlas, Wings::Equipped, &mut rng);
+
+    match outcome {
+        WarpTravelOutcome::Arrived { placement, balance } => {
+            assert_seated(&atlas, &entry.landing, placement);
+            assert_eq!(balance, zen(10_000), "debited by exactly the fee");
+            assert_eq!(arrived.zen(), balance);
+            assert_eq!(placement.movement, Movement::Flying, "Sky forces flight");
+        }
+        WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding => {
+            panic!("the winged hero arrives on Icarus: {outcome:?}")
+        }
+    }
+    assert_eq!(rng.words, 1, "exactly the landing pick");
+}
+
+#[test]
+fn discovery_and_level_short_circuit_before_wings_on_icarus() {
+    let atlas = real_atlas();
+    let entry = warp_view(&atlas, ICARUS_ENTRY);
+
+    // WF-ICA-3: an undiscovered Icarus is NotDiscovered, not CannotFly.
+    let stranger = hero("fairy_elf", 200, 20_000, 0, &[0]);
+    let mut rng = CountingRng::new(7);
+    let (unchanged, outcome) = resolve_warp(&stranger, entry, &atlas, Wings::None, &mut rng);
+    assert_eq!(outcome, WarpTravelOutcome::NotDiscovered);
+    assert_eq!(unchanged.zen(), zen(20_000), "nothing charged");
+    assert_eq!(rng.words, 0);
+
+    // WF-ICA-4: an under-level wingless hero is LevelTooLow, not CannotFly.
+    let low = hero("fairy_elf", 100, 20_000, 0, &[0, 10]);
+    let (unchanged, outcome) = resolve_warp(&low, entry, &atlas, Wings::None, &mut TestRng::new(7));
+    assert_eq!(outcome, WarpTravelOutcome::LevelTooLow { required: 170 });
+    assert_eq!(unchanged.zen(), zen(20_000), "nothing charged");
+}
+
+#[test]
+fn the_lost_tower_icarus_door_bars_a_wingless_hero_without_moving_him() {
+    // WF-GATE-1: gate 62 (trigger (17,250)-(19,250) on Lost Tower, min 160)
+    // lands on Sky — CannotFly for bare shoulders, unmoved, undiscovered.
+    let atlas = real_atlas();
+    let door = gate_at(&atlas, 4, 17, 250);
+    assert_eq!(door.landing.map, MapNumber(10), "the door lands on Icarus");
+    let traveler = hero("dark_knight", 200, 0, 4, &[4]);
+
+    let mut rng = CountingRng::new(7);
+    let (unchanged, outcome) = traverse_enter_gate(&traveler, door, &atlas, Wings::None, &mut rng);
+
+    assert_eq!(outcome, EnterGateOutcome::CannotFly);
+    assert_eq!(unchanged.placement(), traveler.placement(), "not moved");
+    assert!(
+        !unchanged.discovered().contains(MapNumber(10)),
+        "a refused door discovers nothing"
+    );
+    assert_eq!(rng.words, 0, "the wings gate sits before the landing draw");
+}
+
+#[test]
+fn the_same_door_with_wings_admits_lands_flying_and_discovers_icarus() {
+    // WF-GATE-2.
+    let atlas = real_atlas();
+    let door = gate_at(&atlas, 4, 17, 250);
+    let traveler = hero("dark_knight", 200, 0, 4, &[4]);
+
+    let (crossed, outcome) = traverse_enter_gate(
+        &traveler,
+        door,
+        &atlas,
+        Wings::Equipped,
+        &mut TestRng::new(7),
+    );
+
+    match outcome {
+        EnterGateOutcome::Arrived { placement } => {
+            assert_seated(&atlas, &door.landing, placement);
+            assert_eq!(placement.movement, Movement::Flying, "Sky forces flight");
+            assert_eq!(crossed.placement(), placement);
+        }
+        EnterGateOutcome::NotAlive
+        | EnterGateOutcome::LevelTooLow { .. }
+        | EnterGateOutcome::CannotFly
+        | EnterGateOutcome::NoWalkableLanding => {
+            panic!("the winged hero steps through: {outcome:?}")
+        }
+    }
+    assert!(crossed.discovered().contains(MapNumber(10)), "discovered");
+    assert!(crossed.discovered().contains(MapNumber(4)), "kept");
+}
+
+#[test]
+fn level_short_circuits_before_wings_at_the_enter_gate_too() {
+    // WF-GATE-3: the door's order is level → wings.
+    let atlas = real_atlas();
+    let door = gate_at(&atlas, 4, 17, 250);
+    let low = hero("dark_knight", 100, 0, 4, &[4]);
+
+    let (_, outcome) = traverse_enter_gate(&low, door, &atlas, Wings::None, &mut TestRng::new(7));
+
+    assert_eq!(outcome, EnterGateOutcome::LevelTooLow { required: 160 });
+}
+
+#[test]
+fn leaving_icarus_needs_no_wings_because_the_exit_lands_on_ground() {
+    // WF-GATE-4: gate 64 (trigger (14,12)-(16,12) on Icarus, min 50) lands on
+    // Lost Tower — the wings gate keys off the DESTINATION, so exit is free.
+    let atlas = real_atlas();
+    let door = gate_at(&atlas, 10, 14, 12);
+    assert_eq!(
+        door.landing.map,
+        MapNumber(4),
+        "the door lands on Lost Tower"
+    );
+    let elf = hero("fairy_elf", 90, 0, 10, &[10]);
+
+    let (crossed, outcome) =
+        traverse_enter_gate(&elf, door, &atlas, Wings::None, &mut TestRng::new(7));
+
+    match outcome {
+        EnterGateOutcome::Arrived { placement } => {
+            assert_seated(&atlas, &door.landing, placement);
+            assert_eq!(placement.movement, Movement::Grounded, "Ground grounds");
+        }
+        EnterGateOutcome::NotAlive
+        | EnterGateOutcome::LevelTooLow { .. }
+        | EnterGateOutcome::CannotFly
+        | EnterGateOutcome::NoWalkableLanding => {
+            panic!("a wingless exit is never gated: {outcome:?}")
+        }
+    }
+    assert!(crossed.discovered().contains(MapNumber(4)), "discovered");
+    assert!(crossed.discovered().contains(MapNumber(10)), "kept");
+}
+
+#[test]
+fn a_quadruply_failing_icarus_entry_lists_all_four_reasons_in_check_order() {
+    // WF-PROJ-1: the complete ordered lock set — discovery → level → wings →
+    // zen — pinned as values and as the exact wire shape.
+    let atlas = real_atlas();
+    let novice = hero("dark_knight", 100, 5_000, 0, &[0]);
+
+    let menu = warp_menu(&novice, &atlas, Wings::None);
+    let icarus = or_abort(
+        menu.iter()
+            .find(|status| status.index == WarpIndex(ICARUS_ENTRY))
+            .ok_or("the menu lists the Icarus entry"),
+    );
+    match &icarus.availability {
+        WarpAvailability::Locked { reasons } => {
+            let listed: Vec<WarpLockReason> = reasons.iter().copied().collect();
+            assert_eq!(
+                listed,
+                vec![
+                    WarpLockReason::NotDiscovered,
+                    WarpLockReason::LevelTooLow { required: 170 },
+                    WarpLockReason::CannotFly,
+                    WarpLockReason::InsufficientZen { cost: Zen(10_000) },
+                ]
+            );
+        }
+        WarpAvailability::Available => panic!("a quadruply-failing entry is locked"),
+    }
+    assert_eq!(
+        or_abort(serde_json::to_string(&icarus.availability)),
+        r#"{"kind":"locked","reasons":[{"kind":"not_discovered"},{"kind":"level_too_low","required":170},{"kind":"cannot_fly"},{"kind":"insufficient_zen","cost":10000}]}"#
+    );
+
+    // WF-PROJ-3: the same hero's Tarkan entry never carries CannotFly — a
+    // Ground destination has no wings reason.
+    let tarkan = or_abort(
+        menu.iter()
+            .find(|status| status.index == WarpIndex(TARKAN_ENTRY))
+            .ok_or("the menu lists the Tarkan entry"),
+    );
+    match &tarkan.availability {
+        WarpAvailability::Locked { reasons } => {
+            let listed: Vec<WarpLockReason> = reasons.iter().copied().collect();
+            assert_eq!(
+                listed,
+                vec![
+                    WarpLockReason::NotDiscovered,
+                    WarpLockReason::LevelTooLow { required: 140 },
+                    WarpLockReason::InsufficientZen { cost: Zen(8_000) },
+                ],
+                "no CannotFly on a Ground destination"
+            );
+        }
+        WarpAvailability::Available => panic!("a triply-failing entry is locked"),
+    }
+}
+
+#[test]
+fn cannot_fly_is_the_sole_lock_for_a_qualified_wingless_hero_and_wings_flip_it() {
+    // WF-PROJ-2: wings is the only gate; equipping flips exactly that reason.
+    let atlas = real_atlas();
+    let elf = hero("fairy_elf", 200, 50_000, 0, &[0, 10]);
+
+    let menu = warp_menu(&elf, &atlas, Wings::None);
+    let icarus = or_abort(
+        menu.iter()
+            .find(|status| status.index == WarpIndex(ICARUS_ENTRY))
+            .ok_or("the menu lists the Icarus entry"),
+    );
+    match &icarus.availability {
+        WarpAvailability::Locked { reasons } => {
+            let listed: Vec<WarpLockReason> = reasons.iter().copied().collect();
+            assert_eq!(listed, vec![WarpLockReason::CannotFly]);
+        }
+        WarpAvailability::Available => panic!("a wingless hero cannot open the Sky entry"),
+    }
+
+    let menu = warp_menu(&elf, &atlas, Wings::Equipped);
+    let icarus = or_abort(
+        menu.iter()
+            .find(|status| status.index == WarpIndex(ICARUS_ENTRY))
+            .ok_or("the menu lists the Icarus entry"),
+    );
+    assert!(matches!(icarus.availability, WarpAvailability::Available));
+}
+
+#[test]
+fn walking_atlans_to_tarkan_and_back_discovers_tarkan_and_keeps_atlans() {
+    // WF-DISC-1: the s6 doors 53 (Atlans→Tarkan) and 55 (Tarkan→Atlans).
+    let atlas = real_atlas();
+    let out_door = gate_at(&atlas, 7, 14, 225);
+    assert_eq!(out_door.landing.map, MapNumber(8));
+    let traveler = hero("dark_knight", 150, 0, 7, &[7]);
+
+    let (on_tarkan, outcome) = traverse_enter_gate(
+        &traveler,
+        out_door,
+        &atlas,
+        Wings::None,
+        &mut TestRng::new(7),
+    );
+    assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
+    assert!(on_tarkan.discovered().contains(MapNumber(8)), "discovered");
+    assert!(on_tarkan.discovered().contains(MapNumber(7)), "kept");
+
+    let back_door = gate_at(&atlas, 8, 246, 40);
+    assert_eq!(back_door.landing.map, MapNumber(7));
+    let (home, outcome) = traverse_enter_gate(
+        &on_tarkan,
+        back_door,
+        &atlas,
+        Wings::None,
+        &mut TestRng::new(7),
+    );
+    assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
+    assert_eq!(home.placement().map, MapNumber(7));
+    assert!(home.discovered().contains(MapNumber(7)));
+    assert!(home.discovered().contains(MapNumber(8)), "Tarkan retained");
+}
+
+#[test]
+fn a_winged_descent_to_icarus_discovers_it_and_the_wingless_return_is_free() {
+    // WF-DISC-2: down through gate 62 with wings, back out gate 64 without.
+    let atlas = real_atlas();
+    let down_door = gate_at(&atlas, 4, 17, 250);
+    let traveler = hero("dark_knight", 200, 0, 4, &[4]);
+
+    let (on_icarus, outcome) = traverse_enter_gate(
+        &traveler,
+        down_door,
+        &atlas,
+        Wings::Equipped,
+        &mut TestRng::new(7),
+    );
+    assert!(matches!(outcome, EnterGateOutcome::Arrived { .. }));
+    assert!(on_icarus.discovered().contains(MapNumber(10)));
+
+    // Wings come off; the exit door is destination-Ground, so it opens anyway.
+    let up_door = gate_at(&atlas, 10, 14, 12);
+    let (home, outcome) = traverse_enter_gate(
+        &on_icarus,
+        up_door,
+        &atlas,
+        Wings::None,
+        &mut TestRng::new(7),
+    );
+    match outcome {
+        EnterGateOutcome::Arrived { placement } => {
+            assert_eq!(placement.map, MapNumber(4));
+        }
+        EnterGateOutcome::NotAlive
+        | EnterGateOutcome::LevelTooLow { .. }
+        | EnterGateOutcome::CannotFly
+        | EnterGateOutcome::NoWalkableLanding => {
+            panic!("the wingless return exits freely: {outcome:?}")
+        }
+    }
+    assert!(home.discovered().contains(MapNumber(4)));
+    assert!(
+        home.discovered().contains(MapNumber(10)),
+        "first footfall kept"
+    );
+}
+
 #[test]
 fn the_menu_projection_is_a_pure_query() {
     let atlas = real_atlas();
     let traveler = hero("magic_gladiator", 40, 4_000, 0, &[0, 2, 4]);
     // No RngCore parameter exists to pass; reading twice yields identical
     // projections.
-    assert_eq!(warp_menu(&traveler, &atlas), warp_menu(&traveler, &atlas));
+    assert_eq!(
+        warp_menu(&traveler, &atlas, Wings::None),
+        warp_menu(&traveler, &atlas, Wings::None)
+    );
 }

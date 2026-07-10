@@ -4,10 +4,12 @@
 Outputs:
   data/map_definitions.json    11 records (maps 0-10; Devil Square collapsed
                                to one map-9 record)
-  data/gates_warps.json        70 records, kind-tagged:
+  data/gates_warps.json        82 records, kind-tagged:
                                spawn_gate | target_gate | enter_gate | warp
                                (the Arena warp, index 1, is producer-excluded;
-                               see ARENA_WARP_EXCLUSION)
+                               see ARENA_WARP_EXCLUSION; 12 s6 gate/warp
+                               literals are backported for Tarkan/Icarus
+                               reachability)
   data/terrain/0.bin..10.bin   11 sidecars, keyed by map number (re-encoded
                                from OpenMU .att; the four byte-identical Devil
                                Square blobs collapse to terrain/9.bin)
@@ -126,7 +128,8 @@ ARENA_WARP_EXCLUSION = (
     "destination must be visited on foot before it can be warped to) it "
     "could never be visited first and its warp could never unlock; the entry "
     "returns when a future duel/event wave gives Arena a real entrance. "
-    "Surviving warps keep their authentic indices 2-14 — no renumbering")
+    "Surviving warps keep their authentic indices — 2-14 from the 0.95d "
+    "list plus the s6-backported 21-23 — no renumbering")
 
 
 def read(rel_path):
@@ -287,6 +290,8 @@ def emit_enter(gate):
     if gate["min_level"] != 0:  # Gate.txt level-0 sentinel -> typed absence
         record["min_level"] = gate["min_level"]
     record["source_version"] = gate["source_version"]
+    if gate.get("review"):  # curated gates carry a provenance note; parsed ones do not
+        record["review"] = gate["review"]
     return record
 
 
@@ -299,7 +304,9 @@ def emit_warp(warp):
         "min_level": warp["min_level"],
         "target_gate": warp["target_gate"],
         "source_version": warp["source_version"],
-        "review": WARP_REVIEW,
+        # Per-record provenance: parsed 0.75-list warps carry WARP_REVIEW,
+        # curated s6 warps their own backport note (never the 0.75 claim).
+        "review": warp["review"],
     }
 
 
@@ -372,8 +379,80 @@ def main():
                   "Adopted as an s6 backport so Tarkan deaths respawn in Tarkan; "
                   "rect (187,63)-(203,69) verified fully walkable on terrain/8.bin",
     })
+    # Scoped to the parsed 0.95d warps — the s6 backports append below.
     assert all(w["source_version"] == "075" for w in warps), \
         "0.95d warp list expected to be the verbatim 0.75 copy"
+    for warp in warps:
+        warp["review"] = WARP_REVIEW
+
+    # Curated backport: Tarkan (8) and Icarus (10) are reachable only through
+    # gates/warps defined in VersionSeasonSix/Gates.cs — the 0.95d Gates.cs
+    # carries neither map's warp entries nor its walk-in doors. Adopt the 12
+    # records as s6 literals (the gate-57 literal-not-parse discipline): 5
+    # target gates, 4 enter gates, 3 warp entries. Every landing rect was
+    # walkability-verified on its map's terrain sidecar. Tarkan↔Kanturu gates
+    # are NOT backported (Kanturu is not one of our 11 maps).
+    S6_GATE_REVIEW = (
+        "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus "
+        "reachability; absent from the 0.95d Gates.cs")
+    exits.extend([
+        {"number": 54, "map": 8, "area": rect(248, 40, 251, 44),
+         "direction": DIRECTIONS[7], "is_spawn_gate": False,
+         "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; Atlans→Tarkan landing, rect "
+                   "(248,40)-(251,44) verified 19/20 walkable on terrain/8.bin"},
+        {"number": 56, "map": 7, "area": rect(16, 225, 17, 230),
+         "direction": DIRECTIONS[3], "is_spawn_gate": False,
+         "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; Tarkan→Atlans landing, rect "
+                   "(16,225)-(17,230) verified fully walkable on terrain/7.bin"},
+        {"number": 63, "map": 10, "area": rect(14, 13, 16, 13),
+         "direction": DIRECTIONS[5], "is_spawn_gate": False,
+         "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; Icarus landing shared by warp 23 and "
+                   "enter gate 62, rect (14,13)-(16,13) verified fully "
+                   "walkable on terrain/10.bin"},
+        {"number": 65, "map": 4, "area": rect(17, 249, 19, 249),
+         "direction": DIRECTIONS[1], "is_spawn_gate": False,
+         "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; Icarus→LostTower landing, rect "
+                   "(17,249)-(19,249) verified fully walkable on terrain/4.bin"},
+        {"number": 77, "map": 8, "area": rect(91, 160, 93, 161),
+         "direction": None,  # SeasonSix byte 0 -> unspecified facing
+         "is_spawn_gate": False,
+         "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; Tarkan2 warp landing, rect "
+                   "(91,160)-(93,161) verified fully walkable on terrain/8.bin"},
+    ])
+    enters.extend([
+        {"number": 53, "map": 7, "area": rect(14, 225, 15, 230),
+         "target_gate": 54, "min_level": 130, "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; the Atlans→Tarkan door"},
+        {"number": 55, "map": 8, "area": rect(246, 40, 247, 44),
+         "target_gate": 56, "min_level": 130, "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; the Tarkan→Atlans door"},
+        {"number": 62, "map": 4, "area": rect(17, 250, 19, 250),
+         "target_gate": 63, "min_level": 160, "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; the LostTower→Icarus door (Icarus is "
+                   "Sky — entry additionally wings-gated by the travel "
+                   "services on the map environment)"},
+        {"number": 64, "map": 10, "area": rect(14, 12, 16, 12),
+         "target_gate": 65, "min_level": 50, "source_version": "s6",
+         "review": S6_GATE_REVIEW + "; the Icarus→LostTower door (exit is "
+                   "never wings-gated — the rule keys off the destination)"},
+    ])
+    S6_WARP_REVIEW = (
+        "s6 backport (VersionSeasonSix/Gates.cs) so Tarkan/Icarus are "
+        "warp-reachable; the 0.95d/0.75 warp list predates both entries — "
+        "fee and level are the SeasonSix values, no 0.75 claim applies")
+    warps.extend([
+        {"index": 21, "name": "Tarkan", "cost_zen": 8000, "min_level": 140,
+         "target_gate": 57, "source_version": "s6", "review": S6_WARP_REVIEW},
+        {"index": 22, "name": "Tarkan2", "cost_zen": 8500, "min_level": 140,
+         "target_gate": 77, "source_version": "s6", "review": S6_WARP_REVIEW},
+        {"index": 23, "name": "Icarus", "cost_zen": 10000, "min_level": 170,
+         "target_gate": 63, "source_version": "s6", "review": S6_WARP_REVIEW},
+    ])
 
     exit_numbers = {g["number"] for g in exits}
     for gate in enters:
@@ -421,7 +500,7 @@ def main():
                     + [emit_warp(w) for w in warps])
     for record in gate_records:
         assert record["map"] in map_numbers if "map" in record else True, record
-    assert len(gate_records) == 70, len(gate_records)
+    assert len(gate_records) == 82, len(gate_records)
 
     # Display names -> host-owned sidecars; the core files carry only
     # identities and rules. Map names key by number; warp names by list index
@@ -450,8 +529,9 @@ def main():
     reviews = [{"file": "map_definitions.json", "number": r["number"],
                 "review": r["review"]}
                for r in map_records if "review" in r]
+    parsed_warps = [r for r in warp_records if r["source_version"] == "075"]
     reviews.append({"file": "gates_warps.json", "kind": "warp",
-                    "records": len(warp_records), "review": WARP_REVIEW})
+                    "records": len(parsed_warps), "review": WARP_REVIEW})
     reviews.append({"file": "gates_warps.json", "kind": "warp",
                     "excluded_index": 1, "review": ARENA_WARP_EXCLUSION})
 
@@ -479,12 +559,19 @@ def main():
             "its four arrival gates (spawn gates 58-61) ARE extracted",
             "authentic 0.95d warp fees/levels unknown - OpenMU ships the 0.75 "
             "warp list verbatim with a 'todo: update for 0.95d'; adopted as-is, "
-            "all 13 shipped warp records tagged 075 with a review note (the "
-            "14th, Arena index 1, is producer-excluded - see review)",
+            "13 warp records tagged 075 with a review note + 3 tagged s6 "
+            "backport (the 14th 0.75 entry, Arena index 1, is "
+            "producer-excluded - see review)",
             "S6/1.0-era maps (Blood Castle, Kalima, ...) are outside the "
             "approved 11-map 0.95d scope of this wave - no map backports",
         ],
         "notes": [
+            "s6 gate/warp backport for Tarkan+Icarus reachability: warps 21 "
+            "(Tarkan), 22 (Tarkan2), 23 (Icarus), enter gates 53/55 "
+            "(Atlans↔Tarkan) and 62/64 (LostTower↔Icarus), target gates "
+            "54/56/63/65/77 — maps 8 and 10 already exist, so this is a "
+            "gate/warp backport, not a map backport; every landing rect "
+            "walkability-verified on its terrain sidecar",
             "Devil Square: OpenMU's four discriminator records (map 9 disc "
             "1-4, names 'Devil Square 1'..'4') collapse to ONE map-9 record "
             "named 'Devil Square'; the four Terrain10_{1..4}.att blobs are "
