@@ -625,6 +625,7 @@ fn warp_travel_outcome_every_kind_tag_is_pinned() {
         WarpTravelOutcome::NotAlive,
         WarpTravelOutcome::NotDiscovered,
         WarpTravelOutcome::LevelTooLow { required: 33 },
+        WarpTravelOutcome::CannotFly,
         WarpTravelOutcome::NotEnoughZen {
             required: Zen(5000),
             available: CarriedZen::new(4999).unwrap(),
@@ -636,6 +637,7 @@ fn warp_travel_outcome_every_kind_tag_is_pinned() {
             WarpTravelOutcome::NotAlive => "not_alive",
             WarpTravelOutcome::NotDiscovered => "not_discovered",
             WarpTravelOutcome::LevelTooLow { .. } => "level_too_low",
+            WarpTravelOutcome::CannotFly => "cannot_fly",
             WarpTravelOutcome::NotEnoughZen { .. } => "not_enough_zen",
             WarpTravelOutcome::NoWalkableLanding => "no_walkable_landing",
         };
@@ -653,11 +655,13 @@ fn warp_projection_wire_shapes_are_pinned() {
     for reason in [
         WarpLockReason::NotDiscovered,
         WarpLockReason::LevelTooLow { required: 50 },
+        WarpLockReason::CannotFly,
         WarpLockReason::InsufficientZen { cost: Zen(5000) },
     ] {
         let expected = match &reason {
             WarpLockReason::NotDiscovered => "not_discovered",
             WarpLockReason::LevelTooLow { .. } => "level_too_low",
+            WarpLockReason::CannotFly => "cannot_fly",
             WarpLockReason::InsufficientZen { .. } => "insufficient_zen",
         };
         assert_eq!(
@@ -724,12 +728,14 @@ fn enter_gate_outcome_every_kind_tag_is_pinned() {
         },
         EnterGateOutcome::NotAlive,
         EnterGateOutcome::LevelTooLow { required: 40 },
+        EnterGateOutcome::CannotFly,
         EnterGateOutcome::NoWalkableLanding,
     ] {
         let expected = match &outcome {
             EnterGateOutcome::Arrived { .. } => "arrived",
             EnterGateOutcome::NotAlive => "not_alive",
             EnterGateOutcome::LevelTooLow { .. } => "level_too_low",
+            EnterGateOutcome::CannotFly => "cannot_fly",
             EnterGateOutcome::NoWalkableLanding => "no_walkable_landing",
         };
         assert_eq!(

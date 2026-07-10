@@ -13,8 +13,8 @@ use crate::components::units::{CarriedZen, Zen};
 use crate::data::gates_warps::WarpIndex;
 
 /// One unmet warp requirement, kind-tagged. The projection lists every unmet
-/// one in authentic check order (discovery → level → zen); the command rejects
-/// on the first.
+/// one in authentic check order (discovery → level → wings → zen); the
+/// command rejects on the first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WarpLockReason {
@@ -25,6 +25,8 @@ pub enum WarpLockReason {
         /// The class-effective level requirement this character faces.
         required: u16,
     },
+    /// The destination is a Sky map and the character wears no wings.
+    CannotFly,
     /// The character cannot afford the entry's flat fee.
     InsufficientZen {
         /// The flat fee — never fraction-reduced.
@@ -82,6 +84,9 @@ pub enum WarpTravelOutcome {
         /// The class-effective level requirement this character faces.
         required: u16,
     },
+    /// The destination is a Sky map and the character wears no wings; nothing
+    /// charged, nothing moved.
+    CannotFly,
     /// The character cannot afford the fee; the wallet is untouched.
     NotEnoughZen {
         /// The flat fee — never fraction-reduced.
@@ -132,6 +137,9 @@ pub enum EnterGateOutcome {
         /// The class-effective level requirement this character faces.
         required: u16,
     },
+    /// The destination is a Sky map and the character wears no wings; nothing
+    /// moved.
+    CannotFly,
     /// The landing area holds no walkable tile; the traveler was not moved.
     NoWalkableLanding,
 }
@@ -174,12 +182,17 @@ mod tests {
             r#"{"kind":"level_too_low","required":50}"#
         );
         assert_eq!(
+            serde_json::to_string(&WarpLockReason::CannotFly).unwrap(),
+            r#"{"kind":"cannot_fly"}"#
+        );
+        assert_eq!(
             serde_json::to_string(&WarpLockReason::InsufficientZen { cost: Zen(5000) }).unwrap(),
             r#"{"kind":"insufficient_zen","cost":5000}"#
         );
         for reason in [
             WarpLockReason::NotDiscovered,
             WarpLockReason::LevelTooLow { required: 50 },
+            WarpLockReason::CannotFly,
             WarpLockReason::InsufficientZen { cost: Zen(5000) },
         ] {
             round_trips(&reason);
@@ -238,6 +251,10 @@ mod tests {
             r#"{"kind":"level_too_low","required":33}"#
         );
         assert_eq!(
+            serde_json::to_string(&WarpTravelOutcome::CannotFly).unwrap(),
+            r#"{"kind":"cannot_fly"}"#
+        );
+        assert_eq!(
             serde_json::to_string(&WarpTravelOutcome::NotEnoughZen {
                 required: Zen(5000),
                 available: CarriedZen::new(4999).unwrap(),
@@ -257,6 +274,7 @@ mod tests {
             WarpTravelOutcome::NotAlive,
             WarpTravelOutcome::NotDiscovered,
             WarpTravelOutcome::LevelTooLow { required: 33 },
+            WarpTravelOutcome::CannotFly,
             WarpTravelOutcome::NotEnoughZen {
                 required: Zen(5000),
                 available: CarriedZen::new(4999).unwrap(),
@@ -313,6 +331,10 @@ mod tests {
             r#"{"kind":"level_too_low","required":40}"#
         );
         assert_eq!(
+            serde_json::to_string(&EnterGateOutcome::CannotFly).unwrap(),
+            r#"{"kind":"cannot_fly"}"#
+        );
+        assert_eq!(
             serde_json::to_string(&EnterGateOutcome::NoWalkableLanding).unwrap(),
             r#"{"kind":"no_walkable_landing"}"#
         );
@@ -322,6 +344,7 @@ mod tests {
             },
             EnterGateOutcome::NotAlive,
             EnterGateOutcome::LevelTooLow { required: 40 },
+            EnterGateOutcome::CannotFly,
             EnterGateOutcome::NoWalkableLanding,
         ] {
             round_trips(&outcome);

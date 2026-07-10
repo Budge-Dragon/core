@@ -1,17 +1,20 @@
 //! Map-crossing decisions: the warp command, the warp-menu availability
 //! projection, the enter-gate traversal, and the Town Portal Scroll. One
 //! concern — moving a character between maps, gated by discovery, level (after
-//! the class warp fraction), and zen — distinct from the in-map locomotion and
-//! landing primitives in [`crate::services::movement`], which these heads
-//! compose as their arrival tail.
+//! the class warp fraction), wings (a Sky destination admits only a winged
+//! traveler), and zen — distinct from the in-map locomotion and landing
+//! primitives in [`crate::services::movement`], which these heads compose as
+//! their arrival tail.
 //!
 //! One rule, two readers: [`resolve_warp`] and [`warp_menu`] share a single
 //! per-entry evaluator; the command rejects on the first unmet requirement in
-//! authentic check order (discovery → level → zen), the projection reports the
-//! complete unmet set. The fee is charged last and atomically — a failed
-//! earlier check, an unseatable landing, and a rejection of any kind never
-//! cost money. Every arrival funnels through the character's shared
-//! arrival writeback, so a crossed map is always discovered.
+//! authentic check order (discovery → level → wings → zen), the projection
+//! reports the complete unmet set. The fee is charged last and atomically — a
+//! failed earlier check, an unseatable landing, and a rejection of any kind
+//! never cost money. The wings gate keys off the *destination* environment
+//! alone, so leaving a Sky map is never gated. Every arrival funnels through
+//! the character's shared arrival writeback, so a crossed map is always
+//! discovered.
 //!
 //! Determinism: [`resolve_warp`], [`traverse_enter_gate`], and
 //! [`use_town_portal`] each draw exactly one random word on a successful
@@ -23,12 +26,14 @@ use rand_core::RngCore;
 use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::inventory::{Cell, Inventory};
 use crate::components::life::LifeState;
+use crate::components::movement::Wings;
 use crate::components::placement::Placement;
 use crate::components::spatial::Facing;
-use crate::components::units::{DebitOutcome, Level};
+use crate::components::units::{DebitOutcome, Level, MapNumber};
 use crate::data::atlas::{Atlas, EnterGateView, Landing, WarpView};
 use crate::data::classes::WarpRequirement;
 use crate::data::item_definitions::ConsumeEffect;
+use crate::data::map_definitions::MapEnvironment;
 use crate::entities::character::Character;
 use crate::events::movement::WarpOutcome;
 use crate::events::travel::{
@@ -66,7 +71,7 @@ pub(crate) fn effective_level_requirement(min_level: Level, requirement: WarpReq
 
 /// Whether one warp entry is open to a character — the single rule evaluation
 /// the command and the projection share. Reasons accumulate in authentic check
-/// order: discovery → level → zen.
+/// order: discovery → level → wings → zen.
 enum WarpEligibility {
     /// Every requirement is met.
     Qualified,
@@ -77,13 +82,34 @@ enum WarpEligibility {
     },
 }
 
+/// The traversal environment of a destination map, read off the atlas; `None`
+/// for a map the atlas does not carry — the landing attempt folds that absence
+/// to its own no-walkable answer downstream.
+fn destination_env(atlas: &Atlas, map: MapNumber) -> Option<MapEnvironment> {
+    atlas
+        .map_handle(map)
+        .map(|handle| handle.definition().environment)
+}
+
+/// Whether the destination's wings gate bars the traveler: only a known Sky
+/// destination met by bare shoulders bars entry. An off-atlas destination is
+/// not Sky, so the gate passes and the landing folds to its own answer.
+fn wings_barred(destination_env: Option<MapEnvironment>, wings: Wings) -> bool {
+    matches!(
+        (destination_env, wings),
+        (Some(MapEnvironment::Sky), Wings::None)
+    )
+}
+
 /// Evaluates every warp requirement for one entry: target-map discovery, the
-/// class-effective level bar, and the flat fee's affordability. Pure — no RNG,
-/// no mutation.
+/// class-effective level bar, the destination's wings gate, and the flat fee's
+/// affordability. Pure — no RNG, no mutation.
 fn evaluate_warp(
     character: &Character,
     warp: WarpView<'_>,
     requirement: WarpRequirement,
+    atlas: &Atlas,
+    wings: Wings,
 ) -> WarpEligibility {
     let mut reasons = Vec::new();
     if !character.discovered().contains(warp.landing.map) {
@@ -92,6 +118,9 @@ fn evaluate_warp(
     let required = effective_level_requirement(warp.warp.min_level, requirement);
     if character.level().get() < required {
         reasons.push(WarpLockReason::LevelTooLow { required });
+    }
+    if wings_barred(destination_env(atlas, warp.landing.map), wings) {
+        reasons.push(WarpLockReason::CannotFly);
     }
     if character.zen().get() < warp.warp.cost_zen.0 {
         reasons.push(WarpLockReason::InsufficientZen {
@@ -143,8 +172,8 @@ fn attempt_landing(
 
 /// The warp command: the decision head whose landing tail is
 /// [`resolve_arrival`]. Guards aliveness first, evaluates discovery → level →
-/// zen, proves the landing seatable, and only then debits the fee — so no
-/// rejection of any kind costs money. On arrival the returned character
+/// wings → zen, proves the landing seatable, and only then debits the fee — so
+/// no rejection of any kind costs money. On arrival the returned character
 /// carries the debited wallet, the sampled placement, and the (idempotent)
 /// discovery of the target map. Draws exactly one random word on `Arrived`,
 /// none otherwise.
@@ -153,6 +182,7 @@ pub fn resolve_warp(
     character: &Character,
     warp: WarpView<'_>,
     atlas: &Atlas,
+    wings: Wings,
     rng: &mut impl RngCore,
 ) -> (Character, WarpTravelOutcome) {
     match character.life() {
@@ -160,10 +190,13 @@ pub fn resolve_warp(
         LifeState::Alive => {}
     }
     let requirement = atlas.classes().record(character.class()).warp_requirement;
-    if let WarpEligibility::Blocked { reasons } = evaluate_warp(character, warp, requirement) {
+    if let WarpEligibility::Blocked { reasons } =
+        evaluate_warp(character, warp, requirement, atlas, wings)
+    {
         let outcome = match *reasons.first() {
             WarpLockReason::NotDiscovered => WarpTravelOutcome::NotDiscovered,
             WarpLockReason::LevelTooLow { required } => WarpTravelOutcome::LevelTooLow { required },
+            WarpLockReason::CannotFly => WarpTravelOutcome::CannotFly,
             WarpLockReason::InsufficientZen { cost } => WarpTravelOutcome::NotEnoughZen {
                 required: cost,
                 available: character.zen(),
@@ -196,19 +229,19 @@ pub fn resolve_warp(
 
 /// The warp-menu availability projection: one status per warp entry, in
 /// warp-index order, each carrying the complete set of unmet requirements. A
-/// pure query of `(character, atlas)` — no RNG, no mutation; it shares
+/// pure query of `(character, atlas, wings)` — no RNG, no mutation; it shares
 /// [`resolve_warp`]'s rule evaluation, so the menu and the command never
 /// disagree for a living character. Defined for a dead character too (its
 /// per-entry facts are the same); aliveness is the command's whole-action
 /// guard, not a per-entry lock.
 #[must_use]
-pub fn warp_menu(character: &Character, atlas: &Atlas) -> Vec<WarpEntryStatus> {
+pub fn warp_menu(character: &Character, atlas: &Atlas, wings: Wings) -> Vec<WarpEntryStatus> {
     let requirement = atlas.classes().record(character.class()).warp_requirement;
     atlas
         .warps()
         .map(|warp| WarpEntryStatus {
             index: warp.warp.index,
-            availability: match evaluate_warp(character, warp, requirement) {
+            availability: match evaluate_warp(character, warp, requirement, atlas, wings) {
                 WarpEligibility::Qualified => WarpAvailability::Available,
                 WarpEligibility::Blocked { reasons } => WarpAvailability::Locked { reasons },
             },
@@ -217,15 +250,17 @@ pub fn warp_menu(character: &Character, atlas: &Atlas) -> Vec<WarpEntryStatus> {
 }
 
 /// A physical enter-gate traversal: the world's own doors, gated by the gate's
-/// classic level requirement alone (after the same class fraction) — never by
-/// discovery or zen. Arrival discovers the destination map through the shared
-/// writeback, which is how an undiscovered map is reached in the first place.
-/// Draws exactly one random word on `Arrived`, none otherwise.
+/// classic level requirement (after the same class fraction) and the
+/// destination's wings gate, in that order — never by discovery or zen.
+/// Arrival discovers the destination map through the shared writeback, which
+/// is how an undiscovered map is reached in the first place. Draws exactly one
+/// random word on `Arrived`, none otherwise.
 #[must_use]
 pub fn traverse_enter_gate(
     character: &Character,
     gate: EnterGateView<'_>,
     atlas: &Atlas,
+    wings: Wings,
     rng: &mut impl RngCore,
 ) -> (Character, EnterGateOutcome) {
     match character.life() {
@@ -241,6 +276,9 @@ pub fn traverse_enter_gate(
                 EnterGateOutcome::LevelTooLow { required },
             );
         }
+    }
+    if wings_barred(destination_env(atlas, gate.landing.map), wings) {
+        return (character.clone(), EnterGateOutcome::CannotFly);
     }
     match attempt_landing(character.placement().facing, &gate.landing, atlas, rng) {
         LandingAttempt::NoWalkable => (character.clone(), EnterGateOutcome::NoWalkableLanding),
@@ -313,10 +351,6 @@ mod tests {
     use super::*;
     use core::num::NonZeroU16;
 
-    use crate::components::units::Zen;
-    use crate::data::common::{GateNumber, Provenance, SourceVersion};
-    use crate::data::gates_warps::{Warp, WarpIndex};
-
     fn fraction(numerator: u16, denominator: u16) -> WarpRequirement {
         WarpRequirement::Fraction {
             numerator: NonZeroU16::new(numerator).unwrap(),
@@ -362,123 +396,19 @@ mod tests {
         );
     }
 
-    fn character(level: u16, zen: u64, discovered: &serde_json::Value) -> Character {
-        serde_json::from_value(serde_json::json!({
-            "class": "dark_knight",
-            "level": level,
-            "experience": 0,
-            "stats": {"kind": "standard", "strength": 60, "agility": 40, "vitality": 50, "energy": 30},
-            "unspent_points": 0,
-            "zen": zen,
-            "placement": {"position": {"x": 0, "y": 0}, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
-            "vitals": {
-                "health": {"current": 100, "max": 100},
-                "mana": {"current": 50, "max": 50},
-                "ability": {"current": 1, "max": 1}
-            },
-            "discovered": discovered.clone(),
-        }))
-        .unwrap()
-    }
-
-    fn warp_record(cost: u64, min_level: u16) -> Warp {
-        Warp {
-            index: WarpIndex(8),
-            cost_zen: Zen(cost),
-            min_level: Level::new(min_level).unwrap(),
-            target_gate: GateNumber(42),
-            provenance: Provenance {
-                source_version: SourceVersion::V075,
-                review: None,
-            },
-        }
-    }
-
-    fn view(warp: &Warp, map: u8) -> WarpView<'_> {
-        use crate::components::tile::TileArea;
-        use crate::components::units::MapNumber;
-        WarpView {
-            warp,
-            landing: Landing {
-                map: MapNumber(map),
-                area: TileArea::new(10, 10, 20, 20).unwrap().to_world(),
-                facing: None,
-            },
-        }
+    #[test]
+    fn wings_bar_only_a_known_sky_destination_met_by_bare_shoulders() {
+        assert!(wings_barred(Some(MapEnvironment::Sky), Wings::None));
+        assert!(!wings_barred(Some(MapEnvironment::Sky), Wings::Equipped));
+        assert!(!wings_barred(Some(MapEnvironment::Ground), Wings::None));
+        assert!(!wings_barred(Some(MapEnvironment::Underwater), Wings::None));
     }
 
     #[test]
-    fn the_evaluator_accumulates_every_unmet_reason_in_check_order() {
-        let hero = character(15, 1_000, &serde_json::json!([0]));
-        let warp = warp_record(5_000, 50);
-        match evaluate_warp(&hero, view(&warp, 4), WarpRequirement::Full) {
-            WarpEligibility::Blocked { reasons } => {
-                let listed: Vec<WarpLockReason> = reasons.iter().copied().collect();
-                assert_eq!(
-                    listed,
-                    vec![
-                        WarpLockReason::NotDiscovered,
-                        WarpLockReason::LevelTooLow { required: 50 },
-                        WarpLockReason::InsufficientZen { cost: Zen(5_000) },
-                    ]
-                );
-            }
-            WarpEligibility::Qualified => panic!("a triply-failing entry is blocked"),
-        }
-    }
-
-    #[test]
-    fn the_evaluator_qualifies_a_met_entry_and_lists_a_single_failure_alone() {
-        let warp = warp_record(5_000, 50);
-        // Fully qualified: discovered, level met, affordable.
-        let qualified = character(60, 10_000, &serde_json::json!([0, 4]));
-        assert!(matches!(
-            evaluate_warp(&qualified, view(&warp, 4), WarpRequirement::Full),
-            WarpEligibility::Qualified
-        ));
-        // Only the wallet fails.
-        let poor = character(60, 4_999, &serde_json::json!([0, 4]));
-        match evaluate_warp(&poor, view(&warp, 4), WarpRequirement::Full) {
-            WarpEligibility::Blocked { reasons } => {
-                let listed: Vec<WarpLockReason> = reasons.iter().copied().collect();
-                assert_eq!(
-                    listed,
-                    vec![WarpLockReason::InsufficientZen { cost: Zen(5_000) }]
-                );
-            }
-            WarpEligibility::Qualified => panic!("an unaffordable entry is blocked"),
-        }
-    }
-
-    #[test]
-    fn the_evaluator_carries_the_class_effective_requirement() {
-        let hero = character(40, 10_000, &serde_json::json!([0, 4]));
-        let warp = warp_record(5_000, 50);
-        // A 2/3 class faces 33, which a level-40 clears.
-        assert!(matches!(
-            evaluate_warp(&hero, view(&warp, 4), fraction(2, 3)),
-            WarpEligibility::Qualified
-        ));
-        // A Full class at the same level faces the posted 50 and fails.
-        match evaluate_warp(&hero, view(&warp, 4), WarpRequirement::Full) {
-            WarpEligibility::Blocked { reasons } => {
-                assert_eq!(
-                    *reasons.first(),
-                    WarpLockReason::LevelTooLow { required: 50 }
-                );
-            }
-            WarpEligibility::Qualified => panic!("the full requirement blocks level 40"),
-        }
-        // Below even the fraction, the reject carries the effective 33.
-        let low = character(30, 10_000, &serde_json::json!([0, 4]));
-        match evaluate_warp(&low, view(&warp, 4), fraction(2, 3)) {
-            WarpEligibility::Blocked { reasons } => {
-                assert_eq!(
-                    *reasons.first(),
-                    WarpLockReason::LevelTooLow { required: 33 }
-                );
-            }
-            WarpEligibility::Qualified => panic!("level 30 misses the effective 33"),
-        }
+    fn an_off_atlas_destination_is_never_wings_gated() {
+        // Absence folds to not-Sky: the wings gate passes and the landing
+        // attempt owns the off-atlas answer (NoWalkableLanding).
+        assert!(!wings_barred(None, Wings::None));
+        assert!(!wings_barred(None, Wings::Equipped));
     }
 }

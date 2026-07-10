@@ -444,6 +444,75 @@
       "review": "Tarkan's town spawn gate is defined only in VersionSeasonSix/Gates.cs; the 0.95d Gates.cs omits it. Adopted as an s6 backport so Tarkan deaths respawn in Tarkan; rect (187,63)-(203,69) verified fully walkable on terrain/8.bin"
     },
     {
+      "kind": "target_gate",
+      "number": 54,
+      "map": 8,
+      "area": {
+        "x1": 248,
+        "y1": 40,
+        "x2": 251,
+        "y2": 44
+      },
+      "direction": "north",
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; Atlans→Tarkan landing, rect (248,40)-(251,44) verified 19/20 walkable on terrain/8.bin"
+    },
+    {
+      "kind": "target_gate",
+      "number": 56,
+      "map": 7,
+      "area": {
+        "x1": 16,
+        "y1": 225,
+        "x2": 17,
+        "y2": 230
+      },
+      "direction": "south",
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; Tarkan→Atlans landing, rect (16,225)-(17,230) verified fully walkable on terrain/7.bin"
+    },
+    {
+      "kind": "target_gate",
+      "number": 63,
+      "map": 10,
+      "area": {
+        "x1": 14,
+        "y1": 13,
+        "x2": 16,
+        "y2": 13
+      },
+      "direction": "east",
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; Icarus landing shared by warp 23 and enter gate 62, rect (14,13)-(16,13) verified fully walkable on terrain/10.bin"
+    },
+    {
+      "kind": "target_gate",
+      "number": 65,
+      "map": 4,
+      "area": {
+        "x1": 17,
+        "y1": 249,
+        "x2": 19,
+        "y2": 249
+      },
+      "direction": "west",
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; Icarus→LostTower landing, rect (17,249)-(19,249) verified fully walkable on terrain/4.bin"
+    },
+    {
+      "kind": "target_gate",
+      "number": 77,
+      "map": 8,
+      "area": {
+        "x1": 91,
+        "y1": 160,
+        "x2": 93,
+        "y2": 161
+      },
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; Tarkan2 warp landing, rect (91,160)-(93,161) verified fully walkable on terrain/8.bin"
+    },
+    {
       "kind": "enter_gate",
       "number": 1,
       "map": 0,
@@ -750,6 +819,66 @@
       "source_version": "075"
     },
     {
+      "kind": "enter_gate",
+      "number": 53,
+      "map": 7,
+      "area": {
+        "x1": 14,
+        "y1": 225,
+        "x2": 15,
+        "y2": 230
+      },
+      "target_gate": 54,
+      "min_level": 130,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; the Atlans→Tarkan door"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 55,
+      "map": 8,
+      "area": {
+        "x1": 246,
+        "y1": 40,
+        "x2": 247,
+        "y2": 44
+      },
+      "target_gate": 56,
+      "min_level": 130,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; the Tarkan→Atlans door"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 62,
+      "map": 4,
+      "area": {
+        "x1": 17,
+        "y1": 250,
+        "x2": 19,
+        "y2": 250
+      },
+      "target_gate": 63,
+      "min_level": 160,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; the LostTower→Icarus door (Icarus is Sky — entry additionally wings-gated by the travel services on the map environment)"
+    },
+    {
+      "kind": "enter_gate",
+      "number": 64,
+      "map": 10,
+      "area": {
+        "x1": 14,
+        "y1": 12,
+        "x2": 16,
+        "y2": 12
+      },
+      "target_gate": 65,
+      "min_level": 50,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) for Tarkan/Icarus reachability; absent from the 0.95d Gates.cs; the Icarus→LostTower door (exit is never wings-gated — the rule keys off the destination)"
+    },
+    {
       "kind": "warp",
       "index": 2,
       "cost_zen": 2000,
@@ -865,6 +994,33 @@
       "target_gate": 41,
       "source_version": "075",
       "review": "OpenMU ships the 0.75 warp fee/level list verbatim as the 0.95d list (its initializer carries a todo to update it); no authentic 0.95 fee/level table has been sourced"
+    },
+    {
+      "kind": "warp",
+      "index": 21,
+      "cost_zen": 8000,
+      "min_level": 140,
+      "target_gate": 57,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) so Tarkan/Icarus are warp-reachable; the 0.95d/0.75 warp list predates both entries — fee and level are the SeasonSix values, no 0.75 claim applies"
+    },
+    {
+      "kind": "warp",
+      "index": 22,
+      "cost_zen": 8500,
+      "min_level": 140,
+      "target_gate": 77,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) so Tarkan/Icarus are warp-reachable; the 0.95d/0.75 warp list predates both entries — fee and level are the SeasonSix values, no 0.75 claim applies"
+    },
+    {
+      "kind": "warp",
+      "index": 23,
+      "cost_zen": 10000,
+      "min_level": 170,
+      "target_gate": 63,
+      "source_version": "s6",
+      "review": "s6 backport (VersionSeasonSix/Gates.cs) so Tarkan/Icarus are warp-reachable; the 0.95d/0.75 warp list predates both entries — fee and level are the SeasonSix values, no 0.75 claim applies"
     }
   ]
 }

@@ -2349,6 +2349,7 @@ fn a_hero_earns_attempts_a_warp_too_poor_then_earns_enough_and_warps() {
         outcome @ (WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding) => panic!("the funded warp lands: {outcome:?}"),
     }
@@ -2404,6 +2405,7 @@ fn discovery_locks_the_menu_until_a_walk_in_and_the_menu_warp_returns() {
         outcome @ (WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding) => panic!("the home warp lands: {outcome:?}"),
     }
@@ -2423,6 +2425,7 @@ fn discovery_locks_the_menu_until_a_walk_in_and_the_menu_warp_returns() {
         outcome @ (WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding) => {
             panic!("the unlocked menu entry warps: {outcome:?}")
@@ -2471,6 +2474,7 @@ fn a_magic_gladiator_warps_a_gate_its_plain_level_misses_and_pays_the_full_fee()
         outcome @ (WarpTravelOutcome::NotAlive
         | WarpTravelOutcome::NotDiscovered
         | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
         | WarpTravelOutcome::NotEnoughZen { .. }
         | WarpTravelOutcome::NoWalkableLanding) => {
             panic!("the MG's fraction opens the gate: {outcome:?}")
@@ -2596,14 +2600,14 @@ fn scroll_rejections_consume_nothing() {
 #[test]
 fn the_menu_and_the_command_agree_for_the_persisted_character() {
     let mut world = World::new(36, MapNumber(0));
-    // A novice with a thin wallet: every one of the 13 entries is locked for
+    // A novice with a thin wallet: every one of the 16 entries is locked for
     // at least one reason, so sweeping the whole menu through the command
     // leaves the world unmoved while proving the two readers share one rule.
     let hero = world.seat_character(dark_knight(15, 150, tile(10, 10)));
     world.set_wallet(hero, zen(100));
 
     let menu = world.warp_menu(hero);
-    assert_eq!(menu.len(), 13, "one status per surviving entry");
+    assert_eq!(menu.len(), 16, "one status per surviving entry");
     for status in menu {
         let reasons = match status.availability {
             WarpAvailability::Locked { reasons } => reasons,
@@ -2617,6 +2621,7 @@ fn the_menu_and_the_command_agree_for_the_persisted_character() {
             WarpTravelOutcome::LevelTooLow { required } => reasons
                 .iter()
                 .any(|r| *r == WarpLockReason::LevelTooLow { required }),
+            WarpTravelOutcome::CannotFly => reasons.iter().any(|r| *r == WarpLockReason::CannotFly),
             WarpTravelOutcome::NotEnoughZen { required, .. } => reasons
                 .iter()
                 .any(|r| *r == WarpLockReason::InsufficientZen { cost: required }),
@@ -2635,6 +2640,147 @@ fn the_menu_and_the_command_agree_for_the_persisted_character() {
         zen(100),
         "no locked entry charged the persisted wallet"
     );
+}
+
+// --- Icarus / wings: the fly-less bounce → equip → enter → warp-back leg. ----
+
+/// The Icarus warp entry (s6 backport, index 23): level 170, 10,000 zen, the
+/// one Sky destination — its entry doors are wings-gated.
+const ICARUS_WARP: WarpIndex = WarpIndex(23);
+
+/// Wings of Satan (group 12 number 2, a knight's first wing) — worn into the
+/// wings slot, it flips the host-derived `Wings` fact to `Equipped`.
+const WINGS_OF_SATAN: ItemRef = ItemRef {
+    group: 12,
+    number: 2,
+};
+
+/// The persisted menu's Icarus annotation for the character at `hero`.
+fn icarus_status(world: &World, hero: usize) -> WarpAvailability {
+    or_abort(
+        world
+            .warp_menu(hero)
+            .into_iter()
+            .find(|status| status.index == ICARUS_WARP)
+            .ok_or("the menu lists the Icarus entry"),
+    )
+    .availability
+}
+
+#[test]
+fn a_wingless_hero_is_bounced_at_both_icarus_doors_until_a_wing_is_worn() {
+    let mut world = World::new(37, MapNumber(4));
+
+    // A qualified-but-wingless hero standing on the Lost Tower → Icarus
+    // door's trigger (gate 62 at (17,250), min level 160).
+    let character = dark_knight_in_band(world.atlas(), 200, 50_000, MapNumber(4), tile(17, 250));
+    let hero = world.seat_character(character);
+
+    // BOUNCE 1 — the walk-in door: CannotFly, the persisted placement is
+    // unmoved and the persisted discovered set still lacks Icarus.
+    assert_eq!(world.traverse_gate(hero), EnterGateOutcome::CannotFly);
+    assert_eq!(world.character(hero).placement().map, MapNumber(4));
+    assert!(!world.character(hero).discovered().contains(MapNumber(10)));
+
+    // BOUNCE 2 — the menu warp, driven for a host-loaded past visitor whose
+    // discovered set already carries Icarus (and Tarkan): with discovery and
+    // level met, the wingless refusal is CannotFly and the persisted wallet
+    // and placement are untouched.
+    let mut wire = or_abort(serde_json::to_value(dark_knight_in_band(
+        world.atlas(),
+        200,
+        50_000,
+        MapNumber(4),
+        tile(17, 250),
+    )));
+    let object = or_abort(wire.as_object_mut().ok_or("character is an object"));
+    object.insert("discovered".to_owned(), serde_json::json!([4, 8, 10]));
+    let veteran = world.seat_character(or_abort(serde_json::from_value(wire)));
+    assert_eq!(
+        world.warp(veteran, ICARUS_WARP),
+        WarpTravelOutcome::CannotFly
+    );
+    assert_eq!(world.character(veteran).zen(), zen(50_000));
+    assert_eq!(world.character(veteran).placement().map, MapNumber(4));
+
+    // Before the wing, the hero's Icarus entry is locked with CannotFly among
+    // the reasons (alongside the undiscovered lock).
+    match icarus_status(&world, hero) {
+        WarpAvailability::Locked { reasons } => {
+            assert!(
+                reasons.iter().any(|r| *r == WarpLockReason::CannotFly),
+                "the wingless lock set names the wings gate: {reasons:?}"
+            );
+        }
+        WarpAvailability::Available => panic!("a wingless hero cannot open the Sky entry"),
+    }
+
+    // EQUIP — a wing worn into the wings slot flips the host-derived fact.
+    let wing = item_instance(world.atlas(), WINGS_OF_SATAN);
+    assert!(matches!(
+        world.equip_into(hero, wing, EquipmentSlot::Wings),
+        EquipOutcome::Equipped { .. }
+    ));
+
+    // ENTER — the same door now admits: the persisted placement is Flying on
+    // Icarus and the persisted discovered set gains it.
+    match world.traverse_gate(hero) {
+        EnterGateOutcome::Arrived { placement } => {
+            assert_eq!(placement.map, MapNumber(10));
+            assert_eq!(placement.movement, Movement::Flying, "Sky forces flight");
+            assert_eq!(world.character(hero).placement(), placement);
+        }
+        outcome @ (EnterGateOutcome::NotAlive
+        | EnterGateOutcome::LevelTooLow { .. }
+        | EnterGateOutcome::CannotFly
+        | EnterGateOutcome::NoWalkableLanding) => {
+            panic!("the winged hero steps through: {outcome:?}")
+        }
+    }
+    assert!(world.character(hero).discovered().contains(MapNumber(10)));
+
+    // The menu flips: the Icarus entry is Available where CannotFly locked it.
+    assert!(matches!(
+        icarus_status(&world, hero),
+        WarpAvailability::Available
+    ));
+
+    // RETURN — the sixteen-entry list and the shared rule survive the persist
+    // seam: the hero menu-warps back to a Ground map, the fee off the wallet.
+    assert_eq!(world.warp_menu(hero).len(), 16);
+    match world.warp(hero, LOST_TOWER_WARP) {
+        WarpTravelOutcome::Arrived { placement, balance } => {
+            assert_eq!(placement.map, MapNumber(4));
+            // 50,000 seeded minus the one 5,000 fee — the earlier CannotFly
+            // bounce charged nothing.
+            assert_eq!(balance, zen(45_000), "the 5,000 fee off the wallet");
+            assert_eq!(world.character(hero).zen(), balance);
+            let grid = or_abort(
+                world
+                    .atlas()
+                    .walk_grid(placement.map)
+                    .ok_or("Lost Tower has a walk grid"),
+            );
+            assert!(grid.walkable(placement.position), "a walkable landing");
+        }
+        outcome @ (WarpTravelOutcome::NotAlive
+        | WarpTravelOutcome::NotDiscovered
+        | WarpTravelOutcome::LevelTooLow { .. }
+        | WarpTravelOutcome::CannotFly
+        | WarpTravelOutcome::NotEnoughZen { .. }
+        | WarpTravelOutcome::NoWalkableLanding) => panic!("the winged return lands: {outcome:?}"),
+    }
+    // Characters carrying the backported maps in their discovered sets — the
+    // traveler ({4,10}) and the loaded veteran ({4,8,10}) — survive the serde
+    // round-trip byte-for-byte and re-drive cleanly.
+    for index in [hero, veteran] {
+        let stored = world.character(index);
+        assert_eq!(
+            serde_json::to_string(stored).unwrap(),
+            serde_json::to_string(&persist(stored.clone())).unwrap(),
+        );
+        let _menu = world.warp_menu(index);
+    }
 }
 
 // --- The canonical golden path: one identity + one wallet, front to back. ----

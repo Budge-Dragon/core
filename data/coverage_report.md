@@ -27,7 +27,7 @@ files (`character_classes.json`, `stats.json`, `stat_map` imports, `item_options
 | monsters | `spawns.json` | 1563 | 284 | 0 | 1847 |
 | skills | `skills.json` | 30 | 5 | 16 | 51 |
 | maps | `map_definitions.json` | 7 | 4 | 0 | 11 |
-| maps | `gates_warps.json` | 66 | 4 | 0 | 70 |
+| maps | `gates_warps.json` | 65 | 4 | 13 | 82 |
 | maps | `terrain/` binaries | — | — | — | 11 files |
 | options/sets | `ancient_sets.json` | 0 | 0 | 36 | 36 |
 | drops | `special_drops.json` | 0 | 5 | 4 | 9 |
@@ -35,13 +35,14 @@ files (`character_classes.json`, `stats.json`, `stat_map` imports, `item_options
 | chaos | `chaos_mixes.json` | 1 | 5 | 4 | 10 |
 | constants+exp | `exp_tables.json` | 1 | 0 | 0 | 1 |
 | constants+exp | `game_config.json` | 1 | 0 | 0 | 1 |
-| **Total (JSON records)** | | **1941** | **350** | **97** | **2388** |
+| **Total (JSON records)** | | **1940** | **350** | **110** | **2400** |
 
 Plus 11 terrain binaries (`terrain/0.bin`..`terrain/10.bin`, 65536 bytes each; keyed by
 map number, not versioned JSON records).
 
 Structural breakdowns:
-- **gates_warps.json** by kind: spawn_gate 12, target_gate 22, enter_gate 22, warp 14.
+- **gates_warps.json** by kind: spawn_gate 13, target_gate 27, enter_gate 26, warp 16
+  (surviving warp indices 2-14 plus the s6-backported 21-23; Arena index 1 excluded).
 - **monster_definitions.json** by role: monster 75, npc 18, trap 4, guard 2, soccer_ball 1.
 - **spawns.json** by placement: spot 1579, fixed 244, area 24; by schedule: permanent 1845, wandering 2.
 - **special_drops.json** by kind: level_banded 4, monster_bound 3, map_bound 2.
@@ -50,7 +51,7 @@ Structural breakdowns:
   jewel 5, orb 5, mix_material 5, pet 4, event_ticket 2, arrows 1, bolts 1, stat_fruit 1,
   transformation_ring 1, lucky_box 1, consumable 10, skill_scroll 14.
 
-## 2. Review-flagged values (185 review strings total)
+## 2. Review-flagged values (197 review strings total)
 
 Every OpenMU-default / OpenMU-modeling / era-doubtful value carries a `review` string,
 grouped into named families, each slated for independent re-sourcing against on-era
@@ -62,7 +63,7 @@ references. Counts per file:
 | `item_definitions.json` | 41 | 33 S6 backports + 8 durability-3 potions |
 | `ancient_sets.json` | 36 | S6-transcribed set ordering (all 36); Kantata data-bug fix note |
 | `skills.json` | 17 | 16 S6 backports + cometfall AoE-encoding doubt |
-| `gates_warps.json` | 14 | 095d warp fee/level list reused from 0.75 |
+| `gates_warps.json` | 26 | 095d warp fee/level list reused from 0.75 (13); s6 gate/warp backports for Tarkan/Icarus reachability + Tarkan spawn gate 57 (13) |
 | `classes.json` | 8 | ability seed, fruit divisor, MG/DL warp fraction, S6 second tiers |
 | `special_drops.json` | 7 | drop chances + band edges; box encoding + Feather/Crest era doubt |
 | `chaos_mixes.json` | 6 | crafting economics, counts, success splits |
@@ -74,7 +75,7 @@ references. Counts per file:
 
 ## 3. Referential integrity
 
-`tools/extract/validate_refs.py` cross-checks all 13 files (2388 records): every item
+`tools/extract/validate_refs.py` cross-checks all 14 files (2411 records): every item
 `{group,number}`, monster/skill/map number, gate target, transformation skin, chaos /
 special / box / jewel-drop item ref, ancient-set piece, and class home-map resolves;
 every file envelope is exactly `{ "records": [...] }` (no `schema_version` field); every
