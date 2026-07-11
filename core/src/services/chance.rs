@@ -84,14 +84,6 @@ pub fn roll_percent(percent: Percent, rng: &mut impl RngCore) -> bool {
     uniform_below(bound, rng) < u32::from(percent.points())
 }
 
-/// Rolls a resistance byte: `true` iff `uniform_below(255) < byte` — the byte
-/// read as `n/255`. `255` resists always; `0` never.
-#[must_use]
-pub fn roll_resistance(resistance: Resistance, rng: &mut impl RngCore) -> bool {
-    let bound = NonZeroU32::MIN.saturating_add(u32::from(Resistance::DENOMINATOR) - 1);
-    uniform_below(bound, rng) < u32::from(resistance.0)
-}
-
 /// Draws a value uniformly from an inclusive `[min, max]` span, reaching both
 /// endpoints. The width is `max - min + 1` (at least one, since `min <= max` is
 /// proven by the [`Interval`]), so a single-point span is total and consumes one
@@ -109,8 +101,7 @@ pub fn uniform_in_inclusive(span: Interval<u16>, rng: &mut impl RngCore) -> u16 
 /// Rolls whether an elemental effect applies to a target: `false` when immune
 /// (`resistance == 255`, short-circuiting with no draw), otherwise `true` with
 /// probability `1/(resistance + 1)` — `uniform_below(resistance + 1) == 0`. The
-/// faithful application curve (distinct from [`roll_resistance`], which is the
-/// `n/255` resist-chance roll); a byte of `0` always applies, mid values thin it
+/// faithful application curve; a byte of `0` always applies, mid values thin it
 /// hyperbolically.
 #[must_use]
 pub fn roll_apply_elemental(resistance: Resistance, rng: &mut impl RngCore) -> bool {
@@ -285,8 +276,6 @@ mod tests {
         for _ in 0..1000 {
             assert!(roll_per_10000(ChancePer10000::ALWAYS, &mut rng));
             assert!(!roll_per_10000(ChancePer10000::NEVER, &mut rng));
-            assert!(!roll_resistance(Resistance(0), &mut rng));
-            assert!(roll_resistance(Resistance(255), &mut rng));
             assert!(roll_percent(Percent::new(100).unwrap(), &mut rng));
             assert!(!roll_percent(Percent::new(0).unwrap(), &mut rng));
         }

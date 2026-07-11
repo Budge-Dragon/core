@@ -11,7 +11,11 @@ import re
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 COVERAGE_DIR = os.path.join(DATA_DIR, "_coverage")
-STAT_MAP_PATH = os.path.join(os.path.dirname(__file__), "stat_map.json")
+
+# OpenMU source root — the durable, gitignored full clone the consult protocol
+# reads (docs/openmu-reference.md). Every extractor pulls its C# source under
+# here; there is no separate throwaway checkout to keep in sync.
+OPENMU_ROOT = os.path.join(REPO_ROOT, "reference", "openmu")
 
 # Boundary between a lowercase/digit and an uppercase letter, or between an
 # acronym and the next word ("PvM" -> "pv_m" is avoided by the second branch).
@@ -69,12 +73,6 @@ def item_ref(group, number):
 
 def map_ref(number, discriminator=0):
     return {"number": int(number), "discriminator": int(discriminator)}
-
-
-def load_stat_map():
-    """OpenMU Stats.cs property name (or inline designation) -> mu-core slug."""
-    with open(STAT_MAP_PATH, encoding="utf-8") as f:
-        return json.load(f)
 
 
 def coverage(category, info):

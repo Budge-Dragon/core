@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract exp_tables.json + game_config.json (v2 schema, section constants_exp).
 
-Sources (all numbers verified against /tmp/openmu-ref):
+Sources (all numbers verified against reference/openmu):
   Persistence/Initialization/GameConfigurationInitializerBase.cs
       MaximumLevel, ItemDropDuration, MaximumItemOptionLevelDrop,
       MaximumPartySize, RandomExperience{Min,Max}Multiplier, the four default
@@ -52,9 +52,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, item_ref, write_datafile
+from common import coverage, item_ref, write_datafile, OPENMU_ROOT
 
-OPENMU = "/tmp/openmu-ref/src"
+OPENMU = OPENMU_ROOT + "/src"
 
 GAME_CFG = "Persistence/Initialization/GameConfigurationInitializerBase.cs"
 DROP_GEN = "GameLogic/DefaultDropGenerator.cs"

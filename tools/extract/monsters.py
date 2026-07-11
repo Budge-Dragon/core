@@ -40,9 +40,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, without_name, write_datafile, write_names
+from common import coverage, without_name, write_datafile, write_names, OPENMU_ROOT
 
-OPENMU = "/tmp/openmu-ref/src/Persistence/Initialization"
+OPENMU = OPENMU_ROOT + "/src/Persistence/Initialization"
 SKILL_NUMBER_CS = os.path.join(OPENMU, "Skills/SkillNumber.cs")
 
 # --- monster definition sources (oldest first: 075 wins version-tag ties) ----

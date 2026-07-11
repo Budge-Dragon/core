@@ -9,7 +9,7 @@ Rust (services/crafting.rs). v2 emits ChaosMix: a provenance envelope
 {name, source_version, review?, recipe} wrapping a kind-tagged ChaosRecipe
 where each family carries exactly its own typed facts and economics.
 
-Sources (verified against /tmp/openmu-ref); the numbers below are the same
+Sources (verified against reference/openmu); the numbers below are the same
 authentic values the v1 extractor pulled, re-shaped to the v2 contract:
   Version075/ChaosMixes.cs        -> Chaos Weapon (identical in 095d => "075")
   Version095d/ChaosMixes.cs       -> 1st Wings, +10, +11, Dinorant

@@ -1,6 +1,6 @@
 """Extract data/item_definitions.json (v2 schema).
 
-Sources (OpenMU clone at /tmp/openmu-ref):
+Sources (OpenMU clone at reference/openmu):
 - Version095d/Items/{Weapons,Armors,Wings,Pets,Orbs,Scrolls,Jewels,Jewelery,
   BoxOfLuck,EventTicketItems}.cs (+ the Version075 initializers they reuse or
   subclass, used for source_version tagging)
@@ -24,7 +24,7 @@ import re
 
 import common
 
-SRC = "/tmp/openmu-ref/src/Persistence/Initialization"
+SRC = common.OPENMU_ROOT + "/src/Persistence/Initialization"
 
 
 # ---------------------------------------------------------------------------

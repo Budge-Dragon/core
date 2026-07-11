@@ -22,7 +22,7 @@ import re
 
 import common
 
-CC_DIR = "/tmp/openmu-ref/src/Persistence/Initialization/CharacterClasses"
+CC_DIR = common.OPENMU_ROOT + "/src/Persistence/Initialization/CharacterClasses"
 
 # raw OpenMU Stats.<token> on a CreateStatAttributeDefinition -> v2 destination.
 # Everything else in the base-stat block (Level, IsInSafezone, Resets,

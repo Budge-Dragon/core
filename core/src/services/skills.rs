@@ -3115,7 +3115,7 @@ mod tests {
                 multiplier_per_mille: 1000,
             }
         );
-        // The gearless rise (0) is the ×1 identity — W-SKILLDMG's [56, 92].
+        // The gearless rise (0) is the ×1 identity.
         assert_eq!(
             basis_of(&caster, &typed_skill(DamageType::Wizardry, 45)),
             StrikeBasis::Skill {

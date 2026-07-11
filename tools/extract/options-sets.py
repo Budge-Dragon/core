@@ -34,7 +34,7 @@ import re
 
 import common
 
-INIT = "/tmp/openmu-ref/src/Persistence/Initialization"
+INIT = common.OPENMU_ROOT + "/src/Persistence/Initialization"
 
 ITEM_GROUPS = {
     "Swords": 0, "Axes": 1, "Scepters": 2, "Spears": 3, "Bows": 4, "Staff": 5,

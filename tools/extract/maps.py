@@ -41,9 +41,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, without_name, write_datafile, write_names, DATA_DIR
+from common import coverage, without_name, write_datafile, write_names, DATA_DIR, OPENMU_ROOT
 
-INIT = "/tmp/openmu-ref/src/Persistence/Initialization"
+INIT = OPENMU_ROOT + "/src/Persistence/Initialization"
 RESOURCES = os.path.join(INIT, "Resources")
 
 # Gate direction byte: 0 = undefined (field omitted); 1-8 are the 8 compass

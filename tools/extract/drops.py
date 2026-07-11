@@ -11,7 +11,7 @@ excellent 0.0001) and the option-roll policy are NOT here: they live in the
 `drops` / `option_roll` sections of game_config.json, emitted by the
 constants-exp extractor. This extractor owns only the banded/bound/box facts.
 
-Sources (OpenMU clone /tmp/openmu-ref):
+Sources (OpenMU clone reference/openmu):
   src/Persistence/Initialization/Version095d/Items/EventTicketItems.cs
       Devil's Eye 14/17 / Devil's Key 14/18, chance 0.01, monster-level
       bands built from drop levels [2, 36, 47, 60] -> item level 1..4.
