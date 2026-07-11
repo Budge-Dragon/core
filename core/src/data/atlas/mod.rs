@@ -63,6 +63,7 @@ const FALLBACK_MAP: MapNumber = MapNumber(0);
 
 /// Every v2 data file, parsed from JSON but not yet cross-checked. One field
 /// per file; the host fills it once and hands it to [`Atlas::parse`].
+#[derive(Debug)]
 pub struct StaticData {
     /// `map_definitions.json`.
     pub maps: DataFile<MapDefinition>,

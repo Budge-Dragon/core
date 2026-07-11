@@ -976,7 +976,7 @@ impl World {
     /// clamp, vitals refill) now lives in core — this is a thin persist-and-deliver
     /// driver.
     pub fn apply_growth(&mut self, char_index: usize, gained: Exp) -> Vec<GrowthEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (grown, events) = apply_experience(character, gained, &self.atlas);
         let persisted = persist(grown);
         let slot = or_abort(
@@ -1069,7 +1069,7 @@ impl World {
     /// driver, the death twin of [`Self::apply_growth`]. No penalty, gate, refill,
     /// or clear logic is authored host-side.
     pub fn resolve_player_death(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (dead, events) = resolve_death(
             character,
             at,
@@ -1096,7 +1096,7 @@ impl World {
     /// driver, the revive twin of [`Self::resolve_player_death`]. `None` only when
     /// the character was already alive (the symmetric no-op).
     pub fn respawn_player(&mut self, char_index: usize) -> Option<Respawned> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (revived, respawned) = respawn(character, &self.atlas, &mut self.rng);
         let persisted = persist(revived);
         let slot = or_abort(
@@ -1340,7 +1340,7 @@ impl World {
         let character = self.character(char_index).clone();
         let inventory = self.inventory(char_index).clone();
         let (new_character, new_inventory, events) =
-            use_consumable(&character, inventory, cell, &self.atlas);
+            use_consumable(character, inventory, cell, &self.atlas);
         let persisted = persist(new_character);
         let slot = or_abort(
             self.characters
@@ -1363,7 +1363,7 @@ impl World {
         let character = self.character(char_index).clone();
         let wings = self.wings(char_index);
         let entry = or_abort(self.atlas.warp_by_index(index).ok_or("unknown warp index"));
-        let (moved, outcome) = resolve_warp(&character, entry, &self.atlas, wings, &mut self.rng);
+        let (moved, outcome) = resolve_warp(character, entry, &self.atlas, wings, &mut self.rng);
         let persisted = persist(moved);
         let slot = or_abort(
             self.characters
@@ -1402,7 +1402,7 @@ impl World {
                 .ok_or("no enter gate trigger covers the traveler"),
         );
         let (moved, outcome) =
-            traverse_enter_gate(&character, gate, &self.atlas, wings, &mut self.rng);
+            traverse_enter_gate(character, gate, &self.atlas, wings, &mut self.rng);
         let persisted = persist(moved);
         let slot = or_abort(
             self.characters
@@ -1422,7 +1422,7 @@ impl World {
         let character = self.character(char_index).clone();
         let inventory = self.inventory(char_index).clone();
         let (moved, new_inventory, outcome) =
-            use_town_portal(&character, inventory, cell, &self.atlas, &mut self.rng);
+            use_town_portal(character, inventory, cell, &self.atlas, &mut self.rng);
         let persisted = persist(moved);
         let slot = or_abort(
             self.characters
@@ -2204,7 +2204,7 @@ impl World {
     /// twin for a death inside an event. Persists the marked-`Dead` character and
     /// returns the death events (a lone `Died`, no docks).
     pub fn resolve_waived_death_of(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (dead, events) = resolve_death(
             character,
             at,
@@ -2277,7 +2277,8 @@ impl World {
     fn apply_mini_grant(&mut self, char_index: usize, grant: &minigame::GrantDecision, now: Tick) {
         match grant {
             minigame::GrantDecision::Experience { amount } => {
-                let character = or_abort(self.characters.get(char_index).ok_or("no finisher"));
+                let character =
+                    or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
                 let (grown, _events) = apply_experience(character, *amount, &self.atlas);
                 let persisted = persist(grown);
                 let slot = or_abort(

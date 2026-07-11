@@ -1627,7 +1627,13 @@ fn an_in_event_death_waives_the_penalty_the_same_transition_docks_elsewhere() {
     })));
 
     // The mini-game truce: the SAME transition, zero dock, `Died` alone.
-    let (waived, events) = resolve_death(&victim, Tick(100), tick(), &atlas, DeathPenalty::Waived);
+    let (waived, events) = resolve_death(
+        victim.clone(),
+        Tick(100),
+        tick(),
+        &atlas,
+        DeathPenalty::Waived,
+    );
     assert_eq!(events.len(), 1);
     let DeathEvent::Died { respawn_at } = events[0] else {
         panic!("a waived death emits Died alone, got {events:?}");
@@ -1637,7 +1643,13 @@ fn an_in_event_death_waives_the_penalty_the_same_transition_docks_elsewhere() {
     assert_eq!(waived.zen().get(), 100_000);
 
     // The normal-world contrast: the identical Dead marking, penalties on.
-    let (docked, events) = resolve_death(&victim, Tick(100), tick(), &atlas, DeathPenalty::Applied);
+    let (docked, events) = resolve_death(
+        victim.clone(),
+        Tick(100),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
     assert_eq!(docked.life(), LifeState::Dead { respawn_at });
     assert!(docked.experience().0 < exp);
     assert!(docked.zen().get() < 100_000);

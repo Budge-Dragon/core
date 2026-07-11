@@ -161,8 +161,13 @@ fn a_mid_band_level_100_kill_docks_one_percent_of_the_band_and_never_de_levels()
         no_effects(),
         alive(),
     );
-    let (dead_hero, events) =
-        resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, events) = resolve_death(
+        hero.clone(),
+        Tick(500),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
 
     assert_eq!(dead_hero.level().get(), 100, "the floor never de-levels");
     assert_eq!(dead_hero.experience(), Exp(exp - expected_loss));
@@ -205,7 +210,8 @@ fn a_death_a_sliver_past_the_level_threshold_floors_at_the_level_start() {
         no_effects(),
         alive(),
     );
-    let (dead_hero, events) = resolve_death(&hero, Tick(0), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, events) =
+        resolve_death(hero.clone(), Tick(0), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(dead_hero.level().get(), 100, "no de-level");
     assert_eq!(
@@ -242,7 +248,13 @@ fn a_death_below_level_ten_is_free_of_experience_and_zen() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(40), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, events) = resolve_death(
+        hero.clone(),
+        Tick(40),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
 
     assert_eq!(dead_hero.experience(), Exp(exp), "experience untouched");
     assert_eq!(
@@ -274,7 +286,13 @@ fn a_max_level_death_loses_no_experience_but_still_pays_the_zen() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(10), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, events) = resolve_death(
+        hero.clone(),
+        Tick(10),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
 
     assert_eq!(
         dead_hero.experience(),
@@ -315,7 +333,13 @@ fn an_untrusted_over_cap_level_docks_no_experience_and_never_overflows() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(10), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, events) = resolve_death(
+        hero.clone(),
+        Tick(10),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
 
     assert_eq!(
         dead_hero.experience(),
@@ -353,7 +377,7 @@ fn the_zen_brackets_dock_one_two_and_three_percent_at_real_levels() {
         );
 
         let (dead_hero, events) =
-            resolve_death(&hero, Tick(1), tick(), &atlas, DeathPenalty::Applied);
+            resolve_death(hero.clone(), Tick(1), tick(), &atlas, DeathPenalty::Applied);
 
         assert_eq!(
             dead_hero.zen(),
@@ -390,7 +414,8 @@ fn a_tiny_balance_docks_no_zen_because_the_percentage_floors_to_zero() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(1), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, events) =
+        resolve_death(hero.clone(), Tick(1), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(
         dead_hero.zen(),
@@ -425,8 +450,13 @@ fn resolve_death_marks_dead_leaving_vitals_at_zero_and_a_poison_in_place() {
         "the hero died with a poison active"
     );
 
-    let (dead_hero, _events) =
-        resolve_death(&hero, Tick(900), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, _events) = resolve_death(
+        hero.clone(),
+        Tick(900),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
 
     assert_eq!(
         dead_hero.life(),
@@ -462,10 +492,15 @@ fn a_second_resolve_death_on_a_dead_character_is_a_no_op() {
         alive(),
     );
 
-    let (dead_once, _events) =
-        resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_once, _events) = resolve_death(
+        hero.clone(),
+        Tick(500),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
     let (dead_twice, events) = resolve_death(
-        &dead_once,
+        dead_once.clone(),
         Tick(9_999),
         tick(),
         &atlas,
@@ -497,7 +532,13 @@ fn a_waived_death_marks_dead_with_zero_exp_and_zen_dock() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Waived);
+    let (dead_hero, events) = resolve_death(
+        hero.clone(),
+        Tick(500),
+        tick(),
+        &atlas,
+        DeathPenalty::Waived,
+    );
 
     assert_eq!(dead_hero.experience(), Exp(exp), "no experience is docked");
     assert_eq!(
@@ -536,10 +577,15 @@ fn applied_and_waived_deaths_schedule_the_same_respawn_and_differ_only_in_docks(
         alive(),
     );
 
-    let (applied, applied_events) =
-        resolve_death(&hero, Tick(40), tick(), &atlas, DeathPenalty::Applied);
+    let (applied, applied_events) = resolve_death(
+        hero.clone(),
+        Tick(40),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
     let (waived, waived_events) =
-        resolve_death(&hero, Tick(40), tick(), &atlas, DeathPenalty::Waived);
+        resolve_death(hero.clone(), Tick(40), tick(), &atlas, DeathPenalty::Waived);
 
     assert_eq!(
         applied.life(),
@@ -580,7 +626,7 @@ fn respawn_seats_a_map_3_death_on_a_walkable_tile_inside_real_gate_27() {
         dead(1),
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     let rect = gate_rect(171, 108, 177, 117);
     assert_eq!(revived.placement().map, MapNumber(3));
@@ -612,7 +658,7 @@ fn respawn_seats_a_map_8_tarkan_death_inside_real_gate_57() {
         dead(1),
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     let rect = gate_rect(187, 63, 203, 69);
     assert_eq!(
@@ -660,7 +706,7 @@ fn respawn_sends_a_map_10_icarus_death_down_to_lost_tower_gate_42() {
         "seeded flying over Icarus"
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     let rect = gate_rect(203, 70, 213, 81);
     assert_eq!(
@@ -696,7 +742,7 @@ fn respawn_sends_a_map_9_devil_square_death_out_to_noria_not_the_arena() {
         dead(1),
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     let noria_gate = gate_rect(171, 108, 177, 117);
     let arena_gate = gate_rect(133, 91, 141, 99);
@@ -731,7 +777,7 @@ fn respawn_seats_a_map_2_devias_death_in_devias_unchanged() {
         dead(1),
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(revived.placement().map, MapNumber(2));
     assert_landed_inside(
@@ -760,7 +806,7 @@ fn respawn_seats_a_map_4_lost_tower_death_in_lost_tower_unchanged() {
         dead(1),
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(revived.placement().map, MapNumber(4));
     assert_landed_inside(
@@ -786,7 +832,7 @@ fn respawn_resolves_a_gate_less_dungeon_death_to_lorencia() {
         dead(1),
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(revived.placement().map, MapNumber(0), "Lorencia");
     assert_landed_inside(
@@ -812,7 +858,7 @@ fn respawn_resolves_a_gate_less_exile_death_to_lorencia() {
         dead(1),
     );
 
-    let (revived, _respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, _respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(revived.placement().map, MapNumber(0), "Lorencia");
     assert_landed_inside(
@@ -842,7 +888,7 @@ fn respawn_on_a_map_outside_the_eleven_falls_back_to_lorencia() {
         "map 200 has no respawn destination"
     );
 
-    let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(revived.placement().map, MapNumber(0), "Lorencia fallback");
     assert_landed_inside(
@@ -870,7 +916,7 @@ fn respawn_carries_the_destination_map_not_the_died_on_map() {
             dead(1),
         );
 
-        let (revived, respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+        let (revived, respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
         assert_eq!(
             revived.placement().map,
@@ -899,7 +945,7 @@ fn respawn_on_a_multi_gate_map_lands_in_the_first_gate() {
         dead(1),
     );
 
-    let (revived, _respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, _respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     let first_gate = gate_rect(101, 115, 103, 117);
     let second_gate = gate_rect(107, 115, 107, 115);
@@ -923,7 +969,7 @@ fn respawn_refills_all_three_vitals_to_the_class_formula_maxima() {
         dead(1),
     );
 
-    let (revived, _respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, _respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     let (_profile, maxima) = character_profile(&revived);
     assert_eq!(revived.vitals().health.current(), maxima.max_health);
@@ -951,7 +997,7 @@ fn respawn_clears_a_poison_that_survived_the_death() {
         "seeded with a poison"
     );
 
-    let (revived, _respawned) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived, _respawned) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(
         revived.active_effects(),
@@ -975,8 +1021,8 @@ fn respawn_is_deterministic_across_the_redirect_for_the_same_seed() {
         dead(1),
     );
 
-    let (revived_a, respawned_a) = respawn(&hero, &atlas, &mut TestRng::new(7));
-    let (revived_b, respawned_b) = respawn(&hero, &atlas, &mut TestRng::new(7));
+    let (revived_a, respawned_a) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
+    let (revived_b, respawned_b) = respawn(hero.clone(), &atlas, &mut TestRng::new(7));
 
     assert_eq!(
         respawned_a.map(|r| r.map),
@@ -1013,8 +1059,13 @@ fn the_full_loop_dies_takes_the_penalty_respawns_and_persists() {
     );
 
     // Die: penalty applied, marked Dead, vitals and poison left in place.
-    let (dead_hero, _death_events) =
-        resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_hero, _death_events) = resolve_death(
+        hero.clone(),
+        Tick(500),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
     assert_eq!(
         dead_hero.life(),
         LifeState::Dead {
@@ -1030,7 +1081,7 @@ fn the_full_loop_dies_takes_the_penalty_respawns_and_persists() {
     );
 
     // Respawn: alive, full, cleared, standing in map 3's gate.
-    let (revived, respawned) = respawn(&dead_hero, &atlas, &mut TestRng::new(7));
+    let (revived, respawned) = respawn(dead_hero.clone(), &atlas, &mut TestRng::new(7));
     assert_eq!(revived.life(), LifeState::Alive);
     assert_eq!(revived.active_effects(), ActiveEffects::EMPTY);
     assert_landed_inside(

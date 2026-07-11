@@ -186,8 +186,12 @@ fn pieces_at(inventory: &Inventory) -> Option<u8> {
 fn a_real_small_hp_potion_heals_ten_percent_of_max_plus_the_flat_term() {
     let atlas = real_atlas();
     let character = knight(30, 40, 400, 400, 400);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_SMALL, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_SMALL, 3),
+        CELL,
+        &atlas,
+    );
 
     let expected = expected_recovery(400, 30, 1);
     assert_eq!(
@@ -210,8 +214,12 @@ fn real_medium_and_large_hp_potions_heal_by_their_tier() {
     let atlas = real_atlas();
 
     let character = knight(30, 100, 500, 400, 400);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_MEDIUM, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_MEDIUM, 3),
+        CELL,
+        &atlas,
+    );
     let medium = expected_recovery(500, 30, 2);
     assert_eq!(
         events,
@@ -224,8 +232,12 @@ fn real_medium_and_large_hp_potions_heal_by_their_tier() {
     assert_eq!(pieces_at(&bag), Some(2));
 
     let character = knight(60, 100, 1000, 400, 400);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_LARGE, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_LARGE, 3),
+        CELL,
+        &atlas,
+    );
     let large = expected_recovery(1000, 60, 3);
     assert_eq!(
         events,
@@ -248,7 +260,7 @@ fn real_mp_potions_restore_mana_and_leave_health_untouched() {
         // (no cap) and the asserted delta is the whole computed recovery.
         let character = knight(30, 300, 500, 10, 400);
         let (healed, bag, events) =
-            use_consumable(&character, bag_with(&atlas, id, 3), CELL, &atlas);
+            use_consumable(character.clone(), bag_with(&atlas, id, 3), CELL, &atlas);
         let expected = expected_recovery(400, 30, multiplier);
         assert_eq!(
             events,
@@ -272,7 +284,7 @@ fn a_real_apple_heals_only_its_flat_sip_at_a_low_level() {
     let atlas = real_atlas();
     let character = knight(10, 100, 400, 400, 400);
     let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, APPLE, 3), CELL, &atlas);
+        use_consumable(character.clone(), bag_with(&atlas, APPLE, 3), CELL, &atlas);
 
     let expected = expected_recovery(400, 10, 0);
     assert_eq!(
@@ -296,7 +308,7 @@ fn a_real_apple_past_level_fifty_heals_nothing_and_is_refused_consuming_nothing(
     // Not full — proves the refusal is the zero-magnitude rule, not a full pool.
     let character = knight(60, 500, 1000, 400, 400);
     let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, APPLE, 3), CELL, &atlas);
+        use_consumable(character.clone(), bag_with(&atlas, APPLE, 3), CELL, &atlas);
 
     assert_eq!(
         events,
@@ -315,8 +327,12 @@ fn a_real_apple_past_level_fifty_heals_nothing_and_is_refused_consuming_nothing(
 fn a_real_potion_near_full_caps_at_max_and_reports_only_the_delta() {
     let atlas = real_atlas();
     let character = knight(30, 395, 400, 400, 400);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_MEDIUM, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_MEDIUM, 3),
+        CELL,
+        &atlas,
+    );
 
     // The computed amount over-caps; the event carries the actual gain to full.
     assert_eq!(
@@ -340,8 +356,12 @@ fn a_real_potion_near_full_caps_at_max_and_reports_only_the_delta() {
 fn a_real_potion_at_full_hp_is_refused_consuming_nothing() {
     let atlas = real_atlas();
     let character = knight(30, 400, 400, 400, 400);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_SMALL, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_SMALL, 3),
+        CELL,
+        &atlas,
+    );
 
     assert_eq!(
         events,
@@ -358,8 +378,12 @@ fn a_real_mp_potion_at_full_mana_is_refused_even_with_low_health() {
     let atlas = real_atlas();
     // Full mana, health well below full — an MP potion reads only the mana pool.
     let character = knight(30, 40, 400, 200, 200);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, MP_MEDIUM, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, MP_MEDIUM, 3),
+        CELL,
+        &atlas,
+    );
 
     assert_eq!(
         events,
@@ -378,8 +402,12 @@ fn a_real_mp_potion_at_full_mana_is_refused_even_with_low_health() {
 fn a_real_antidote_cures_poison_and_leaves_health_and_other_effects_intact() {
     let atlas = real_atlas();
     let character = poisoned_buffed_knight();
-    let (cured, bag, events) =
-        use_consumable(&character, bag_with(&atlas, ANTIDOTE, 3), CELL, &atlas);
+    let (cured, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, ANTIDOTE, 3),
+        CELL,
+        &atlas,
+    );
 
     assert_eq!(events, vec![ConsumeEvent::PoisonCured]);
     assert!(
@@ -399,8 +427,12 @@ fn a_real_antidote_cures_poison_and_leaves_health_and_other_effects_intact() {
 fn a_real_antidote_with_no_poison_is_refused_consuming_nothing() {
     let atlas = real_atlas();
     let character = knight(30, 200, 400, 400, 400);
-    let (cured, bag, events) =
-        use_consumable(&character, bag_with(&atlas, ANTIDOTE, 3), CELL, &atlas);
+    let (cured, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, ANTIDOTE, 3),
+        CELL,
+        &atlas,
+    );
 
     assert_eq!(
         events,
@@ -420,7 +452,7 @@ fn real_out_of_scope_consumables_are_refused_not_recoverable_consuming_nothing()
     for id in [ALCOHOL, TOWN_PORTAL] {
         let character = knight(30, 40, 400, 40, 400);
         let (unchanged, bag, events) =
-            use_consumable(&character, bag_with(&atlas, id, 1), CELL, &atlas);
+            use_consumable(character.clone(), bag_with(&atlas, id, 1), CELL, &atlas);
         assert_eq!(
             events,
             vec![ConsumeEvent::Rejected {
@@ -440,7 +472,7 @@ fn a_real_non_consumable_is_refused_not_consumable() {
     let atlas = real_atlas();
     let character = knight(30, 40, 400, 400, 400);
     let (unchanged, bag, events) =
-        use_consumable(&character, bag_with(&atlas, SWORD, 1), CELL, &atlas);
+        use_consumable(character.clone(), bag_with(&atlas, SWORD, 1), CELL, &atlas);
 
     assert_eq!(
         events,
@@ -457,7 +489,8 @@ fn a_real_non_consumable_is_refused_not_consumable() {
 fn an_empty_cell_is_refused_no_item() {
     let atlas = real_atlas();
     let character = knight(30, 40, 400, 400, 400);
-    let (unchanged, bag, events) = use_consumable(&character, Inventory::empty(8, 8), CELL, &atlas);
+    let (unchanged, bag, events) =
+        use_consumable(character.clone(), Inventory::empty(8, 8), CELL, &atlas);
 
     assert_eq!(
         events,
@@ -473,8 +506,12 @@ fn an_empty_cell_is_refused_no_item() {
 fn a_dead_character_is_refused_not_alive_over_real_data() {
     let atlas = real_atlas();
     let character = dead_knight();
-    let (unchanged, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_SMALL, 3), CELL, &atlas);
+    let (unchanged, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_SMALL, 3),
+        CELL,
+        &atlas,
+    );
 
     assert_eq!(
         events,
@@ -500,7 +537,7 @@ fn a_real_three_stack_decrements_to_two_then_one_then_empties_on_the_last_drink(
     let mut bag = bag_with(&atlas, HP_SMALL, 3);
 
     for expected_left in [2u8, 1, 0] {
-        let (healed, next_bag, events) = use_consumable(&character, bag, CELL, &atlas);
+        let (healed, next_bag, events) = use_consumable(character.clone(), bag, CELL, &atlas);
         assert!(
             matches!(
                 events.as_slice(),
@@ -531,8 +568,12 @@ fn a_real_three_stack_decrements_to_two_then_one_then_empties_on_the_last_drink(
 fn a_hurt_knight_drinks_a_real_potion_heals_and_the_character_round_trips() {
     let atlas = real_atlas();
     let character = knight(30, 40, 400, 400, 400);
-    let (healed, bag, events) =
-        use_consumable(&character, bag_with(&atlas, HP_SMALL, 3), CELL, &atlas);
+    let (healed, bag, events) = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_SMALL, 3),
+        CELL,
+        &atlas,
+    );
 
     let expected = expected_recovery(400, 30, 1);
     assert_eq!(
@@ -557,8 +598,18 @@ fn use_consumable_is_a_pure_deterministic_transition() {
     let character = knight(30, 40, 400, 400, 400);
     let before = character.clone();
 
-    let first = use_consumable(&character, bag_with(&atlas, HP_SMALL, 3), CELL, &atlas);
-    let second = use_consumable(&character, bag_with(&atlas, HP_SMALL, 3), CELL, &atlas);
+    let first = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_SMALL, 3),
+        CELL,
+        &atlas,
+    );
+    let second = use_consumable(
+        character.clone(),
+        bag_with(&atlas, HP_SMALL, 3),
+        CELL,
+        &atlas,
+    );
 
     assert_eq!(first, second, "identical inputs yield an identical triple");
     // The borrowed character is never mutated in place.

@@ -179,20 +179,19 @@ fn attempt_landing(
 /// none otherwise.
 #[must_use]
 pub fn resolve_warp(
-    character: &Character,
+    character: Character,
     warp: WarpView<'_>,
     atlas: &Atlas,
     wings: Wings,
     rng: &mut impl RngCore,
 ) -> (Character, WarpTravelOutcome) {
     match character.life() {
-        LifeState::Dead { .. } => return (character.clone(), WarpTravelOutcome::NotAlive),
+        LifeState::Dead { .. } => return (character, WarpTravelOutcome::NotAlive),
         LifeState::Alive => {}
     }
     let requirement = atlas.classes().record(character.class()).warp_requirement;
-    if let WarpEligibility::Blocked { reasons } =
-        evaluate_warp(character, warp, requirement, atlas, wings)
-    {
+    let eligibility = evaluate_warp(&character, warp, requirement, atlas, wings);
+    if let WarpEligibility::Blocked { reasons } = eligibility {
         let outcome = match *reasons.first() {
             WarpLockReason::NotDiscovered => WarpTravelOutcome::NotDiscovered,
             WarpLockReason::LevelTooLow { required } => WarpTravelOutcome::LevelTooLow { required },
@@ -202,10 +201,10 @@ pub fn resolve_warp(
                 available: character.zen(),
             },
         };
-        return (character.clone(), outcome);
+        return (character, outcome);
     }
     match attempt_landing(character.placement().facing, &warp.landing, atlas, rng) {
-        LandingAttempt::NoWalkable => (character.clone(), WarpTravelOutcome::NoWalkableLanding),
+        LandingAttempt::NoWalkable => (character, WarpTravelOutcome::NoWalkableLanding),
         LandingAttempt::Seated { placement } => {
             match character.zen().debit(warp.warp.cost_zen) {
                 DebitOutcome::Debited { balance } => (
@@ -216,7 +215,7 @@ pub fn resolve_warp(
                 // structurally unreachable; it folds to the same insufficient
                 // answer without a suppressor (the zen_penalty fold).
                 DebitOutcome::Insufficient { balance } => (
-                    character.clone(),
+                    character,
                     WarpTravelOutcome::NotEnoughZen {
                         required: warp.warp.cost_zen,
                         available: balance,
@@ -257,31 +256,28 @@ pub fn warp_menu(character: &Character, atlas: &Atlas, wings: Wings) -> Vec<Warp
 /// random word on `Arrived`, none otherwise.
 #[must_use]
 pub fn traverse_enter_gate(
-    character: &Character,
+    character: Character,
     gate: EnterGateView<'_>,
     atlas: &Atlas,
     wings: Wings,
     rng: &mut impl RngCore,
 ) -> (Character, EnterGateOutcome) {
     match character.life() {
-        LifeState::Dead { .. } => return (character.clone(), EnterGateOutcome::NotAlive),
+        LifeState::Dead { .. } => return (character, EnterGateOutcome::NotAlive),
         LifeState::Alive => {}
     }
     if let Some(min_level) = gate.gate.min_level {
         let requirement = atlas.classes().record(character.class()).warp_requirement;
         let required = effective_level_requirement(min_level, requirement);
         if character.level().get() < required {
-            return (
-                character.clone(),
-                EnterGateOutcome::LevelTooLow { required },
-            );
+            return (character, EnterGateOutcome::LevelTooLow { required });
         }
     }
     if wings_barred(destination_env(atlas, gate.landing.map), wings) {
-        return (character.clone(), EnterGateOutcome::CannotFly);
+        return (character, EnterGateOutcome::CannotFly);
     }
     match attempt_landing(character.placement().facing, &gate.landing, atlas, rng) {
-        LandingAttempt::NoWalkable => (character.clone(), EnterGateOutcome::NoWalkableLanding),
+        LandingAttempt::NoWalkable => (character, EnterGateOutcome::NoWalkableLanding),
         LandingAttempt::Seated { placement } => (
             character.arrived_at(placement),
             EnterGateOutcome::Arrived { placement },
@@ -302,7 +298,7 @@ pub fn traverse_enter_gate(
 /// otherwise.
 #[must_use]
 pub fn use_town_portal(
-    character: &Character,
+    character: Character,
     inventory: Inventory,
     cell: Cell,
     atlas: &Atlas,
@@ -310,7 +306,7 @@ pub fn use_town_portal(
 ) -> (Character, Inventory, TownPortalOutcome) {
     match character.life() {
         LifeState::Dead { .. } => {
-            return (character.clone(), inventory, TownPortalOutcome::NotAlive);
+            return (character, inventory, TownPortalOutcome::NotAlive);
         }
         LifeState::Alive => {}
     }
@@ -323,7 +319,7 @@ pub fn use_town_portal(
             | ConsumeEffect::Mana { .. }
             | ConsumeEffect::Antidote
             | ConsumeEffect::Alcohol,
-        ) => return (character.clone(), inventory, TownPortalOutcome::NoScroll),
+        ) => return (character, inventory, TownPortalOutcome::NoScroll),
     }
     let inventory = match inventory.consume_one(cell) {
         Ok(consumed) => consumed,
@@ -331,7 +327,7 @@ pub fn use_town_portal(
         // structurally unreachable; it folds to the same no-scroll answer with
         // the inventory handed back whole (the consume-commit fold).
         Err((whole, _reason)) => {
-            return (character.clone(), whole, TownPortalOutcome::NoScroll);
+            return (character, whole, TownPortalOutcome::NoScroll);
         }
     };
     let (gate, env) = match atlas.town_gate_for_map(character.placement().map) {
