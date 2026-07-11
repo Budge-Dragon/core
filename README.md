@@ -1,74 +1,94 @@
 # mu-core
 
-Pure game logic for a MU Online rewrite: entities, stats, combat math, items,
-drops, and skills as a plain Rust library.
+The authoritative game logic for a MU Online rewrite, as a single pure Rust
+library. Entities, stats, combat math, items, drops, skills, and the systems
+that connect them — no engine, no database, no network, no clock.
+
+The client proposes; **mu-core decides.** Every rule lives here once, and every
+host (server, browser, mobile) runs the exact same code with bit-identical
+results.
+
+## What's inside
+
+A complete, deterministic simulation of the game's server-authoritative rules:
+
+| System | What it does |
+|---|---|
+| **Combat** | Physical & wizardry damage, crits, elemental math, skill strikes, area/cone geometry, knockback |
+| **Skills** | Per-class skill casting, damage dispatch, buffs/debuffs, active timed effects |
+| **Progression** | Experience, leveling, stat-point allocation, class-scaled derived stats |
+| **Items** | Equipment folding (all slots, requirements, set bonuses), option rolls, durability & wear |
+| **Drops & loot** | Weighted drop tables, box/special drops, ground claims, ownership windows, pickup |
+| **Crafting** | Chaos-machine mixes, success chance, price service |
+| **Economy** | NPC shops (buy/sell/repair), player-to-player trade with escrow, zen |
+| **Inventory** | Grid placement, stacking, item movement |
+| **Party** | Roster & leadership, invites, shared experience & zen, alive-only share rules |
+| **Monsters** | Spawning, respawn cycles, decision AI, movement intents |
+| **Movement** | Tile-based `Q48.16` fixed-point positioning, step resolution, terrain grids, safe zones |
+| **World** | Map/gate warps, per-character discovery, travel |
+| **Death** | Experience/zen penalties, respawn placement, effect clearing |
+| **Consumables** | Potions, antidotes, percentage heals, permanent stat gains |
+| **Mini-games** | Instanced tick sessions (Devil Square, Blood Castle, …) with entry gates, wave spawners, ranked rewards |
+
+Everything is exercised: **~1495 tests**, including cross-file dataset contracts
+and a native/wasm determinism proof.
 
 ## The core rule: zero host dependencies
 
-The same crate must compile and behave identically everywhere it is embedded:
+The same crate compiles and behaves identically everywhere it is embedded:
 
 - **native** — game server / SpacetimeDB module
 - **`wasm32-unknown-unknown`** — browser
-- **Unity** — iOS (`aarch64-apple-ios`), Android (`aarch64-linux-android`), and
-  WebGL (`wasm32-unknown-emscripten`). The pure core must compile for all three
-  (enforced in CI); the C-ABI FFI shim that exposes it to C# lands in a future
-  host crate.
+- **Unity** — iOS, Android, and WebGL (the pure core compiles for all three in
+  CI; the C-ABI FFI shim lands in a future host crate)
 
-## Portability rules
+Its only dependencies are `serde` and `rand_core`. Nothing else is allowed.
 
-1. **No wall-clock time.** The simulation is tick-based; hosts own the clock.
-2. **No async or threading.** The core is synchronous, single-threaded logic.
-3. **No logging.** Services return events; hosts decide what to log, persist,
-   or broadcast.
-4. **No engine or DB types/IDs.** Plain Rust types only.
-5. **RNG injected via trait.** `rand_core::RngCore` is passed in by the host,
-   never a global generator. Deterministic given a seed.
-6. **Static game data is defined as structs here.** The core defines the
-   shapes and the rules that read them; hosts load the data.
-7. **No float math.** All arithmetic is integer or `Q48.16` fixed-point
-   (`components::spatial::Fixed`, `i64` with `2^16` sub-units per tile).
-   `f32`/`f64` round differently across native/wasm/FFI and break replay
-   determinism.
+### Portability contract
+
+1. **No wall-clock time.** Tick-based; hosts own the clock.
+2. **No async or threading.** Synchronous, single-threaded logic.
+3. **No logging.** Services return events; hosts decide what to log or persist.
+4. **No engine or DB types/IDs.** Plain, `serde`-serializable Rust types only.
+5. **RNG injected via `rand_core::RngCore`**, never a global — deterministic
+   given a seed.
+6. **Static game data is defined as structs here**; hosts load it.
+7. **No float math.** Integer and `Q48.16` fixed-point only — `f32`/`f64` round
+   differently across native/wasm/FFI and break replay determinism.
 8. **Client proposes, server decides.** Every service takes a typed *intent*
    plus current state and computes the authoritative *result*; it never trusts a
-   client-claimed outcome. Intent types in, distinct result/event types out.
+   client-claimed outcome.
 
-Mechanical enforcement (build-failing under `cargo clippy -- -D warnings`):
-`clippy.toml` disallows `SystemTime`/`Instant` (rule 1),
-`thread::{spawn, Builder::spawn, scope, sleep}` (rule 2), the `print!`/`dbg!`
-macro family (rule 3), and entropy-seeded `HashMap`/`HashSet`/`RandomState`
-(rule 5 — nondeterministic iteration order); `[workspace.lints.clippy]` sets
-`float_arithmetic` (rule 7). Async, engine/DB types, injected RNG, and the
-authoritative intent→result flow (rule 8) are convention, enforced by code
-review.
-
-## Dependencies
-
-`serde` (derive) and `rand_core`. Nothing else is allowed in `core`.
+Rules 1, 2, 3, 5, and 7 are build-failing under `cargo clippy -- -D warnings`
+(via `clippy.toml` and `[workspace.lints]`). The rest are enforced by review and
+the frozen dependency set.
 
 ## Layout
 
-- `core/` — the library crate (`mu-core`)
-  - `src/entities/` — aggregate game objects (characters, monsters, items)
-  - `src/components/` — serializable value types entities compose
-  - `src/services/` — pure rule functions (combat, drops, leveling, skills)
-  - `src/events/` — outcomes returned instead of side effects
-  - `src/rng/` — injected-randomness plumbing
-  - `src/data/` — static game data struct definitions
-- `hosts/` — no crates; hosts (server, clients) are separate repos that
-  consume `mu-core` (see `hosts/README.md`)
+```
+core/                the library crate (mu-core)
+  src/entities/      aggregate game objects (characters, monsters, sessions)
+  src/components/    serializable value types entities compose
+  src/services/      pure rule functions — the only place logic lives
+  src/events/        outcomes returned instead of side effects
+  src/data/          static game-data struct definitions + total lookups
+  src/rng/           injected-randomness plumbing
+  tests/             cross-file / dataset / whole-service contracts
+data/                the game data the host loads (generated by tools/)
+hosts/               no crates — hosts are separate repos (see hosts/README.md)
+```
 
-One concept per file; a file grows to a directory module (`foo/{mod.rs, …}`)
-only when it holds separable concerns, never for line count. Unit tests live
-inline; cross-file/dataset contracts live in `core/tests/`.
+Every service is a pure function `(state, intent[, &mut rng]) -> (state, events)`.
+One concept per file; a file grows into a directory module only when it holds
+genuinely separable concerns, never for line count.
 
 ## Development
 
 ```sh
-cargo check                                              # native
 cargo test
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
+cargo xtask scan          # review-enforced bans with no clippy lint
 
 # Portability gate — the pure core compiles for every deployment target.
 # One-time: rustup target add wasm32-unknown-unknown wasm32-unknown-emscripten \
@@ -79,28 +99,12 @@ cargo check -p mu-core --target aarch64-apple-ios           # Unity iOS
 cargo check -p mu-core --target aarch64-linux-android       # Unity Android
 ```
 
-### Review-enforced ban scanner
-
-Some review-enforced bans have no clippy lint: lookup-shaped
-`unwrap_or`, inline `#[expect(..)]`, `#[non_exhaustive]` on an enum, and a
-fabricated `Default`. The `xtask` dev tool scans `core/src` for them and exits
-non-zero with `file:line` on any hit:
-
-```sh
-cargo xtask scan
-```
-
-Install it as a pre-commit gate once per clone (CI runs the same step, so the
-hook is a fast local pre-flight, not the sole gate):
-
-```sh
-git config core.hooksPath .githooks
-```
+Install the pre-commit gate once per clone (CI runs the same checks, so this is
+a fast local pre-flight): `git config core.hooksPath .githooks`.
 
 ### Cross-target determinism (executed, not just compiled)
 
-Determinism is exercised under wasm, so identical results on native and wasm are
-proven by execution. Requires a wasm runner (e.g. [wasmtime](https://wasmtime.dev)):
+Identical native/wasm results are proven by running the suite under wasm:
 
 ```sh
 # One-time: rustup target add wasm32-wasip1
@@ -108,6 +112,6 @@ CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime \
   cargo test -p mu-core --test wasm_determinism --target wasm32-wasip1
 ```
 
-(The full test suite is not wasi-buildable — `proptest` pulls `wait-timeout` —
-so the property tests run on the native legs and this dedicated proptest-free
-test is the one wasmtime runs.)
+(The full suite isn't wasi-buildable — `proptest` pulls `wait-timeout` — so this
+dedicated proptest-free test is the one wasmtime runs; the property tests run on
+the native legs.)
