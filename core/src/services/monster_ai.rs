@@ -8,7 +8,8 @@
 //! that strayed past its territory returns before anything else, so it never
 //! wedges chasing into a concave wall), attack a target in range, chase a target
 //! in view, then wander. Determinism: only the wander branch draws randomness —
-//! exactly one word (the drift heading) via [`crate::services::chance`].
+//! a free continuous drift heading via [`crate::services::chance::draw_heading`],
+//! which consumes a variable but deterministic-per-seed number of words.
 //!
 //! Safezones bound the decision: a target standing on a safe tile is no target
 //! for any role, and the behavior's [`SafezoneDisposition`] gates the rest — an
@@ -26,7 +27,7 @@ use crate::data::monster_definitions::{MobBehavior, SafezoneDisposition};
 use crate::entities::monster_instance::MonsterInstance;
 use crate::events::monster_ai::MonsterIntent;
 use crate::events::movement::StepOutcome;
-use crate::services::chance::draw_cardinal;
+use crate::services::chance::draw_heading;
 use crate::services::movement::{resolve_drift, resolve_step};
 
 /// A monster's per-action step distance: one whole tile. Authentic: classic MU
@@ -199,7 +200,7 @@ pub fn decide_monster_action(
     // Wander is a movement branch; an immobilized or territory-bound mob idles.
     match speed {
         Some(speed) if behavior.move_range > 0 => {
-            let drift = draw_cardinal(rng);
+            let drift = draw_heading(rng);
             let step = disposition_gated(
                 resolve_drift(mob.placement, drift, speed, grid),
                 behavior.disposition,
@@ -458,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn wander_draws_exactly_one_word() {
+    fn wander_consumes_rng_unlike_idle() {
         let grid = all_walkable();
         let mob = mob_at((10, 10), (10, 10), Tick(0));
         let mut rng = TestRng::new(5);
@@ -473,10 +474,13 @@ mod tests {
             &mut rng,
         );
         assert!(matches!(intent, MonsterIntent::Wander { .. }));
-        // Exactly one word consumed by draw_cardinal.
-        let mut probe = TestRng::new(5);
-        probe.next_u64();
-        assert_eq!(rng.next_u64(), probe.next_u64());
+        // The wander branch draws a continuous heading — a VARIABLE but
+        // deterministic-per-seed number of words (Marsaglia disk rejection,
+        // ≥2), so the stream advances past a fresh generator (unlike idle,
+        // which draws none). Same-seed reproduction is proven by
+        // `same_seed_yields_identical_decisions`.
+        let mut fresh = TestRng::new(5);
+        assert_ne!(rng.next_u64(), fresh.next_u64(), "wander must consume RNG");
     }
 
     #[test]
@@ -685,9 +689,9 @@ mod tests {
     }
 
     #[test]
-    fn an_excluded_wander_onto_safe_tiles_stays_put_but_draws_its_word() {
+    fn an_excluded_wander_onto_safe_tiles_stays_put_but_consumes_rng() {
         // MAI-4 (wander): every neighbouring tile is safe, so whatever heading
-        // the one drift word picks, the step is refused and the mob holds.
+        // the drift draw picks, the step is refused and the mob holds.
         let grid = grid_safe_except(&[(10, 10)]);
         let mob = mob_at((10, 10), (10, 10), Tick(0));
         let mut rng = TestRng::new(5);
@@ -703,9 +707,14 @@ mod tests {
         );
         assert!(matches!(intent, MonsterIntent::Wander { .. }));
         assert_eq!(after.placement.position, mob.placement.position);
-        let mut probe = TestRng::new(5);
-        probe.next_u64();
-        assert_eq!(rng.next_u64(), probe.next_u64());
+        // The heading draw still consumed RNG (the step was gated, not skipped):
+        // the stream advanced past a fresh generator.
+        let mut fresh = TestRng::new(5);
+        assert_ne!(
+            rng.next_u64(),
+            fresh.next_u64(),
+            "the drift draw consumed RNG"
+        );
     }
 
     #[test]

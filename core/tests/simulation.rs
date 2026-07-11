@@ -1791,7 +1791,8 @@ fn scripted_run(seed: u64) -> (String, Vec<TraceStep>) {
     };
     let mob = world.seat_monster(*instance);
 
-    // 2. Advance the mob's AI two ticks (wander draws one heading word each).
+    // 2. Advance the mob's AI two ticks (each wander draws a continuous heading,
+    // a variable but deterministic-per-seed number of words).
     for now in [Tick(1_000), Tick(2_000)] {
         let intent = world.advance_monster(mob, None, now);
         trace.push(TraceStep {

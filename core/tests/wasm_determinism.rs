@@ -19,7 +19,7 @@ use rand_core::RngCore;
 use mu_core::components::interval::Interval;
 use mu_core::rng::uniform_below;
 use mu_core::services::chance::{
-    WeightedTable, draw_cardinal, uniform_in_inclusive, weighted_pick,
+    WeightedTable, draw_cardinal, draw_heading, uniform_in_inclusive, weighted_pick,
 };
 
 /// Aborts on an impossible error (a nonzero literal failing `NonZeroU32::new`),
@@ -131,6 +131,39 @@ fn draw_cardinal_sequence_is_identical_across_targets() {
             (1, 1),
             (1, 1),
             (-1, 0),
+        ]
+    );
+}
+
+#[test]
+fn draw_heading_sequence_is_identical_across_targets() {
+    // The Marsaglia disk-rejection heading draw consumes a variable number of
+    // words per call, so this pins BOTH the accepted directions and, implicitly,
+    // the exact rejection-loop word consumption: any float creep, endian, or
+    // width divergence would move a drawn point across the disk boundary and
+    // change the sequence.
+    let mut rng = SplitMix64::new(SEED);
+    let seq: Vec<(i64, i64)> = (0..12)
+        .map(|_| {
+            let facing = draw_heading(&mut rng);
+            (facing.vector().x().raw(), facing.vector().y().raw())
+        })
+        .collect();
+    assert_eq!(
+        seq,
+        vec![
+            (-1862, 1069),
+            (518, -2853),
+            (-3704, -1169),
+            (1176, -1870),
+            (-1897, 730),
+            (-3866, -1353),
+            (2857, 2082),
+            (2199, -2587),
+            (-3125, -24),
+            (2256, 1170),
+            (-2998, 101),
+            (-1566, -2310),
         ]
     );
 }
