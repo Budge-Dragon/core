@@ -175,8 +175,8 @@ pub enum AreaDisplacement {
     /// No special displacement; a lightning-element hit still jiggles via the
     /// generic elemental modifier, driven by `element`, not by this field.
     None,
-    /// The struck target is thrown up to three tiles 8-way away from the caster
-    /// (Earthshake's quake).
+    /// The struck target is thrown three tiles straight away from the caster
+    /// along the real attacker-to-target line (Earthshake's quake).
     DirectionalPush,
 }
 

@@ -1,8 +1,16 @@
 # mu-core
 
-The authoritative game logic for a MU Online rewrite, as a single pure Rust
-library. Entities, stats, combat math, items, drops, skills, and the systems
-that connect them — no engine, no database, no network, no clock.
+The authoritative game logic for a **modern reimagining of MU Online**, as a
+single pure Rust library. Entities, stats, combat math, items, drops, skills,
+and the systems that connect them — no engine, no database, no network, no clock.
+
+This is **not a faithful clone.** MU Online is the starting point and the source
+of the game's identity, but systems are deliberately reinterpreted and
+modernized: movement is continuous fixed-point steering rather than the classic
+grid-locked hops, combat math is rederived, and more systems will be reworked —
+and entirely new ones added — as the design evolves. Where a mechanic departs
+from the original, that is intentional, not an approximation of it. Think of it
+as *my version* of MU, built from scratch on modern foundations.
 
 The client proposes; **mu-core decides.** Every rule lives here once, and every
 host (server, browser, mobile) runs the exact same code with bit-identical
@@ -24,7 +32,7 @@ A complete, deterministic simulation of the game's server-authoritative rules:
 | **Inventory** | Grid placement, stacking, item movement |
 | **Party** | Roster & leadership, invites, shared experience & zen, alive-only share rules |
 | **Monsters** | Spawning, respawn cycles, decision AI, movement intents |
-| **Movement** | Tile-based `Q48.16` fixed-point positioning, step resolution, terrain grids, safe zones |
+| **Movement** | Continuous `Q48.16` fixed-point positioning on a 2.5D ground plane, step resolution, terrain walkability grids, safe zones |
 | **World** | Map/gate warps, per-character discovery, travel |
 | **Death** | Experience/zen penalties, respawn placement, effect clearing |
 | **Consumables** | Potions, antidotes, percentage heals, permanent stat gains |

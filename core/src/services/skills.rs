@@ -25,7 +25,8 @@ use crate::components::interval::Interval;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::{
-    ConeHalfWidth, Displacement, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
+    ConeHalfWidth, Displacement, Fixed, Radius, Region, StepMagnitude, UNITS_PER_TILE, WorldPos,
+    WorldRect, WorldVec,
 };
 use crate::components::stats::Stats;
 use crate::components::tile::TerrainGrid;
@@ -40,10 +41,10 @@ use crate::events::combat::AttackOutcome;
 use crate::events::effect::BuffCastOutcome;
 use crate::events::movement::StepOutcome;
 use crate::events::skills::{CastRejection, SkillOutcome, TargetHit};
-use crate::services::chance::{draw_cardinal, draw_jiggle_offset, roll_apply_elemental};
+use crate::services::chance::{draw_jiggle_offset, roll_apply_elemental};
 use crate::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 use crate::services::effects::{ApplicableBuff, apply_buff};
-use crate::services::movement::{lunge_teleport, resolve_tile_offset};
+use crate::services::movement::{lunge_teleport, resolve_step, resolve_tile_offset};
 use crate::services::profile::effective_profile;
 use crate::services::ratio::{nonzero, scale_ratio};
 
@@ -53,8 +54,15 @@ const SINGLE_TARGET_RADIUS_TILES: u8 = 1;
 
 // W-SRC: the push distance is the authentic Earthshake shove — OpenMU's
 // EarthShakeSkillPlugIn throws the victim exactly three tiles away.
-/// The number of one-tile steps Earthshake's push throws a target.
-const PUSH_TILES: u8 = 3;
+/// The straight-line distance Earthshake's push throws a target, in tiles.
+const PUSH_TILES: i64 = 3;
+/// The push endpoint as a fixed-point distance — [`PUSH_TILES`] tiles along the
+/// attacker→target line.
+const PUSH_DISTANCE: Fixed = Fixed::from_raw(PUSH_TILES * UNITS_PER_TILE);
+/// The number of one-tile CCD sweep sub-steps: `ceil(PUSH_TILES / 1 tile)`.
+/// Each increment is one tile, so the count is [`PUSH_TILES`]; that ≤1-tile
+/// bound is what keeps each destination-only walkability check sound.
+const PUSH_STEPS: i64 = PUSH_TILES;
 
 // W-SRC: Heal restores 5 + Energy/5 health, applied instantly (no timed effect).
 /// Heal flat base, before the energy term.
@@ -816,29 +824,33 @@ fn elemental_displacement(element: Option<Element>) -> TargetDisplacement {
     }
 }
 
-/// Throws a target up to three tiles 8-way away from the attacker, breaking on
-/// the first unwalkable or safe tile and keeping the tiles already gained — a
-/// safe town tile refuses the step like a wall, so no target is ever pushed
-/// into a safezone. The heading is the quantized away-vector (attacker →
-/// target); on a shared tile it is drawn uniformly among the eight
-/// ([`draw_cardinal`], one word). Reports the final placement, or `None` if the
-/// very first tile was refused (no ground gained). Draws zero words off a
-/// shared tile, exactly one on it.
+/// Throws a target three tiles straight away from the attacker along the real
+/// attacker→target line — the continuous swept knockback. The endpoint is the
+/// target's position plus the away-vector rescaled to [`PUSH_DISTANCE`]; the
+/// target is then swept toward it in ≤-one-tile increments (the CCD sub-step —
+/// the one-tile bound is what makes each destination-only walkability check
+/// sound, so the sweep never tunnels a wall). Each increment stops on the first
+/// unwalkable or safe tile and keeps the tiles already gained — a safe town
+/// tile refuses the step like a wall, so no target is ever pushed into a
+/// safezone. Attacker and target on the exact same point have no direction and
+/// no push. Reports the final placement, or `None` when no increment gained
+/// ground. Draws no RNG.
 fn directional_push(
     attacker: Placement,
     target: Placement,
     grid: &TerrainGrid,
-    rng: &mut impl RngCore,
 ) -> Option<Placement> {
-    let heading = match (target.position - attacker.position).octant() {
-        Some(offset) => offset,
-        None => draw_cardinal(rng).to_tile_offset(),
+    let dest = match (target.position - attacker.position).normalized_to(PUSH_DISTANCE) {
+        Displacement::NoDirection => return None,
+        Displacement::Scaled { vector } => target.position + vector,
     };
     let mut current = target;
     let mut moved = false;
-    for _ in 0..PUSH_TILES {
-        match resolve_tile_offset(current, heading, grid) {
-            StepOutcome::Resolved { placement } if !grid.safe(placement.position) => {
+    for _ in 0..PUSH_STEPS {
+        match resolve_step(current, dest, StepMagnitude::ONE_TILE, grid) {
+            StepOutcome::Resolved { placement }
+                if placement.position != current.position && !grid.safe(placement.position) =>
+            {
                 current = placement;
                 moved = true;
             }
@@ -951,7 +963,7 @@ fn missed_displacement(
     rng: &mut impl RngCore,
 ) -> Option<Placement> {
     match kind {
-        TargetDisplacement::Push => directional_push(attacker, target, grid, rng),
+        TargetDisplacement::Push => directional_push(attacker, target, grid),
         TargetDisplacement::LungeJiggle => jiggle(target, grid, rng),
         TargetDisplacement::ElementalJiggle | TargetDisplacement::None => None,
     }
@@ -969,7 +981,7 @@ fn landed_displacement(
     rng: &mut impl RngCore,
 ) -> Option<Placement> {
     match kind {
-        TargetDisplacement::Push => directional_push(attacker, target, grid, rng),
+        TargetDisplacement::Push => directional_push(attacker, target, grid),
         TargetDisplacement::LungeJiggle => jiggle(target, grid, rng),
         TargetDisplacement::ElementalJiggle => {
             if applied {
@@ -2338,26 +2350,35 @@ mod tests {
     }
 
     #[test]
-    fn the_push_throws_three_tiles_directly_away_and_draws_nothing() {
+    fn the_push_throws_three_tiles_directly_away() {
+        // Two tiles east of the attacker, thrown three tiles further along the
+        // attacker→target line to (15,10). The push is rng-free by signature.
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
-        let mut rng = TestRng::new(3);
-        let moved = directional_push(attacker, target, &all_walkable(), &mut rng)
+        let moved = directional_push(attacker, target, &all_walkable())
             .expect("open ground: the push moves");
         assert_eq!(moved.position, TileCoord::new(15, 10).to_world());
-        // Zero words: the away-vector heading and per-tile stepping draw nothing.
-        let mut probe = TestRng::new(3);
-        assert_eq!(rng.next_u64(), probe.next_u64());
     }
 
     #[test]
-    fn the_push_quantizes_a_diagonal_away_vector_to_a_diagonal_heading() {
+    fn the_push_follows_the_real_diagonal_angle_three_tiles() {
+        // A diagonal away-vector is swept at its real angle (no whole-tile
+        // snap): the target lands three tiles straight-line away — ~2.12 tiles
+        // on each axis — not a ~4.24-tile diagonal throw to a whole-tile corner.
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 12));
-        let mut rng = TestRng::new(3);
-        let moved = directional_push(attacker, target, &all_walkable(), &mut rng)
+        let start = target.position;
+        let moved = directional_push(attacker, target, &all_walkable())
             .expect("open ground: the push moves");
-        assert_eq!(moved.position, TileCoord::new(15, 15).to_world());
+        assert_eq!(moved.position, WorldPos::clamped(958_223, 958_223));
+        let dx = moved.position.x().raw() - start.x().raw();
+        let dy = moved.position.y().raw() - start.y().raw();
+        assert_eq!(dx, dy, "equal offset per axis — the true diagonal");
+        assert!(dx > 0);
+        // Straight-line displacement is exactly three tiles (not the diagonal's
+        // 3·√2 ≈ 4.24), and its per-axis Chebyshev reach is only two tiles.
+        assert_eq!(start.distance_sq(moved.position).isqrt(), 3 * 65_536);
+        assert_eq!(dx / TILE, 2);
     }
 
     #[test]
@@ -2371,9 +2392,7 @@ mod tests {
         let grid = TerrainGrid::from_words(words);
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
-        let mut rng = TestRng::new(3);
-        let moved = directional_push(attacker, target, &grid, &mut rng)
-            .expect("two walkable steps are kept");
+        let moved = directional_push(attacker, target, &grid).expect("two walkable steps are kept");
         assert_eq!(moved.position, TileCoord::new(14, 10).to_world());
     }
 
@@ -2386,27 +2405,16 @@ mod tests {
         let grid = TerrainGrid::from_words(words);
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
-        let mut rng = TestRng::new(3);
-        assert_eq!(directional_push(attacker, target, &grid, &mut rng), None);
+        assert_eq!(directional_push(attacker, target, &grid), None);
     }
 
     #[test]
-    fn the_same_tile_push_draws_exactly_one_word_and_moves_three_tiles() {
+    fn a_same_point_target_is_not_pushed() {
+        // Attacker and target on the exact same point: no direction, no push —
+        // a clean `None`, never a random fallback heading.
         let attacker = placed_at((10, 10));
         let target = placed_at((10, 10));
-        for seed in 0u64..16 {
-            let mut rng = TestRng::new(seed);
-            let moved = directional_push(attacker, target, &all_walkable(), &mut rng)
-                .expect("open ground: the drawn heading moves");
-            // Exactly three tiles along one 8-way heading (Chebyshev 3).
-            let dx = (moved.position.x().raw() - target.position.x().raw()) / TILE;
-            let dy = (moved.position.y().raw() - target.position.y().raw()) / TILE;
-            assert_eq!(dx.abs().max(dy.abs()), 3, "seed {seed}");
-            // Exactly one word consumed (the draw_cardinal fallback).
-            let mut probe = TestRng::new(seed);
-            probe.next_u64();
-            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
-        }
+        assert_eq!(directional_push(attacker, target, &all_walkable()), None);
     }
 
     /// The index a hit reports, on every variant.
@@ -2548,45 +2556,24 @@ mod tests {
 
     #[test]
     fn the_push_stops_at_a_safe_tile_keeping_gained_ground() {
-        // FIRE-4: heading +x from (12,10); (13,10) is open, (14,10) is safe —
-        // the safe tile refuses the step like a wall, prior ground kept, and
-        // the away-vector push still draws nothing.
+        // FIRE-4: swept +x from (12,10); (13,10) is open, (14,10) is safe — the
+        // safe tile refuses the increment like a wall, prior ground kept.
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
-        let mut rng = TestRng::new(3);
-        let moved = directional_push(attacker, target, &walkable_with_safe(&[(14, 10)]), &mut rng)
+        let moved = directional_push(attacker, target, &walkable_with_safe(&[(14, 10)]))
             .expect("one open step is kept");
         assert_eq!(moved.position, TileCoord::new(13, 10).to_world());
-        let mut probe = TestRng::new(3);
-        assert_eq!(rng.next_u64(), probe.next_u64(), "no word drawn");
     }
 
     #[test]
     fn the_push_reports_none_when_the_first_tile_is_safe() {
-        // A safe first step gains no ground — `None`, exactly like the wall.
+        // A safe opening increment gains no ground — `None`, exactly like the wall.
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
-        let mut rng = TestRng::new(3);
         assert_eq!(
-            directional_push(attacker, target, &walkable_with_safe(&[(13, 10)]), &mut rng),
+            directional_push(attacker, target, &walkable_with_safe(&[(13, 10)])),
             None
         );
-    }
-
-    #[test]
-    fn a_safe_stopped_same_tile_push_still_draws_its_one_word() {
-        // The RNG contract is commit-independent: the shared-tile fallback
-        // draws its heading word even when every landing is a safe tile.
-        let attacker = placed_at((10, 10));
-        let target = placed_at((10, 10));
-        let grid = safe_everywhere_but(&[(10, 10)]);
-        for seed in 0u64..16 {
-            let mut rng = TestRng::new(seed);
-            assert_eq!(directional_push(attacker, target, &grid, &mut rng), None);
-            let mut probe = TestRng::new(seed);
-            probe.next_u64();
-            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
-        }
     }
 
     #[test]

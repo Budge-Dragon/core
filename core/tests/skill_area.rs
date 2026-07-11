@@ -2,8 +2,9 @@
 //! the 18 authored `AreaGeometry` records at their ratified sizes, the
 //! aim-bound gate (aim-centered shapes range-gate their aim before spend;
 //! caster-anchored shapes never read it), the Earthshake directional push
-//! (away-8-way, 3 tiles, per-tile wall stop, same-tile fallback, on-miss but
-//! never on-kill), the lunge teleport-onto-target across walls with its
+//! (continuous swept knockback along the real away-vector, 3 tiles, per-tile
+//! wall/safe stop, same-point no-push, on-miss but never on-kill), the lunge
+//! teleport-onto-target across walls with its
 //! `MovesTarget` jiggle, the lightning ±1 jiggle, and the fixed per-branch RNG
 //! draw discipline — all proven through the public `route`/`locate`/`cast`
 //! ports against the shipped skill roster.
@@ -119,6 +120,30 @@ fn grid_with(walkable: &[(u8, u8)]) -> TerrainGrid {
         *word |= 1u64 << (bit & 63);
     }
     TerrainGrid::from_words(words)
+}
+
+/// A fully walkable grid except the listed tiles, which are walls — the inverse
+/// of [`grid_with`], for a push whose whole runway is open save one blocking cell.
+fn all_walkable_except(walls: &[(u8, u8)]) -> TerrainGrid {
+    let mut words = [u64::MAX; 1024];
+    for &(x, y) in walls {
+        let bit = (usize::from(y) << 8) | usize::from(x);
+        let word = or_abort(words.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        *word &= !(1u64 << (bit & 63));
+    }
+    TerrainGrid::from_words(words)
+}
+
+/// A fully walkable grid on which the listed tiles are also safe (town-truce) —
+/// a push runway that is open everywhere except a safe cell the sweep must refuse.
+fn all_walkable_with_safe(safe_tiles: &[(u8, u8)]) -> TerrainGrid {
+    let mut safe = [0u64; 1024];
+    for &(x, y) in safe_tiles {
+        let bit = (usize::from(y) << 8) | usize::from(x);
+        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        *word |= 1u64 << (bit & 63);
+    }
+    TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
 }
 
 /// The real skill record numbered `number` — the §0 ratification table is keyed
@@ -573,7 +598,7 @@ fn the_real_earthshake_never_pushes_a_killed_monster() {
 }
 
 #[test]
-fn the_real_earthshake_push_stops_at_a_wall_and_draws_a_heading_on_a_shared_tile() {
+fn the_real_earthshake_push_stops_at_a_wall_and_a_same_point_target_is_not_pushed() {
     let atlas = real_atlas();
     let quake = skill_number(&atlas, 62);
     let hero = caster("dark_knight", 200, 30);
@@ -602,9 +627,9 @@ fn the_real_earthshake_push_stops_at_a_wall_and_draws_a_heading_on_a_shared_tile
         );
     }
 
-    // Same-tile fallback: attacker and target share (10,10); the heading is
-    // drawn (one word — pinned in the draw-count test below) and the victim is
-    // thrown exactly three tiles along one of the eight headings.
+    // Same-point target: attacker and target share (10,10), so the away-vector
+    // has no direction — the victim is not displaced at all (no random
+    // fallback heading), on the missed and landed branch alike.
     let shared = [seated((10, 10), 1_000_000, 0, 0)];
     for seed in 0u64..16 {
         let (_, outcome) = cast_once(&hero, quake, aim, &shared, &all_walkable(), seed);
@@ -616,12 +641,285 @@ fn the_real_earthshake_push_stops_at_a_wall_and_draws_a_heading_on_a_shared_tile
         else {
             panic!("a million-HP target cannot be killed");
         };
-        let moved = displacement.expect("open ground: the drawn heading moves");
-        let (dx, dy) = tile_delta(TileCoord::new(10, 10).to_world(), moved);
         assert_eq!(
-            dx.abs().max(dy.abs()),
-            3,
-            "seed {seed}: exactly three tiles 8-way"
+            displacement, None,
+            "seed {seed}: a same-point target is not pushed"
+        );
+    }
+}
+
+#[test]
+fn the_real_earthshake_pushes_a_diagonal_target_along_the_true_line_not_an_octant_snap() {
+    let atlas = real_atlas();
+    let quake = skill_number(&atlas, 62);
+    let hero = caster("dark_knight", 200, 30);
+    let aim = hero.placement().position;
+
+    // Caster (10,10), target (13,13): the away-vector is a true 45° diagonal. The
+    // continuous sweep throws the victim three tiles *straight-line* along that
+    // real line — ~2.12 tiles on each axis — not the ~4.24-tile (13,13)→(16,16)
+    // a heading snapped to the nearest neighbour would have produced.
+    let start = TileCoord::new(13, 13).to_world();
+    let targets = [seated((13, 13), 1_000_000, 0, 0)];
+    let (_, outcome) = cast_once(&hero, quake, aim, &targets, &all_walkable(), 0);
+    let SkillOutcome::Cast { hits, .. } = outcome else {
+        panic!("a funded quake over a covered target resolves");
+    };
+    let (TargetHit::Landed { displacement, .. } | TargetHit::Missed { displacement, .. }) = hits[0]
+    else {
+        panic!("a million-HP target cannot be killed");
+    };
+    let moved = displacement.expect("a diagonal quake scatters over open ground");
+
+    // The exact deterministic endpoint the swept knockback lands on.
+    assert_eq!(moved.position, WorldPos::clamped(1_023_759, 1_023_759));
+
+    // It advances ~2 tiles on BOTH axes (Chebyshev per-axis 2), never the
+    // 3-and-0 an axis snap would give.
+    assert_eq!(
+        tile_delta(start, moved),
+        (2, 2),
+        "the diagonal push advances on both axes"
+    );
+
+    // Straight-line displacement is three tiles, not the diagonal octant's ~4.24.
+    let three_tiles = 3 * TILE.unsigned_abs();
+    let straight = start.distance_sq(moved.position).isqrt();
+    assert!(
+        straight.abs_diff(three_tiles) < TILE.unsigned_abs() / 8,
+        "straight-line push is ~3 tiles, got {straight} sub-units (3 tiles = {three_tiles})"
+    );
+}
+
+#[test]
+fn the_real_earthshake_pushes_all_four_diagonals_along_the_true_line() {
+    let atlas = real_atlas();
+    let quake = skill_number(&atlas, 62);
+    let hero = caster("dark_knight", 200, 30);
+    let aim = hero.placement().position;
+
+    // Caster (10,10). Each quadrant's target sits three tiles away on a true 45°
+    // diagonal; the continuous sweep throws the victim ~3 tiles straight-line
+    // along the real away-vector — ~2.12 tiles on EACH axis, with the sign of the
+    // away-vector on each. A sign error in the direction math lands the victim in
+    // the wrong quadrant; an axis snap zeroes one axis (a 3-and-0 hop).
+    // `(target, expected tile-delta, exact endpoint)`.
+    let cases = [
+        ((13u8, 13u8), (2i64, 2i64), (1_023_759i64, 1_023_759i64)), // +x +y
+        ((7, 7), (-2, -2), (352_497, 352_497)),                     // −x −y
+        ((13, 7), (2, -2), (1_023_759, 352_497)),                   // +x −y
+        ((7, 13), (-2, 2), (352_497, 1_023_759)),                   // −x +y
+    ];
+    for ((tx, ty), delta, (ex, ey)) in cases {
+        let start = TileCoord::new(tx, ty).to_world();
+        let targets = [seated((tx, ty), 1_000_000, 0, 0)];
+        let (_, outcome) = cast_once(&hero, quake, aim, &targets, &all_walkable(), 0);
+        let SkillOutcome::Cast { hits, .. } = outcome else {
+            panic!("a funded quake over a covered target resolves");
+        };
+        let (TargetHit::Landed { displacement, .. } | TargetHit::Missed { displacement, .. }) =
+            hits[0]
+        else {
+            panic!("a million-HP target cannot be killed");
+        };
+        let moved = displacement.expect("a diagonal quake scatters over open ground");
+
+        // The exact deterministic endpoint of this quadrant's swept knockback.
+        assert_eq!(
+            moved.position,
+            WorldPos::clamped(ex, ey),
+            "target ({tx},{ty}): endpoint"
+        );
+
+        // Per-axis Chebyshev ~2 WITH the away-vector's sign on each axis — the
+        // whole (sign, magnitude) pair, so a flipped sign or a snapped axis fails.
+        assert_eq!(tile_delta(start, moved), delta, "target ({tx},{ty}): delta");
+
+        // |dx| == |dy|: a true 45° line keeps the axes equal to the sub-unit — an
+        // octant/axis snap would zero one axis or split them unevenly.
+        let raw = (
+            moved.position.x().raw() - start.x().raw(),
+            moved.position.y().raw() - start.y().raw(),
+        );
+        assert_eq!(
+            raw.0.abs(),
+            raw.1.abs(),
+            "target ({tx},{ty}): equal advance on both axes"
+        );
+
+        // Straight-line displacement is three tiles, not the ~4.24 a whole-tile
+        // diagonal neighbour hop (13,13)->(16,16) would give.
+        let three_tiles = 3 * TILE.unsigned_abs();
+        let straight = start.distance_sq(moved.position).isqrt();
+        assert!(
+            straight.abs_diff(three_tiles) < TILE.unsigned_abs() / 8,
+            "target ({tx},{ty}): straight-line ~3 tiles, got {straight} sub-units"
+        );
+    }
+}
+
+#[test]
+fn the_real_earthshake_pushes_a_two_to_one_slope_at_its_true_angle() {
+    let atlas = real_atlas();
+    let quake = skill_number(&atlas, 62);
+    let hero = caster("dark_knight", 200, 30);
+    let aim = hero.placement().position;
+
+    // Caster (10,10), target (14,12): the away-vector is (4,2) — a 2:1 slope at
+    // ~26.57°, a heading NO 8-way (45° grid) NOR 16-way (22.5° grid) snap can
+    // represent (the nearest 16-way headings, 22.5° and 45°, give 2.414:1 and
+    // 1:1). The continuous sweep throws the victim three tiles straight along
+    // THAT real line: it advances ~2× as far on x as on y. This is the test that
+    // proves TRUE continuity — it cannot pass under any fixed-direction snap.
+    let start = TileCoord::new(14, 12).to_world();
+    let targets = [seated((14, 12), 1_000_000, 0, 0)];
+    let (_, outcome) = cast_once(&hero, quake, aim, &targets, &all_walkable(), 0);
+    let SkillOutcome::Cast { hits, .. } = outcome else {
+        panic!("a funded quake over a covered target resolves");
+    };
+    let (TargetHit::Landed { displacement, .. } | TargetHit::Missed { displacement, .. }) = hits[0]
+    else {
+        panic!("a million-HP target cannot be killed");
+    };
+    let moved = displacement.expect("a 2:1-slope quake scatters over open ground");
+
+    // The exact deterministic endpoint of the swept knockback along the 2:1 line.
+    assert_eq!(moved.position, WorldPos::clamped(1_126_123, 907_127));
+
+    let dx = moved.position.x().raw() - start.x().raw();
+    let dy = moved.position.y().raw() - start.y().raw();
+    // Both axes advance in the away-vector's (+,+) quadrant.
+    assert!(
+        dx > 0 && dy > 0,
+        "advances in the (+,+) quadrant: dx={dx} dy={dy}"
+    );
+    // The x advance is ~twice the y advance — the defining 2:1 continuity proof.
+    // A 22.5° snap would give 2.414:1 (dx≈2.414·dy), a 45° snap 1:1, a 0° snap
+    // dy==0; each falls far outside this eighth-tile band around exactly 2:1.
+    assert!(
+        dx.abs_diff(2 * dy) < TILE.unsigned_abs() / 8,
+        "x advance is ~2× y (2:1 slope): dx={dx} dy={dy}"
+    );
+    // dy is a real advance (excludes the 0° axis snap) and dx ≠ dy (excludes 45°).
+    assert!(
+        dy > TILE / 4,
+        "y genuinely advances (not an axis snap): dy={dy}"
+    );
+    assert_ne!(dx, dy, "the axes differ (not a 45° diagonal snap)");
+
+    // Straight-line displacement is three tiles.
+    let three_tiles = 3 * TILE.unsigned_abs();
+    let straight = start.distance_sq(moved.position).isqrt();
+    assert!(
+        straight.abs_diff(three_tiles) < TILE.unsigned_abs() / 8,
+        "straight-line push is ~3 tiles, got {straight} sub-units"
+    );
+}
+
+#[test]
+fn the_real_earthshake_diagonal_push_stops_at_a_wall_keeping_gained_ground() {
+    let atlas = real_atlas();
+    let quake = skill_number(&atlas, 62);
+    let hero = caster("dark_knight", 200, 30);
+    let aim = hero.placement().position;
+
+    // Caster (10,10), target (13,13): on open ground the 45° sweep lands the
+    // victim in tile (15,15) at (1_023_759,1_023_759). A wall on that final tile
+    // refuses the last increment like any block; the two earlier increments are
+    // kept, so the victim stops in tile (14,14) — ground gained, wall never
+    // crossed (the diagonal mirror of the axis-aligned wall-stop above).
+    let start = TileCoord::new(13, 13).to_world();
+    let open_ground_endpoint = WorldPos::clamped(1_023_759, 1_023_759);
+    let walled = all_walkable_except(&[(15, 15)]);
+    let targets = [seated((13, 13), 1_000_000, 0, 0)];
+    for seed in 0u64..16 {
+        let (_, outcome) = cast_once(&hero, quake, aim, &targets, &walled, seed);
+        let SkillOutcome::Cast { hits, .. } = outcome else {
+            panic!("a funded quake over a covered target resolves");
+        };
+        let (TargetHit::Landed { displacement, .. } | TargetHit::Missed { displacement, .. }) =
+            hits[0]
+        else {
+            panic!("a million-HP target cannot be killed");
+        };
+        let moved = displacement.expect("the earlier diagonal increments are kept");
+
+        // The exact deterministic endpoint the walled sweep stops on.
+        assert_eq!(
+            moved.position,
+            WorldPos::clamped(977_418, 977_418),
+            "seed {seed}"
+        );
+        // Ground was gained (past the start tile) but the wall was never entered:
+        // the victim rests in tile (14,14), one tile short of the open-ground land.
+        assert_eq!(
+            TileCoord::from_world(moved.position),
+            TileCoord::new(14, 14),
+            "seed {seed}: stops on the last walkable diagonal tile"
+        );
+        assert_ne!(
+            moved.position, open_ground_endpoint,
+            "seed {seed}: the wall shortened the push"
+        );
+        assert_ne!(
+            moved.position, start,
+            "seed {seed}: ground was still gained"
+        );
+    }
+}
+
+#[test]
+fn the_real_earthshake_diagonal_push_refuses_a_safezone_tile_exactly_like_a_wall() {
+    let atlas = real_atlas();
+    let quake = skill_number(&atlas, 62);
+    let hero = caster("dark_knight", 200, 30);
+    let aim = hero.placement().position;
+
+    // Same 45° push as the wall-stop, but the final tile (15,15) is a SAFE
+    // town-truce tile rather than a wall. A safe destination refuses the step
+    // just as a wall does — so the victim stops on the identical tile with the
+    // identical endpoint, and is never shoved into the safezone.
+    let safe_grid = all_walkable_with_safe(&[(15, 15)]);
+    let wall_grid = all_walkable_except(&[(15, 15)]);
+    let safe_tile = TileCoord::new(15, 15).to_world();
+    assert!(safe_grid.safe(safe_tile), "the (15,15) tile is safe");
+    assert!(safe_grid.walkable(safe_tile), "a safe tile is walkable");
+    assert!(
+        !wall_grid.walkable(safe_tile),
+        "the wall tile is not walkable"
+    );
+
+    let targets = [seated((13, 13), 1_000_000, 0, 0)];
+    for seed in 0u64..16 {
+        let displaced = |grid: &TerrainGrid| {
+            let (_, outcome) = cast_once(&hero, quake, aim, &targets, grid, seed);
+            let SkillOutcome::Cast { hits, .. } = outcome else {
+                panic!("a funded quake over a covered target resolves");
+            };
+            let (TargetHit::Landed { displacement, .. } | TargetHit::Missed { displacement, .. }) =
+                hits[0]
+            else {
+                panic!("a million-HP target cannot be killed");
+            };
+            displacement.expect("the earlier diagonal increments are kept")
+        };
+        let over_safe = displaced(&safe_grid);
+        let over_wall = displaced(&wall_grid);
+
+        // The exact endpoint, identical to the wall-stop — a safe tile refuses the
+        // sweep at the same point a wall does.
+        assert_eq!(
+            over_safe.position,
+            WorldPos::clamped(977_418, 977_418),
+            "seed {seed}"
+        );
+        assert_eq!(
+            over_safe.position, over_wall.position,
+            "seed {seed}: the safezone stops the push exactly like a wall"
+        );
+        assert!(
+            !safe_grid.safe(over_safe.position),
+            "seed {seed}: the victim never lands on the safe tile"
         );
     }
 }
@@ -1016,14 +1314,13 @@ fn identical_inputs_and_seeds_replay_byte_identical_including_displacements() {
 }
 
 #[test]
-fn earthshake_draws_no_element_roll_and_no_word_off_a_shared_tile() {
+fn earthshake_draws_no_element_roll_and_no_push_word() {
     // Differential word-count pin over the real roster: Evil Spirit (record 9)
     // is a non-elemental caster circle with no displacement, so its post-strike
     // draw count is zero. On the same seed (same profiles, so the identical
     // strike branch) the quake's count equals it exactly — Earthshake's inert
-    // lightning tag draws no element roll, and the different-tile push draws no
-    // word (DET-2). On a SHARED tile the quake draws exactly one more (the
-    // random 8-way heading).
+    // lightning tag draws no element roll, and the swept push draws no word at
+    // any range, a same-point target included (DET-2).
     let atlas = real_atlas();
     let quake = skill_number(&atlas, 62);
     let evil_spirit = skill_number(&atlas, 9);
@@ -1058,9 +1355,8 @@ fn earthshake_draws_no_element_roll_and_no_word_off_a_shared_tile() {
             "seed {seed}"
         );
         assert_eq!(
-            quake_words,
-            spirit_words + 1,
-            "seed {seed}: the same-tile fallback draws exactly one word"
+            quake_words, spirit_words,
+            "seed {seed}: a same-point target draws no push word either"
         );
     }
 }
