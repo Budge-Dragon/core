@@ -19,6 +19,7 @@ publish = false
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 # Portability rules (no wall-clock, no threads, no logging) are enforced

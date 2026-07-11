@@ -66,20 +66,24 @@ pub fn award_kill_experience(
 /// in-place mutation. Returns the grown character and the growth events.
 #[must_use]
 pub fn apply_experience(
-    character: &Character,
+    character: Character,
     gained: Exp,
     atlas: &Atlas,
 ) -> (Character, Vec<GrowthEvent>) {
+    let level = character.level();
+    let experience = character.experience();
+    let unspent_points = character.unspent_points();
+    let class = character.class();
+
     let cap_total = atlas.exp_curve().cap_total();
-    let raw_sum = character.experience().0.saturating_add(gained.0);
+    let raw_sum = experience.0.saturating_add(gained.0);
     let new_total = Exp(raw_sum.min(cap_total.0));
     let discarded = raw_sum > cap_total.0;
 
-    let crossings = level_ups_from(character.level(), new_total, atlas);
+    let crossings = level_ups_from(level, new_total, atlas);
     match crossings.split_last() {
         None => {
-            let grown =
-                character.with_progress(character.level(), new_total, character.unspent_points());
+            let grown = character.with_progress(level, new_total, unspent_points);
             let events = if discarded {
                 vec![GrowthEvent::MaxLevelReached]
             } else {
@@ -90,11 +94,11 @@ pub fn apply_experience(
         Some((top, prior)) => {
             let reached = top.level;
             let count = prior.len() + 1;
-            let per_level = u32::from(atlas.classes().record(character.class()).points_per_level);
+            let per_level = u32::from(atlas.classes().record(class).points_per_level);
             let count32 = u32::try_from(count).unwrap_or(u32::MAX);
             let nominal = u16::try_from(per_level.saturating_mul(count32)).unwrap_or(u16::MAX);
-            let new_unspent = character.unspent_points().saturating_add(nominal);
-            let applied_delta = new_unspent.saturating_sub(character.unspent_points());
+            let new_unspent = unspent_points.saturating_add(nominal);
+            let applied_delta = new_unspent.saturating_sub(unspent_points);
 
             // One refill at the top-crossed level equals OpenMU's per-crossing refill
             // because stats are invariant across the award: the points are banked

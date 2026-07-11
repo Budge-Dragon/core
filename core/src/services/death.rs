@@ -62,37 +62,40 @@ pub enum DeathPenalty {
 /// waived death emits `Died` alone.
 #[must_use]
 pub fn resolve_death(
-    character: &Character,
+    character: Character,
     at: Tick,
     tick: TickDuration,
     atlas: &Atlas,
     penalty: DeathPenalty,
 ) -> (Character, Vec<DeathEvent>) {
     match character.life() {
-        LifeState::Dead { .. } => (character.clone(), Vec::new()),
+        LifeState::Dead { .. } => (character, Vec::new()),
         LifeState::Alive => {
             let respawn_at = at + RESPAWN_DELAY_MS.in_ticks(tick);
             let mut events = vec![DeathEvent::Died { respawn_at }];
 
+            // The Copy scalars the penalty math reads are captured before the
+            // character is moved into the writeback below, so the read and the
+            // move never share one expression.
+            let level = character.level();
+            let unspent_points = character.unspent_points();
+            let zen = character.zen();
+
             let docked = match penalty {
-                DeathPenalty::Waived => character.clone(),
+                DeathPenalty::Waived => character,
                 DeathPenalty::Applied => {
-                    let after_exp = match exp_penalty(character, atlas) {
-                        ExpPenalty::None => character.clone(),
+                    let after_exp = match exp_penalty(&character, atlas) {
+                        ExpPenalty::None => character,
                         ExpPenalty::Docked { new_exp, lost } => {
                             events.push(DeathEvent::ExperienceDocked {
                                 lost,
                                 remaining: new_exp,
                             });
-                            character.with_progress(
-                                character.level(),
-                                new_exp,
-                                character.unspent_points(),
-                            )
+                            character.with_progress(level, new_exp, unspent_points)
                         }
                     };
 
-                    match zen_penalty(character.level(), character.zen()) {
+                    match zen_penalty(level, zen) {
                         ZenPenalty::None => after_exp,
                         ZenPenalty::Docked { balance, lost } => {
                             events.push(DeathEvent::ZenDocked {
@@ -121,12 +124,12 @@ pub fn resolve_death(
 /// so the stream is untouched.
 #[must_use]
 pub fn respawn(
-    character: &Character,
+    character: Character,
     atlas: &Atlas,
     rng: &mut impl RngCore,
 ) -> (Character, Option<Respawned>) {
     match character.life() {
-        LifeState::Alive => (character.clone(), None),
+        LifeState::Alive => (character, None),
         LifeState::Dead { .. } => {
             let (gate, env) = match atlas.town_gate_for_map(character.placement().map) {
                 Some(destination) => destination,
@@ -134,7 +137,7 @@ pub fn respawn(
             };
             let placement = resolve_spawn_gate_landing(gate, env, rng);
 
-            let (_profile, maxima) = character_profile(character);
+            let (_profile, maxima) = character_profile(&character);
             let refilled = Vitals {
                 health: Pool::full(maxima.max_health),
                 mana: Pool::full(maxima.max_mana),

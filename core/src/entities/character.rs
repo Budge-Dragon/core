@@ -195,7 +195,7 @@ impl Character {
     /// This character with its leveling scalars advanced; every other field —
     /// class, stats, zen, placement, vitals, active effects — carried unchanged.
     pub(crate) fn with_progress(
-        &self,
+        self,
         level: Level,
         experience: Exp,
         unspent_points: u16,
@@ -204,44 +204,35 @@ impl Character {
             level,
             experience,
             unspent_points,
-            ..self.clone()
+            ..self
         }
     }
 
     /// This character with its vitals reseated; every other field carried
     /// unchanged. The caller derives the refilled pools from the class formula.
-    pub(crate) fn with_vitals(&self, vitals: Vitals) -> Character {
-        Character {
-            vitals,
-            ..self.clone()
-        }
+    pub(crate) fn with_vitals(self, vitals: Vitals) -> Character {
+        Character { vitals, ..self }
     }
 
     /// This character with its life state reseated; every other field carried
     /// unchanged. The death transitions flip it to `Dead` on a kill and back to
     /// `Alive` on respawn.
-    pub(crate) fn with_life(&self, life: LifeState) -> Character {
-        Character {
-            life,
-            ..self.clone()
-        }
+    pub(crate) fn with_life(self, life: LifeState) -> Character {
+        Character { life, ..self }
     }
 
     /// This character with its carried zen reseated; every other field carried
     /// unchanged. The caller derives the docked balance through `CarriedZen`.
-    pub(crate) fn with_zen(&self, zen: CarriedZen) -> Character {
-        Character {
-            zen,
-            ..self.clone()
-        }
+    pub(crate) fn with_zen(self, zen: CarriedZen) -> Character {
+        Character { zen, ..self }
     }
 
     /// This character with its active effects reseated; every other field
     /// carried unchanged. Respawn reseats the empty store — a clean slate.
-    pub(crate) fn with_effects(&self, active_effects: ActiveEffects) -> Character {
+    pub(crate) fn with_effects(self, active_effects: ActiveEffects) -> Character {
         Character {
             active_effects,
-            ..self.clone()
+            ..self
         }
     }
 
@@ -251,11 +242,11 @@ impl Character {
     /// map-crossing funnels through — warp, enter-gate traversal, respawn,
     /// town portal. Idempotent on the set for a same-map arrival; every other
     /// field carried unchanged.
-    pub(crate) fn arrived_at(&self, placement: Placement) -> Character {
+    pub(crate) fn arrived_at(self, placement: Placement) -> Character {
         Character {
             placement,
             discovered: self.discovered.inserted(placement.map),
-            ..self.clone()
+            ..self
         }
     }
 }
@@ -450,7 +441,9 @@ mod tests {
     #[test]
     fn with_progress_advances_scalars_and_carries_the_rest() {
         let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
-        let grown = character.with_progress(Level::new(43).unwrap(), Exp(2_000_000), 20);
+        let grown = character
+            .clone()
+            .with_progress(Level::new(43).unwrap(), Exp(2_000_000), 20);
         assert_eq!(grown.level(), Level::new(43).unwrap());
         assert_eq!(grown.experience(), Exp(2_000_000));
         assert_eq!(grown.unspent_points(), 20);
@@ -475,7 +468,7 @@ mod tests {
             mana: Pool::full(500),
             ability: Pool::full(42),
         };
-        let reseated = character.with_vitals(refilled);
+        let reseated = character.clone().with_vitals(refilled);
         assert_eq!(reseated.vitals(), refilled);
         assert_eq!(reseated.level(), character.level());
         assert_eq!(reseated.experience(), character.experience());
@@ -549,7 +542,7 @@ mod tests {
     fn with_life_reseats_only_life() {
         use crate::components::units::Tick;
         let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
-        let dead = character.with_life(LifeState::Dead {
+        let dead = character.clone().with_life(LifeState::Dead {
             respawn_at: Tick(903),
         });
         assert_eq!(
@@ -568,7 +561,9 @@ mod tests {
     #[test]
     fn with_zen_reseats_only_zen() {
         let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
-        let docked = character.with_zen(CarriedZen::new(990_000).unwrap());
+        let docked = character
+            .clone()
+            .with_zen(CarriedZen::new(990_000).unwrap());
         assert_eq!(docked.zen(), CarriedZen::new(990_000).unwrap());
         assert_carries_all_but(&docked, &character);
         assert_eq!(docked.life(), character.life());
@@ -586,7 +581,7 @@ mod tests {
             base.with_effects(ActiveEffects::EMPTY.with(ActiveEffect::Defense { expiry: Tick(80) }))
         };
         // Clearing back to empty reseats only the store.
-        let cleared = seeded.with_effects(ActiveEffects::EMPTY);
+        let cleared = seeded.clone().with_effects(ActiveEffects::EMPTY);
         assert_eq!(cleared.active_effects(), ActiveEffects::EMPTY);
         assert_carries_all_but(&cleared, &seeded);
         assert_eq!(cleared.life(), seeded.life());
@@ -604,7 +599,7 @@ mod tests {
             movement: Movement::Grounded,
             map: MapNumber(3),
         };
-        let moved = character.arrived_at(landing);
+        let moved = character.clone().arrived_at(landing);
         assert_eq!(moved.placement(), landing);
         // The destination map joined the set; the home map is still a member.
         assert!(moved.discovered().contains(MapNumber(3)));
@@ -629,7 +624,7 @@ mod tests {
     #[test]
     fn arrived_at_the_current_map_is_idempotent_on_the_discovered_set() {
         let character = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
-        let reseated = character.arrived_at(Placement {
+        let reseated = character.clone().arrived_at(Placement {
             position: TileCoord::new(174, 112).to_world(),
             facing: Facing::POS_X,
             movement: Movement::Grounded,

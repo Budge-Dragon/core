@@ -26,11 +26,11 @@ use crate::services::ratio::{nonzero, scale_ratio};
 /// refused; a recovery or cure that would change nothing is refused and
 /// consumes nothing; an out-of-scope consumable (alcohol, town portal) is
 /// refused. Otherwise the character is healed or cured, exactly one piece is
-/// consumed, and the outcome is returned. The borrowed character is never
-/// mutated — a fresh character value is returned.
+/// consumed, and the outcome is returned. The character is moved in and the
+/// new character value returned.
 #[must_use]
 pub fn use_consumable(
-    character: &Character,
+    character: Character,
     inventory: Inventory,
     cell: Cell,
     atlas: &Atlas,
@@ -67,14 +67,15 @@ pub fn use_consumable(
     }
 }
 
-/// The refusal outcome: the untouched inventory and a single `Rejected` event.
+/// The refusal outcome: the character and untouched inventory handed back with
+/// a single `Rejected` event.
 fn refuse(
-    character: &Character,
+    character: Character,
     inventory: Inventory,
     reason: ConsumeRejection,
 ) -> (Character, Inventory, Vec<ConsumeEvent>) {
     (
-        character.clone(),
+        character,
         inventory,
         vec![ConsumeEvent::Rejected { reason }],
     )
@@ -153,10 +154,14 @@ fn resolve_effect(
 
 /// Recovers `pool` by the tier's percent-of-max plus its level-decaying flat
 /// term, capped at the pool's own maximum. A zero post-cap delta (a full pool or
-/// a zero-magnitude amount) refuses and consumes nothing; otherwise the reseated
-/// character is committed and one piece consumed.
+/// a zero-magnitude amount) refuses and consumes nothing — checked before a
+/// piece is spent; otherwise one piece is consumed and the reseated character is
+/// returned. `resolve_effect` already proved the cell covered, so
+/// `consume_one`'s rejection arm is structurally unreachable — folding it back
+/// to the refusal keeps the transition total without a panic (the shop-sell
+/// fold).
 fn recover(
-    character: &Character,
+    character: Character,
     inventory: Inventory,
     cell: Cell,
     pool: PoolKind,
@@ -183,20 +188,23 @@ fn recover(
             ..vitals
         },
     };
-    commit(
-        character,
-        character.with_vitals(vitals),
-        inventory,
-        cell,
-        ConsumeEvent::Recovered { pool, restored },
-    )
+    match inventory.consume_one(cell) {
+        Ok(inventory) => (
+            character.with_vitals(vitals),
+            inventory,
+            vec![ConsumeEvent::Recovered { pool, restored }],
+        ),
+        Err((inventory, _reason)) => refuse(character, inventory, ConsumeRejection::NoItem),
+    }
 }
 
 /// Cures an active poison. An antidote met by no poison would change nothing, so
-/// it refuses and consumes nothing; otherwise the cured character is committed
-/// and one antidote consumed.
+/// it refuses and consumes nothing — checked before a piece is spent; otherwise
+/// one antidote is consumed and the cured character returned. The covered-cell
+/// proof makes `consume_one`'s rejection arm unreachable; it folds to the same
+/// refusal (the shop-sell fold).
 fn cure(
-    character: &Character,
+    character: Character,
     inventory: Inventory,
     cell: Cell,
 ) -> (Character, Inventory, Vec<ConsumeEvent>) {
@@ -204,30 +212,13 @@ fn cure(
         return refuse(character, inventory, ConsumeRejection::NoEffect);
     }
     let effects = character.active_effects().without(EffectIdentity::Poisoned);
-    commit(
-        character,
-        character.with_effects(effects),
-        inventory,
-        cell,
-        ConsumeEvent::PoisonCured,
-    )
-}
-
-/// Consumes one piece for a successful heal or cure and returns the applied
-/// character with its event. The single consume seam: `resolve_effect` already
-/// proved the cell covered, so `consume_one`'s rejection arm is structurally
-/// unreachable — folding it keeps the transition total without a panic (the
-/// shop-sell fold).
-fn commit(
-    original: &Character,
-    applied: Character,
-    inventory: Inventory,
-    cell: Cell,
-    event: ConsumeEvent,
-) -> (Character, Inventory, Vec<ConsumeEvent>) {
     match inventory.consume_one(cell) {
-        Ok(inventory) => (applied, inventory, vec![event]),
-        Err((inventory, _reason)) => refuse(original, inventory, ConsumeRejection::NoItem),
+        Ok(inventory) => (
+            character.with_effects(effects),
+            inventory,
+            vec![ConsumeEvent::PoisonCured],
+        ),
+        Err((inventory, _reason)) => refuse(character, inventory, ConsumeRejection::NoItem),
     }
 }
 

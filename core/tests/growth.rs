@@ -145,7 +145,7 @@ fn a_single_level_crossing_banks_five_points_refills_and_carries_experience() {
     let hero = dark_knight(5, t5, 0, &full_vitals(1, 1, 1));
     let gained = Exp(t6 - t5);
 
-    let (grown, events) = apply_experience(&hero, gained, &atlas);
+    let (grown, events) = apply_experience(hero.clone(), gained, &atlas);
 
     assert_eq!(grown.level(), level(6));
     assert_eq!(
@@ -178,7 +178,7 @@ fn a_multi_level_crossing_banks_five_per_level_refills_at_the_top_and_carries() 
     let hero = dark_knight(5, t5, 0, &full_vitals(1, 1, 1));
     let gained = Exp(t8 - t5);
 
-    let (grown, events) = apply_experience(&hero, gained, &atlas);
+    let (grown, events) = apply_experience(hero.clone(), gained, &atlas);
 
     // Crossed 6, 7, 8 → three levels, 5 points each.
     assert_eq!(grown.level(), level(8));
@@ -233,7 +233,7 @@ fn experience_below_the_next_threshold_carries_with_no_growth_event() {
     let hero = dark_knight(5, t5, 3, &hurt);
     let before = hero.clone();
 
-    let (grown, events) = apply_experience(&hero, gained, &atlas);
+    let (grown, events) = apply_experience(hero.clone(), gained, &atlas);
 
     // The canonical "no growth event": experience moved, nothing crossed, nothing
     // discarded — the exp observable is owned upstream by `ExpAward`.
@@ -281,7 +281,7 @@ fn magic_gladiator_and_dark_lord_bank_seven_points_per_crossing() {
         0,
         &full_vitals(1, 1, 1),
     );
-    let (mg_grown, mg_events) = apply_experience(&magic_gladiator, gained, &atlas);
+    let (mg_grown, mg_events) = apply_experience(magic_gladiator.clone(), gained, &atlas);
     assert_eq!(mg_grown.level(), level(6));
     assert_eq!(mg_grown.unspent_points(), 7);
     assert_eq!(
@@ -300,7 +300,7 @@ fn magic_gladiator_and_dark_lord_bank_seven_points_per_crossing() {
         0,
         &full_vitals(1, 1, 1),
     );
-    let (dl_grown, dl_events) = apply_experience(&dark_lord, gained, &atlas);
+    let (dl_grown, dl_events) = apply_experience(dark_lord.clone(), gained, &atlas);
     assert_eq!(dl_grown.level(), level(6));
     assert_eq!(dl_grown.unspent_points(), 7);
     assert_eq!(
@@ -324,7 +324,7 @@ fn a_capped_character_discards_further_experience_and_reports_max_level() {
         &full_vitals(500, 400, 400),
     );
 
-    let (grown, events) = apply_experience(&hero, Exp(1000), &atlas);
+    let (grown, events) = apply_experience(hero.clone(), Exp(1000), &atlas);
 
     assert_eq!(grown.level(), max_level);
     assert_eq!(
@@ -352,7 +352,7 @@ fn a_crossing_that_lands_on_the_cap_reports_both_levels_gained_and_max_level() {
         &full_vitals(1, 1, 1),
     );
 
-    let (grown, events) = apply_experience(&hero, cap_total, &atlas);
+    let (grown, events) = apply_experience(hero.clone(), cap_total, &atlas);
 
     assert_eq!(grown.level(), max_level);
     assert_eq!(
@@ -390,7 +390,7 @@ fn a_crossing_that_lands_exactly_on_the_cap_gains_the_level_without_a_discard_si
     // discard (the strict `>` overshoot test never fires).
     let gained = Exp(cap_total.0 - threshold);
 
-    let (grown, events) = apply_experience(&hero, gained, &atlas);
+    let (grown, events) = apply_experience(hero.clone(), gained, &atlas);
 
     assert_eq!(grown.level(), max_level);
     assert_eq!(
@@ -433,7 +433,7 @@ fn a_hurt_hero_has_all_three_pools_refilled_on_a_crossing() {
         "the hero starts hurt"
     );
 
-    let (grown, _events) = apply_experience(&hero, Exp(t6 - t5), &atlas);
+    let (grown, _events) = apply_experience(hero.clone(), Exp(t6 - t5), &atlas);
 
     assert_refilled_full(&grown);
     assert_eq!(grown.vitals().health.current(), grown.vitals().health.max());
@@ -452,8 +452,8 @@ fn apply_experience_is_pure_and_deterministic() {
     let hero = dark_knight(5, t5, 0, &full_vitals(1, 1, 1));
     let before = hero.clone();
 
-    let (grown_a, events_a) = apply_experience(&hero, Exp(t8 - t5), &atlas);
-    let (grown_b, events_b) = apply_experience(&hero, Exp(t8 - t5), &atlas);
+    let (grown_a, events_a) = apply_experience(hero.clone(), Exp(t8 - t5), &atlas);
+    let (grown_b, events_b) = apply_experience(hero.clone(), Exp(t8 - t5), &atlas);
 
     // Byte-identical outputs on identical inputs.
     assert_eq!(
@@ -504,8 +504,8 @@ fn a_party_award_applied_matches_a_solo_apply_of_the_same_gained() {
 
     // The solo path: apply that exact gained to an identical character.
     let member = dark_knight(5, seat_exp, 0, &full_vitals(1, 1, 1));
-    let (grown_a, events_a) = apply_experience(&member, gained, &atlas);
-    let (grown_b, _events_b) = apply_experience(&member, gained, &atlas);
+    let (grown_a, events_a) = apply_experience(member.clone(), gained, &atlas);
+    let (grown_b, _events_b) = apply_experience(member.clone(), gained, &atlas);
     // Deterministic and byte-identical.
     assert_eq!(
         or_abort(serde_json::to_string(&grown_a)),

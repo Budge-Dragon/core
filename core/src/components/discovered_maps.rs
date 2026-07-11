@@ -33,10 +33,9 @@ impl DiscoveredMaps {
     /// This set with `map` inserted — monotone and idempotent: inserting a
     /// member returns an equal set.
     #[must_use]
-    pub fn inserted(&self, map: MapNumber) -> Self {
-        let mut maps = self.0.clone();
-        maps.insert(map);
-        Self(maps)
+    pub fn inserted(mut self, map: MapNumber) -> Self {
+        self.0.insert(map);
+        self
     }
 
     /// Every discovered map, in map-number order.
@@ -64,8 +63,8 @@ mod tests {
         assert!(grown.contains(MapNumber(0)));
         assert!(grown.contains(MapNumber(4)));
         // Re-inserting a member returns an equal set — no duplicate, no churn.
-        assert_eq!(grown.inserted(MapNumber(4)), grown);
-        assert_eq!(grown.inserted(MapNumber(0)), grown);
+        assert_eq!(grown.clone().inserted(MapNumber(4)), grown);
+        assert_eq!(grown.clone().inserted(MapNumber(0)), grown);
     }
 
     #[test]
