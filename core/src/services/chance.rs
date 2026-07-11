@@ -10,12 +10,12 @@ use rand_core::RngCore;
 
 use crate::components::collections::OneOrMore;
 use crate::components::interval::Interval;
-use crate::components::spatial::{Facing, TileDelta, TileOffset};
+use crate::components::spatial::{Facing, Fixed, TileDelta, TileOffset, WorldVec};
 use crate::components::units::{ChancePer10000, Percent, Resistance};
 use crate::rng::{uniform_below, uniform_below_usize};
 
-/// The eight cardinal facings a drawn heading resolves to, in a fixed order so
-/// a drawn index maps to the same facing bit-for-bit on every target.
+/// The eight cardinal facings a spawn-facing draw resolves to, in a fixed order
+/// so a drawn index maps to the same facing bit-for-bit on every target.
 const CARDINALS: [Facing; 8] = [
     Facing::POS_X,
     Facing::POS_X_POS_Y,
@@ -27,9 +27,9 @@ const CARDINALS: [Facing; 8] = [
     Facing::POS_X_NEG_Y,
 ];
 
-/// Draws a cardinal facing uniformly through the RNG seam — the shared heading
-/// draw for spawns without an authored facing and for wander drift. Consumes
-/// exactly one random word.
+/// Draws a cardinal facing uniformly through the RNG seam — the spawn heading
+/// draw for a mob placed without an authored facing. Consumes exactly one random
+/// word.
 #[must_use]
 pub fn draw_cardinal(rng: &mut impl RngCore) -> Facing {
     let bound = NonZeroUsize::MIN.saturating_add(CARDINALS.len() - 1);
@@ -42,6 +42,67 @@ pub fn draw_cardinal(rng: &mut impl RngCore) -> Facing {
         position = position.saturating_add(1);
     }
     Facing::POS_X
+}
+
+/// Half-extent, in raw Q48.16 sub-units, of the square the Marsaglia
+/// disk-rejection heading draw samples. A few thousand units: large enough that
+/// accepted headings resolve to thousands of distinct angles (effectively a
+/// continuous direction), and far below [`crate::components::spatial::WORLD_EXTENT`]
+/// (`256 * 65536`) so [`Facing::new`] accepts every in-disk non-zero vector — the
+/// zero vector is the only rejection — and `2 * R²` (the largest possible
+/// `length_sq`) stays well within range.
+const HEADING_EXTENT: u32 = 4096;
+
+/// Count of integers in the inclusive axis span
+/// `[-HEADING_EXTENT, +HEADING_EXTENT]` (`2 * HEADING_EXTENT + 1`): the
+/// [`uniform_below`] bound whose draw, shifted down by [`HEADING_EXTENT`], yields
+/// one signed axis component uniformly over that span.
+const HEADING_SPAN: NonZeroU32 = NonZeroU32::MIN.saturating_add(2 * HEADING_EXTENT);
+
+/// The inscribed disk's radius squared (`HEADING_EXTENT²` = `16_777_216`). A drawn
+/// vector whose `length_sq` exceeds this lies in a corner of the sampling square,
+/// outside the disk, and is redrawn — the rejection that strips the square's
+/// diagonal bias and leaves the accepted heading uniform over all directions.
+const HEADING_EXTENT_SQ: u128 = 16_777_216;
+
+/// Draws a free continuous heading uniformly over every direction, through the
+/// RNG seam — the wander drift heading. Marsaglia disk-rejection sampling
+/// (Marsaglia 1972; the method Rust `rand`'s `UnitCircle` uses): draw a point
+/// uniformly in the square `[-R, R]²` (two [`uniform_below`] axis draws, dx then
+/// dy in a fixed order), reject it when it falls outside the inscribed disk, and
+/// keep it otherwise. The disk test removes the square's corner (diagonal) bias,
+/// so the surviving direction is uniform; the loop terminates fast (≈1.27 draws
+/// on average, the disk covering ≈78.5% of the square). A kept vector is a proven
+/// in-bounds non-zero direction, so [`Facing::new`] accepts it; the one rejection
+/// it can raise — the zero vector — folds back into a redraw, so no unwrap is
+/// needed. The magnitude is left unnormalized, exactly as [`draw_cardinal`]
+/// leaves its cardinal: [`crate::services::movement::resolve_drift`]
+/// isqrt-normalizes the facing when it steps. Consumes a variable but
+/// deterministic-per-seed number of words (at least two).
+#[must_use]
+pub fn draw_heading(rng: &mut impl RngCore) -> Facing {
+    loop {
+        let dx = draw_heading_axis(rng);
+        let dy = draw_heading_axis(rng);
+        let vector = WorldVec::new(Fixed::from_raw(dx), Fixed::from_raw(dy));
+        if vector.length_sq().get() > HEADING_EXTENT_SQ {
+            continue;
+        }
+        // The only rejection `Facing::new` can raise here is the zero vector
+        // (components are proven in-bounds): its `Err` folds into a redraw by
+        // falling through to the next iteration, so no unwrap is ever needed.
+        if let Ok(facing) = Facing::new(vector) {
+            return facing;
+        }
+    }
+}
+
+/// One signed axis component drawn uniformly in
+/// `[-HEADING_EXTENT, +HEADING_EXTENT]` — a single [`uniform_below`] draw over the
+/// span shifted down by the extent. The two-per-heading call shape mirrors
+/// [`draw_jiggle_offset`]'s dx-then-dy axis draws.
+fn draw_heading_axis(rng: &mut impl RngCore) -> i64 {
+    i64::from(uniform_below(HEADING_SPAN, rng)) - i64::from(HEADING_EXTENT)
 }
 
 /// The `uniform_below(3)` bound — a tile delta drawn as {0,1,2} → {−1,0,+1}.
@@ -417,7 +478,7 @@ mod tests {
     #[test]
     fn draw_cardinal_reaches_all_eight_facings() {
         // Over many draws every one of the eight cardinal facings is reached, so
-        // the uniform heading draw is not stuck on a subset.
+        // the uniform spawn-facing draw is not stuck on a subset.
         let mut rng = TestRng::new(9);
         let mut seen = [false; 8];
         for _ in 0..1000 {
@@ -432,6 +493,78 @@ mod tests {
             seen.iter().all(|&hit| hit),
             "not every cardinal facing was reached"
         );
+    }
+
+    #[test]
+    fn draw_heading_is_a_uniform_continuous_direction() {
+        use std::collections::BTreeSet;
+
+        // Each accepted heading is bucketed onto the boundary of an L-infinity
+        // grid of radius 32 (the larger axis normalises to ±32), so two draws
+        // share a bucket only when they point in nearly the same direction. The
+        // eight-way pick fills exactly eight buckets; a free continuous heading
+        // fills far more, so a well-above-eight count proves the draw is NOT the
+        // cardinal pick and is not stuck on an axis.
+        fn direction_bucket(facing: Facing) -> (i64, i64) {
+            let vector = facing.vector();
+            let x = vector.x().raw();
+            let y = vector.y().raw();
+            let scale = x.abs().max(y.abs()).max(1);
+            ((x * 32) / scale, (y * 32) / scale)
+        }
+
+        let mut rng = TestRng::new(0x00A1_1CE0);
+        let mut buckets = BTreeSet::new();
+        let mut quadrants = [false; 4];
+        for _ in 0..20_000 {
+            let facing = draw_heading(&mut rng);
+            let vector = facing.vector();
+            let x = vector.x().raw();
+            let y = vector.y().raw();
+            // (c) never a zero/degenerate facing.
+            assert!(x != 0 || y != 0, "draw_heading returned a zero facing");
+            // (b) all four quadrants reached (both signs on each axis appear).
+            if x > 0 && y > 0 {
+                quadrants[0] = true;
+            }
+            if x < 0 && y > 0 {
+                quadrants[1] = true;
+            }
+            if x < 0 && y < 0 {
+                quadrants[2] = true;
+            }
+            if x > 0 && y < 0 {
+                quadrants[3] = true;
+            }
+            buckets.insert(direction_bucket(facing));
+        }
+        // (a) many distinct headings — overwhelmingly more than the old eight.
+        assert!(
+            buckets.len() > 100,
+            "only {} distinct headings — not a continuous direction draw",
+            buckets.len()
+        );
+        assert!(
+            quadrants.iter().all(|&hit| hit),
+            "not every quadrant was reached: {quadrants:?}"
+        );
+    }
+
+    #[test]
+    fn draw_heading_is_deterministic_per_seed() {
+        let sequence = |seed: u64| {
+            let mut rng = TestRng::new(seed);
+            (0..64)
+                .map(|_| {
+                    let facing = draw_heading(&mut rng);
+                    (facing.vector().x().raw(), facing.vector().y().raw())
+                })
+                .collect::<Vec<_>>()
+        };
+        // (d) same seed reproduces the whole sequence bit-for-bit; a different
+        // seed does not (the draw is seed-driven, never constant).
+        assert_eq!(sequence(4), sequence(4));
+        assert_ne!(sequence(4), sequence(5));
     }
 
     #[test]
