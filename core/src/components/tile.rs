@@ -249,11 +249,19 @@ impl core::fmt::Display for TileError {
 
 impl core::error::Error for TileError {}
 
-/// A per-tile walkability bitset over the 256x256 grid — one bit per tile.
+/// Per-map terrain over the 256x256 grid: which tiles are walkable and which
+/// are safe (a town-truce tile), one bit each. The safe bitset is the
+/// conjunction `walkable AND SafeZone`, folded at build — so `safe(pos)`
+/// implies `walkable(pos)` and no caller can read the raw `SafeZone` bit apart
+/// from the fold. The live, world-space terrain query; the tile grid is a
+/// private detail, callers never name a tile.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WalkGrid([u64; 1024]);
+pub struct TerrainGrid {
+    walk: [u64; 1024],
+    safe: [u64; 1024],
+}
 
-impl WalkGrid {
+impl TerrainGrid {
     /// The two blocking bits of the on-disk terrain layout (documented on
     /// [`crate::data::terrain`]): `NoMove` (`0x02`) and `NoGround` (`0x04`). A
     /// tile is walkable iff neither is set; `SafeZone` (`0x01`) and `Water`
@@ -261,32 +269,59 @@ impl WalkGrid {
     /// fully traversable.
     const BLOCKED_MASK: u8 = 0x06;
 
-    /// Builds a walk grid from its raw 1024-word bitset.
-    #[must_use]
-    pub const fn from_words(words: [u64; 1024]) -> Self {
-        Self(words)
-    }
+    /// The on-disk safezone bit.
+    const SAFE_BIT: u8 = 0x01;
 
-    /// Builds the walk grid from a map's raw `256 x 256` terrain-attribute
-    /// array — one byte per tile at index `y*256 + x`, matching [`walkable`]'s
-    /// `bit = (y<<8)|x` convention. Total: the fixed array length makes a
-    /// wrong-size input unrepresentable, and a tile is walkable iff neither
-    /// blocking bit (`NoMove`, `NoGround`) is set.
+    /// Builds the grid from a map's raw `256 x 256` terrain-attribute array —
+    /// one byte per tile at index `y*256 + x`, matching [`walkable`]'s
+    /// `bit = (y<<8)|x` convention. A tile is walkable iff neither blocking
+    /// bit is set; it is safe iff it is walkable AND the `SafeZone` bit is set —
+    /// the conjunction folded here so no downstream reader reconstructs it.
+    /// Total: the fixed array length makes a wrong-size input unrepresentable.
     ///
-    /// [`walkable`]: WalkGrid::walkable
+    /// [`walkable`]: TerrainGrid::walkable
     #[must_use]
     pub fn from_terrain(bytes: &[u8; TERRAIN_LEN]) -> Self {
-        let mut words = [0u64; 1024];
-        for (word, chunk) in words.iter_mut().zip(bytes.chunks_exact(64)) {
-            let mut packed = 0u64;
+        let mut walk = [0u64; 1024];
+        let mut safe = [0u64; 1024];
+        for ((walk_word, safe_word), chunk) in walk
+            .iter_mut()
+            .zip(safe.iter_mut())
+            .zip(bytes.chunks_exact(64))
+        {
+            let mut walk_packed = 0u64;
+            let mut safe_packed = 0u64;
             for (bit, &attr) in chunk.iter().enumerate() {
                 if (attr & Self::BLOCKED_MASK) == 0 {
-                    packed |= 1u64 << bit;
+                    walk_packed |= 1u64 << bit;
+                    if (attr & Self::SAFE_BIT) != 0 {
+                        safe_packed |= 1u64 << bit;
+                    }
                 }
             }
-            *word = packed;
+            *walk_word = walk_packed;
+            *safe_word = safe_packed;
         }
-        Self(words)
+        Self { walk, safe }
+    }
+
+    /// Builds a grid from raw bitsets — the test constructor. `safe` must
+    /// already be a subset of `walk` (the caller supplies the folded pair);
+    /// this is a white-box seam, not a load path.
+    #[must_use]
+    pub const fn from_bitsets(walk: [u64; 1024], safe: [u64; 1024]) -> Self {
+        Self { walk, safe }
+    }
+
+    /// A walk-only grid — every walkable tile is non-safe (a zero-safezone
+    /// map, e.g. Dungeon). A real domain value (many shipped maps carry no
+    /// safe tile), not a fabricated default.
+    #[must_use]
+    pub const fn from_words(walk: [u64; 1024]) -> Self {
+        Self {
+            walk,
+            safe: [0u64; 1024],
+        }
     }
 
     /// Whether the tile containing a world position is walkable — the live,
@@ -298,18 +333,31 @@ impl WalkGrid {
         let tile = TileCoord::from_world(pos);
         let bit = (usize::from(tile.y) << 8) | usize::from(tile.x);
         let mask = 1u64 << (bit & 63);
-        self.0.get(bit >> 6).is_some_and(|w| w & mask != 0)
+        self.walk.get(bit >> 6).is_some_and(|w| w & mask != 0)
+    }
+
+    /// Whether the tile containing a world position is safe (a town-truce
+    /// tile). Safe implies walkable by construction (folded at build). Total —
+    /// every in-world position resolves to a grid cell.
+    #[must_use]
+    pub fn safe(&self, pos: WorldPos) -> bool {
+        let tile = TileCoord::from_world(pos);
+        let bit = (usize::from(tile.y) << 8) | usize::from(tile.x);
+        let mask = 1u64 << (bit & 63);
+        self.safe.get(bit >> 6).is_some_and(|w| w & mask != 0)
     }
 
     /// The world positions of every walkable tile whose centre lies inside
-    /// `rect`, yielded in deterministic row-major (y then x) order. Pure,
-    /// RNG-free, and target-independent, so the same index maps to the same
-    /// [`WorldPos`] bit-for-bit on native, wasm, and FFI.
+    /// `rect`, yielded in deterministic row-major (y then x) order — walk-only
+    /// (spawn placement and warp landing draw from walkable cells,
+    /// safezone-agnostic). Pure, RNG-free, and target-independent, so the same
+    /// index maps to the same [`WorldPos`] bit-for-bit on native, wasm, and
+    /// FFI.
     ///
     /// The rectangle-to-tile arithmetic stays private to this module — callers
-    /// receive world positions and never name a tile — so the walk grid keeps
-    /// hiding its cells while still answering "which walkable spots are in this
-    /// area?" for spawn placement and warp landing.
+    /// receive world positions and never name a tile — so the terrain grid
+    /// keeps hiding its cells while still answering "which walkable spots are
+    /// in this area?".
     pub fn walkable_positions_in(&self, rect: WorldRect) -> impl Iterator<Item = WorldPos> + '_ {
         let min = TileCoord::from_world(rect.min());
         let max = TileCoord::from_world(rect.max());
@@ -415,18 +463,18 @@ mod tests {
     }
 
     #[test]
-    fn walk_grid_walkable_is_total() {
+    fn terrain_grid_walkable_is_total() {
         let mut words = [0u64; 1024];
         // Set the bit for tile (1, 0): bit index 1.
         words[0] = 0b10;
-        let grid = WalkGrid::from_words(words);
+        let grid = TerrainGrid::from_words(words);
         assert!(grid.walkable(TileCoord::new(1, 0).to_world()));
         assert!(!grid.walkable(TileCoord::new(0, 0).to_world()));
         assert!(!grid.walkable(TileCoord::new(255, 255).to_world()));
     }
 
     #[test]
-    fn walk_grid_from_terrain_applies_blocked_mask() {
+    fn terrain_grid_from_terrain_applies_blocked_mask() {
         let mut bytes = vec![0u8; TERRAIN_LEN];
         // On-disk layout: SafeZone 0x01, NoMove 0x02, NoGround 0x04, Water 0x08.
         // (0,0) open; (1,0) SafeZone -> walkable; (2,0) NoMove -> blocked;
@@ -438,13 +486,94 @@ mod tests {
         bytes[4] = 0x08;
         bytes[5] = 0x06;
         let array: &[u8; TERRAIN_LEN] = bytes.as_slice().try_into().unwrap();
-        let grid = WalkGrid::from_terrain(array);
+        let grid = TerrainGrid::from_terrain(array);
         assert!(grid.walkable(TileCoord::new(0, 0).to_world()));
         assert!(grid.walkable(TileCoord::new(1, 0).to_world()));
         assert!(!grid.walkable(TileCoord::new(2, 0).to_world()));
         assert!(!grid.walkable(TileCoord::new(3, 0).to_world()));
         assert!(grid.walkable(TileCoord::new(4, 0).to_world()));
         assert!(!grid.walkable(TileCoord::new(5, 0).to_world()));
+    }
+
+    #[test]
+    fn safe_requires_safezone_bit_and_walkable() {
+        let mut bytes = vec![0u8; TERRAIN_LEN];
+        // (0,0) plain 0x00: walkable, not safe. (1,0) SafeZone 0x01: walkable
+        // and safe. (2,0) Safezone|Blocked 0x03: neither. (3,0) NoMove 0x02:
+        // neither. (4,0) SafeZone|NoGround 0x05: neither.
+        bytes[1] = 0x01;
+        bytes[2] = 0x03;
+        bytes[3] = 0x02;
+        bytes[4] = 0x05;
+        let array: &[u8; TERRAIN_LEN] = bytes.as_slice().try_into().unwrap();
+        let grid = TerrainGrid::from_terrain(array);
+        assert!(grid.walkable(TileCoord::new(0, 0).to_world()));
+        assert!(!grid.safe(TileCoord::new(0, 0).to_world()));
+        assert!(grid.walkable(TileCoord::new(1, 0).to_world()));
+        assert!(grid.safe(TileCoord::new(1, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(2, 0).to_world()));
+        assert!(!grid.safe(TileCoord::new(2, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(3, 0).to_world()));
+        assert!(!grid.safe(TileCoord::new(3, 0).to_world()));
+        assert!(!grid.walkable(TileCoord::new(4, 0).to_world()));
+        assert!(!grid.safe(TileCoord::new(4, 0).to_world()));
+    }
+
+    #[test]
+    fn safe_implies_walkable_over_every_folded_tile() {
+        let mut bytes = vec![0u8; TERRAIN_LEN];
+        for (index, byte) in bytes.iter_mut().enumerate() {
+            *byte = u8::try_from(index % 16).unwrap();
+        }
+        let array: &[u8; TERRAIN_LEN] = bytes.as_slice().try_into().unwrap();
+        let grid = TerrainGrid::from_terrain(array);
+        for x in 0u8..=255 {
+            for y in 0u8..=255 {
+                let pos = TileCoord::new(x, y).to_world();
+                if grid.safe(pos) {
+                    assert!(grid.walkable(pos));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn from_words_grid_is_walkable_and_nowhere_safe() {
+        let grid = TerrainGrid::from_words([u64::MAX; 1024]);
+        let pos = TileCoord::new(42, 42).to_world();
+        assert!(grid.walkable(pos));
+        assert!(!grid.safe(pos));
+    }
+
+    #[test]
+    fn from_bitsets_answers_both_queries() {
+        let mut walk = [0u64; 1024];
+        let mut safe = [0u64; 1024];
+        // Tiles (0,0) and (1,0) walkable; only (1,0) safe.
+        walk[0] = 0b11;
+        safe[0] = 0b10;
+        let grid = TerrainGrid::from_bitsets(walk, safe);
+        assert!(grid.walkable(TileCoord::new(0, 0).to_world()));
+        assert!(!grid.safe(TileCoord::new(0, 0).to_world()));
+        assert!(grid.walkable(TileCoord::new(1, 0).to_world()));
+        assert!(grid.safe(TileCoord::new(1, 0).to_world()));
+    }
+
+    #[test]
+    fn safe_query_is_world_space_across_the_whole_tile() {
+        let mut bytes = vec![0u8; TERRAIN_LEN];
+        // Tile (2, 3) safe; index y*256 + x.
+        bytes[3 * 256 + 2] = 0x01;
+        let array: &[u8; TERRAIN_LEN] = bytes.as_slice().try_into().unwrap();
+        let grid = TerrainGrid::from_terrain(array);
+        let centre = TileCoord::new(2, 3).to_world();
+        let off_centre = WorldPos::clamped(
+            centre.x().raw() + HALF_TILE - 1,
+            centre.y().raw() - HALF_TILE,
+        );
+        assert!(grid.safe(centre));
+        assert!(grid.safe(off_centre));
+        assert!(!grid.safe(TileCoord::new(3, 3).to_world()));
     }
 
     #[test]
@@ -455,7 +584,7 @@ mod tests {
             words[bit >> 6] |= 1u64 << (bit & 63);
         }
         // (6, 6) stays blocked.
-        let grid = WalkGrid::from_words(words);
+        let grid = TerrainGrid::from_words(words);
         let rect = TileArea::new(5, 5, 6, 6).unwrap().to_world();
         let got: Vec<WorldPos> = grid.walkable_positions_in(rect).collect();
         assert_eq!(
@@ -475,7 +604,7 @@ mod tests {
 
     #[test]
     fn walkable_positions_in_is_empty_when_nothing_walkable() {
-        let grid = WalkGrid::from_words([0u64; 1024]);
+        let grid = TerrainGrid::from_words([0u64; 1024]);
         let rect = TileArea::new(10, 10, 20, 20).unwrap().to_world();
         assert_eq!(grid.walkable_positions_in(rect).count(), 0);
     }

@@ -28,12 +28,12 @@ use mu_core::components::movement::{CombatLock, FlightChange, Mobility, Movement
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, Radius, UNITS_PER_TILE, WorldPos};
-use mu_core::components::tile::{TileArea, TileCoord, WalkGrid};
+use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
 use mu_core::components::units::{DurationMs, MapNumber, Tick};
 use mu_core::data::atlas::{Atlas, Landing};
 use mu_core::data::common::MonsterNumber;
 use mu_core::data::map_definitions::MapEnvironment;
-use mu_core::data::monster_definitions::MobBehavior;
+use mu_core::data::monster_definitions::{MobBehavior, SafezoneDisposition};
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
@@ -164,8 +164,8 @@ struct Action {
     intent: MonsterIntent,
 }
 
-fn all_walkable() -> WalkGrid {
-    WalkGrid::from_words([u64::MAX; 1024])
+fn all_walkable() -> TerrainGrid {
+    TerrainGrid::from_words([u64::MAX; 1024])
 }
 
 fn behavior(
@@ -182,6 +182,7 @@ fn behavior(
         move_delay_ms: DurationMs(move_ms),
         attack_delay_ms: DurationMs(attack_ms),
         respawn_ms: DurationMs(0),
+        disposition: SafezoneDisposition::Excluded,
     }
 }
 
@@ -215,7 +216,7 @@ fn drive(
     mut inst: MonsterInstance,
     behavior: &MobBehavior,
     target: Option<WorldPos>,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     steps: usize,
 ) -> Vec<Action> {
     let mut rng = TestRng::new(1);
@@ -240,7 +241,7 @@ fn decide(
     behavior: &MobBehavior,
     target: Option<WorldPos>,
     now: Tick,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     rng: &mut TestRng,
 ) -> (MonsterInstance, MonsterIntent) {
     mu_core::services::monster_ai::decide_monster_action(
@@ -398,7 +399,7 @@ fn i8_attack_is_intent_only() {
 }
 
 /// I6': a start/target pair on real terrain, both walkable, target within view.
-fn pick_chase_pair(grid: &WalkGrid) -> Option<(WorldPos, WorldPos)> {
+fn pick_chase_pair(grid: &TerrainGrid) -> Option<(WorldPos, WorldPos)> {
     let offsets = [(5i32, 0i32), (0, 5), (-5, 0), (0, -5), (4, 3), (3, 4)];
     for sy in 0u8..=255 {
         for sx in 0u8..=255 {
@@ -426,7 +427,7 @@ fn pick_chase_pair(grid: &WalkGrid) -> Option<(WorldPos, WorldPos)> {
 #[test]
 fn i6_prime_chase_no_regression_on_real_terrain() {
     let atlas = real_atlas();
-    let grid = atlas.walk_grid(MapNumber(8)).unwrap();
+    let grid = atlas.terrain_grid(MapNumber(8)).unwrap();
     let (start, target) = pick_chase_pair(grid).expect("map 8 has a walkable chase pair");
     let mob = mob_from(start, start, MapNumber(8));
     let actions = drive(mob, &behavior(1, 1, 10, 400, 1000), Some(target), grid, 15);
@@ -515,7 +516,7 @@ fn no_ordinary_step_caller_can_request_more_than_one_tile() {
         let bit = (10usize << 8) | usize::from(x);
         words[bit >> 6] |= 1u64 << (bit & 63);
     }
-    let grid = WalkGrid::from_words(words);
+    let grid = TerrainGrid::from_words(words);
     let start = Placement {
         position: TileCoord::new(10, 10).to_world(),
         facing: Facing::POS_X,
@@ -601,7 +602,7 @@ fn i9_flight_toggle_chain_on_ground_map() {
     );
 }
 
-fn first_walkable_tile(grid: &WalkGrid) -> Option<TileCoord> {
+fn first_walkable_tile(grid: &TerrainGrid) -> Option<TileCoord> {
     for y in 0u8..=255 {
         for x in 0u8..=255 {
             let tile = TileCoord::new(x, y);
@@ -616,7 +617,7 @@ fn first_walkable_tile(grid: &WalkGrid) -> Option<TileCoord> {
 /// A landing on Sky map 10: a real warp landing if one targets it, else a
 /// landing constructed over a discovered walkable tile. `None` only if the map
 /// carried no walkable tile at all.
-fn sky_landing(atlas: &Atlas, grid: &WalkGrid) -> Option<Landing> {
+fn sky_landing(atlas: &Atlas, grid: &TerrainGrid) -> Option<Landing> {
     if let Some(landing) = atlas
         .warps()
         .map(|warp| warp.landing)
@@ -640,7 +641,7 @@ fn i10_sky_map_forces_flight() {
     let atlas = real_atlas();
     let handle = atlas.map_handle(MapNumber(10)).unwrap();
     assert_eq!(handle.definition().environment, MapEnvironment::Sky);
-    let grid = handle.walk_grid();
+    let grid = handle.terrain_grid();
 
     // (a) Grounding is denied on a Sky map.
     let (mode, events) = change_flight(
@@ -690,7 +691,7 @@ fn i10_sky_map_forces_flight() {
     }
 }
 
-fn walkable_neighbor(grid: &WalkGrid, pos: WorldPos) -> Option<WorldPos> {
+fn walkable_neighbor(grid: &TerrainGrid, pos: WorldPos) -> Option<WorldPos> {
     let tile = TileCoord::from_world(pos);
     let (x, y) = (tile.x(), tile.y());
     let mut candidates = Vec::new();
@@ -714,13 +715,13 @@ fn walkable_neighbor(grid: &WalkGrid, pos: WorldPos) -> Option<WorldPos> {
 
 /// I11: the first Ground warp whose arrival tile has a walkable neighbour, with
 /// that landing, the resolved arrival, the neighbour, and the map's grid.
-fn ground_warp_arrival(atlas: &Atlas) -> Option<(Landing, Placement, WorldPos, &WalkGrid)> {
+fn ground_warp_arrival(atlas: &Atlas) -> Option<(Landing, Placement, WorldPos, &TerrainGrid)> {
     for warp in atlas.warps() {
         let handle = atlas.map_handle(warp.landing.map)?;
         if handle.definition().environment != MapEnvironment::Ground {
             continue;
         }
-        let grid = handle.walk_grid();
+        let grid = handle.terrain_grid();
         let mut rng = TestRng::new(7);
         let placement = match resolve_arrival(
             Facing::POS_X,

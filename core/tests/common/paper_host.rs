@@ -28,6 +28,7 @@ use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
 use mu_core::components::combat_profile::CombatTarget;
+use mu_core::components::drop_claim::PickerStanding;
 use mu_core::components::element::PerElement;
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
@@ -41,7 +42,7 @@ use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
-use mu_core::components::tile::{TileCoord, WalkGrid};
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{
     CarriedZen, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
@@ -53,7 +54,6 @@ use mu_core::data::gates_warps::WarpIndex;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
-use mu_core::data::option_roll::OptionRollPolicy;
 use mu_core::data::skills::{AreaDisplacement, AreaGeometry, DamageType, Skill};
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::character::Character;
@@ -67,6 +67,7 @@ use mu_core::events::consume::ConsumeEvent;
 use mu_core::events::craft::MixOutcome;
 use mu_core::events::death::{DeathEvent, Respawned};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
+use mu_core::events::ground::DespawnEvent;
 use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, RemoveOutcome};
 use mu_core::events::kill::KillResolution;
 use mu_core::events::monster_ai::MonsterIntent;
@@ -86,6 +87,9 @@ use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
 };
 use mu_core::services::experience::apply_experience;
+use mu_core::services::ground::{
+    DropOrigin, ItemStamp, ZenStamp, reap_ground, stamp_item, stamp_zen,
+};
 use mu_core::services::inventory::{
     PickupOutcome, PlaceIntent, Wearer, ZenPickupOutcome, equip, place_item, remove_item,
 };
@@ -108,7 +112,7 @@ use mu_core::services::travel::{resolve_warp, traverse_enter_gate, use_town_port
 use mu_core::services::wear::{WearEvent, resolve_strike_with_wear, wear_from_strike};
 
 pub use dataset::or_abort;
-use dataset::{real_atlas, real_static_data};
+use dataset::real_atlas;
 use rng::TestRng;
 
 /// The one owned world value: the held static [`Atlas`], one seeded stream, the
@@ -119,10 +123,6 @@ pub struct World {
     /// The static data index, rebuilt from source and held by value — the one
     /// carve-out from the persist seam (it never round-trips).
     atlas: Atlas,
-    /// The drop-time option-roll policy, loaded from `game_config` alongside the
-    /// atlas and held by value: it is static data the host loads (the atlas does
-    /// not retain it), so like the atlas it never round-trips.
-    drop_policy: OptionRollPolicy,
     /// The single seeded stream threaded through every randomised call.
     rng: TestRng,
     /// The current map; supplies the `map` of every ground drop the host lays.
@@ -204,24 +204,8 @@ impl World {
     /// seeded by `seed`, with every live set empty.
     #[must_use]
     pub fn new(seed: u64, map: MapNumber) -> Self {
-        // The parsed atlas keeps every cross-checked record but drops the
-        // drop-time option policy (it is not retained on the resolved index), so
-        // the policy is lifted from a raw dataset load — the one static value the
-        // atlas cannot supply. Both are static data the host loads once; neither
-        // round-trips.
-        let atlas = real_atlas();
-        let drop_policy = or_abort(
-            real_static_data()
-                .game_config
-                .records
-                .first()
-                .ok_or("empty game config"),
-        )
-        .option_roll
-        .clone();
         Self {
-            atlas,
-            drop_policy,
+            atlas: real_atlas(),
             rng: TestRng::new(seed),
             map,
             characters: Vec::new(),
@@ -296,6 +280,13 @@ impl World {
         or_abort(self.ground_zen.get(index).ok_or("no ground zen at index"))
     }
 
+    /// How many money piles lie on the ground — proves a reaped pile left the
+    /// set and a surviving one stayed.
+    #[must_use]
+    pub fn ground_zen_count(&self) -> usize {
+        self.ground_zen.len()
+    }
+
     /// The trade session at `index`.
     #[must_use]
     pub fn session(&self, index: usize) -> &TradeSession {
@@ -321,40 +312,82 @@ impl World {
         index
     }
 
-    /// Lays an item on the ground at `position` with despawn tick `despawn`,
-    /// synthesising its `map` from the world's current context (the ground-drop
-    /// map a host must supply), seats it through the persist seam, and returns
-    /// its index.
+    /// Stamps an item drop's lifecycle clocks by calling the core stamping
+    /// seam over the held atlas duration and the host cadence — the
+    /// appearance beat, the despawn tick, and the ownership window are all
+    /// core arithmetic, never re-derived here.
+    #[must_use]
+    pub fn stamp_item_drop(&self, origin: DropOrigin, drop_tick: Tick) -> ItemStamp {
+        stamp_item(
+            origin,
+            drop_tick,
+            self.atlas.item_drop_duration(),
+            host_tick(),
+        )
+    }
+
+    /// Stamps a zen pile's lifecycle clocks by calling the core stamping seam
+    /// — the [`Self::stamp_item_drop`] twin for money, which carries no claim.
+    #[must_use]
+    pub fn stamp_zen_drop(&self, origin: DropOrigin, drop_tick: Tick) -> ZenStamp {
+        stamp_zen(
+            origin,
+            drop_tick,
+            self.atlas.item_drop_duration(),
+            host_tick(),
+        )
+    }
+
+    /// Lays an item on the ground at `position` with the lifecycle clocks of
+    /// `stamp` — the core-computed despawn tick and ownership window —
+    /// synthesising its `map` from the world's current context (the
+    /// ground-drop map a host must supply), seats it through the persist
+    /// seam, and returns its index. The host seats a drop at its appearance
+    /// tick; before then there is nothing on the ground to pick.
     pub fn seat_ground_item(
         &mut self,
         instance: ItemInstance,
         position: WorldPos,
-        despawn: Tick,
+        stamp: ItemStamp,
     ) -> usize {
         let index = self.ground_items.len();
         let world_item = WorldItem {
             instance,
             position,
             map: self.map,
-            despawn,
+            despawn: stamp.despawn,
+            claim: stamp.claim,
         };
         self.ground_items.push(persist(world_item));
         index
     }
 
-    /// Lays a money pile on the ground at `position` with despawn tick
-    /// `despawn`, synthesising its `map` from the world's current context, seats
-    /// it through the persist seam, and returns its index.
-    pub fn seat_ground_zen(&mut self, amount: Zen, position: WorldPos, despawn: Tick) -> usize {
+    /// Lays a money pile on the ground at `position` with the lifecycle
+    /// clocks of `stamp`, synthesising its `map` from the world's current
+    /// context, seats it through the persist seam, and returns its index.
+    pub fn seat_ground_zen(&mut self, amount: Zen, position: WorldPos, stamp: ZenStamp) -> usize {
         let index = self.ground_zen.len();
         let world_zen = WorldZen {
             amount,
             position,
             map: self.map,
-            despawn,
+            despawn: stamp.despawn,
         };
         self.ground_zen.push(persist(world_zen));
         index
+    }
+
+    /// Advances the ground clock to `now`: hands both live ground sets to the
+    /// core despawn reaper, stores the survivors back through the persist
+    /// seam, and returns the despawn events for delivery. The flip rule lives
+    /// in core; this is a thin persist-and-deliver driver.
+    pub fn reap_ground(&mut self, now: Tick) -> Vec<DespawnEvent> {
+        let items = std::mem::take(&mut self.ground_items);
+        let zen = std::mem::take(&mut self.ground_zen);
+        let (items, zen, events) = reap_ground(items, zen, now);
+        self.ground_items = items.into_iter().map(persist).collect();
+        self.ground_zen = zen.into_iter().map(persist).collect();
+        events
     }
 
     /// Seats a trade session through the persist seam and returns its index.
@@ -440,14 +473,18 @@ impl World {
     }
 
     /// Resolves one spawn record for monster `number` on the world's current map
-    /// (seam 6): looks up the definition and the map's walk grid from the held
+    /// (seam 6): looks up the definition and the map's terrain grid from the held
     /// atlas, runs [`place_spawn`] over the world's stream, and hands the
     /// `SpawnResult` back for the scenario to seat and correlate. The returned
     /// aggregate's positional pairing to its event is the delivery key (V8) — the
     /// harness never invents an id.
     pub fn spawn_from(&mut self, number: MonsterNumber, placement: SpawnPlacement) -> SpawnResult {
         let def = or_abort(self.atlas.monster(number).ok_or("unknown monster number"));
-        let grid = or_abort(self.atlas.walk_grid(self.map).ok_or("no walk grid for map"));
+        let grid = or_abort(
+            self.atlas
+                .terrain_grid(self.map)
+                .ok_or("no terrain grid for map"),
+        );
         place_spawn(def, &placement, grid, self.map, &mut self.rng)
     }
 
@@ -481,8 +518,8 @@ impl World {
         };
         let grid = or_abort(
             self.atlas
-                .walk_grid(mob.placement.map)
-                .ok_or("no walk grid"),
+                .terrain_grid(mob.placement.map)
+                .ok_or("no terrain grid"),
         );
         let capability = mobility(&mob.active_effects);
         let tick = host_tick();
@@ -515,22 +552,23 @@ impl World {
 
     /// Materialises a `Drop::Item` as a ground item (seam 1, V1/V7): rolls the
     /// decided `{item, level, rarity}` into a full instance over the world's
-    /// stream and held policy, then lays it at `position` on the world's current
-    /// map with a host-chosen `despawn` tick — the position comes from the
-    /// victim's placement (available), the map from context (available), the
-    /// despawn from host policy (no core source — spec §5.2/V7). Returns the
-    /// ground index and the rolled instance for byte-identity checks.
+    /// stream and the atlas's option-roll policy, then lays it at `position` on
+    /// the world's current map with the lifecycle clocks of `stamp` — the
+    /// position comes from the victim's placement (available), the map from
+    /// context (available), the clocks from the core stamping seam
+    /// ([`Self::stamp_item_drop`]). Returns the ground index and the rolled
+    /// instance for byte-identity checks.
     pub fn drop_item_to_ground(
         &mut self,
         item: ItemRef,
         level: ItemLevel,
         rarity: ItemRarity,
         position: WorldPos,
-        despawn: Tick,
+        stamp: ItemStamp,
     ) -> (usize, ItemInstance) {
         let def = or_abort(self.atlas.item(item).ok_or("unknown dropped item"));
-        let rolled = roll_dropped_item(def, level, rarity, &self.drop_policy, &mut self.rng);
-        let index = self.seat_ground_item(rolled.clone(), position, despawn);
+        let rolled = roll_dropped_item(def, level, rarity, self.atlas.option_roll(), &mut self.rng);
+        let index = self.seat_ground_item(rolled.clone(), position, stamp);
         (index, rolled)
     }
 
@@ -562,23 +600,37 @@ impl World {
 
     /// Picks the ground item at `ground_index` into the bag of the character at
     /// `char_index` at `anchor` (seam 1, V2): the footprint is the host's atlas
-    /// lookup (I1), the reach gate is host-owned (V2). On `PickedUp` the world
-    /// item is consumed — removed from the ground set — and the new bag is
-    /// written back through the seam; on `Rejected` the ground set is untouched
-    /// and the untouched world item is reassembled in the outcome (move-only —
-    /// nothing double-credited). Returns the outcome.
+    /// lookup (I1); the picker's locus is read from its live placement; the
+    /// reach and claim-window gates are core's. `standing` is the host-resolved
+    /// kill-snapshot relation (a bare fact, never a verdict) and `now` is the
+    /// window clock. On `PickedUp` the world item is consumed — removed from
+    /// the ground set — and the new bag is written back through the seam; on
+    /// any refusal the ground set is untouched and the untouched world item
+    /// rides the outcome (move-only — nothing double-credited). Returns the
+    /// outcome.
     pub fn pickup(
         &mut self,
         char_index: usize,
         ground_index: usize,
         anchor: Cell,
+        standing: PickerStanding,
+        now: Tick,
     ) -> PickupOutcome {
         let world_item =
             or_abort(self.ground_items.get(ground_index).ok_or("no ground item")).clone();
         let footprint = footprint_of(&self.atlas, world_item.instance.item);
         let inventory = or_abort(self.inventories.get(char_index).ok_or("no bag")).clone();
-        let (new_inventory, outcome) =
-            mu_core::services::inventory::pickup(world_item, inventory, anchor, footprint);
+        let placement = self.character(char_index).placement();
+        let (new_inventory, outcome) = mu_core::services::inventory::pickup(
+            world_item,
+            inventory,
+            anchor,
+            footprint,
+            placement.position,
+            placement.map,
+            standing,
+            now,
+        );
         match &outcome {
             PickupOutcome::PickedUp { .. } => {
                 let persisted = persist(new_inventory);
@@ -586,7 +638,9 @@ impl World {
                 *slot = persisted;
                 self.ground_items.remove(ground_index);
             }
-            PickupOutcome::Rejected { .. } => {
+            PickupOutcome::Rejected { .. }
+            | PickupOutcome::OutOfReach { .. }
+            | PickupOutcome::Refused { .. } => {
                 // The bag is unchanged and the ground item stays put; the
                 // reassembled world item rides the outcome for the caller.
                 drop(new_inventory);
@@ -760,8 +814,8 @@ impl World {
             let caster_worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set"));
             let grid = or_abort(
                 self.atlas
-                    .walk_grid(caster.placement().map)
-                    .ok_or("no walk grid"),
+                    .terrain_grid(caster.placement().map)
+                    .ok_or("no terrain grid"),
             );
             cast(
                 caster,
@@ -1126,7 +1180,7 @@ impl World {
     }
 
     /// Steps the character at `char_index` one tile toward `target` (seam 4):
-    /// reads its placement, runs [`resolve_step`] over the map's walk grid from
+    /// reads its placement, runs [`resolve_step`] over the map's terrain grid from
     /// the held atlas at a one-tile speed, and on `Resolved` writes the new
     /// placement back *through* the persist seam by serde-editing the character's
     /// `placement` field. A `Blocked` step leaves the character put. Returns the
@@ -1134,7 +1188,11 @@ impl World {
     /// walkable run ([`walkable_run`]).
     pub fn step(&mut self, char_index: usize, target: WorldPos) -> StepOutcome {
         let placement = self.character(char_index).placement();
-        let grid = or_abort(self.atlas.walk_grid(placement.map).ok_or("no walk grid"));
+        let grid = or_abort(
+            self.atlas
+                .terrain_grid(placement.map)
+                .ok_or("no terrain grid"),
+        );
         let outcome = resolve_step(placement, target, ONE_TILE, grid);
         if let StepOutcome::Resolved { placement } = &outcome {
             let value = or_abort(serde_json::to_value(placement));
@@ -1386,21 +1444,29 @@ impl World {
 
     /// Picks the whole zen pile at `ground_zen_index` into the wallet of the
     /// character at `char_index` (seam 2, V1/V7, P3): reads the character's
-    /// wallet, runs [`pickup_zen`], and on `PickedUp` credits the returned
-    /// balance and consumes the pile from the ground set. On `OverCap` the wallet
-    /// and the untouched pile both stand — the over-cap pile is never clamped or
-    /// split, it stays whole on the ground. Returns the outcome.
+    /// wallet and its live placement (the picker locus the core reach gate
+    /// tests), runs [`pickup_zen`], and on `PickedUp` credits the returned
+    /// balance and consumes the pile from the ground set. On `OverCap` or
+    /// `OutOfReach` the wallet and the untouched pile both stand — the pile is
+    /// never clamped or split, it stays whole on the ground. Returns the
+    /// outcome.
     ///
     /// [`pickup_zen`]: mu_core::services::inventory::pickup_zen
     pub fn pickup_zen(&mut self, char_index: usize, ground_zen_index: usize) -> ZenPickupOutcome {
         let wallet = self.character(char_index).zen();
+        let placement = self.character(char_index).placement();
         let pile = or_abort(
             self.ground_zen
                 .get(ground_zen_index)
                 .ok_or("no ground zen at index"),
         )
         .clone();
-        let (balance, outcome) = mu_core::services::inventory::pickup_zen(pile, wallet);
+        let (balance, outcome) = mu_core::services::inventory::pickup_zen(
+            pile,
+            wallet,
+            placement.position,
+            placement.map,
+        );
         if let ZenPickupOutcome::PickedUp = &outcome {
             self.set_wallet(char_index, balance);
             self.ground_zen.remove(ground_zen_index);
@@ -1864,12 +1930,18 @@ impl World {
             .copied()
             .filter(|fact| fact.slot != killer)
             .collect();
+        let grid = or_abort(
+            self.atlas
+                .terrain_grid(killer_fact.map)
+                .ok_or("no terrain grid for the killer's map"),
+        );
         let awards = party::distribute_kill_experience(
             &party,
             killer_fact,
             &others,
             victim_level,
             &self.atlas,
+            grid,
             &mut self.rng,
         );
         awards
@@ -1915,6 +1987,11 @@ impl World {
             .enumerate()
             .filter_map(|(i, wallet)| (i != index).then_some(*wallet))
             .collect();
+        let grid = or_abort(
+            self.atlas
+                .terrain_grid(picker_fact.map)
+                .ok_or("no terrain grid for the picker's map"),
+        );
         let result = party::split_zen_pickup(
             pile,
             &party,
@@ -1922,6 +1999,7 @@ impl World {
             picker_wallet,
             &others,
             &other_wallets,
+            grid,
         );
         for credit in &result.credits {
             self.set_wallet(usize::from(credit.slot.0), credit.wallet);
@@ -2373,6 +2451,22 @@ pub fn wizardry_direct_skill(atlas: &Atlas) -> SkillNumber {
     )
 }
 
+/// The number of the first lightning-element wizardry direct hit — the
+/// jiggling bolt whose landed strike nudges its target within one tile per
+/// axis. Re-found from the catalog, never hard-coded.
+#[must_use]
+pub fn lightning_direct_skill(atlas: &Atlas) -> SkillNumber {
+    find_damaging_skill(
+        atlas,
+        |skill, reference| {
+            matches!(reference.shape(), DamagingSkill::DirectHit)
+                && skill.element == Some(mu_core::components::element::Element::Lightning)
+                && reference.damage_type() == DamageType::Wizardry
+        },
+        "the dataset has no lightning direct-hit skill",
+    )
+}
+
 /// The number of the first None-type damaging skill (record 50, the monster
 /// Flame of Evil) — the skill whose authored damage is discarded and whose cast
 /// lands the floor-times-multiplier scratch. Re-found from the catalog.
@@ -2578,20 +2672,20 @@ fn host_tick() -> TickDuration {
 }
 
 /// The first horizontal run of `length` consecutive walkable tiles on `map`,
-/// discovered by scanning the real walk grid in row-major order — the
+/// discovered by scanning the real terrain grid in row-major order — the
 /// walkable corridor a grounded character is stepped along, so no step is ever
 /// `Blocked` off the run. Returned as tile coordinates left-to-right; the caller
 /// walks from the first toward the last. Data-driven, never a hard-coded tile:
 /// the run is re-found from the shipped terrain on every run.
 #[must_use]
 pub fn walkable_run(atlas: &Atlas, map: MapNumber, length: usize) -> Vec<TileCoord> {
-    let grid = or_abort(atlas.walk_grid(map).ok_or("no walk grid for map"));
+    let grid = or_abort(atlas.terrain_grid(map).ok_or("no terrain grid for map"));
     or_abort(first_walkable_run(grid, length).ok_or("no walkable run of that length"))
 }
 
 /// Scans `grid` row by row for the first run of `length` consecutive walkable
 /// tiles, returning them left-to-right. `None` when no row carries such a run.
-fn first_walkable_run(grid: &WalkGrid, length: usize) -> Option<Vec<TileCoord>> {
+fn first_walkable_run(grid: &TerrainGrid, length: usize) -> Option<Vec<TileCoord>> {
     for y in 0u8..=u8::MAX {
         let mut run: Vec<TileCoord> = Vec::new();
         for x in 0u8..=u8::MAX {

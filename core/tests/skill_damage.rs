@@ -25,7 +25,7 @@ use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::Facing;
-use mu_core::components::tile::{TileCoord, WalkGrid};
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{Level, MapNumber, Resistance};
 use mu_core::data::skills::{DamageType, Skill};
 use mu_core::entities::character::Character;
@@ -114,8 +114,8 @@ fn seated_target(tile: (u8, u8), defense: u16) -> CombatTarget {
     )
 }
 
-fn all_walkable() -> WalkGrid {
-    WalkGrid::from_words([u64::MAX; 1024])
+fn all_walkable() -> TerrainGrid {
+    TerrainGrid::from_words([u64::MAX; 1024])
 }
 
 /// The damaging reference the router yields; a non-damaging skill aborts (this

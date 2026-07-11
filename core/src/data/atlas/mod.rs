@@ -13,7 +13,8 @@ mod views;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::components::spatial::WorldPos;
-use crate::components::tile::WalkGrid;
+use crate::components::tile::TerrainGrid;
+use crate::components::units::DurationMs;
 use crate::data::ancient_sets::{AncientRoster, AncientRosterError, AncientSet};
 use crate::data::box_drops::BoxDrop;
 use crate::data::chaos_mixes::ChaosMix;
@@ -27,6 +28,7 @@ use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::{MapDefinition, MapEnvironment};
 use crate::data::monster_definitions::MonsterDefinition;
 use crate::data::npc_shops::{MerchantShop, ShelfSlot};
+use crate::data::option_roll::OptionRollPolicy;
 use crate::data::skills::Skill;
 use crate::data::spawns::Spawn;
 use crate::data::special_drops::SpecialDropRecord;
@@ -40,8 +42,8 @@ pub use views::{
 
 use check::{
     check_ancient_sets, check_box_drops, check_chaos_mixes, check_classes, check_items,
-    check_monster_attacks, check_respawn_destinations, check_shops, check_special_drops,
-    check_summons,
+    check_monster_attacks, check_monster_dispositions, check_respawn_destinations, check_shops,
+    check_special_drops, check_summons,
 };
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
@@ -102,7 +104,7 @@ pub struct Atlas {
     warps: Vec<(Warp, Landing)>,
     fallback: ResolvedSpawnGate,
     fallback_env: MapEnvironment,
-    walk_grids: BTreeMap<MapNumber, WalkGrid>,
+    terrain_grids: BTreeMap<MapNumber, TerrainGrid>,
     items: BTreeMap<ItemRef, ItemDefinition>,
     monsters: BTreeMap<MonsterNumber, MonsterDefinition>,
     skills: BTreeMap<SkillNumber, Skill>,
@@ -111,6 +113,8 @@ pub struct Atlas {
     ancient_roster: AncientRoster,
     drop_config: DropConfig,
     progression: ProgressionConfig,
+    item_drop_duration: DurationMs,
+    option_roll: OptionRollPolicy,
     special_drops: Vec<SpecialDropRecord>,
     box_drops: Vec<BoxDrop>,
     drop_pool: DropPool,
@@ -144,6 +148,7 @@ impl Atlas {
 
         let spawns_by_map = resolve_spawns(data.spawns.records, &map_numbers, &monsters)?;
         check_monster_attacks(&monsters, &skills)?;
+        check_monster_dispositions(&monsters)?;
         check_summons(&skills, &monsters)?;
         check_items(&items, &skills, &monsters)?;
         check_ancient_sets(&data.ancient_sets.records, &items)?;
@@ -165,13 +170,16 @@ impl Atlas {
             .map_err(|found| AtlasError::GameConfigNotSingle { found })?;
         let progression = game_config.progression;
         let drop_config = game_config.drops;
+        let item_drop_duration = game_config.item_drop_duration_ms;
+        let option_roll = game_config.option_roll;
         let drop_pool = DropPool::build(items.values());
 
-        // Walk grids are built before the spawn-gate resolution so each respawn
-        // gate's walkable landing set resolves against its map's grid at parse.
-        let walk_grids = index_terrain(data.terrain, &map_numbers)?;
+        // Terrain grids are built before the spawn-gate resolution so each
+        // respawn gate's walkable landing set resolves against its map's grid
+        // at parse.
+        let terrain_grids = index_terrain(data.terrain, &map_numbers)?;
 
-        let respawn_gate_by_map = resolve_spawn_gates(gates.spawn_gates, &walk_grids)?;
+        let respawn_gate_by_map = resolve_spawn_gates(gates.spawn_gates, &terrain_grids)?;
         let fallback = respawn_gate_by_map
             .get(&FALLBACK_MAP)
             .cloned()
@@ -193,7 +201,7 @@ impl Atlas {
             warps,
             fallback,
             fallback_env,
-            walk_grids,
+            terrain_grids,
             items,
             monsters,
             skills,
@@ -202,6 +210,8 @@ impl Atlas {
             ancient_roster,
             drop_config,
             progression,
+            item_drop_duration,
+            option_roll,
             special_drops: data.special_drops.records,
             box_drops: data.box_drops.records,
             drop_pool,
@@ -216,16 +226,16 @@ impl Atlas {
     }
 
     /// A proven-present handle per map, ordered by number. Both `maps` and
-    /// `walk_grids` are keyed by the identical map-number set proven at parse,
-    /// so iterating them in lockstep pairs each definition with its own walk
-    /// grid — total, with no `Option` at any call site.
+    /// `terrain_grids` are keyed by the identical map-number set proven at
+    /// parse, so iterating them in lockstep pairs each definition with its own
+    /// terrain grid — total, with no `Option` at any call site.
     pub fn map_handles(&self) -> impl Iterator<Item = MapHandle<'_>> {
         self.maps
             .values()
-            .zip(self.walk_grids.values())
-            .map(move |(definition, walk_grid)| MapHandle {
+            .zip(self.terrain_grids.values())
+            .map(move |(definition, terrain)| MapHandle {
                 definition,
-                walk_grid,
+                terrain,
                 spawns: self.map_spawns(definition.number),
             })
     }
@@ -236,10 +246,10 @@ impl Atlas {
     #[must_use]
     pub fn map_handle(&self, map: MapNumber) -> Option<MapHandle<'_>> {
         let definition = self.maps.get(&map)?;
-        let walk_grid = self.walk_grids.get(&map)?;
+        let terrain = self.terrain_grids.get(&map)?;
         Some(MapHandle {
             definition,
-            walk_grid,
+            terrain,
             spawns: self.map_spawns(map),
         })
     }
@@ -310,12 +320,12 @@ impl Atlas {
         })
     }
 
-    /// The walk grid for a map; `None` when no record carries it — genuine
+    /// The terrain grid for a map; `None` when no record carries it — genuine
     /// optionality of an open `MapNumber` key. A number taken from a resolved
     /// edge (spawn, gate, landing, class home) is proven present by `parse`.
     #[must_use]
-    pub fn walk_grid(&self, map: MapNumber) -> Option<&WalkGrid> {
-        self.walk_grids.get(&map)
+    pub fn terrain_grid(&self, map: MapNumber) -> Option<&TerrainGrid> {
+        self.terrain_grids.get(&map)
     }
 
     /// The warp list in index order, each with its landing resolved at parse.
@@ -413,6 +423,20 @@ impl Atlas {
     #[must_use]
     pub fn progression(&self) -> ProgressionConfig {
         self.progression
+    }
+
+    /// The ground-drop despawn duration (authentic 60 s) — one clock for items
+    /// and zen alike.
+    #[must_use]
+    pub fn item_drop_duration(&self) -> DurationMs {
+        self.item_drop_duration
+    }
+
+    /// The drop-time option-roll policy — creation-time option chances and the
+    /// two per-drop caps.
+    #[must_use]
+    pub fn option_roll(&self) -> &OptionRollPolicy {
+        &self.option_roll
     }
 
     /// The special-drop records, in load order.
@@ -554,6 +578,12 @@ pub enum AtlasError {
         /// The unresolved skill.
         skill: SkillNumber,
     },
+    /// A fighting record's stored safezone disposition disagrees with the one
+    /// its role confers.
+    MonsterDispositionMismatch {
+        /// The monster carrying the inconsistent disposition.
+        monster: MonsterNumber,
+    },
     /// A record references an item with no record.
     UnknownItemRef {
         /// The unresolved item.
@@ -681,6 +711,12 @@ impl core::fmt::Display for AtlasError {
                 write!(f, "reference to unknown monster {monster:?}")
             }
             Self::UnknownSkillRef { skill } => write!(f, "reference to unknown skill {skill:?}"),
+            Self::MonsterDispositionMismatch { monster } => {
+                write!(
+                    f,
+                    "monster {monster:?} stores a safezone disposition its role does not confer"
+                )
+            }
             Self::UnknownItemRef { item } => write!(f, "reference to unknown item {item:?}"),
             Self::ShopForNonMerchant { npc } => {
                 write!(f, "shop record for non-merchant NPC {npc:?}")
@@ -753,6 +789,7 @@ impl core::error::Error for AtlasError {
             | Self::UnknownMapRef { .. }
             | Self::UnknownMonsterRef { .. }
             | Self::UnknownSkillRef { .. }
+            | Self::MonsterDispositionMismatch { .. }
             | Self::UnknownItemRef { .. }
             | Self::ShopForNonMerchant { .. }
             | Self::MerchantWithoutShop { .. }

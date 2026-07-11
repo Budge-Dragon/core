@@ -1,6 +1,6 @@
 //! Monster AI: the pure decision that turns a live mob plus its surroundings
 //! into one action per tick. It reads the mob's cadence clock and leash anchor,
-//! the target it may see, and the walk grid, and returns the advanced mob state
+//! the target it may see, and the terrain grid, and returns the advanced mob state
 //! together with the [`MonsterIntent`] it chose — state in, state out, no hidden
 //! mutation beyond the injected RNG.
 //!
@@ -9,15 +9,20 @@
 //! wedges chasing into a concave wall), attack a target in range, chase a target
 //! in view, then wander. Determinism: only the wander branch draws randomness —
 //! exactly one word (the drift heading) via [`crate::services::chance`].
+//!
+//! Safezones bound the decision: a target standing on a safe tile is no target
+//! for any role, and the behavior's [`SafezoneDisposition`] gates the rest — an
+//! `Excluded` mob never swings from a safe tile and never steps onto one, while
+//! a `Patrols` guard walks and fights across town freely.
 
 use rand_core::RngCore;
 
 use crate::components::movement::Mobility;
 use crate::components::placement::Placement;
 use crate::components::spatial::{Facing, Radius, StepMagnitude, WorldPos};
-use crate::components::tile::WalkGrid;
+use crate::components::tile::TerrainGrid;
 use crate::components::units::{Tick, TickDuration, Ticks};
-use crate::data::monster_definitions::MobBehavior;
+use crate::data::monster_definitions::{MobBehavior, SafezoneDisposition};
 use crate::entities::monster_instance::MonsterInstance;
 use crate::events::monster_ai::MonsterIntent;
 use crate::events::movement::StepOutcome;
@@ -75,6 +80,34 @@ fn step_speed(mobility: Mobility) -> Option<StepMagnitude> {
     }
 }
 
+/// Whether a mob standing at `pos` may swing. A guard (`Patrols`) attacks even
+/// from a safe tile; a basic mob or trap (`Excluded`) refuses to swing from
+/// one. Total over [`SafezoneDisposition`].
+fn attacks_from_here(disposition: SafezoneDisposition, pos: WorldPos, grid: &TerrainGrid) -> bool {
+    match disposition {
+        SafezoneDisposition::Patrols => true,
+        SafezoneDisposition::Excluded => !grid.safe(pos),
+    }
+}
+
+/// A movement step gated by disposition: an `Excluded` mob's step onto a safe
+/// tile is refused (`Blocked`) — it never walks into town; a `Patrols` guard
+/// steps freely. Total over `(StepOutcome, SafezoneDisposition)`.
+fn disposition_gated(
+    step: StepOutcome,
+    disposition: SafezoneDisposition,
+    grid: &TerrainGrid,
+) -> StepOutcome {
+    match (step, disposition) {
+        (StepOutcome::Resolved { placement }, SafezoneDisposition::Excluded)
+            if grid.safe(placement.position) =>
+        {
+            StepOutcome::Blocked
+        }
+        (step, SafezoneDisposition::Excluded | SafezoneDisposition::Patrols) => step,
+    }
+}
+
 /// Applies a resolved movement step and advances the cadence by `delay`. A
 /// blocked step leaves the placement unchanged but still reports the movement
 /// toward the mob's current position. Returns the new instance and the
@@ -95,7 +128,7 @@ fn advance_after_step(
 /// Decides one action for a mob and returns the advanced mob state with the
 /// chosen intent. The eight parameters are each a distinct domain input at the
 /// right layer — the mob and its behavior, the optional target, the clock and
-/// tick length, the walk grid, the movement capability, and the RNG — so none
+/// tick length, the terrain grid, the movement capability, and the RNG — so none
 /// can be dropped or bundled. `mobility` is supplied by the caller (derived from
 /// the mob's active effects via [`crate::services::effects::mobility`]) so this
 /// service stays effect-unaware: it only gates movement. An immobilized mob
@@ -108,7 +141,7 @@ pub fn decide_monster_action(
     target: Option<WorldPos>,
     now: Tick,
     tick: TickDuration,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     mobility: Mobility,
     rng: &mut impl RngCore,
 ) -> (MonsterInstance, MonsterIntent) {
@@ -117,6 +150,9 @@ pub fn decide_monster_action(
     }
 
     let pos = mob.placement.position;
+    // A safezone-stander is no target for any role: never selected, and a
+    // locked target is dropped the tick it steps onto a safe tile.
+    let target = target.filter(|&target| !grid.safe(target));
     let move_delay = behavior.move_delay_ms.in_ticks(tick);
     let speed = step_speed(mobility);
 
@@ -124,14 +160,20 @@ pub fn decide_monster_action(
     // still outranks aggro (an immobilized stray skips straight to combat).
     if let Some(speed) = speed {
         if !pos.within_range(mob.anchor, leash_radius(behavior)) {
-            let step = resolve_step(mob.placement, mob.anchor, speed, grid);
+            let step = disposition_gated(
+                resolve_step(mob.placement, mob.anchor, speed, grid),
+                behavior.disposition,
+                grid,
+            );
             let (instance, to, facing) = advance_after_step(mob, step, move_delay);
             return (instance, MonsterIntent::LeashReturn { to, facing });
         }
     }
 
     if let Some(target) = target {
-        if pos.within_range(target, Radius::from_tiles(behavior.attack_range)) {
+        if pos.within_range(target, Radius::from_tiles(behavior.attack_range))
+            && attacks_from_here(behavior.disposition, pos, grid)
+        {
             let facing = face_toward(pos, target, mob.placement.facing);
             let placement = Placement {
                 facing,
@@ -143,7 +185,11 @@ pub fn decide_monster_action(
         }
         if let Some(speed) = speed {
             if pos.within_range(target, Radius::from_tiles(behavior.view_range)) {
-                let step = resolve_step(mob.placement, target, speed, grid);
+                let step = disposition_gated(
+                    resolve_step(mob.placement, target, speed, grid),
+                    behavior.disposition,
+                    grid,
+                );
                 let (instance, to, facing) = advance_after_step(mob, step, move_delay);
                 return (instance, MonsterIntent::Chase { to, facing });
             }
@@ -154,7 +200,11 @@ pub fn decide_monster_action(
     match speed {
         Some(speed) if behavior.move_range > 0 => {
             let drift = draw_cardinal(rng);
-            let step = resolve_drift(mob.placement, drift, speed, grid);
+            let step = disposition_gated(
+                resolve_drift(mob.placement, drift, speed, grid),
+                behavior.disposition,
+                grid,
+            );
             let (instance, to, facing) = advance_after_step(mob, step, move_delay);
             (instance, MonsterIntent::Wander { to, facing })
         }
@@ -210,15 +260,44 @@ mod tests {
         }
     }
 
-    fn all_walkable() -> WalkGrid {
-        WalkGrid::from_words([u64::MAX; 1024])
+    fn all_walkable() -> TerrainGrid {
+        TerrainGrid::from_words([u64::MAX; 1024])
+    }
+
+    fn safe_bit(words: &mut [u64; 1024], tile: (u8, u8)) {
+        let bit = (usize::from(tile.1) << 8) | usize::from(tile.0);
+        words[bit >> 6] |= 1u64 << (bit & 63);
+    }
+
+    /// All tiles walkable; exactly `tiles` are safe.
+    fn grid_safe_at(tiles: &[(u8, u8)]) -> TerrainGrid {
+        let mut safe = [0u64; 1024];
+        for &tile in tiles {
+            safe_bit(&mut safe, tile);
+        }
+        TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
+    }
+
+    /// All tiles walkable and safe except `tiles`.
+    fn grid_safe_except(tiles: &[(u8, u8)]) -> TerrainGrid {
+        let mut safe = [u64::MAX; 1024];
+        for &tile in tiles {
+            let bit = (usize::from(tile.1) << 8) | usize::from(tile.0);
+            safe[bit >> 6] &= !(1u64 << (bit & 63));
+        }
+        TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
     }
 
     fn tick50() -> TickDuration {
         TickDuration::new(50).unwrap()
     }
 
-    fn behavior(move_range: u8, attack_range: u8, view_range: u8) -> MobBehavior {
+    fn behavior_of(
+        move_range: u8,
+        attack_range: u8,
+        view_range: u8,
+        disposition: SafezoneDisposition,
+    ) -> MobBehavior {
         MobBehavior {
             move_range,
             attack_range,
@@ -226,7 +305,26 @@ mod tests {
             move_delay_ms: DurationMs(400),
             attack_delay_ms: DurationMs(1000),
             respawn_ms: DurationMs(0),
+            disposition,
         }
+    }
+
+    fn behavior(move_range: u8, attack_range: u8, view_range: u8) -> MobBehavior {
+        behavior_of(
+            move_range,
+            attack_range,
+            view_range,
+            SafezoneDisposition::Excluded,
+        )
+    }
+
+    fn guard_behavior(move_range: u8, attack_range: u8, view_range: u8) -> MobBehavior {
+        behavior_of(
+            move_range,
+            attack_range,
+            view_range,
+            SafezoneDisposition::Patrols,
+        )
     }
 
     fn mob_at(tile: (u8, u8), anchor: (u8, u8), next_action: Tick) -> MonsterInstance {
@@ -467,5 +565,189 @@ mod tests {
             )
         };
         assert_eq!(decide(9), decide(9));
+    }
+
+    #[test]
+    fn no_role_targets_a_safezone_stander() {
+        // MAI-1 (universal): the adjacent target stands on a safe tile, so
+        // neither an excluded mob nor a patrolling guard attacks or chases it —
+        // with no territory to wander, each idles as if there were no target.
+        let grid = grid_safe_at(&[(11, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(11, 10).to_world();
+        for behavior in [behavior(0, 2, 5), guard_behavior(0, 2, 5)] {
+            let mut rng = TestRng::new(1);
+            let (after, intent) = decide_monster_action(
+                &mob,
+                &behavior,
+                Some(target),
+                Tick(0),
+                tick50(),
+                &grid,
+                Mobility::Free,
+                &mut rng,
+            );
+            assert_eq!(intent, MonsterIntent::Idle);
+            assert_eq!(after.placement.position, mob.placement.position);
+        }
+    }
+
+    #[test]
+    fn a_locked_target_that_entered_a_safezone_is_dropped() {
+        // MAI-2: the target sits in chase geometry (out of attack reach, in
+        // view) but on a safe tile — the same per-tick test as never-selecting,
+        // so the mob neither chases nor attacks and falls back to wandering.
+        let grid = grid_safe_at(&[(13, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(13, 10).to_world();
+        let mut rng = TestRng::new(1);
+        let (_, intent) = decide_monster_action(
+            &mob,
+            &behavior(1, 1, 8),
+            Some(target),
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert!(!matches!(
+            intent,
+            MonsterIntent::Attack { .. } | MonsterIntent::Chase { .. }
+        ));
+    }
+
+    #[test]
+    fn an_excluded_mob_on_a_safe_tile_does_not_attack() {
+        // MAI-3: the mob's own tile is safe and the in-range target is not —
+        // an excluded mob refuses to swing from a safezone and chases off the
+        // tile instead.
+        let grid = grid_safe_at(&[(10, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(11, 10).to_world();
+        let mut rng = TestRng::new(1);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &behavior(1, 2, 8),
+            Some(target),
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert!(!matches!(intent, MonsterIntent::Attack { .. }));
+        assert!(matches!(intent, MonsterIntent::Chase { .. }));
+        assert_eq!(after.placement.position, target);
+    }
+
+    #[test]
+    fn a_guard_on_a_safe_tile_still_attacks() {
+        // MAI-6: the same geometry as the excluded refusal, but a patrolling
+        // guard swings from a safe town tile.
+        let grid = grid_safe_at(&[(10, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(11, 10).to_world();
+        let mut rng = TestRng::new(1);
+        let (_, intent) = decide_monster_action(
+            &mob,
+            &guard_behavior(1, 2, 8),
+            Some(target),
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert_eq!(intent, MonsterIntent::Attack { target });
+    }
+
+    #[test]
+    fn an_excluded_chase_step_onto_a_safe_tile_is_refused() {
+        // MAI-4: every tile between the mob and its target is safe, so the
+        // chase step is blocked at the safezone line and the mob stays put.
+        let grid = grid_safe_except(&[(10, 10), (13, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let target = TileCoord::new(13, 10).to_world();
+        let mut rng = TestRng::new(1);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &behavior(1, 1, 8),
+            Some(target),
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert!(matches!(intent, MonsterIntent::Chase { .. }));
+        assert_eq!(after.placement.position, mob.placement.position);
+    }
+
+    #[test]
+    fn an_excluded_wander_onto_safe_tiles_stays_put_but_draws_its_word() {
+        // MAI-4 (wander): every neighbouring tile is safe, so whatever heading
+        // the one drift word picks, the step is refused and the mob holds.
+        let grid = grid_safe_except(&[(10, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let mut rng = TestRng::new(5);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &behavior(3, 1, 5),
+            None,
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert!(matches!(intent, MonsterIntent::Wander { .. }));
+        assert_eq!(after.placement.position, mob.placement.position);
+        let mut probe = TestRng::new(5);
+        probe.next_u64();
+        assert_eq!(rng.next_u64(), probe.next_u64());
+    }
+
+    #[test]
+    fn an_excluded_leash_return_stops_at_the_safe_line() {
+        // MAI-4 (leash): the stray's whole way home is safe tiles, so the
+        // return step is refused and the mob holds at the line.
+        let grid = grid_safe_except(&[(20, 10)]);
+        let mob = mob_at((20, 10), (10, 10), Tick(0));
+        let mut rng = TestRng::new(1);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &behavior(3, 1, 3),
+            None,
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert!(matches!(intent, MonsterIntent::LeashReturn { .. }));
+        assert_eq!(after.placement.position, mob.placement.position);
+    }
+
+    #[test]
+    fn a_guard_patrols_onto_safe_tiles_freely() {
+        // MAI-5: the same all-safe surroundings that pin an excluded mob leave
+        // a guard free — its patrol step resolves onto a safe tile.
+        let grid = grid_safe_except(&[(10, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let mut rng = TestRng::new(5);
+        let (after, intent) = decide_monster_action(
+            &mob,
+            &guard_behavior(3, 1, 5),
+            None,
+            Tick(0),
+            tick50(),
+            &grid,
+            Mobility::Free,
+            &mut rng,
+        );
+        assert!(matches!(intent, MonsterIntent::Wander { .. }));
+        assert_ne!(after.placement.position, mob.placement.position);
+        assert!(grid.safe(after.placement.position));
     }
 }

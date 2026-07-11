@@ -1,7 +1,9 @@
 //! The party zen split over the real wallet cap: the equal division with the
 //! remainder to the picker, an at-cap member's share grounding as a fresh pile
 //! (conserved against the real 2,000,000,000 cap), the shared qualification
-//! exclusions, and the untouched solo `pickup_zen` path beside it.
+//! exclusions (including the safezone fifth term and its all-in-town
+//! picker-keeps-the-pile fallback), and the untouched solo `pickup_zen` path
+//! beside it.
 //!
 //! Load failures route through `or_abort`; every assertion is a `#[test]` body.
 
@@ -10,7 +12,7 @@ mod dataset;
 
 use mu_core::components::party::{MemberSlot, Membership, Vitality};
 use mu_core::components::spatial::WorldPos;
-use mu_core::components::tile::TileCoord;
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{CarriedZen, Exp, Level, MapNumber, Tick, Zen};
 use mu_core::entities::party_session::{PartyMember, PartySession};
 use mu_core::entities::world_zen::WorldZen;
@@ -21,6 +23,22 @@ use dataset::{or_abort, real_atlas};
 
 fn pos(x: u8, y: u8) -> WorldPos {
     TileCoord::new(x, y).to_world()
+}
+
+/// A fully walkable, nowhere-safe grid — the open field.
+fn all_unsafe() -> TerrainGrid {
+    TerrainGrid::from_words([u64::MAX; 1024])
+}
+
+/// A fully walkable grid whose safe set is exactly the listed tiles.
+fn safe_at(tiles: &[(u8, u8)]) -> TerrainGrid {
+    let mut safe = [0u64; 1024];
+    for &(x, y) in tiles {
+        let bit = (usize::from(y) << 8) | usize::from(x);
+        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        *word |= 1u64 << (bit & 63);
+    }
+    TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
 }
 
 fn map0() -> MapNumber {
@@ -88,6 +106,7 @@ fn a_real_hundred_thousand_pile_splits_equally_with_the_remainder_to_the_picker(
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     assert!(result.to_ground.is_empty());
     let credited: Vec<(u8, u64)> = result
@@ -121,6 +140,7 @@ fn an_at_cap_wallet_grounds_its_share_and_conservation_holds_against_the_real_ca
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     assert_eq!(result.to_ground.len(), 1);
     let grounded = or_abort(result.to_ground.first().ok_or("one grounded pile"));
@@ -153,6 +173,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     let credited: Vec<(u8, u64)> = result
         .credits
@@ -172,6 +193,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     assert_eq!(result.credits.len(), 2);
     assert!(result.credits.iter().all(|c| c.slot != MemberSlot(2)));
@@ -187,6 +209,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     assert_eq!(result.credits.len(), 2);
 
@@ -200,6 +223,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     assert_eq!(result.credits.len(), 3);
 }
@@ -223,6 +247,7 @@ fn the_picker_always_qualifies_so_the_divisor_is_never_zero_and_the_pile_is_neve
         picker_wallet.wallet,
         others,
         other_wallets,
+        &all_unsafe(),
     );
     assert!(result.to_ground.is_empty());
     assert_eq!(result.credits.len(), 1);
@@ -230,15 +255,88 @@ fn the_picker_always_qualifies_so_the_divisor_is_never_zero_and_the_pile_is_neve
 }
 
 #[test]
+fn a_safezone_standing_member_is_not_counted_in_the_divisor() {
+    let _atlas = real_atlas();
+    let mut facts = [fact(0), fact(1), fact(2)];
+    facts[2].position = pos(5, 0);
+    let slot_wallets = wallets([0, 0, 0]);
+    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker_wallet, other_wallets) =
+        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+
+    // The same locus splits three ways over an all-unsafe grid — the exclusion
+    // below is the fifth term, not reach.
+    let result = split_zen_pickup(
+        &pile(90_000),
+        &trio(),
+        *picker,
+        picker_wallet.wallet,
+        others,
+        other_wallets,
+        &all_unsafe(),
+    );
+    assert_eq!(result.credits.len(), 3);
+
+    // Divisor 2 with the town-stander excluded; every coin still accounted for.
+    let result = split_zen_pickup(
+        &pile(90_000),
+        &trio(),
+        *picker,
+        picker_wallet.wallet,
+        others,
+        other_wallets,
+        &safe_at(&[(5, 0)]),
+    );
+    let credited: Vec<(u8, u64)> = result
+        .credits
+        .iter()
+        .map(|c| (c.slot.0, c.wallet.get()))
+        .collect();
+    assert_eq!(credited, vec![(0, 45_000), (1, 45_000)]);
+    assert!(result.to_ground.is_empty());
+}
+
+#[test]
+fn an_all_in_safezone_party_credits_the_picker_the_whole_pile() {
+    let _atlas = real_atlas();
+    // The picker AND every other member stand on safe tiles; the picker is
+    // seeded unconditionally, so it keeps the entire pile — nothing lost.
+    let mut facts = [fact(0), fact(1), fact(2)];
+    facts[0].position = pos(5, 0);
+    facts[1].position = pos(6, 0);
+    facts[2].position = pos(7, 0);
+    let slot_wallets = wallets([0, 0, 0]);
+    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker_wallet, other_wallets) =
+        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+    let result = split_zen_pickup(
+        &pile(70_000),
+        &trio(),
+        *picker,
+        picker_wallet.wallet,
+        others,
+        other_wallets,
+        &safe_at(&[(5, 0), (6, 0), (7, 0)]),
+    );
+    assert!(result.to_ground.is_empty());
+    let credited: Vec<(u8, u64)> = result
+        .credits
+        .iter()
+        .map(|c| (c.slot.0, c.wallet.get()))
+        .collect();
+    assert_eq!(credited, vec![(0, 70_000)]);
+}
+
+#[test]
 fn a_solo_picker_still_uses_pickup_zen_untouched() {
     let _atlas = real_atlas();
-    // The solo path merges the whole pile.
-    let (balance, outcome) = pickup_zen(pile(40_000), wallet(250_000));
+    // The solo path merges the whole pile — the picker stands in reach.
+    let (balance, outcome) = pickup_zen(pile(40_000), wallet(250_000), pos(0, 0), map0());
     assert_eq!(balance, wallet(290_000));
     assert_eq!(outcome, ZenPickupOutcome::PickedUp);
 
     // Over-cap hands the pile back whole — the solo path is unchanged by W-PARTY.
-    let (balance, outcome) = pickup_zen(pile(2), wallet(1_999_999_999));
+    let (balance, outcome) = pickup_zen(pile(2), wallet(1_999_999_999), pos(0, 0), map0());
     assert_eq!(balance, wallet(1_999_999_999));
     assert_eq!(outcome, ZenPickupOutcome::OverCap { world_zen: pile(2) });
 }

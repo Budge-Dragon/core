@@ -168,7 +168,11 @@ fn assert_seated(atlas: &Atlas, landing: &Landing, placement: Placement) {
         landing.area.contains(placement.position),
         "the arrival tile sits inside the target gate area"
     );
-    let grid = or_abort(atlas.walk_grid(placement.map).ok_or("map has a walk grid"));
+    let grid = or_abort(
+        atlas
+            .terrain_grid(placement.map)
+            .ok_or("map has a terrain grid"),
+    );
     assert!(
         grid.walkable(placement.position),
         "the arrival tile is walkable"
@@ -204,7 +208,11 @@ fn synthetic_view(warp: &Warp, map: u8, area: (u8, u8, u8, u8)) -> WarpView<'_> 
 
 /// The first walkable tile on `map`, scanned row-major from the real grid.
 fn first_walkable_tile(atlas: &Atlas, map: u8) -> (u8, u8) {
-    let grid = or_abort(atlas.walk_grid(MapNumber(map)).ok_or("map has a walk grid"));
+    let grid = or_abort(
+        atlas
+            .terrain_grid(MapNumber(map))
+            .ok_or("map has a terrain grid"),
+    );
     for y in 0u8..=u8::MAX {
         for x in 0u8..=u8::MAX {
             if grid.walkable(TileCoord::new(x, y).to_world()) {
@@ -1222,8 +1230,8 @@ fn the_town_gate_arrival_is_total_for_every_real_map_and_the_fallback() {
             TownPortalOutcome::Arrived { placement } => {
                 let grid = or_abort(
                     atlas
-                        .walk_grid(placement.map)
-                        .ok_or("the town map has a walk grid"),
+                        .terrain_grid(placement.map)
+                        .ok_or("the town map has a terrain grid"),
                 );
                 assert!(grid.walkable(placement.position), "map {map}");
                 assert_eq!(landed.placement(), placement);

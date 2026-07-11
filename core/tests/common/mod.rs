@@ -23,7 +23,7 @@ pub mod rng;
 use std::collections::BTreeMap;
 
 use mu_core::components::spatial::StepMagnitude;
-use mu_core::components::tile::WalkGrid;
+use mu_core::components::tile::TerrainGrid;
 use mu_core::components::units::{Tick, TickDuration};
 use mu_core::data::atlas::{Atlas, MapHandle};
 use mu_core::data::common::MonsterNumber;
@@ -94,10 +94,10 @@ pub struct Frame {
     pub anchor_walkable: bool,
 }
 
-/// One live map in the ambient simulation: its walk grid and its ordered set of
+/// One live map in the ambient simulation: its terrain grid and its ordered set of
 /// live mobs, each paired with the behavior the host joined to it.
 struct LiveMap {
-    grid: WalkGrid,
+    grid: TerrainGrid,
     mobs: Vec<(MonsterInstance, MobBehavior)>,
 }
 
@@ -127,7 +127,7 @@ pub fn simulate(
             }
         }
         live.push(LiveMap {
-            grid: handle.walk_grid().clone(),
+            grid: handle.terrain_grid().clone(),
             mobs,
         });
     }

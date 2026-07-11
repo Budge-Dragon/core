@@ -9,6 +9,7 @@ pub mod consume;
 pub mod craft;
 pub mod death;
 pub mod effect;
+pub mod ground;
 pub mod inventory;
 pub mod kill;
 pub mod loot;

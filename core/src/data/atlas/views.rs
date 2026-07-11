@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use crate::components::collections::OneOrMore;
 use crate::components::levels::EnhanceLevel;
 use crate::components::spatial::{Facing, WorldPos, WorldRect};
-use crate::components::tile::{TileFacing, WalkGrid};
+use crate::components::tile::{TerrainGrid, TileFacing};
 use crate::components::units::{Percent, Zen};
 use crate::data::chaos_mixes::{ItemAtLevel, ItemLevelWindow, UpgradeTarget, WingEconomics};
 use crate::data::common::{ItemRef, MapNumber};
@@ -325,14 +325,14 @@ impl<'a> ShopView<'a> {
     }
 }
 
-/// A proven-present view of one map: its definition, its walk grid, and its
+/// A proven-present view of one map: its definition, its terrain grid, and its
 /// spawns joined to their monster definitions. Minted only by the [`Atlas`](super::Atlas)
 /// from resolved state — there is no public fabricating constructor — so its
-/// walk grid and spawns are total, never `Option`.
+/// terrain grid and spawns are total, never `Option`.
 #[derive(Debug, Clone, Copy)]
 pub struct MapHandle<'a> {
     pub(super) definition: &'a MapDefinition,
-    pub(super) walk_grid: &'a WalkGrid,
+    pub(super) terrain: &'a TerrainGrid,
     pub(super) spawns: &'a [ResolvedSpawn],
 }
 
@@ -343,10 +343,10 @@ impl<'a> MapHandle<'a> {
         self.definition
     }
 
-    /// The map's walk grid. Total — presence was proven at parse.
+    /// The map's terrain grid. Total — presence was proven at parse.
     #[must_use]
-    pub fn walk_grid(&self) -> &'a WalkGrid {
-        self.walk_grid
+    pub fn terrain_grid(&self) -> &'a TerrainGrid {
+        self.terrain
     }
 
     /// The map's spawn entries, each already joined to its monster definition.

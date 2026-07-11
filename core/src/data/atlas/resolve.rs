@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::spatial::WorldPos;
-use crate::components::tile::{TileFacing, WalkGrid};
+use crate::components::tile::{TerrainGrid, TileFacing};
 use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe, UpgradeTarget};
 use crate::data::common::{GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::gates_warps::{EnterGate, GateWarpRecord, SpawnGate, TargetGate, Warp};
@@ -221,19 +221,20 @@ pub(super) fn require_map(
     }
 }
 
-/// Parses each terrain sidecar into a [`WalkGrid`] and proves a bijection with
+/// Parses each terrain sidecar into a [`TerrainGrid`] — both bitsets, walk and
+/// safe, folded from the raw attribute bytes — and proves a bijection with
 /// the map set: every terrain names a known map, no two share a map, and every
 /// map carries exactly one terrain — so the resulting per-map lookup is complete.
 pub(super) fn index_terrain(
     terrain: Vec<MapTerrain>,
     map_numbers: &BTreeSet<MapNumber>,
-) -> Result<BTreeMap<MapNumber, WalkGrid>, AtlasError> {
-    let mut grids: BTreeMap<MapNumber, WalkGrid> = BTreeMap::new();
+) -> Result<BTreeMap<MapNumber, TerrainGrid>, AtlasError> {
+    let mut grids: BTreeMap<MapNumber, TerrainGrid> = BTreeMap::new();
     for entry in terrain {
         if !map_numbers.contains(&entry.map) {
             return Err(AtlasError::TerrainForUnknownMap { map: entry.map });
         }
-        let grid = WalkGrid::from_terrain(entry.bytes.as_array());
+        let grid = TerrainGrid::from_terrain(entry.bytes.as_array());
         if grids.insert(entry.map, grid).is_some() {
             return Err(AtlasError::DuplicateTerrain { map: entry.map });
         }
@@ -337,7 +338,7 @@ pub(super) fn resolve_spawns(
 /// walkability is not this invariant's concern.
 pub(super) fn resolve_spawn_gates(
     spawn_gates: Vec<SpawnGate>,
-    walk_grids: &BTreeMap<MapNumber, WalkGrid>,
+    terrain_grids: &BTreeMap<MapNumber, TerrainGrid>,
 ) -> Result<BTreeMap<MapNumber, ResolvedSpawnGate>, AtlasError> {
     let mut first_by_map: BTreeMap<MapNumber, SpawnGate> = BTreeMap::new();
     for gate in spawn_gates {
@@ -349,7 +350,7 @@ pub(super) fn resolve_spawn_gates(
         // The grid is present — `check_maps` proved `gate.map` is a known map and
         // `index_terrain` proved every map carries one — so the absent branch is
         // unreachable; it folds to the empty-landing error, never a fabricated grid.
-        let cells: Vec<WorldPos> = match walk_grids.get(&map) {
+        let cells: Vec<WorldPos> = match terrain_grids.get(&map) {
             Some(grid) => grid.walkable_positions_in(gate.area.to_world()).collect(),
             None => Vec::new(),
         };

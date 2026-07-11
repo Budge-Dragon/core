@@ -37,6 +37,9 @@ pub enum SkillOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CastRejection {
+    /// The caster stood on a safe town tile — offensive casting is forbidden
+    /// there. Checked first, before any spend or aim gate.
+    CasterInSafezone,
     /// The caster lacked the mana the skill costs.
     InsufficientMana,
     /// The caster lacked the ability (AG) the skill costs.
@@ -142,6 +145,14 @@ mod tests {
             SkillOutcome::Rejected {
                 reason: CastRejection::NoTargetsInRegion
             }
+        );
+        assert_eq!(
+            serde_json::to_string(&CastRejection::CasterInSafezone).unwrap(),
+            r#""caster_in_safezone""#
+        );
+        assert_eq!(
+            serde_json::from_str::<CastRejection>(r#""caster_in_safezone""#).unwrap(),
+            CastRejection::CasterInSafezone
         );
     }
 

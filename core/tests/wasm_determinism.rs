@@ -282,7 +282,7 @@ use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
 use mu_core::components::spatial::{Facing, Fixed, TileDelta, TileOffset, WorldVec};
-use mu_core::components::tile::{TileCoord, WalkGrid};
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::MapNumber;
 use mu_core::data::skills::Skill;
 use mu_core::entities::character::Character;
@@ -437,8 +437,8 @@ fn fixed_lunge() -> Skill {
     })))
 }
 
-fn open_ground() -> WalkGrid {
-    WalkGrid::from_words([u64::MAX; 1024])
+fn open_ground() -> TerrainGrid {
+    TerrainGrid::from_words([u64::MAX; 1024])
 }
 
 #[test]
@@ -500,4 +500,254 @@ fn a_fixed_lunge_cast_serializes_identically_across_targets() {
         or_abort(serde_json::to_string(&outcome)),
         r#"{"kind":"cast","caster_placement":{"position":{"x":819200,"y":688128},"facing":{"x":131072,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":89,"quality":"normal","modifiers":[]},"health":{"current":99911,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":753664,"y":622592},"facing":{"x":-65536,"y":-65536},"movement":"grounded","map":0}}]}"#
     );
+}
+
+// --- W-GROUND: the RNG-free ground lifecycle, pickup gates, firewall, and ---
+// --- party fifth term reproduce byte-identically across targets (DET-2). ---
+
+use mu_core::components::drop_claim::{DropClaim, PickerStanding};
+use mu_core::components::inventory::{Cell, Footprint, Inventory};
+use mu_core::components::item_instance::{
+    CraftedAugment, Durability, ItemInstance, LuckRoll, RarityRoll, SkillRoll,
+};
+use mu_core::components::party::{MemberSlot, Membership, Vitality};
+use mu_core::components::units::{CarriedZen, DurationMs, Exp, Level, Tick, TickDuration, Zen};
+use mu_core::entities::party_session::{PartyMember, PartySession};
+use mu_core::entities::world_item::WorldItem;
+use mu_core::entities::world_zen::WorldZen;
+use mu_core::services::ground::{DropOrigin, reap_ground, stamp_item, stamp_zen};
+use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome, pickup, pickup_zen};
+use mu_core::services::party::{MemberFact, SlotWallet, split_zen_pickup};
+
+/// A fully walkable grid whose safe set is exactly the listed tiles — the
+/// pocket the firewall and fifth-term pins stand a subject on.
+fn safe_pocket(tiles: &[(u8, u8)]) -> TerrainGrid {
+    let mut safe = [0u64; 1024];
+    for &(x, y) in tiles {
+        let bit = (usize::from(y) << 8) | usize::from(x);
+        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        *word |= 1u64 << (bit & 63);
+    }
+    TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
+}
+
+/// A hand-pinned sword instance — the ground item the lifecycle pins carry.
+fn fixed_instance() -> ItemInstance {
+    ItemInstance {
+        item: ItemRef {
+            group: 0,
+            number: 3,
+        },
+        level: ItemLevel::ZERO,
+        roll: RarityRoll::Normal,
+        normal_option: None,
+        luck: LuckRoll::Plain,
+        skill: SkillRoll::NoSkill,
+        durability: Durability::full(30),
+        augment: CraftedAugment::None,
+    }
+}
+
+#[test]
+fn fixed_ground_stamps_and_the_reaper_are_identical_across_targets() {
+    // A monster kill at tick 100 on the 50 ms cadence with the authentic
+    // 60 s duration: appearance 120 (the 1 s beat), despawn 1320, the claim
+    // window closing at 320 — pure integer arithmetic, no draw.
+    let tick = or_abort(TickDuration::new(50));
+    let stamp = stamp_item(DropOrigin::MonsterKill, Tick(100), DurationMs(60_000), tick);
+    assert_eq!(stamp.appearance, Tick(120));
+    assert_eq!(stamp.despawn, Tick(1320));
+    assert_eq!(stamp.claim, DropClaim::Claimed { until: Tick(320) });
+    let zen_stamp = stamp_zen(DropOrigin::MonsterKill, Tick(100), DurationMs(60_000), tick);
+    assert_eq!(zen_stamp.despawn, stamp.despawn);
+
+    let position = TileCoord::new(10, 10).to_world();
+    let item = WorldItem {
+        instance: fixed_instance(),
+        position,
+        map: MapNumber(0),
+        despawn: stamp.despawn,
+        claim: stamp.claim,
+    };
+    let pile = WorldZen {
+        amount: Zen(40_000),
+        position,
+        map: MapNumber(0),
+        despawn: zen_stamp.despawn,
+    };
+
+    let (kept_items, kept_zen, events) =
+        reap_ground(vec![item.clone()], vec![pile.clone()], Tick(1319));
+    assert_eq!(kept_items, vec![item.clone()]);
+    assert_eq!(kept_zen, vec![pile.clone()]);
+    assert!(events.is_empty());
+
+    let (gone_items, gone_zen, events) = reap_ground(vec![item], vec![pile], Tick(1320));
+    assert!(gone_items.is_empty());
+    assert!(gone_zen.is_empty());
+    assert_eq!(
+        or_abort(serde_json::to_string(&events)),
+        r#"[{"kind":"item_despawned","position":{"x":688128,"y":688128},"map":0,"item":{"group":0,"number":3}},{"kind":"zen_despawned","position":{"x":688128,"y":688128},"map":0,"amount":40000}]"#
+    );
+}
+
+#[test]
+fn fixed_pickup_gates_are_identical_across_targets() {
+    // The reach gate, the claim window, and the store step — all RNG-free.
+    let footprint = or_abort(Footprint::new(1, 3));
+    let anchor = Cell { row: 0, col: 0 };
+    let item_pos = TileCoord::new(10, 10).to_world();
+    let ground = WorldItem {
+        instance: fixed_instance(),
+        position: item_pos,
+        map: MapNumber(0),
+        despawn: Tick(1320),
+        claim: DropClaim::Claimed { until: Tick(320) },
+    };
+
+    // Four tiles away: OutOfReach, the untouched item handed back.
+    let far = TileCoord::new(14, 10).to_world();
+    let (_, outcome) = pickup(
+        ground.clone(),
+        Inventory::empty(8, 8),
+        anchor,
+        footprint,
+        far,
+        MapNumber(0),
+        PickerStanding::Owner,
+        Tick(120),
+    );
+    assert_eq!(
+        outcome,
+        PickupOutcome::OutOfReach {
+            item: ground.clone()
+        }
+    );
+
+    // In reach, a stranger inside the window: Refused.
+    let near = TileCoord::new(12, 10).to_world();
+    let (_, outcome) = pickup(
+        ground.clone(),
+        Inventory::empty(8, 8),
+        anchor,
+        footprint,
+        near,
+        MapNumber(0),
+        PickerStanding::Stranger,
+        Tick(120),
+    );
+    assert_eq!(
+        outcome,
+        PickupOutcome::Refused {
+            item: ground.clone()
+        }
+    );
+
+    // The owner inside the window stores it.
+    let (_, outcome) = pickup(
+        ground.clone(),
+        Inventory::empty(8, 8),
+        anchor,
+        footprint,
+        near,
+        MapNumber(0),
+        PickerStanding::Owner,
+        Tick(120),
+    );
+    assert_eq!(outcome, PickupOutcome::PickedUp { at: anchor });
+
+    // Zen gates on the same reach with no window.
+    let pile = WorldZen {
+        amount: Zen(500),
+        position: item_pos,
+        map: MapNumber(0),
+        despawn: Tick(1320),
+    };
+    let (balance, outcome) = pickup_zen(
+        pile.clone(),
+        or_abort(CarriedZen::new(0)),
+        far,
+        MapNumber(0),
+    );
+    assert_eq!(outcome, ZenPickupOutcome::OutOfReach { world_zen: pile });
+    assert_eq!(balance, or_abort(CarriedZen::new(0)));
+}
+
+#[test]
+fn a_fixed_cast_from_a_safe_tile_is_rejected_identically_across_targets() {
+    // The firewall's caster gate: the fixed caster stands at (10, 10); with
+    // that tile safe the cast is refused before any spend, and no RNG word is
+    // drawn — SEED replays untouched.
+    let caster = fixed_caster();
+    let profile = fixed_profile(50, (33, 50), 0, (10_000, 0), 0);
+    let skill = fixed_earthshake();
+    let targets = [fixed_target((12, 10))];
+    let aim = TileCoord::new(10, 10).to_world();
+    let grid = safe_pocket(&[(10, 10)]);
+    let mut rng = SplitMix64::new(SEED);
+    let (vitals, outcome) = cast(
+        &caster,
+        &profile,
+        fixed_damaging(&skill).locate(aim),
+        &targets,
+        &grid,
+        &mut rng,
+    );
+    assert_eq!(vitals.ability.current(), 400, "nothing spent");
+    assert_eq!(
+        or_abort(serde_json::to_string(&outcome)),
+        r#"{"kind":"rejected","reason":"caster_in_safezone"}"#
+    );
+    assert_eq!(rng.next_u64(), SplitMix64::new(SEED).next_u64());
+}
+
+#[test]
+fn a_fixed_zen_split_excludes_the_safe_stander_identically_across_targets() {
+    // The party fifth term, RNG-free: slot 1 stands on the safe tile and is
+    // dropped from the divisor; the 100_000 pile splits 50_000/50_000 between
+    // the picker (slot 0) and the field member (slot 2).
+    let party = PartySession::forming().with_member(PartyMember {
+        slot: MemberSlot(2),
+        membership: Membership::Active,
+    });
+    let fact = |slot: u8, tile: (u8, u8)| MemberFact {
+        slot: MemberSlot(slot),
+        level: or_abort(Level::new(30)),
+        experience: Exp(0),
+        vitality: Vitality::Alive,
+        map: MapNumber(0),
+        position: TileCoord::new(tile.0, tile.1).to_world(),
+    };
+    let pile = WorldZen {
+        amount: Zen(100_000),
+        position: TileCoord::new(10, 10).to_world(),
+        map: MapNumber(0),
+        despawn: Tick(1320),
+    };
+    let grid = safe_pocket(&[(11, 10)]);
+    let others = [fact(1, (11, 10)), fact(2, (12, 10))];
+    let other_wallets = [
+        SlotWallet {
+            slot: MemberSlot(1),
+            wallet: or_abort(CarriedZen::new(0)),
+        },
+        SlotWallet {
+            slot: MemberSlot(2),
+            wallet: or_abort(CarriedZen::new(0)),
+        },
+    ];
+    let result = split_zen_pickup(
+        &pile,
+        &party,
+        fact(0, (10, 10)),
+        or_abort(CarriedZen::new(0)),
+        &others,
+        &other_wallets,
+        &grid,
+    );
+    assert_eq!(
+        or_abort(serde_json::to_string(&result.credits)),
+        r#"[{"slot":0,"wallet":50000},{"slot":2,"wallet":50000}]"#
+    );
+    assert!(result.to_ground.is_empty());
 }

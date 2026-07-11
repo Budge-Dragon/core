@@ -1,0 +1,6 @@
+# Normalize all text to LF in the repo and in every working tree, so Windows
+# checkouts don't convert to CRLF and trip `rustfmt --check` (newline_style = "Unix").
+* text=auto eol=lf
+
+# Terrain blobs are binary — never touch their bytes or line endings.
+*.bin binary

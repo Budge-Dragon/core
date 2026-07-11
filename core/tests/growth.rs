@@ -16,7 +16,7 @@ mod rng;
 use mu_core::components::class::CharacterClass;
 use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::pool::Pool;
-use mu_core::components::tile::TileCoord;
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{Exp, Level, MapNumber};
 use mu_core::data::atlas::Atlas;
 use mu_core::entities::character::Character;
@@ -479,8 +479,16 @@ fn a_party_award_applied_matches_a_solo_apply_of_the_same_gained() {
     let killer = fact(1, 5, seat_exp);
     let others = [fact(0, 5, seat_exp)];
     let mut party_rng = TestRng::new(123);
-    let awards =
-        distribute_kill_experience(&party, killer, &others, level(30), &atlas, &mut party_rng);
+    let all_unsafe = TerrainGrid::from_words([u64::MAX; 1024]);
+    let awards = distribute_kill_experience(
+        &party,
+        killer,
+        &others,
+        level(30),
+        &atlas,
+        &all_unsafe,
+        &mut party_rng,
+    );
     let member_award = or_abort(
         awards
             .iter()

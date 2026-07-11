@@ -42,6 +42,31 @@ pub(super) fn check_monster_attacks(
     Ok(())
 }
 
+/// Proves every fighting record's stored `MobBehavior.disposition` matches
+/// the one its role confers ([`MonsterRole::safezone_disposition`]) — the
+/// dual-sourced-discriminant reconciliation, so the monster-AI decision reads
+/// the stored value without re-deriving the law and an inconsistent hand-edit
+/// cannot pass parse. The two behavior-less roles (`Npc`, `SoccerBall`) carry
+/// nothing to reconcile.
+pub(super) fn check_monster_dispositions(
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
+) -> Result<(), AtlasError> {
+    for monster in monsters.values() {
+        let stored = match &monster.role {
+            MonsterRole::Monster { behavior, .. }
+            | MonsterRole::Guard { behavior, .. }
+            | MonsterRole::Trap { behavior, .. } => behavior.disposition,
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => continue,
+        };
+        if monster.role.safezone_disposition() != Some(stored) {
+            return Err(AtlasError::MonsterDispositionMismatch {
+                monster: monster.number,
+            });
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn check_summons(
     skills: &BTreeMap<SkillNumber, Skill>,
     monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
@@ -316,5 +341,138 @@ pub(super) fn require_item(
         Ok(())
     } else {
         Err(AtlasError::UnknownItemRef { item })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::element::PerElement;
+    use crate::components::units::{DurationMs, Level, Resistance};
+    use crate::data::common::{Provenance, SourceVersion};
+    use crate::data::monster_definitions::{
+        MobBehavior, MonsterCombat, SafezoneDisposition, TrapTargeting,
+    };
+
+    fn behavior(disposition: SafezoneDisposition) -> MobBehavior {
+        MobBehavior {
+            move_range: 3,
+            attack_range: 1,
+            view_range: 5,
+            move_delay_ms: DurationMs(400),
+            attack_delay_ms: DurationMs(1600),
+            respawn_ms: DurationMs(10_000),
+            disposition,
+        }
+    }
+
+    fn combat() -> MonsterCombat {
+        MonsterCombat {
+            level: Level::MIN,
+            hp: 60,
+            min_phys_damage: 4,
+            max_phys_damage: 7,
+            defense: 2,
+            attack_rate: 20,
+            defense_rate: 4,
+        }
+    }
+
+    fn resistances() -> PerElement<Resistance> {
+        PerElement {
+            ice: Resistance(0),
+            poison: Resistance(0),
+            lightning: Resistance(0),
+            fire: Resistance(0),
+            earth: Resistance(0),
+            wind: Resistance(0),
+            water: Resistance(0),
+        }
+    }
+
+    fn roster(records: Vec<(u16, MonsterRole)>) -> BTreeMap<MonsterNumber, MonsterDefinition> {
+        records
+            .into_iter()
+            .map(|(number, role)| {
+                let number = MonsterNumber(number);
+                (
+                    number,
+                    MonsterDefinition {
+                        number,
+                        provenance: Provenance {
+                            source_version: SourceVersion::V075,
+                            review: None,
+                        },
+                        role,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn monster(disposition: SafezoneDisposition) -> MonsterRole {
+        MonsterRole::Monster {
+            combat: combat(),
+            resistances: resistances(),
+            behavior: behavior(disposition),
+            attack: MonsterAttack::Plain,
+        }
+    }
+
+    fn guard(disposition: SafezoneDisposition) -> MonsterRole {
+        MonsterRole::Guard {
+            combat: combat(),
+            resistances: resistances(),
+            behavior: behavior(disposition),
+        }
+    }
+
+    fn trap(disposition: SafezoneDisposition) -> MonsterRole {
+        MonsterRole::Trap {
+            targeting: TrapTargeting::Directional,
+            combat: combat(),
+            resistances: resistances(),
+            behavior: behavior(disposition),
+            attack: MonsterAttack::Plain,
+        }
+    }
+
+    #[test]
+    fn a_role_consistent_roster_passes() {
+        let monsters = roster(vec![
+            (1, monster(SafezoneDisposition::Excluded)),
+            (2, guard(SafezoneDisposition::Patrols)),
+            (3, trap(SafezoneDisposition::Excluded)),
+            (4, MonsterRole::Npc { window: None }),
+            (5, MonsterRole::SoccerBall),
+        ]);
+        assert_eq!(check_monster_dispositions(&monsters), Ok(()));
+    }
+
+    #[test]
+    fn a_guard_stored_excluded_is_rejected() {
+        let monsters = roster(vec![(2, guard(SafezoneDisposition::Excluded))]);
+        assert_eq!(
+            check_monster_dispositions(&monsters),
+            Err(AtlasError::MonsterDispositionMismatch {
+                monster: MonsterNumber(2),
+            })
+        );
+    }
+
+    #[test]
+    fn a_monster_or_trap_stored_patrols_is_rejected() {
+        for role in [
+            monster(SafezoneDisposition::Patrols),
+            trap(SafezoneDisposition::Patrols),
+        ] {
+            let monsters = roster(vec![(9, role)]);
+            assert_eq!(
+                check_monster_dispositions(&monsters),
+                Err(AtlasError::MonsterDispositionMismatch {
+                    monster: MonsterNumber(9),
+                })
+            );
+        }
     }
 }

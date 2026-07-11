@@ -19,8 +19,8 @@ use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
 use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
 use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
-use mu_core::components::tile::{TileArea, TileCoord, WalkGrid};
-use mu_core::components::units::{ItemLevel, Level};
+use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
+use mu_core::components::units::{DurationMs, ItemLevel, Level};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
 use mu_core::data::atlas::{
     Atlas, AtlasError, Landing, ResolvedOutput, ResolvedRecipe, StaticData,
@@ -35,7 +35,7 @@ use mu_core::data::game_config::GameConfig;
 use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::{MapDefinition, MapEnvironment};
-use mu_core::data::monster_definitions::MonsterDefinition;
+use mu_core::data::monster_definitions::{MonsterDefinition, MonsterRole};
 use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
@@ -192,6 +192,46 @@ fn game_config_and_special_drops_build_from_real_data() {
 }
 
 #[test]
+fn the_atlas_surfaces_the_authentic_ground_drop_duration_and_option_roll() {
+    // The generated game_config.json carries the authentic 60 s ground-item
+    // despawn duration, and the atlas accessor returns exactly the parsed
+    // value — read, never hand-copied.
+    let config = load!(GameConfig, "game_config", 1);
+    let record = config.records.into_iter().next().unwrap();
+    assert_eq!(record.item_drop_duration_ms, DurationMs(60_000));
+
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    assert_eq!(atlas.item_drop_duration(), record.item_drop_duration_ms);
+    assert_eq!(*atlas.option_roll(), record.option_roll);
+}
+
+#[test]
+fn every_monster_records_stored_disposition_reconciles_with_its_role() {
+    // The generated monster_definitions.json stores each fighting record's
+    // safezone disposition; dataset-wide it equals the single core source —
+    // the role's own disposition (Guard patrols, Monster/Trap excluded) —
+    // which is exactly the law `Atlas::parse` re-proves at the load boundary.
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let mut fighting = 0u32;
+    for definition in atlas.monsters() {
+        let stored = match &definition.role {
+            MonsterRole::Monster { behavior, .. }
+            | MonsterRole::Guard { behavior, .. }
+            | MonsterRole::Trap { behavior, .. } => behavior.disposition,
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => continue,
+        };
+        assert_eq!(
+            Some(stored),
+            definition.role.safezone_disposition(),
+            "monster {} stores its role's disposition",
+            definition.number.0
+        );
+        fighting += 1;
+    }
+    assert!(fighting > 0, "the roster carries fighting records");
+}
+
+#[test]
 fn atlas_resolves_the_whole_real_dataset() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     assert_eq!(atlas.maps().count(), 11);
@@ -255,7 +295,7 @@ fn every_death_map_resolves_a_destination_gate_spanning_the_town_set() {
     let mut destinations = std::collections::BTreeSet::new();
     for map in 0u8..=10 {
         let (view, env) = atlas.town_gate_for_map(MapNumber(map)).unwrap();
-        let grid = atlas.walk_grid(view.map).unwrap();
+        let grid = atlas.terrain_grid(view.map).unwrap();
         for &landing in view.landing.iter() {
             assert!(
                 grid.walkable(landing),
@@ -408,19 +448,19 @@ fn atlas_retains_the_resolved_dataset_for_by_id_lookup() {
 }
 
 #[test]
-fn atlas_loads_terrain_walk_grids() {
+fn atlas_loads_terrain_grids() {
     let atlas = Atlas::parse(static_data!()).unwrap();
 
-    // `walk_grid` is total: parse proves every map carries exactly one sidecar.
+    // `terrain_grid` is total: parse proves every map carries exactly one sidecar.
     let maps: Vec<MapNumber> = atlas.maps().map(|map| map.number).collect();
     assert_eq!(maps.len(), 11);
     for map in maps {
-        assert!(atlas.walk_grid(map).is_some());
+        assert!(atlas.terrain_grid(map).is_some());
     }
 
     // Lorencia (map 0) is a fully walkable town: a town tile and an open tile
     // both walk (SafeZone `0x01` stays walkable).
-    let lorencia = atlas.walk_grid(MapNumber(0)).unwrap();
+    let lorencia = atlas.terrain_grid(MapNumber(0)).unwrap();
     assert!(lorencia.walkable(TileCoord::new(135, 125).to_world()));
     assert!(lorencia.walkable(TileCoord::new(10, 10).to_world()));
     // (0,0) is a NoMove (`0x02`) wall tile — the exact case a mask checking only
@@ -429,7 +469,7 @@ fn atlas_loads_terrain_walk_grids() {
 
     // Map 8 (Tarkan) is roughly half blocked: its (0,0) corner is a
     // NoGround (`0x04`) tile and is not walkable.
-    let tarkan = atlas.walk_grid(MapNumber(8)).unwrap();
+    let tarkan = atlas.terrain_grid(MapNumber(8)).unwrap();
     assert!(!tarkan.walkable(TileCoord::new(0, 0).to_world()));
 }
 
@@ -604,7 +644,7 @@ fn position_of(spawned: &Spawned) -> WorldPos {
 /// The instance count a permanent spawn contributes, computed independently of
 /// the RNG loop (Fixed → 1, Spot → quantity, Area → quantity when at least one
 /// tile in the rect is walkable, else 0).
-fn expected_instances(placement: SpawnPlacement, grid: &WalkGrid) -> usize {
+fn expected_instances(placement: SpawnPlacement, grid: &TerrainGrid) -> usize {
     match placement {
         SpawnPlacement::Fixed { .. } => 1,
         SpawnPlacement::Spot { quantity, .. } => usize::from(quantity),
@@ -641,7 +681,7 @@ fn every_area_placed_instance_sits_on_a_walkable_tile() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     let mut rng = TestRng::new(99);
     for handle in atlas.map_handles() {
-        let grid = handle.walk_grid();
+        let grid = handle.terrain_grid();
         for entry in handle.spawns() {
             if entry.spawn.schedule != SpawnSchedule::Permanent {
                 continue;
@@ -667,7 +707,7 @@ fn wandering_spawns_are_excluded_from_initial_population() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     let mut rng = TestRng::new(7);
     for handle in atlas.map_handles() {
-        let grid = handle.walk_grid();
+        let grid = handle.terrain_grid();
         let expected: usize = handle
             .spawns()
             .filter(|entry| entry.spawn.schedule == SpawnSchedule::Permanent)
@@ -716,10 +756,10 @@ fn map_handles_enumerate_every_map_and_join_spawns() {
     let atlas = Atlas::parse(static_data!()).unwrap();
     assert_eq!(atlas.map_handles().count(), 11);
 
-    // A present map yields a walk grid directly (no Option) and spawn entries
+    // A present map yields a terrain grid directly (no Option) and spawn entries
     // joined to their monster definition.
     let lorencia = atlas.map_handle(MapNumber(0)).unwrap();
-    let _grid: &WalkGrid = lorencia.walk_grid();
+    let _grid: &TerrainGrid = lorencia.terrain_grid();
     let mut joined = 0;
     for entry in lorencia.spawns() {
         assert_eq!(entry.monster.number, entry.spawn.monster);
@@ -765,7 +805,7 @@ fn first_enter_gate_landing(atlas: &Atlas) -> Option<Landing> {
 
 /// Asserts a landing resolves to a walkable tile inside its own area on every
 /// seed, or reports no-landing only when the area truly holds no walkable tile.
-fn assert_landing_resolves(landing: &Landing, grid: &WalkGrid, env: MapEnvironment) {
+fn assert_landing_resolves(landing: &Landing, grid: &TerrainGrid, env: MapEnvironment) {
     for seed in 0u64..32 {
         let mut rng = TestRng::new(seed);
         match resolve_arrival(Facing::POS_X, landing, grid, env, &mut rng) {
@@ -787,7 +827,7 @@ fn assert_landing_resolves(landing: &Landing, grid: &WalkGrid, env: MapEnvironme
 #[test]
 fn grounded_steps_respect_real_terrain_walls() {
     let atlas = Atlas::parse(static_data!()).unwrap();
-    let lorencia = atlas.walk_grid(MapNumber(0)).unwrap();
+    let lorencia = atlas.terrain_grid(MapNumber(0)).unwrap();
 
     // (0,0) is a NoMove wall: a grounded step onto it from (1,0) is blocked.
     let wall = TileCoord::new(0, 0).to_world();
@@ -830,7 +870,7 @@ fn grounded_steps_respect_real_terrain_walls() {
     }
 
     // Tarkan (map 8) (0,0) is NoGround: a grounded step there is blocked.
-    let tarkan = atlas.walk_grid(MapNumber(8)).unwrap();
+    let tarkan = atlas.terrain_grid(MapNumber(8)).unwrap();
     assert_eq!(
         resolve_step(
             grounded((1, 0), MapNumber(8)),
@@ -851,7 +891,7 @@ fn every_real_warp_and_an_enter_gate_landing_resolve() {
         let handle = atlas.map_handle(warp.landing.map).unwrap();
         assert_landing_resolves(
             &warp.landing,
-            handle.walk_grid(),
+            handle.terrain_grid(),
             handle.definition().environment,
         );
     }
@@ -859,7 +899,11 @@ fn every_real_warp_and_an_enter_gate_landing_resolve() {
 
     let enter = first_enter_gate_landing(&atlas).expect("the dataset has an enter gate");
     let handle = atlas.map_handle(enter.map).unwrap();
-    assert_landing_resolves(&enter, handle.walk_grid(), handle.definition().environment);
+    assert_landing_resolves(
+        &enter,
+        handle.terrain_grid(),
+        handle.definition().environment,
+    );
 
     // The four s6-backported doors (Atlans↔Tarkan 53/55, LostTower↔Icarus
     // 62/64), addressed by their trigger tiles, each seat their landing.
@@ -870,7 +914,7 @@ fn every_real_warp_and_an_enter_gate_landing_resolve() {
         let handle = atlas.map_handle(view.landing.map).unwrap();
         assert_landing_resolves(
             &view.landing,
-            handle.walk_grid(),
+            handle.terrain_grid(),
             handle.definition().environment,
         );
     }
@@ -886,7 +930,7 @@ fn unspecified_landing_facing_keeps_the_traveler_facing() {
         .expect("a real warp landing with unspecified facing");
     let handle = atlas.map_handle(landing.map).unwrap();
     let env = handle.definition().environment;
-    let grid = handle.walk_grid();
+    let grid = handle.terrain_grid();
     let traveler = Facing::NEG_Y;
     let mut rng = TestRng::new(4);
     match resolve_arrival(traveler, &landing, grid, env, &mut rng) {
@@ -907,7 +951,7 @@ fn whole_dataset_arrival_is_deterministic() {
                 resolve_arrival(
                     Facing::POS_X,
                     &warp.landing,
-                    handle.walk_grid(),
+                    handle.terrain_grid(),
                     handle.definition().environment,
                     &mut rng,
                 )

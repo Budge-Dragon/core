@@ -161,7 +161,7 @@ fn attempt_landing(
     match resolve_arrival(
         traveler_facing,
         landing,
-        handle.walk_grid(),
+        handle.terrain_grid(),
         handle.definition().environment,
         rng,
     ) {

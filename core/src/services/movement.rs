@@ -1,7 +1,7 @@
 //! Movement and flight decisions: the pure functions that change how and where
 //! an entity crosses the ground plane. Flight-mode changes gate on host-supplied
 //! eligibility facts then transition; grounded/flying steps resolve a greedy
-//! seek-with-arrival move against the walk grid, bounded to at most one tile by
+//! seek-with-arrival move against the terrain grid, bounded to at most one tile by
 //! [`StepMagnitude`] so the destination-only walkability check is sound;
 //! tile-offset steps move by a whole grid neighbour; the lunge teleport lands a
 //! caster on its target's exact cell with no terrain check; warp/gate arrivals
@@ -22,7 +22,7 @@ use crate::components::placement::Placement;
 use crate::components::spatial::{
     Displacement, Facing, Fixed, StepMagnitude, TileOffset, WorldPos, WorldVec,
 };
-use crate::components::tile::WalkGrid;
+use crate::components::tile::TerrainGrid;
 use crate::data::atlas::{Landing, SpawnGateView};
 use crate::data::map_definitions::MapEnvironment;
 use crate::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
@@ -133,7 +133,7 @@ pub fn change_flight(
 /// destination cell is validated, not the traversed path). Otherwise the entity
 /// arrives, faces along the step (keeping its prior facing when the step has no
 /// direction), and keeps its map and movement mode.
-fn commit(placement: Placement, step: WorldVec, grid: &WalkGrid) -> StepOutcome {
+fn commit(placement: Placement, step: WorldVec, grid: &TerrainGrid) -> StepOutcome {
     let destination = placement.position + step;
     if placement.movement.checks_walkability() && !grid.walkable(destination) {
         return StepOutcome::Blocked;
@@ -177,7 +177,7 @@ pub fn resolve_step(
     placement: Placement,
     target: WorldPos,
     speed: StepMagnitude,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
 ) -> StepOutcome {
     match seek(target - placement.position, speed.get()) {
         Displacement::NoDirection => StepOutcome::Resolved { placement },
@@ -193,7 +193,7 @@ pub fn resolve_drift(
     placement: Placement,
     direction: Facing,
     speed: StepMagnitude,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
 ) -> StepOutcome {
     match direction.vector().normalized_to(speed.get()) {
         Displacement::NoDirection => StepOutcome::Resolved { placement },
@@ -213,7 +213,7 @@ pub fn resolve_drift(
 pub fn resolve_tile_offset(
     placement: Placement,
     offset: TileOffset,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
 ) -> StepOutcome {
     commit(placement, offset.world_offset(), grid)
 }
@@ -248,7 +248,7 @@ pub fn lunge_teleport(caster: Placement, target: Placement) -> Placement {
 pub fn resolve_arrival(
     traveler_facing: Facing,
     landing: &Landing,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     env: MapEnvironment,
     rng: &mut impl RngCore,
 ) -> WarpOutcome {
@@ -350,13 +350,13 @@ mod tests {
 
     const STEP: StepMagnitude = StepMagnitude::ONE_TILE;
 
-    fn grid_with(walkable: &[(u8, u8)]) -> WalkGrid {
+    fn grid_with(walkable: &[(u8, u8)]) -> TerrainGrid {
         let mut words = [0u64; 1024];
         for &(x, y) in walkable {
             let bit = (usize::from(y) << 8) | usize::from(x);
             words[bit >> 6] |= 1u64 << (bit & 63);
         }
-        WalkGrid::from_words(words)
+        TerrainGrid::from_words(words)
     }
 
     fn placed(tile: (u8, u8), movement: Movement) -> Placement {
