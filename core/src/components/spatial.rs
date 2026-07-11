@@ -607,8 +607,7 @@ impl TileDelta {
 /// A single grid-neighbour offset: each axis in {−1, 0, +1}, applied as a
 /// full-tile world offset. The nine values are the eight neighbours plus `STAY`.
 /// Every value is valid by construction (no fallible constructor), so the ±1
-/// jiggle's nine outcomes and the push's eight headings are all expressible and
-/// none can be malformed.
+/// jiggle's nine outcomes are all expressible and none can be malformed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TileOffset {
     dx: TileDelta,
@@ -636,57 +635,6 @@ impl TileOffset {
             Fixed::from_raw(self.dx.signum().saturating_mul(UNITS_PER_TILE)),
             Fixed::from_raw(self.dy.signum().saturating_mul(UNITS_PER_TILE)),
         )
-    }
-}
-
-// W-SRC: the 408/985 pin — the rational tan(22.5°) the 8-way quantizer
-// compares against; see the constant's doc for the convergent derivation.
-/// The pinned rational tan(22.5°) ≈ 0.41421356 — the sector boundary between a
-/// cardinal (axis-aligned) heading and a diagonal one. tan(22.5°) = √2−1 is
-/// irrational; `408/985` is its continued-fraction convergent [0;2,2,2,2,2,2,2,2]
-/// (√2−1 = [0;2̄]), accurate to 3.6e-7 — the closest convergent whose numerator
-/// and denominator both stay well inside i64 after the ×|component| multiply, so
-/// the cross-product test is exact in i128 with no saturation on any in-world
-/// vector.
-const TAN_2250_NUM: i128 = 408;
-/// The pinned denominator of the rational tan(22.5°) — see [`TAN_2250_NUM`].
-const TAN_2250_DEN: i128 = 985;
-
-impl WorldVec {
-    /// The 8-way grid heading this offset points along — the away-vector
-    /// quantizer. `None` for the zero vector (no direction). Integer-exact, no
-    /// `atan2`, no float, no sqrt: it compares the ratio |Δy|/|Δx| against
-    /// tan(22.5°) and its reciprocal (tan 67.5° = 985/408) by i128
-    /// cross-multiplication. A vector exactly on a 22.5° sector boundary
-    /// resolves to the **diagonal** sector (pinned tie rule — both strict
-    /// axis-tests fail, so the diagonal arm is taken). Draws no RNG.
-    #[must_use]
-    pub fn octant(self) -> Option<TileOffset> {
-        let (sx, sy) = (delta_of_sign(self.x.0), delta_of_sign(self.y.0));
-        if let (TileDelta::Zero, TileDelta::Zero) = (sx, sy) {
-            return None;
-        }
-        let x = i128::from(self.x.0.unsigned_abs());
-        let y = i128::from(self.y.0.unsigned_abs());
-        // Near the x-axis: |Δy|/|Δx| < tan22.5  ⇔  y·985 < x·408.
-        if y * TAN_2250_DEN < x * TAN_2250_NUM {
-            return Some(TileOffset::new(sx, TileDelta::Zero));
-        }
-        // Near the y-axis: |Δx|/|Δy| < tan22.5  ⇔  x·985 < y·408.
-        if x * TAN_2250_DEN < y * TAN_2250_NUM {
-            return Some(TileOffset::new(TileDelta::Zero, sy));
-        }
-        // Otherwise (incl. boundary-exact): the diagonal sector.
-        Some(TileOffset::new(sx, sy))
-    }
-}
-
-/// The tile delta of a raw component's sign.
-fn delta_of_sign(v: i64) -> TileDelta {
-    match v.cmp(&0) {
-        core::cmp::Ordering::Less => TileDelta::Neg,
-        core::cmp::Ordering::Equal => TileDelta::Zero,
-        core::cmp::Ordering::Greater => TileDelta::Pos,
     }
 }
 
@@ -745,14 +693,6 @@ impl Facing {
     #[must_use]
     pub const fn vector(self) -> WorldVec {
         self.0
-    }
-
-    /// The grid-neighbour offset this facing's sign vector points to — total for
-    /// every facing (each component's sign in {−1,0,+1}). The bridge from a drawn
-    /// cardinal to a tile-offset step (the push's same-tile fallback).
-    #[must_use]
-    pub fn to_tile_offset(self) -> TileOffset {
-        TileOffset::new(delta_of_sign(self.0.x.0), delta_of_sign(self.0.y.0))
     }
 
     /// Whether `target` lies within the frontal cone of half-width `half`
@@ -1431,74 +1371,11 @@ mod tests {
     }
 
     #[test]
-    fn octant_zero_vector_has_no_direction() {
-        assert_eq!(WorldVec::ZERO.octant(), None);
-    }
-
-    #[test]
-    fn octant_near_boundary_vectors_resolve_per_the_pinned_tie_rule() {
-        // Sub-unit vectors straddling the 22.5-degree sector boundary, where
-        // y*985 vs x*408 flips.
-        assert_eq!(
-            vec(985, 407).octant(),
-            Some(TileOffset::new(TileDelta::Pos, TileDelta::Zero)) // East
-        );
-        // Boundary-exact (y·985 == x·408): the diagonal sector wins.
-        assert_eq!(
-            vec(985, 408).octant(),
-            Some(TileOffset::new(TileDelta::Pos, TileDelta::Pos)) // North-East
-        );
-        assert_eq!(
-            vec(985, 409).octant(),
-            Some(TileOffset::new(TileDelta::Pos, TileDelta::Pos))
-        );
-        assert_eq!(
-            vec(0, 65_536).octant(),
-            Some(TileOffset::new(TileDelta::Zero, TileDelta::Pos)) // North
-        );
-        // 2 tiles east, 1 tile north (atan ≈ 26.6° > 22.5°): diagonal.
-        assert_eq!(
-            vec(131_072, 65_536).octant(),
-            Some(TileOffset::new(TileDelta::Pos, TileDelta::Pos))
-        );
-        // Sign symmetry: the mirrored vector lands in the mirrored sector.
-        assert_eq!(
-            vec(-985, -407).octant(),
-            Some(TileOffset::new(TileDelta::Neg, TileDelta::Zero)) // West
-        );
-        assert_eq!(
-            vec(-985, -408).octant(),
-            Some(TileOffset::new(TileDelta::Neg, TileDelta::Neg)) // South-West
-        );
-    }
-
-    #[test]
     fn tile_offset_world_offset_scales_to_whole_tiles() {
         assert_eq!(TileOffset::STAY.world_offset(), WorldVec::ZERO);
         assert_eq!(
             TileOffset::new(TileDelta::Pos, TileDelta::Neg).world_offset(),
             vec(UNITS_PER_TILE, -UNITS_PER_TILE)
-        );
-    }
-
-    #[test]
-    fn facing_to_tile_offset_covers_the_eight_cardinals() {
-        assert_eq!(
-            Facing::POS_X.to_tile_offset(),
-            TileOffset::new(TileDelta::Pos, TileDelta::Zero)
-        );
-        assert_eq!(
-            Facing::NEG_X_NEG_Y.to_tile_offset(),
-            TileOffset::new(TileDelta::Neg, TileDelta::Neg)
-        );
-        assert_eq!(
-            Facing::POS_X_NEG_Y.to_tile_offset(),
-            TileOffset::new(TileDelta::Pos, TileDelta::Neg)
-        );
-        // A non-unit facing quantizes by sign, not magnitude.
-        assert_eq!(
-            facing(300, -7).to_tile_offset(),
-            TileOffset::new(TileDelta::Pos, TileDelta::Neg)
         );
     }
 

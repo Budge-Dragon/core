@@ -507,9 +507,9 @@ fn a_real_earthshake_push_stops_at_the_town_core_boundary() {
     let grid = lorencia_grid(&atlas);
     let [caster_tile, target_tile, last_field, first_safe] = push_lane(grid);
 
-    // The quake pushes the mob due east, away from the caster: the first step
-    // gains the last field tile, the second is refused at the safe boundary
-    // like a wall — gained ground kept, town never entered.
+    // The quake pushes the mob due east, away from the caster: the opening
+    // increment gains the last field tile, the next is refused at the safe
+    // boundary like a wall — gained ground kept, town never entered.
     let knight = caster("dark_knight", 200, 30, caster_tile);
     let skill = earthshake(&atlas);
     let targets = [seated(target_tile)];

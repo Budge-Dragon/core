@@ -281,7 +281,7 @@ use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
-use mu_core::components::spatial::{Facing, Fixed, TileDelta, TileOffset, WorldVec};
+use mu_core::components::spatial::{Facing, TileDelta, TileOffset};
 use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::MapNumber;
 use mu_core::data::skills::Skill;
@@ -313,41 +313,6 @@ fn draw_jiggle_offset_sequence_is_identical_across_targets() {
             offset(TileDelta::Pos, TileDelta::Zero),
         ]
     );
-}
-
-#[test]
-fn the_octant_quantizer_is_identical_across_targets() {
-    // The 8-way away-vector quantizer is pure i128 arithmetic over the pinned
-    // 408/985 convergent of tan 22.5° — no RNG, no float — so its sector
-    // decisions (including the boundary-exact-to-diagonal tie rule) must agree
-    // bit-for-bit on every target. The vectors are the design doc's worked
-    // boundaries.
-    let vec = |x: i64, y: i64| WorldVec::new(Fixed::from_raw(x), Fixed::from_raw(y));
-    let offset = |dx: TileDelta, dy: TileDelta| TileOffset::new(dx, dy);
-    // Just inside the East sector.
-    assert_eq!(
-        vec(985, 407).octant(),
-        Some(offset(TileDelta::Pos, TileDelta::Zero))
-    );
-    // Exactly on the 22.5° boundary: the pinned tie rule resolves diagonal.
-    assert_eq!(
-        vec(985, 408).octant(),
-        Some(offset(TileDelta::Pos, TileDelta::Pos))
-    );
-    // Straight north; a clear diagonal; the mirrored west flank; the zero vector.
-    assert_eq!(
-        vec(0, 65_536).octant(),
-        Some(offset(TileDelta::Zero, TileDelta::Pos))
-    );
-    assert_eq!(
-        vec(131_072, 65_536).octant(),
-        Some(offset(TileDelta::Pos, TileDelta::Pos))
-    );
-    assert_eq!(
-        vec(-985, -407).octant(),
-        Some(offset(TileDelta::Neg, TileDelta::Zero))
-    );
-    assert_eq!(WorldVec::ZERO.octant(), None);
 }
 
 /// A hand-pinned level-50 Dark Knight caster at tile (10, 10) facing +X, built
@@ -469,6 +434,35 @@ fn a_fixed_earthshake_cast_serializes_identically_across_targets() {
     assert_eq!(
         or_abort(serde_json::to_string(&outcome)),
         r#"{"kind":"cast","caster_placement":{"position":{"x":688128,"y":688128},"facing":{"x":1,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":489,"quality":"normal","modifiers":[]},"health":{"current":99511,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":1015808,"y":688128},"facing":{"x":65536,"y":0},"movement":"grounded","map":0}}]}"#
+    );
+}
+
+#[test]
+fn a_fixed_diagonal_earthshake_cast_serializes_identically_across_targets() {
+    // The continuous swept knockback along a true 45° away-vector: the caster at
+    // (10,10) throws the target at (13,13) three tiles straight-line to
+    // (1_023_759,1_023_759) — ~2.12 tiles on each axis, NOT the whole-tile
+    // (16,16) an octant snap would give, and NOT an axis-aligned (16,13). Zero
+    // displacement words. This exact serialization is the cross-target contract:
+    // native and wasm must reproduce the diagonal push bit-for-bit.
+    let caster = fixed_caster();
+    let profile = fixed_profile(50, (33, 50), 0, (10_000, 0), 0);
+    let skill = fixed_earthshake();
+    let targets = [fixed_target((13, 13))];
+    let aim = TileCoord::new(10, 10).to_world();
+    let mut rng = SplitMix64::new(SEED);
+    let (vitals, outcome) = cast(
+        &caster,
+        &profile,
+        fixed_damaging(&skill).locate(aim),
+        &targets,
+        &open_ground(),
+        &mut rng,
+    );
+    assert_eq!(vitals.ability.current(), 350, "the quake's 50 AG is spent");
+    assert_eq!(
+        or_abort(serde_json::to_string(&outcome)),
+        r#"{"kind":"cast","caster_placement":{"position":{"x":688128,"y":688128},"facing":{"x":1,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":489,"quality":"normal","modifiers":[]},"health":{"current":99511,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":1023759,"y":1023759},"facing":{"x":46341,"y":46341},"movement":"grounded","map":0}}]}"#
     );
 }
 
