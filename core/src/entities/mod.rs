@@ -5,6 +5,7 @@
 //! engine handles, no database rows, no network state.
 
 pub mod character;
+pub mod minigame_session;
 pub mod monster_instance;
 pub mod party_session;
 pub mod spawned;

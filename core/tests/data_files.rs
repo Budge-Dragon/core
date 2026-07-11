@@ -8,11 +8,13 @@
 //! expand inside the `#[test]` functions that call them, where `clippy.toml`
 //! permits them (`allow-unwrap-in-tests`).
 
+use core::num::NonZeroU16;
 use std::path::PathBuf;
 
 use rand_core::RngCore;
 
 use mu_core::components::class::CharacterClass;
+use mu_core::components::collections::OneOrMore;
 use mu_core::components::interval::Interval;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
@@ -20,7 +22,7 @@ use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
 use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
-use mu_core::components::units::{DurationMs, ItemLevel, Level};
+use mu_core::components::units::{DurationMs, ItemLevel, Level, Zen};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
 use mu_core::data::atlas::{
     Atlas, AtlasError, Landing, ResolvedOutput, ResolvedRecipe, StaticData,
@@ -35,7 +37,12 @@ use mu_core::data::game_config::GameConfig;
 use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::{MapDefinition, MapEnvironment};
-use mu_core::data::monster_definitions::{MonsterDefinition, MonsterRole};
+use mu_core::data::minigame::{
+    EntranceGate, EventLevel, MiniGameDefinition, MiniGameKey, MiniGameKind, PhaseSpan,
+    PlayerBounds, RewardDropGroup, RewardEntry, RewardKind, SpawnWave, SuccessFlags,
+    TicketRequirement, WaveNumber, WaveRespawn, WaveSpawnArea,
+};
+use mu_core::data::monster_definitions::{MobBehavior, MonsterDefinition, MonsterRole};
 use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
 use mu_core::data::spawns::Spawn;
@@ -115,6 +122,11 @@ macro_rules! static_data {
             classes: load!(ClassRecord, "classes", 8),
             exp_tables: load!(ExpTable, "exp_tables", 1),
             game_config: load!(GameConfig, "game_config", 1),
+            // Schema-only family: no minigame.json ships this era (zero
+            // records), and the Atlas stays total over the empty family.
+            mini_games: DataFile {
+                records: Vec::new(),
+            },
             terrain: load_terrain!(),
         }
     };
@@ -937,6 +949,280 @@ fn unspecified_landing_facing_keeps_the_traveler_facing() {
         WarpOutcome::Arrived { placement } => assert_eq!(placement.facing, traveler),
         WarpOutcome::NoWalkableLanding => panic!("this landing has walkable tiles"),
     }
+}
+
+// --- Mini-game definitions: the schema-only family (W-MINIGAME), total over
+// zero rows. No `minigame.json` ships this era — the rows are W-DS/W-BC/W-CC's
+// — so the family's whole cross-file contract lives here: the Atlas parses
+// with the empty family and every key answers `None`, and a test-authored
+// record resolves its entrance landing, town hop, and wave monsters against
+// the real dataset (or is rejected by the parse proof).
+
+/// A test-authored mini-game definition over a real map, exercising the
+/// schema against the real dataset. A macro like `load!`, so its `unwrap`s
+/// expand at the `#[test]` call site.
+macro_rules! authored_minigame {
+    (level: $level:expr, map: $map:expr, area: ($x1:expr, $y1:expr, $x2:expr, $y2:expr), waves: $waves:expr) => {{
+        MiniGameDefinition {
+            kind: MiniGameKind::DevilSquare,
+            level: EventLevel::new($level).unwrap(),
+            normal_bracket: Interval::new(Level::new(15).unwrap(), Level::new(130).unwrap())
+                .unwrap(),
+            special_bracket: Interval::new(Level::new(10).unwrap(), Level::new(110).unwrap())
+                .unwrap(),
+            ticket: TicketRequirement {
+                item: ItemRef {
+                    group: 14,
+                    number: 19,
+                },
+                item_level: ItemLevel::new(2).unwrap(),
+            },
+            entrance_fee: Zen(25_000),
+            players: PlayerBounds::new(NonZeroU16::new(2).unwrap(), NonZeroU16::new(20).unwrap())
+                .unwrap(),
+            enter_duration: PhaseSpan::floored(DurationMs(300_000)),
+            game_duration: PhaseSpan::floored(DurationMs(1_200_000)),
+            exit_duration: PhaseSpan::floored_less_countdown(DurationMs(180_000)),
+            entrance: EntranceGate {
+                map: MapNumber($map),
+                area: TileArea::new($x1, $y1, $x2, $y2).unwrap(),
+            },
+            spawn_waves: $waves,
+            reward_table: Vec::new(),
+        }
+    }};
+}
+
+/// One authored spawn wave of `$monster` over the real map-9 gate-59 floor.
+macro_rules! authored_wave {
+    (monster: $monster:expr) => {{
+        SpawnWave {
+            number: WaveNumber(1),
+            window: Interval::new(DurationMs(0), DurationMs(420_000)).unwrap(),
+            respawn: WaveRespawn::RespawningWhileOpen,
+            areas: vec![WaveSpawnArea {
+                monster: MonsterNumber($monster),
+                area: TileArea::new(135, 162, 142, 170).unwrap(),
+                quantity: NonZeroU16::new(4).unwrap(),
+            }],
+        }
+    }};
+}
+
+#[test]
+fn the_mini_game_family_ships_zero_rows_and_the_atlas_stays_total() {
+    let data = static_data!();
+    assert!(data.mini_games.records.is_empty());
+    let atlas = Atlas::parse(data).unwrap();
+    // Total over zero rows: every (kind, level) key answers None — the
+    // host's "Failed", never a core entry call.
+    for kind in [
+        MiniGameKind::DevilSquare,
+        MiniGameKind::BloodCastle,
+        MiniGameKind::ChaosCastle,
+    ] {
+        for level in 1u8..=9 {
+            assert!(
+                atlas
+                    .mini_game(kind, EventLevel::new(level).unwrap())
+                    .is_none(),
+                "{kind:?} level {level}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_test_authored_mini_game_definition_resolves_over_the_real_devil_square() {
+    let mut data = static_data!();
+    // The entrance is map 9's spawn-gate 58 rectangle — real Devil Square
+    // terrain; the wave monster is the real record 1.
+    data.mini_games.records = vec![authored_minigame!(
+        level: 3, map: 9, area: (133, 91, 141, 99), waves: vec![authored_wave!(monster: 1)]
+    )];
+    let atlas = Atlas::parse(data).unwrap();
+    let handle = atlas
+        .mini_game(MiniGameKind::DevilSquare, EventLevel::new(3).unwrap())
+        .unwrap();
+
+    // The entrance rectangle resolved into a non-empty walkable landing set
+    // against the real terrain, every tile inside the authored area.
+    let grid = atlas.terrain_grid(MapNumber(9)).unwrap();
+    let rect = TileArea::new(133, 91, 141, 99).unwrap().to_world();
+    assert!(handle.entrance_landing.iter().count() > 0);
+    for &landing in handle.entrance_landing.iter() {
+        assert!(grid.walkable(landing));
+        assert!(rect.contains(landing));
+    }
+
+    // The town warp-out follows the real respawn hop: map 9 redirects to
+    // Noria (map 3), whose gate landings are walkable ground.
+    assert_eq!(handle.town.map, MapNumber(3));
+    let noria = atlas.terrain_grid(MapNumber(3)).unwrap();
+    for &landing in handle.town.landing.iter() {
+        assert!(noria.walkable(landing));
+    }
+    assert_eq!(handle.town_env, MapEnvironment::Ground);
+
+    // The wave joined the real monster definition, its own respawn delay
+    // read from the record — never hand-copied.
+    assert_eq!(handle.waves.len(), 1);
+    let wave = &handle.waves[0];
+    assert_eq!(wave.number, WaveNumber(1));
+    assert_eq!(wave.respawn, WaveRespawn::RespawningWhileOpen);
+    let area = &wave.areas[0];
+    assert_eq!(area.monster.number, MonsterNumber(1));
+    let behavior: MobBehavior = match atlas.monster(MonsterNumber(1)).unwrap().role {
+        MonsterRole::Monster { behavior, .. }
+        | MonsterRole::Guard { behavior, .. }
+        | MonsterRole::Trap { behavior, .. } => behavior,
+        MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
+            panic!("monster 1 is a fighting record")
+        }
+    };
+    assert_eq!(area.respawn_ms, behavior.respawn_ms);
+
+    // The folds landed at parse: the raw 3-minute exit stored as 2 min 30 s.
+    assert_eq!(handle.definition.exit_duration.get(), DurationMs(150_000));
+
+    // Every OTHER key still answers None — the store is keyed, not fuzzy.
+    assert!(
+        atlas
+            .mini_game(MiniGameKind::DevilSquare, EventLevel::new(2).unwrap())
+            .is_none()
+    );
+    assert!(
+        atlas
+            .mini_game(MiniGameKind::BloodCastle, EventLevel::new(3).unwrap())
+            .is_none()
+    );
+}
+
+#[test]
+fn atlas_rejects_a_mini_game_entrance_without_a_walkable_landing() {
+    let mut data = static_data!();
+    // Map 9's (0,0)..(2,2) corner is fully unwalkable on the real terrain.
+    data.mini_games.records = vec![authored_minigame!(
+        level: 3, map: 9, area: (0, 0, 2, 2), waves: Vec::new()
+    )];
+    let err = Atlas::parse(data).unwrap_err();
+    assert_eq!(
+        err,
+        AtlasError::MiniGameEntranceWithoutWalkableLanding {
+            key: MiniGameKey {
+                kind: MiniGameKind::DevilSquare,
+                level: EventLevel::new(3).unwrap(),
+            },
+            map: MapNumber(9),
+        }
+    );
+}
+
+#[test]
+fn atlas_rejects_a_mini_game_entrance_on_an_unknown_map() {
+    let mut data = static_data!();
+    data.mini_games.records = vec![authored_minigame!(
+        level: 3, map: 200, area: (133, 91, 141, 99), waves: Vec::new()
+    )];
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(
+        err,
+        AtlasError::UnknownMapRef {
+            map: MapNumber(200)
+        }
+    ));
+}
+
+#[test]
+fn atlas_rejects_a_mini_game_wave_over_an_unknown_or_passive_monster() {
+    // A wave-area monster no record carries.
+    let mut data = static_data!();
+    data.mini_games.records = vec![authored_minigame!(
+        level: 3, map: 9, area: (133, 91, 141, 99), waves: vec![authored_wave!(monster: 9999)]
+    )];
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(err, AtlasError::UnknownMonsterRef { .. }));
+
+    // A wave-area monster that resolves to a passive NPC (record 235).
+    let mut data = static_data!();
+    data.mini_games.records = vec![authored_minigame!(
+        level: 3, map: 9, area: (133, 91, 141, 99), waves: vec![authored_wave!(monster: 235)]
+    )];
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(
+        err,
+        AtlasError::MiniGameWaveMonsterNotFighting {
+            monster: MonsterNumber(235),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn atlas_rejects_two_mini_game_definitions_sharing_a_key() {
+    let mut data = static_data!();
+    data.mini_games.records = vec![
+        authored_minigame!(level: 3, map: 9, area: (133, 91, 141, 99), waves: Vec::new()),
+        authored_minigame!(level: 3, map: 9, area: (135, 162, 142, 170), waves: Vec::new()),
+    ];
+    let err = Atlas::parse(data).unwrap_err();
+    assert!(matches!(err, AtlasError::DuplicateMiniGameKey { .. }));
+}
+
+#[test]
+fn atlas_rejects_a_mini_game_ticket_over_an_unknown_item() {
+    let mut data = static_data!();
+    let mut definition = authored_minigame!(
+        level: 3, map: 9, area: (133, 91, 141, 99), waves: Vec::new()
+    );
+    definition.ticket.item = ItemRef {
+        group: 99,
+        number: 99,
+    };
+    data.mini_games.records = vec![definition];
+    let err = Atlas::parse(data).unwrap_err();
+    assert_eq!(
+        err,
+        AtlasError::UnknownItemRef {
+            item: ItemRef {
+                group: 99,
+                number: 99,
+            },
+        }
+    );
+}
+
+#[test]
+fn atlas_rejects_a_mini_game_reward_group_over_an_unknown_item() {
+    let mut data = static_data!();
+    let mut definition = authored_minigame!(
+        level: 3, map: 9, area: (133, 91, 141, 99), waves: Vec::new()
+    );
+    definition.reward_table = vec![RewardEntry {
+        rank: None,
+        flags: SuccessFlags::NONE,
+        reward: RewardKind::ItemDrop {
+            group: RewardDropGroup {
+                items: OneOrMore::new(vec![ItemRef {
+                    group: 99,
+                    number: 99,
+                }])
+                .unwrap(),
+                item_level: ItemLevel::ZERO,
+            },
+        },
+    }];
+    data.mini_games.records = vec![definition];
+    let err = Atlas::parse(data).unwrap_err();
+    assert_eq!(
+        err,
+        AtlasError::UnknownItemRef {
+            item: ItemRef {
+                group: 99,
+                number: 99,
+            },
+        }
+    );
 }
 
 #[test]

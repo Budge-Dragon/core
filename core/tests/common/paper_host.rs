@@ -23,14 +23,18 @@ mod dataset;
 #[path = "rng.rs"]
 mod rng;
 
+use core::num::NonZeroU16;
+
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
+use mu_core::components::collections::OneOrMore;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::drop_claim::PickerStanding;
 use mu_core::components::element::PerElement;
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
+use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
 use mu_core::components::item_instance::{
     CraftedAugment, Durability, ItemInstance, LuckRoll, RarityRoll, SkillRoll,
@@ -42,21 +46,28 @@ use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
-use mu_core::components::tile::{TerrainGrid, TileCoord};
+use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{
-    CarriedZen, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
+    CarriedZen, DurationMs, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
 };
-use mu_core::data::atlas::Atlas;
+use mu_core::data::atlas::{Atlas, MiniGameHandle};
 use mu_core::data::common::{MonsterNumber, SkillNumber};
 use mu_core::data::effects::Ailment;
 use mu_core::data::gates_warps::WarpIndex;
-use mu_core::data::item_definitions::ItemDefinition;
+use mu_core::data::item_definitions::{EventKind, ItemDefinition, ItemKind};
+use mu_core::data::minigame::{
+    EntranceGate, EventLevel, MiniGameDefinition, MiniGameKey, MiniGameKind, PhaseSpan,
+    PlayerBounds, Rank, RewardDropGroup, RewardEntry, RewardKind, RosterSlot, Score,
+    SessionMonsterId, SpawnWave, SuccessFlag, SuccessFlags, TicketRequirement, WaveNumber,
+    WaveRespawn, WaveSpawnArea,
+};
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::skills::{AreaDisplacement, AreaGeometry, DamageType, Skill};
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::character::Character;
+use mu_core::entities::minigame_session::MiniGameSession;
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::entities::party_session::{PartyInvite, PartySession};
 use mu_core::entities::trade_session::TradeSession;
@@ -70,6 +81,7 @@ use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::ground::DespawnEvent;
 use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, RemoveOutcome};
 use mu_core::events::kill::KillResolution;
+use mu_core::events::minigame::MiniGameEvent;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightOutcome, StepOutcome};
 use mu_core::events::party::{MemberAward, PartyEvent};
@@ -82,7 +94,7 @@ use mu_core::events::travel::{
 };
 use mu_core::services::combat::StrikeBasis;
 use mu_core::services::consume::use_consumable;
-use mu_core::services::death::{resolve_death, respawn};
+use mu_core::services::death::{DeathPenalty, resolve_death, respawn};
 use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
 };
@@ -95,6 +107,7 @@ use mu_core::services::inventory::{
 };
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::kill::resolve_kill;
+use mu_core::services::minigame;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::movement::resolve_step;
 use mu_core::services::party;
@@ -111,8 +124,8 @@ use mu_core::services::trade::{
 use mu_core::services::travel::{resolve_warp, traverse_enter_gate, use_town_portal, warp_menu};
 use mu_core::services::wear::{WearEvent, resolve_strike_with_wear, wear_from_strike};
 
-pub use dataset::or_abort;
-use dataset::real_atlas;
+use dataset::real_static_data;
+pub use dataset::{or_abort, real_atlas};
 use rng::TestRng;
 
 /// The one owned world value: the held static [`Atlas`], one seeded stream, the
@@ -156,6 +169,11 @@ pub struct World {
     /// nothing, so every logged event belongs to a character). Scenarios drain
     /// it with [`World::drain_wear_events`].
     delivered_wear: Vec<WearEvent>,
+    /// The live mini-game sessions, addressed by index — each a caller-owned
+    /// serde value the framework services thread through the persist seam. A
+    /// session's `RosterSlot(i)` maps to the character at index `i` (the same
+    /// positional account↔slot convention the party live set uses).
+    mini_sessions: Vec<MiniGameSession>,
 }
 
 /// The persist seam — the database write/read boundary abstracted. Serialises a
@@ -197,6 +215,7 @@ struct LiveSnapshot<'a> {
     sessions: &'a [TradeSession],
     parties: &'a [PartySession],
     pending_invites: &'a [PartyInvite],
+    mini_sessions: &'a [MiniGameSession],
 }
 
 impl World {
@@ -204,8 +223,34 @@ impl World {
     /// seeded by `seed`, with every live set empty.
     #[must_use]
     pub fn new(seed: u64, map: MapNumber) -> Self {
+        Self::from_atlas(real_atlas(), seed, map)
+    }
+
+    /// A fresh world on `map` whose held atlas carries the authored mini-game
+    /// `definitions` resolved against the real terrain — the only way a scenario
+    /// runs an event, since no mini-game rows ship. The real dataset is parsed
+    /// with the definitions injected, so the entrance landing, the town hop, and
+    /// the wave monster defs all resolve at parse exactly as a shipped row would.
+    /// The scenario authors its definitions against a base [`real_atlas`] so it
+    /// can find the ticket item and walkable rectangles by pattern, never a
+    /// hard-coded number.
+    #[must_use]
+    pub fn with_mini_games(
+        seed: u64,
+        map: MapNumber,
+        definitions: Vec<MiniGameDefinition>,
+    ) -> Self {
+        let mut data = real_static_data();
+        data.mini_games.records = definitions;
+        Self::from_atlas(or_abort(Atlas::parse(data)), seed, map)
+    }
+
+    /// The shared constructor: a fresh world on `map` over an already-parsed
+    /// `atlas` and a stream seeded by `seed`, every live set empty.
+    #[must_use]
+    fn from_atlas(atlas: Atlas, seed: u64, map: MapNumber) -> Self {
         Self {
-            atlas: real_atlas(),
+            atlas,
             rng: TestRng::new(seed),
             map,
             characters: Vec::new(),
@@ -218,6 +263,7 @@ impl World {
             parties: Vec::new(),
             pending_invites: Vec::new(),
             delivered_wear: Vec::new(),
+            mini_sessions: Vec::new(),
         }
     }
 
@@ -1015,15 +1061,22 @@ impl World {
 
     /// Runs the monster-kill death step on the player at `char_index` (the
     /// W-DEATH seam, V6 continuation): reads the live character, calls the core
-    /// [`resolve_death`] service at `at` on the host's fixed tick base, persists
-    /// the returned character, and hands the death events back for delivery. The
+    /// [`resolve_death`] service at `at` on the host's fixed tick base with the
+    /// penalty applied (the normal-death host path), persists the returned
+    /// character, and hands the death events back for delivery. The
     /// death RULE — the exp + zen penalty, the Dead-marking, leaving vitals and
     /// effects in place — lives in core; this is a thin persist-and-deliver
     /// driver, the death twin of [`Self::apply_growth`]. No penalty, gate, refill,
     /// or clear logic is authored host-side.
     pub fn resolve_player_death(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
         let character = or_abort(self.characters.get(char_index).ok_or("no character"));
-        let (dead, events) = resolve_death(character, at, host_tick(), &self.atlas);
+        let (dead, events) = resolve_death(
+            character,
+            at,
+            host_tick(),
+            &self.atlas,
+            DeathPenalty::Applied,
+        );
         let persisted = persist(dead);
         let slot = or_abort(
             self.characters
@@ -2010,6 +2063,275 @@ impl World {
         result
     }
 
+    /// The mini-game session at `index`.
+    #[must_use]
+    pub fn mini_session(&self, index: usize) -> &MiniGameSession {
+        or_abort(
+            self.mini_sessions
+                .get(index)
+                .ok_or("no mini-game session at index"),
+        )
+    }
+
+    /// How many mini-game sessions are live.
+    #[must_use]
+    pub fn mini_session_count(&self) -> usize {
+        self.mini_sessions.len()
+    }
+
+    /// Opens a fresh mini-game session for `key`, its entry window closing at the
+    /// definition's enter-duration past `opened_at` — the close tick is core
+    /// arithmetic ([`DurationMs::in_ticks`] over the host cadence), never
+    /// re-derived here. Seats the session through the persist seam and returns
+    /// its index.
+    pub fn open_mini_session(&mut self, key: MiniGameKey, opened_at: Tick) -> usize {
+        let handle: MiniGameHandle<'_> = or_abort(
+            self.atlas
+                .mini_game(key.kind, key.level)
+                .ok_or("no resolved mini-game for the key"),
+        );
+        let closes_at = opened_at + handle.definition.enter_duration.get().in_ticks(host_tick());
+        let session = MiniGameSession::open(key, opened_at, closes_at);
+        let index = self.mini_sessions.len();
+        self.mini_sessions.push(persist(session));
+        index
+    }
+
+    /// Drives the entry gate for the character at `char_index` into the session
+    /// at `session_index` with host-supplied `pk` standing: reads the live
+    /// session, entrant, and bag, runs [`minigame::enter_mini_game`] over the
+    /// held atlas and stream, and writes the (possibly spent) session, entrant,
+    /// and bag back *through* the persist seam. On any rejection the framework
+    /// returns them unchanged (reject-before-spend), so the write-back is a
+    /// no-op in value. Returns the outcome.
+    pub fn enter_mini_session(
+        &mut self,
+        session_index: usize,
+        char_index: usize,
+        pk: minigame::PkStanding,
+    ) -> minigame::EnterOutcome {
+        let session = self.mini_session(session_index).clone();
+        let entrant = or_abort(self.characters.get(char_index).ok_or("no entrant")).clone();
+        let bag = or_abort(self.inventories.get(char_index).ok_or("no entrant bag")).clone();
+        let handle: MiniGameHandle<'_> = or_abort(
+            self.atlas
+                .mini_game(session.key.kind, session.key.level)
+                .ok_or("no resolved mini-game"),
+        );
+        let (session, entrant, bag, outcome) =
+            minigame::enter_mini_game(session, &handle, entrant, bag, pk, &mut self.rng);
+        self.store_mini_session(session_index, session);
+        let slot = or_abort(self.characters.get_mut(char_index).ok_or("no entrant slot"));
+        *slot = persist(entrant);
+        let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
+        *slot = persist(bag);
+        outcome
+    }
+
+    /// Advances the mini-game session at `session_index` to `now`: runs the
+    /// core tick machine [`minigame::advance_mini_game`] over the held atlas and
+    /// stream (its own deadlines, wave spawns and respawns, the min-player abort,
+    /// the empty-roster end, the dispose warp-outs), writes the new session back
+    /// *through* the persist seam, and returns the emitted events. The host reads
+    /// the next deadline off the returned session's phase to decide when to
+    /// advance again — it never re-derives the phase arithmetic.
+    pub fn advance_mini_session(&mut self, session_index: usize, now: Tick) -> Vec<MiniGameEvent> {
+        let session = self.mini_session(session_index).clone();
+        let handle: MiniGameHandle<'_> = or_abort(
+            self.atlas
+                .mini_game(session.key.kind, session.key.level)
+                .ok_or("no resolved mini-game"),
+        );
+        let (session, events) =
+            minigame::advance_mini_game(session, &handle, now, host_tick(), &mut self.rng);
+        self.store_mini_session(session_index, session);
+        events
+    }
+
+    /// Reports a server-attributed kill into the session at `session_index`:
+    /// credits `score` to `credit`, removes the slain instance from the session
+    /// live-set, and (for a still-open respawning wave) schedules the monster's
+    /// own-`respawn_ms` return — all core, over the held atlas. Persists the new
+    /// session. `slain`/`credit`/`score` are the host's server-computed kill
+    /// facts (invariant 6), never a client claim.
+    pub fn report_mini_kill(
+        &mut self,
+        session_index: usize,
+        slain: SessionMonsterId,
+        credit: RosterSlot,
+        score: Score,
+        now: Tick,
+    ) {
+        let session = self.mini_session(session_index).clone();
+        let handle: MiniGameHandle<'_> = or_abort(
+            self.atlas
+                .mini_game(session.key.kind, session.key.level)
+                .ok_or("no resolved mini-game"),
+        );
+        let session =
+            minigame::report_session_kill(session, &handle, slain, credit, score, now, host_tick());
+        self.store_mini_session(session_index, session);
+    }
+
+    /// Marks the session's server-computed `winner` (a quest delivery / last-man
+    /// fact) via [`minigame::finish_event`] and persists it; the next advance
+    /// observes the marker and ends the game early.
+    pub fn finish_mini_event(&mut self, session_index: usize, winner: RosterSlot) {
+        let session = minigame::finish_event(self.mini_session(session_index).clone(), winner);
+        self.store_mini_session(session_index, session);
+    }
+
+    /// Flips the roster status of `victim` to the bare `Dead` in the session at
+    /// `session_index` ([`minigame::report_death`]) and persists it — the roster
+    /// side of an in-event death. The 3 s eject clock and every penalty live on
+    /// the character's own [`resolve_death`] transition, never here.
+    pub fn report_mini_death(&mut self, session_index: usize, victim: RosterSlot) {
+        let session = minigame::report_death(self.mini_session(session_index).clone(), victim);
+        self.store_mini_session(session_index, session);
+    }
+
+    /// Removes `who` from the session's roster ([`minigame::report_leave`]) and
+    /// persists it — a voluntary leave or the host-reported exit of an ejected
+    /// dead member (forfeits the fee, no reward).
+    pub fn report_mini_leave(&mut self, session_index: usize, who: RosterSlot) {
+        let session = minigame::report_leave(self.mini_session(session_index).clone(), who);
+        self.store_mini_session(session_index, session);
+    }
+
+    /// Resolves the death of the character at `char_index` with the mini-game
+    /// penalty policy WAIVED — the same [`resolve_death`] transition as any
+    /// death, docking no experience and no zen (pin 2). The [`Self::resolve_player_death`]
+    /// twin for a death inside an event. Persists the marked-`Dead` character and
+    /// returns the death events (a lone `Died`, no docks).
+    pub fn resolve_waived_death_of(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
+        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
+        let (dead, events) = resolve_death(
+            character,
+            at,
+            host_tick(),
+            &self.atlas,
+            DeathPenalty::Waived,
+        );
+        let persisted = persist(dead);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        events
+    }
+
+    /// Resolves the Ended session's rewards ([`minigame::resolve_rewards`]) and
+    /// APPLIES every per-finisher grant through the existing per-character seams
+    /// — experience via [`apply_experience`], money via
+    /// [`minigame::apply_money_grant`], an item drop via
+    /// [`minigame::apply_item_drop_grant`] (seated on the ground) — each written
+    /// back *through* the persist seam. A finisher's `RosterSlot(i)` addresses
+    /// the character at index `i`. Returns the resolution (its ranked score table
+    /// and grant events) for the scenario to read.
+    pub fn pay_out_mini_rewards(
+        &mut self,
+        session_index: usize,
+        now: Tick,
+    ) -> minigame::RewardOutcome {
+        let session = self.mini_session(session_index).clone();
+        let handle: MiniGameHandle<'_> = or_abort(
+            self.atlas
+                .mini_game(session.key.kind, session.key.level)
+                .ok_or("no resolved mini-game"),
+        );
+        let outcome = minigame::resolve_rewards(&session, &handle, host_tick());
+        for award in &outcome.awards {
+            let char_index = usize::from(award.slot.0);
+            for grant in &award.grants {
+                self.apply_mini_grant(char_index, grant, now);
+            }
+        }
+        outcome
+    }
+
+    /// Credits `amount` back to the character at `char_index` through the
+    /// balance-preserving carried-zen seam — the host applying a `FeeRefunded`
+    /// decision (the min-player abort's one refund path, pin 4). Persists the
+    /// credited character.
+    pub fn refund_fee(&mut self, char_index: usize, amount: Zen) {
+        let character = or_abort(self.characters.get(char_index).ok_or("no refundee")).clone();
+        let refunded = match minigame::apply_money_grant(character, amount) {
+            minigame::MoneyGrant::Credited { character }
+            | minigame::MoneyGrant::OverCap { character } => character,
+        };
+        let persisted = persist(refunded);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no refundee slot"),
+        );
+        *slot = persisted;
+    }
+
+    /// Applies one grant decision to the character at `char_index` through its
+    /// existing per-character seam, writing the result back through the persist
+    /// seam (an item drop is seated on the ground instead). The reward fan-out's
+    /// application half.
+    fn apply_mini_grant(&mut self, char_index: usize, grant: &minigame::GrantDecision, now: Tick) {
+        match grant {
+            minigame::GrantDecision::Experience { amount } => {
+                let character = or_abort(self.characters.get(char_index).ok_or("no finisher"));
+                let (grown, _events) = apply_experience(character, *amount, &self.atlas);
+                let persisted = persist(grown);
+                let slot = or_abort(
+                    self.characters
+                        .get_mut(char_index)
+                        .ok_or("no finisher slot"),
+                );
+                *slot = persisted;
+            }
+            minigame::GrantDecision::Money { amount } => {
+                let character =
+                    or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
+                let credited = match minigame::apply_money_grant(character, *amount) {
+                    minigame::MoneyGrant::Credited { character }
+                    | minigame::MoneyGrant::OverCap { character } => character,
+                };
+                let persisted = persist(credited);
+                let slot = or_abort(
+                    self.characters
+                        .get_mut(char_index)
+                        .ok_or("no finisher slot"),
+                );
+                *slot = persisted;
+            }
+            minigame::GrantDecision::ItemDrop { group } => {
+                let character =
+                    or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
+                match minigame::apply_item_drop_grant(
+                    &character,
+                    group,
+                    &self.atlas,
+                    now,
+                    host_tick(),
+                    &mut self.rng,
+                ) {
+                    minigame::ItemDropGrant::Dropped { item } => {
+                        self.ground_items.push(persist(item));
+                    }
+                    minigame::ItemDropGrant::Nothing => {}
+                }
+            }
+        }
+    }
+
+    /// Persists `session` into the mini-game session slot at `session_index`.
+    fn store_mini_session(&mut self, session_index: usize, session: MiniGameSession) {
+        let slot = or_abort(
+            self.mini_sessions
+                .get_mut(session_index)
+                .ok_or("no mini-game session slot"),
+        );
+        *slot = persist(session);
+    }
+
     /// Persists `party` into the party slot at `party_index`.
     fn store_party(&mut self, party_index: usize, party: PartySession) {
         let slot = or_abort(self.parties.get_mut(party_index).ok_or("no party slot"));
@@ -2030,6 +2352,7 @@ impl World {
             sessions: &self.sessions,
             parties: &self.parties,
             pending_invites: &self.pending_invites,
+            mini_sessions: &self.mini_sessions,
         }))
     }
 }
@@ -2701,4 +3024,184 @@ fn first_walkable_run(grid: &TerrainGrid, length: usize) -> Option<Vec<TileCoord
         }
     }
     None
+}
+
+// --- Mini-game fixtures over the real dataset (found by pattern, never a
+// --- hard-coded id or tile). ------------------------------------------------
+
+/// The real Devil Square event-ticket item, found by pattern in the shipped
+/// catalog — the only [`ItemKind::EventTicket`] carrying
+/// [`EventKind::DevilSquare`]. Never a hard-coded id, so a catalog renumber
+/// cannot silently drift the fixture.
+#[must_use]
+pub fn devil_square_ticket_ref(atlas: &Atlas) -> ItemRef {
+    or_abort(
+        atlas
+            .items()
+            .find(|def| {
+                matches!(
+                    &def.kind,
+                    ItemKind::EventTicket {
+                        event: EventKind::DevilSquare
+                    }
+                )
+            })
+            .map(|def| def.id)
+            .ok_or("no Devil Square event ticket in the catalog"),
+    )
+}
+
+/// A Devil Square ticket instance carrying `charges` at plus-`level` — the entry
+/// item a scenario seeds into an entrant's bag. `ticket_ref` is resolved by
+/// pattern; only its ref, level, and remaining durability matter to the entry
+/// scan.
+#[must_use]
+pub fn devil_square_ticket(ticket_ref: ItemRef, charges: u8, level: ItemLevel) -> ItemInstance {
+    ItemInstance {
+        item: ticket_ref,
+        level,
+        roll: RarityRoll::Normal,
+        normal_option: None,
+        luck: LuckRoll::Plain,
+        skill: SkillRoll::NoSkill,
+        durability: or_abort(Durability::new(charges, 5)),
+        augment: CraftedAugment::None,
+    }
+}
+
+/// The first fully-walkable `width`x1 tile strip on `map`, as a [`TileArea`] —
+/// an event entrance or wave floor found by scanning the real terrain, so the
+/// spawn/landing rectangles are never hard-coded coordinates. A shorter strip
+/// still seats the authored quantity: the `Area` placement samples walkable
+/// tiles with replacement.
+#[must_use]
+pub fn walkable_area(atlas: &Atlas, map: MapNumber, width: usize) -> TileArea {
+    let run = walkable_run(atlas, map, width);
+    let first = *or_abort(run.first().ok_or("empty walkable run"));
+    let last = *or_abort(run.last().ok_or("empty walkable run"));
+    or_abort(TileArea::new(first.x(), first.y(), last.x(), last.y()))
+}
+
+/// A reward-drop group of a single catalog `item` at a fixed plus-`level` — the
+/// self-contained group a [`RewardKind::ItemDrop`] rolls at the finisher's feet.
+#[must_use]
+pub fn reward_drop_group(item: ItemRef, level: ItemLevel) -> RewardDropGroup {
+    RewardDropGroup {
+        items: or_abort(OneOrMore::new(vec![item])),
+        item_level: level,
+    }
+}
+
+/// One reward-table row: an optional `rank` filter, a success-flag conjunction,
+/// and the `reward` payload — the `entry` shorthand the reward scenarios author.
+#[must_use]
+pub fn reward_entry(rank: Option<u16>, flags: Vec<SuccessFlag>, reward: RewardKind) -> RewardEntry {
+    RewardEntry {
+        rank: rank.map(Rank),
+        flags: or_abort(SuccessFlags::new(flags)),
+        reward,
+    }
+}
+
+/// One authored spawn wave over `area`: its `number`, the game-relative window
+/// `[start_ms, end_ms]`, its respawn policy, and `quantity` of `monster`.
+#[must_use]
+pub fn spawn_wave(
+    number: u8,
+    start_ms: u32,
+    end_ms: u32,
+    respawn: WaveRespawn,
+    monster: MonsterNumber,
+    quantity: u16,
+    area: TileArea,
+) -> SpawnWave {
+    SpawnWave {
+        number: WaveNumber(number),
+        window: or_abort(Interval::new(DurationMs(start_ms), DurationMs(end_ms))),
+        respawn,
+        areas: vec![WaveSpawnArea {
+            monster,
+            area,
+            quantity: or_abort(NonZeroU16::new(quantity).ok_or("wave quantity is nonzero")),
+        }],
+    }
+}
+
+/// The `(DevilSquare, level)` key of a [`devil_square_definition`].
+#[must_use]
+pub fn devil_square_key(level: EventLevel) -> MiniGameKey {
+    MiniGameKey {
+        kind: MiniGameKind::DevilSquare,
+        level,
+    }
+}
+
+/// A test-authored Devil Square definition over the REAL map-9 terrain at event
+/// `level`: normal bracket 15..130, special 10..110, the real DS ticket at +2, a
+/// 25,000-zen fee, `min_players`..`max_players`, a 2-minute enter window, a
+/// 5-minute game, a 1-minute raw exit (folding to the 30 s floor), its entrance
+/// resolved by pattern from the real terrain, and `rewards`/`waves`. Map 9's
+/// real town hop (Noria) resolves the alive warp-outs, so the definition passes
+/// the Atlas parse proof over the shipped dataset. The generous game span leaves
+/// room for authored wave windows to open, overlap, and close well inside it.
+#[must_use]
+pub fn devil_square_definition(
+    atlas: &Atlas,
+    level: EventLevel,
+    min_players: u16,
+    max_players: u16,
+    waves: Vec<SpawnWave>,
+    rewards: Vec<RewardEntry>,
+) -> MiniGameDefinition {
+    MiniGameDefinition {
+        kind: MiniGameKind::DevilSquare,
+        level,
+        normal_bracket: or_abort(Interval::new(
+            or_abort(Level::new(15)),
+            or_abort(Level::new(130)),
+        )),
+        special_bracket: or_abort(Interval::new(
+            or_abort(Level::new(10)),
+            or_abort(Level::new(110)),
+        )),
+        ticket: TicketRequirement {
+            item: devil_square_ticket_ref(atlas),
+            item_level: or_abort(ItemLevel::new(2)),
+        },
+        entrance_fee: Zen(25_000),
+        players: or_abort(PlayerBounds::new(
+            or_abort(NonZeroU16::new(min_players).ok_or("min players is nonzero")),
+            or_abort(NonZeroU16::new(max_players).ok_or("max players is nonzero")),
+        )),
+        enter_duration: PhaseSpan::floored(DurationMs(120_000)),
+        game_duration: PhaseSpan::floored(DurationMs(300_000)),
+        exit_duration: PhaseSpan::floored_less_countdown(DurationMs(60_000)),
+        entrance: EntranceGate {
+            map: MapNumber(9),
+            area: walkable_area(atlas, MapNumber(9), 8),
+        },
+        spawn_waves: waves,
+        reward_table: rewards,
+    }
+}
+
+/// A fighting monster carrying a positive respawn delay, found by pattern — the
+/// wave populace whose own `MobBehavior.respawn_ms` a respawning wave reuses
+/// (ruling D). Returns its number.
+#[must_use]
+pub fn respawning_wave_monster(atlas: &Atlas) -> MonsterNumber {
+    or_abort(
+        atlas
+            .monsters()
+            .find_map(|def| match &def.role {
+                MonsterRole::Monster {
+                    combat, behavior, ..
+                } => (combat.hp > 0 && behavior.respawn_ms.0 > 0).then_some(def.number),
+                MonsterRole::Guard { .. }
+                | MonsterRole::Trap { .. }
+                | MonsterRole::Npc { .. }
+                | MonsterRole::SoccerBall => None,
+            })
+            .ok_or("no fighting monster with a positive respawn delay"),
+    )
 }

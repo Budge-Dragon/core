@@ -10,10 +10,12 @@ mod check;
 mod resolve;
 mod views;
 
+use core::num::NonZeroU16;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::spatial::WorldPos;
-use crate::components::tile::TerrainGrid;
+use crate::components::tile::{TerrainGrid, TileArea};
 use crate::components::units::DurationMs;
 use crate::data::ancient_sets::{AncientRoster, AncientRosterError, AncientSet};
 use crate::data::box_drops::BoxDrop;
@@ -26,7 +28,11 @@ use crate::data::game_config::{GameConfig, ProgressionConfig};
 use crate::data::gates_warps::{GateWarpRecord, Warp, WarpIndex};
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::map_definitions::{MapDefinition, MapEnvironment};
-use crate::data::monster_definitions::MonsterDefinition;
+use crate::data::minigame::{
+    EventLevel, MiniGameDefinition, MiniGameKey, MiniGameKind, RewardKind, WaveNumber, WaveRespawn,
+    WaveWindow,
+};
+use crate::data::monster_definitions::{MonsterDefinition, MonsterRole};
 use crate::data::npc_shops::{MerchantShop, ShelfSlot};
 use crate::data::option_roll::OptionRollPolicy;
 use crate::data::skills::Skill;
@@ -43,7 +49,7 @@ pub use views::{
 use check::{
     check_ancient_sets, check_box_drops, check_chaos_mixes, check_classes, check_items,
     check_monster_attacks, check_monster_dispositions, check_respawn_destinations, check_shops,
-    check_special_drops, check_summons,
+    check_special_drops, check_summons, require_item,
 };
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
@@ -86,6 +92,10 @@ pub struct StaticData {
     pub exp_tables: DataFile<ExpTable>,
     /// `game_config.json`.
     pub game_config: DataFile<GameConfig>,
+    /// `minigame.json` — schema-only this era: the file is absent, the host
+    /// supplies zero records, and the Atlas stays total over the empty
+    /// family (the per-game waves W-DS/W-BC/W-CC ship the rows).
+    pub mini_games: DataFile<MiniGameDefinition>,
     /// The 11 `terrain/<map>.bin` walkability sidecars, one per map.
     pub terrain: Vec<MapTerrain>,
 }
@@ -120,6 +130,7 @@ pub struct Atlas {
     drop_pool: DropPool,
     chaos_recipes: Vec<ResolvedRecipe>,
     shops: BTreeMap<MonsterNumber, ResolvedShop>,
+    mini_games: BTreeMap<MiniGameKey, ResolvedMiniGame>,
 }
 
 impl Atlas {
@@ -193,6 +204,15 @@ impl Atlas {
             .ok_or(AtlasError::FallbackSpawnGateMissing)?;
         check_respawn_destinations(&maps, &respawn_gate_by_map)?;
 
+        let mini_games = index_minigames(
+            data.mini_games.records,
+            &maps,
+            &monsters,
+            &items,
+            &terrain_grids,
+            &respawn_gate_by_map,
+        )?;
+
         Ok(Self {
             maps,
             spawns_by_map,
@@ -217,6 +237,7 @@ impl Atlas {
             drop_pool,
             chaos_recipes,
             shops,
+            mini_games,
         })
     }
 
@@ -475,6 +496,205 @@ impl Atlas {
             entries: &shop.entries,
         })
     }
+
+    /// The resolved handle for a `(kind, level)`; `None` when no definition
+    /// carries it — genuine optionality of an open key, and the host's
+    /// "Failed" (a `None` never reaches a core entry call; core takes a
+    /// resolved handle, parse-don't-validate). Total over zero rows: the
+    /// store is empty, every key returns `None`.
+    #[must_use]
+    pub fn mini_game(&self, kind: MiniGameKind, level: EventLevel) -> Option<MiniGameHandle<'_>> {
+        let resolved = self.mini_games.get(&MiniGameKey { kind, level })?;
+        Some(MiniGameHandle {
+            definition: &resolved.definition,
+            entrance_landing: &resolved.entrance_landing,
+            terrain: self.terrain_grids.get(&resolved.definition.entrance.map)?,
+            town: resolved.town_landing.view(),
+            town_env: resolved.town_env,
+            waves: &resolved.waves,
+        })
+    }
+}
+
+/// A mini-game definition with its entrance landing, town warp-out, and wave
+/// monster definitions resolved and retained at parse — the store
+/// [`Atlas::mini_game`] hands a borrow of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedMiniGame {
+    definition: MiniGameDefinition,
+    /// The entrance rectangle resolved to its non-empty walkable landing set
+    /// (`MiniGameEntranceWithoutWalkableLanding` at parse if empty — the
+    /// `SpawnGateWithoutWalkableLanding` precedent).
+    entrance_landing: OneOrMore<WorldPos>,
+    /// The entrance map's town destination gate plus environment, for the
+    /// alive warp-outs.
+    town_landing: ResolvedSpawnGate,
+    town_env: MapEnvironment,
+    /// Each wave with its monster definitions joined.
+    waves: Vec<ResolvedWave>,
+}
+
+/// The borrowed view the Atlas hands out — the mini-game analog of
+/// [`MapHandle`]. Every service takes this, never a raw
+/// `&MiniGameDefinition` + grid + atlas triple.
+#[derive(Debug, Clone, Copy)]
+pub struct MiniGameHandle<'a> {
+    /// The raw schema fields (brackets, ticket, fee, players, durations,
+    /// rewards).
+    pub definition: &'a MiniGameDefinition,
+    /// The entrance's non-empty walkable landing set.
+    pub entrance_landing: &'a OneOrMore<WorldPos>,
+    /// The entrance map's terrain (for spawn placement on wave areas).
+    pub terrain: &'a TerrainGrid,
+    /// The town warp-out destination.
+    pub town: SpawnGateView<'a>,
+    /// The town traversal environment.
+    pub town_env: MapEnvironment,
+    /// The resolved waves.
+    pub waves: &'a [ResolvedWave],
+}
+
+/// One resolved wave: window offsets, respawn policy, and areas with monster
+/// definitions joined. `respawn_ms` is read from each monster's
+/// `MobBehavior` at parse — this wave is that field's first consumer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedWave {
+    /// The wave number.
+    pub number: WaveNumber,
+    /// The game-relative window.
+    pub window: WaveWindow,
+    /// Sustained vs one-shot.
+    pub respawn: WaveRespawn,
+    /// The resolved areas.
+    pub areas: Vec<ResolvedWaveArea>,
+}
+
+/// One resolved wave area: the monster definition (joined), the spawn
+/// rectangle, the quantity, and the monster's own respawn delay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedWaveArea {
+    /// The monster to place (joined at parse — proven present).
+    pub monster: MonsterDefinition,
+    /// The spawn rectangle.
+    pub area: TileArea,
+    /// Instances per wave start.
+    pub quantity: NonZeroU16,
+    /// The monster's own respawn delay (`MobBehavior::respawn_ms`).
+    pub respawn_ms: DurationMs,
+}
+
+/// Proves and retains the mini-game definitions in one pass: `(kind, level)`
+/// uniqueness, its ticket and every reward-group drop item, a known entrance
+/// map with a non-empty walkable landing, a gate-owning town destination for
+/// the warp-outs, and every wave-area monster joined as a fighting kind
+/// carrying its respawn delay. Vacuously total over zero records.
+fn index_minigames(
+    records: Vec<MiniGameDefinition>,
+    maps: &BTreeMap<MapNumber, MapDefinition>,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+    terrain_grids: &BTreeMap<MapNumber, TerrainGrid>,
+    respawn_gates: &BTreeMap<MapNumber, ResolvedSpawnGate>,
+) -> Result<BTreeMap<MiniGameKey, ResolvedMiniGame>, AtlasError> {
+    let mut resolved = BTreeMap::new();
+    for definition in records {
+        let key = MiniGameKey {
+            kind: definition.kind,
+            level: definition.level,
+        };
+        require_item(items, definition.ticket.item)?;
+        for entry in &definition.reward_table {
+            match &entry.reward {
+                RewardKind::ItemDrop { group } => {
+                    for &item in group.items.iter() {
+                        require_item(items, item)?;
+                    }
+                }
+                RewardKind::Experience { .. }
+                | RewardKind::ExperiencePerRemainingSecond { .. }
+                | RewardKind::Money { .. }
+                | RewardKind::Score { .. } => {}
+            }
+        }
+        let map = definition.entrance.map;
+        let Some(map_def) = maps.get(&map) else {
+            return Err(AtlasError::UnknownMapRef { map });
+        };
+        let cells: Vec<WorldPos> = match terrain_grids.get(&map) {
+            Some(grid) => grid
+                .walkable_positions_in(definition.entrance.area.to_world())
+                .collect(),
+            None => Vec::new(),
+        };
+        let entrance_landing = OneOrMore::new(cells).map_err(|EmptyCollection| {
+            AtlasError::MiniGameEntranceWithoutWalkableLanding { key, map }
+        })?;
+        let respawn_map = map_def.respawn_map;
+        let town_landing = respawn_gates
+            .get(&respawn_map)
+            .cloned()
+            .ok_or(AtlasError::MiniGameEntranceWithoutTownGate { key, respawn_map })?;
+        let town_env = maps
+            .get(&respawn_map)
+            .map(|town| town.environment)
+            .ok_or(AtlasError::MiniGameEntranceWithoutTownGate { key, respawn_map })?;
+        let waves = resolve_minigame_waves(&definition, key, monsters)?;
+        let entry = ResolvedMiniGame {
+            definition,
+            entrance_landing,
+            town_landing,
+            town_env,
+            waves,
+        };
+        if resolved.insert(key, entry).is_some() {
+            return Err(AtlasError::DuplicateMiniGameKey { key });
+        }
+    }
+    Ok(resolved)
+}
+
+/// Joins one definition's wave areas to their monster definitions, reading
+/// each fighting monster's own respawn delay.
+fn resolve_minigame_waves(
+    definition: &MiniGameDefinition,
+    key: MiniGameKey,
+    monsters: &BTreeMap<MonsterNumber, MonsterDefinition>,
+) -> Result<Vec<ResolvedWave>, AtlasError> {
+    let mut waves = Vec::with_capacity(definition.spawn_waves.len());
+    for wave in &definition.spawn_waves {
+        let mut areas = Vec::with_capacity(wave.areas.len());
+        for area in &wave.areas {
+            let Some(monster) = monsters.get(&area.monster) else {
+                return Err(AtlasError::UnknownMonsterRef {
+                    monster: area.monster,
+                });
+            };
+            let respawn_ms = match monster.role {
+                MonsterRole::Monster { behavior, .. }
+                | MonsterRole::Guard { behavior, .. }
+                | MonsterRole::Trap { behavior, .. } => behavior.respawn_ms,
+                MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
+                    return Err(AtlasError::MiniGameWaveMonsterNotFighting {
+                        key,
+                        monster: area.monster,
+                    });
+                }
+            };
+            areas.push(ResolvedWaveArea {
+                monster: monster.clone(),
+                area: area.area,
+                quantity: area.quantity,
+                respawn_ms,
+            });
+        }
+        waves.push(ResolvedWave {
+            number: wave.number,
+            window: wave.window,
+            respawn: wave.respawn,
+            areas,
+        });
+    }
+    Ok(waves)
 }
 
 /// Why the dataset does not form a consistent world — one variant per proof.
@@ -663,6 +883,35 @@ pub enum AtlasError {
         /// The uncovered map.
         map: MapNumber,
     },
+    /// Two mini-game definitions share a `(kind, level)` key.
+    DuplicateMiniGameKey {
+        /// The repeated definition key.
+        key: MiniGameKey,
+    },
+    /// A mini-game's entrance rectangle holds no walkable tile — entry would
+    /// have nowhere to place an admitted entrant.
+    MiniGameEntranceWithoutWalkableLanding {
+        /// The definition key.
+        key: MiniGameKey,
+        /// The entrance map with no walkable landing.
+        map: MapNumber,
+    },
+    /// A mini-game's entrance map names a town destination that owns no spawn
+    /// gate — its warp-outs would have no town landing.
+    MiniGameEntranceWithoutTownGate {
+        /// The definition key.
+        key: MiniGameKey,
+        /// The gate-less destination the entrance map names.
+        respawn_map: MapNumber,
+    },
+    /// A mini-game wave names a monster whose role carries no mob behavior —
+    /// a wave instance needs its respawn delay.
+    MiniGameWaveMonsterNotFighting {
+        /// The definition key.
+        key: MiniGameKey,
+        /// The behavior-less monster.
+        monster: MonsterNumber,
+    },
 }
 
 impl core::fmt::Display for AtlasError {
@@ -762,6 +1011,27 @@ impl core::fmt::Display for AtlasError {
             }
             Self::DuplicateTerrain { map } => write!(f, "duplicate terrain for map {map:?}"),
             Self::TerrainMissingForMap { map } => write!(f, "map {map:?} has no terrain sidecar"),
+            Self::DuplicateMiniGameKey { key } => {
+                write!(f, "duplicate mini-game definition for {key:?}")
+            }
+            Self::MiniGameEntranceWithoutWalkableLanding { key, map } => {
+                write!(
+                    f,
+                    "mini-game {key:?} entrance on map {map:?} has no walkable landing tile"
+                )
+            }
+            Self::MiniGameEntranceWithoutTownGate { key, respawn_map } => {
+                write!(
+                    f,
+                    "mini-game {key:?} entrance map respawns at map {respawn_map:?}, which has no spawn gate"
+                )
+            }
+            Self::MiniGameWaveMonsterNotFighting { key, monster } => {
+                write!(
+                    f,
+                    "mini-game {key:?} wave names monster {monster:?}, which carries no mob behavior"
+                )
+            }
         }
     }
 }
@@ -802,7 +1072,11 @@ impl core::error::Error for AtlasError {
             | Self::GameConfigNotSingle { .. }
             | Self::TerrainForUnknownMap { .. }
             | Self::DuplicateTerrain { .. }
-            | Self::TerrainMissingForMap { .. } => None,
+            | Self::TerrainMissingForMap { .. }
+            | Self::DuplicateMiniGameKey { .. }
+            | Self::MiniGameEntranceWithoutWalkableLanding { .. }
+            | Self::MiniGameEntranceWithoutTownGate { .. }
+            | Self::MiniGameWaveMonsterNotFighting { .. } => None,
         }
     }
 }

@@ -9,6 +9,8 @@
 //! The canonical strings are derived from the real `serde_json` output — this
 //! file asserts the shape does not drift, it does not invent one.
 
+use core::num::NonZeroU16;
+
 use mu_core::components::active_effect::{
     ActiveEffect, ActiveEffects, EffectIdentity, PoisonTicks,
 };
@@ -37,14 +39,27 @@ use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{
     ConeHalfWidth, Facing, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
-use mu_core::components::tile::TileCoord;
+use mu_core::components::tile::{TileArea, TileCoord};
 use mu_core::components::trade_window::{Side, TradeWindow};
-use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen};
+use mu_core::components::units::{
+    CarriedZen, DurationMs, Exp, ItemLevel, Level, MapNumber, Tick, Ticks, Zen,
+};
 use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::gates_warps::WarpIndex;
 use mu_core::data::item_definitions::{ItemPrice, PerLevelPrice};
+use mu_core::data::minigame::{
+    EntranceGate, EventLevel, MiniGameDefinition, MiniGameKey, MiniGameKind, PhaseSpan,
+    PlayerBounds, PlayerCount, Rank, RewardDropGroup, RewardEntry, RewardKind, RosterSlot,
+    RosterStatus, Score, SessionMonsterId, SpawnWave, SuccessFlag, SuccessFlags, TicketRequirement,
+    WaveNumber, WaveRespawn, WaveSpawnArea, WinnerStanding,
+};
 use mu_core::data::special_drops::SpecialDrop;
 use mu_core::entities::character::Character;
+use mu_core::entities::minigame_session::{
+    InstancedMonster, MiniGamePhase, MiniGameSession, PendingRespawn, RosterMember,
+    SessionMonsters, WaveProgress, WaveState, WaveTrack,
+};
+use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::entities::party_session::{PartyInvite, PartyMember, PartySession};
 use mu_core::entities::trade_session::{TradeLocks, TradeOffer, TradeOffers, TradeSession};
 use mu_core::entities::world_item::WorldItem;
@@ -58,6 +73,7 @@ use mu_core::events::inventory::{
 };
 use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::{Drop, DropResolution};
+use mu_core::events::minigame::{GrantRecord, MiniGameEvent, ScoreRow};
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
 use mu_core::events::party::{AcceptBounce, InviteRejection, MemberAward, PartyEvent};
@@ -76,6 +92,7 @@ use mu_core::events::travel::{
     WarpTravelOutcome,
 };
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
+use mu_core::services::minigame::EnterOutcome;
 use mu_core::services::party;
 use mu_core::services::trade::{AcceptOutcome, LockResult, RequestOutcome, TradeAvailability};
 use mu_core::services::wear::WearEvent;
@@ -2337,5 +2354,539 @@ fn party_event_award_and_refusal_wire_is_pinned() {
     assert_eq!(
         serde_json::to_string(&AcceptBounce::InviterNotLeader).unwrap(),
         r#""inviter_not_leader""#
+    );
+}
+
+// --- Mini-game framework (W-MINIGAME): the definition record, the session
+// value, the phase/wave machines, the event surface, and the entry outcome.
+
+#[test]
+fn mini_game_vocabulary_wire_shapes_are_pinned() {
+    // The framework discriminator and its tier are bare snake_case / integer.
+    assert_eq!(
+        serde_json::to_string(&MiniGameKind::DevilSquare).unwrap(),
+        r#""devil_square""#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGameKind::BloodCastle).unwrap(),
+        r#""blood_castle""#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGameKind::ChaosCastle).unwrap(),
+        r#""chaos_castle""#
+    );
+    assert_eq!(
+        serde_json::to_string(&EventLevel::new(3).unwrap()).unwrap(),
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGameKey {
+            kind: MiniGameKind::DevilSquare,
+            level: EventLevel::new(3).unwrap(),
+        })
+        .unwrap(),
+        r#"{"kind":"devil_square","level":3}"#
+    );
+
+    // Positional / scalar newtypes are bare integers.
+    assert_eq!(serde_json::to_string(&WaveNumber(1)).unwrap(), "1");
+    assert_eq!(serde_json::to_string(&Rank(1)).unwrap(), "1");
+    assert_eq!(serde_json::to_string(&RosterSlot(2)).unwrap(), "2");
+    assert_eq!(serde_json::to_string(&Score(42)).unwrap(), "42");
+    assert_eq!(serde_json::to_string(&PlayerCount(4)).unwrap(), "4");
+    assert_eq!(serde_json::to_string(&SessionMonsterId(7)).unwrap(), "7");
+
+    assert_eq!(
+        serde_json::to_string(&RosterStatus::Alive).unwrap(),
+        r#"{"kind":"alive"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RosterStatus::Dead).unwrap(),
+        r#"{"kind":"dead"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WinnerStanding::None).unwrap(),
+        r#"{"kind":"none"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WinnerStanding::Won { by: RosterSlot(1) }).unwrap(),
+        r#"{"kind":"won","by":1}"#
+    );
+
+    // The flag conjunction is an array of snake_case flag names; empty = the
+    // always-applies set.
+    assert_eq!(
+        serde_json::to_string(
+            &SuccessFlags::new(vec![SuccessFlag::Alive, SuccessFlag::Winner]).unwrap()
+        )
+        .unwrap(),
+        r#"["alive","winner"]"#
+    );
+    assert_eq!(serde_json::to_string(&SuccessFlags::NONE).unwrap(), "[]");
+
+    // A phase span writes its already-folded milliseconds.
+    assert_eq!(
+        serde_json::to_string(&PhaseSpan::floored(DurationMs(10_000))).unwrap(),
+        "30000"
+    );
+}
+
+/// The canonical one-wave, two-reward definition every mini-game pin reuses —
+/// a macro so its fallible constructors expand at each `#[test]` call site (the
+/// `authored_minigame!` idiom), keeping `unwrap_used` out of a plain helper fn.
+macro_rules! mini_game_definition {
+    () => {{
+        MiniGameDefinition {
+            kind: MiniGameKind::DevilSquare,
+            level: EventLevel::new(3).unwrap(),
+            normal_bracket: Interval::new(Level::new(15).unwrap(), Level::new(130).unwrap())
+                .unwrap(),
+            special_bracket: Interval::new(Level::new(10).unwrap(), Level::new(110).unwrap())
+                .unwrap(),
+            ticket: TicketRequirement {
+                item: ItemRef {
+                    group: 14,
+                    number: 19,
+                },
+                item_level: ItemLevel::new(2).unwrap(),
+            },
+            entrance_fee: Zen(25_000),
+            players: PlayerBounds::new(NonZeroU16::new(2).unwrap(), NonZeroU16::new(3).unwrap())
+                .unwrap(),
+            enter_duration: PhaseSpan::floored(DurationMs(300_000)),
+            game_duration: PhaseSpan::floored(DurationMs(1_200_000)),
+            exit_duration: PhaseSpan::floored_less_countdown(DurationMs(180_000)),
+            entrance: EntranceGate {
+                map: MapNumber(9),
+                area: TileArea::new(133, 91, 141, 99).unwrap(),
+            },
+            spawn_waves: vec![SpawnWave {
+                number: WaveNumber(1),
+                window: Interval::new(DurationMs(0), DurationMs(420_000)).unwrap(),
+                respawn: WaveRespawn::RespawningWhileOpen,
+                areas: vec![WaveSpawnArea {
+                    monster: MonsterNumber(1),
+                    area: TileArea::new(135, 162, 142, 170).unwrap(),
+                    quantity: NonZeroU16::new(2).unwrap(),
+                }],
+            }],
+            reward_table: vec![
+                RewardEntry {
+                    rank: Some(Rank(1)),
+                    flags: SuccessFlags::new(vec![SuccessFlag::Alive]).unwrap(),
+                    reward: RewardKind::Experience { amount: Exp(6000) },
+                },
+                RewardEntry {
+                    rank: None,
+                    flags: SuccessFlags::NONE,
+                    reward: RewardKind::Money { amount: Zen(300) },
+                },
+            ],
+        }
+    }};
+}
+
+#[test]
+fn mini_game_definition_record_wire_is_pinned() {
+    // The whole data-family record: the enter/game spans write their folded
+    // milliseconds; the exit span writes its canonical raw (folded + 30 s)
+    // so the parse-time fold is idempotent across round-trips.
+    let definition = mini_game_definition!();
+    let json = serde_json::to_string(&definition).unwrap();
+    assert_eq!(
+        json,
+        concat!(
+            r#"{"kind":"devil_square","level":3,"#,
+            r#""normal_bracket":{"min":15,"max":130},"#,
+            r#""special_bracket":{"min":10,"max":110},"#,
+            r#""ticket":{"item":{"group":14,"number":19},"item_level":2},"#,
+            r#""entrance_fee":25000,"#,
+            r#""players":{"min":2,"max":3},"#,
+            r#""enter_duration":300000,"game_duration":1200000,"exit_duration":180000,"#,
+            r#""entrance":{"map":9,"area":{"x1":133,"y1":91,"x2":141,"y2":99}},"#,
+            r#""spawn_waves":[{"number":1,"window":{"min":0,"max":420000},"#,
+            r#""respawn":{"kind":"respawning_while_open"},"#,
+            r#""areas":[{"monster":1,"area":{"x1":135,"y1":162,"x2":142,"y2":170},"quantity":2}]}],"#,
+            r#""reward_table":[{"rank":1,"flags":["alive"],"reward":{"kind":"experience","amount":6000}},"#,
+            r#"{"rank":null,"flags":[],"reward":{"kind":"money","amount":300}}]}"#,
+        )
+    );
+    assert_eq!(
+        serde_json::from_str::<MiniGameDefinition>(&json).unwrap(),
+        definition
+    );
+}
+
+#[test]
+fn mini_game_reward_kind_every_variant_is_pinned() {
+    assert_eq!(
+        serde_json::to_string(&RewardKind::Experience { amount: Exp(6000) }).unwrap(),
+        r#"{"kind":"experience","amount":6000}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RewardKind::ExperiencePerRemainingSecond { amount: Exp(160) })
+            .unwrap(),
+        r#"{"kind":"experience_per_remaining_second","amount":160}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RewardKind::Money {
+            amount: Zen(30_000)
+        })
+        .unwrap(),
+        r#"{"kind":"money","amount":30000}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RewardKind::ItemDrop {
+            group: RewardDropGroup {
+                items: OneOrMore::new(vec![ItemRef {
+                    group: 0,
+                    number: 0,
+                }])
+                .unwrap(),
+                item_level: ItemLevel::ZERO,
+            },
+        })
+        .unwrap(),
+        r#"{"kind":"item_drop","group":{"items":[{"group":0,"number":0}],"item_level":0}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&RewardKind::Score { amount: Score(600) }).unwrap(),
+        r#"{"kind":"score","amount":600}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WaveRespawn::OnceAtWaveStart).unwrap(),
+        r#"{"kind":"once_at_wave_start"}"#
+    );
+}
+
+#[test]
+fn mini_game_phase_and_wave_state_every_variant_is_pinned() {
+    // Each deadline and the frozen snapshot ride only the variant that owns
+    // them.
+    assert_eq!(
+        serde_json::to_string(&MiniGamePhase::Open {
+            closes_at: Tick(3000),
+            next_notice: Tick(0),
+        })
+        .unwrap(),
+        r#"{"kind":"open","closes_at":3000,"next_notice":0}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGamePhase::Closing {
+            starts_at: Tick(3300)
+        })
+        .unwrap(),
+        r#"{"kind":"closing","starts_at":3300}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGamePhase::Playing {
+            ends_at: Tick(15_300),
+            snapshot: PlayerCount(2),
+        })
+        .unwrap(),
+        r#"{"kind":"playing","ends_at":15300,"snapshot":2}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGamePhase::Ended {
+            disposes_at: Tick(17_100),
+            snapshot: PlayerCount(2),
+            remaining: Ticks(900),
+        })
+        .unwrap(),
+        r#"{"kind":"ended","disposes_at":17100,"snapshot":2,"remaining":900}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGamePhase::Disposed).unwrap(),
+        r#"{"kind":"disposed"}"#
+    );
+
+    assert_eq!(
+        serde_json::to_string(&WaveState::Pending {
+            starts_at: Tick(3300),
+            ends_at: Tick(7500),
+        })
+        .unwrap(),
+        r#"{"kind":"pending","starts_at":3300,"ends_at":7500}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WaveState::Running {
+            ends_at: Tick(7500)
+        })
+        .unwrap(),
+        r#"{"kind":"running","ends_at":7500}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&WaveState::Closed).unwrap(),
+        r#"{"kind":"closed"}"#
+    );
+}
+
+#[test]
+fn mini_game_session_wire_is_pinned() {
+    // The whole caller-owned session value mid-Playing: seated roster (one
+    // dead), the winner marker, a running and a pending wave, a scheduled
+    // respawn, and one instanced live monster.
+    let session = MiniGameSession {
+        key: MiniGameKey {
+            kind: MiniGameKind::DevilSquare,
+            level: EventLevel::new(3).unwrap(),
+        },
+        phase: MiniGamePhase::Playing {
+            ends_at: Tick(15_300),
+            snapshot: PlayerCount(2),
+        },
+        roster: vec![
+            RosterMember {
+                slot: RosterSlot(0),
+                status: RosterStatus::Alive,
+                score: Score(12),
+            },
+            RosterMember {
+                slot: RosterSlot(1),
+                status: RosterStatus::Dead,
+                score: Score(4),
+            },
+        ],
+        winner: WinnerStanding::Won { by: RosterSlot(0) },
+        waves: WaveProgress {
+            waves: vec![
+                WaveTrack {
+                    number: WaveNumber(1),
+                    state: WaveState::Running {
+                        ends_at: Tick(7500),
+                    },
+                },
+                WaveTrack {
+                    number: WaveNumber(2),
+                    state: WaveState::Pending {
+                        starts_at: Tick(6300),
+                        ends_at: Tick(11_700),
+                    },
+                },
+            ],
+            pending_respawns: vec![PendingRespawn {
+                monster: MonsterNumber(1),
+                wave: WaveNumber(1),
+                due: Tick(7000),
+            }],
+        },
+        monsters: SessionMonsters {
+            live: vec![InstancedMonster {
+                id: SessionMonsterId(0),
+                instance: MonsterInstance {
+                    number: MonsterNumber(1),
+                    placement: Placement {
+                        position: TileCoord::new(2, 3).to_world(),
+                        facing: Facing::POS_Y,
+                        movement: Movement::Grounded,
+                        map: MapNumber(9),
+                    },
+                    health: Pool::full(60),
+                    anchor: TileCoord::new(2, 3).to_world(),
+                    next_action: Tick(0),
+                    active_effects: ActiveEffects::EMPTY,
+                },
+                origin: WaveNumber(1),
+            }],
+            next_id: 1,
+        },
+    };
+    let json = serde_json::to_string(&session).unwrap();
+    assert_eq!(
+        json,
+        concat!(
+            r#"{"key":{"kind":"devil_square","level":3},"#,
+            r#""phase":{"kind":"playing","ends_at":15300,"snapshot":2},"#,
+            r#""roster":[{"slot":0,"status":{"kind":"alive"},"score":12},"#,
+            r#"{"slot":1,"status":{"kind":"dead"},"score":4}],"#,
+            r#""winner":{"kind":"won","by":0},"#,
+            r#""waves":{"waves":[{"number":1,"state":{"kind":"running","ends_at":7500}},"#,
+            r#"{"number":2,"state":{"kind":"pending","starts_at":6300,"ends_at":11700}}],"#,
+            r#""pending_respawns":[{"monster":1,"wave":1,"due":7000}]},"#,
+            r#""monsters":{"live":[{"id":0,"instance":{"number":1,"#,
+            r#""placement":{"position":{"x":163840,"y":229376},"facing":{"x":0,"y":1},"movement":"grounded","map":9},"#,
+            r#""health":{"current":60,"max":60},"anchor":{"x":163840,"y":229376},"#,
+            r#""next_action":0,"active_effects":[]},"origin":1}],"next_id":1}}"#,
+        )
+    );
+    // The live session survives the wire mid-lifecycle unchanged.
+    assert_eq!(
+        serde_json::from_str::<MiniGameSession>(&json).unwrap(),
+        session
+    );
+}
+
+#[test]
+fn mini_game_event_every_kind_tag_is_pinned() {
+    let row = ScoreRow {
+        slot: RosterSlot(0),
+        rank: Rank(1),
+        final_score: Score(42),
+        granted_money: Zen(30_000),
+        granted_experience: Exp(6000),
+    };
+    for event in [
+        MiniGameEvent::EntranceClosing { minutes_left: 5 },
+        MiniGameEvent::CountdownStarted { seconds: 30 },
+        MiniGameEvent::GameStarted {
+            players: PlayerCount(4),
+        },
+        MiniGameEvent::MinPlayersAbort {
+            present: PlayerCount(1),
+            required: PlayerCount(2),
+        },
+        MiniGameEvent::FeeRefunded {
+            slot: RosterSlot(0),
+            amount: Zen(25_000),
+        },
+        MiniGameEvent::WaveStarted {
+            number: WaveNumber(1),
+        },
+        MiniGameEvent::MonsterSpawned {
+            number: MonsterNumber(1),
+            at: TileCoord::new(2, 3).to_world(),
+            facing: Facing::POS_X,
+        },
+        MiniGameEvent::GameEnded {
+            finishers: vec![RosterSlot(0), RosterSlot(2)],
+        },
+        MiniGameEvent::ScoreTable { rows: vec![row] },
+        MiniGameEvent::RewardGranted {
+            slot: RosterSlot(0),
+            grant: GrantRecord::Experience { amount: Exp(6000) },
+        },
+        MiniGameEvent::WarpedOut {
+            slot: RosterSlot(2),
+            to: placement(),
+        },
+        MiniGameEvent::Disposed,
+    ] {
+        let expected = match &event {
+            MiniGameEvent::EntranceClosing { .. } => "entrance_closing",
+            MiniGameEvent::CountdownStarted { .. } => "countdown_started",
+            MiniGameEvent::GameStarted { .. } => "game_started",
+            MiniGameEvent::MinPlayersAbort { .. } => "min_players_abort",
+            MiniGameEvent::FeeRefunded { .. } => "fee_refunded",
+            MiniGameEvent::WaveStarted { .. } => "wave_started",
+            MiniGameEvent::MonsterSpawned { .. } => "monster_spawned",
+            MiniGameEvent::GameEnded { .. } => "game_ended",
+            MiniGameEvent::ScoreTable { .. } => "score_table",
+            MiniGameEvent::RewardGranted { .. } => "reward_granted",
+            MiniGameEvent::WarpedOut { .. } => "warped_out",
+            MiniGameEvent::Disposed => "disposed",
+        };
+        let value = serde_json::to_value(&event).unwrap();
+        assert_eq!(kind_tag(&value), Some(expected));
+        assert_eq!(
+            serde_json::from_value::<MiniGameEvent>(value).unwrap(),
+            event
+        );
+    }
+}
+
+#[test]
+fn mini_game_event_payload_wire_is_pinned() {
+    assert_eq!(
+        serde_json::to_string(&MiniGameEvent::GameStarted {
+            players: PlayerCount(4)
+        })
+        .unwrap(),
+        r#"{"kind":"game_started","players":4}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&MiniGameEvent::FeeRefunded {
+            slot: RosterSlot(0),
+            amount: Zen(25_000),
+        })
+        .unwrap(),
+        r#"{"kind":"fee_refunded","slot":0,"amount":25000}"#
+    );
+    // The spawn placement is the OUTPUT of the random-cardinal draw.
+    assert_eq!(
+        serde_json::to_string(&MiniGameEvent::MonsterSpawned {
+            number: MonsterNumber(1),
+            at: TileCoord::new(2, 3).to_world(),
+            facing: Facing::POS_X,
+        })
+        .unwrap(),
+        r#"{"kind":"monster_spawned","number":1,"at":{"x":163840,"y":229376},"facing":{"x":1,"y":0}}"#
+    );
+    // The alive warp-out nests the canonical placement.
+    assert_eq!(
+        serde_json::to_string(&MiniGameEvent::WarpedOut {
+            slot: RosterSlot(2),
+            to: placement(),
+        })
+        .unwrap(),
+        format!(r#"{{"kind":"warped_out","slot":2,"to":{PLACEMENT_JSON}}}"#)
+    );
+    // A score-table row is slot + newtype values — no host id anywhere.
+    assert_eq!(
+        serde_json::to_string(&ScoreRow {
+            slot: RosterSlot(0),
+            rank: Rank(1),
+            final_score: Score(42),
+            granted_money: Zen(30_000),
+            granted_experience: Exp(6000),
+        })
+        .unwrap(),
+        r#"{"slot":0,"rank":1,"final_score":42,"granted_money":30000,"granted_experience":6000}"#
+    );
+    // Grant records; the item drop names no item (it rides the ground drop).
+    assert_eq!(
+        serde_json::to_string(&GrantRecord::Experience { amount: Exp(6000) }).unwrap(),
+        r#"{"kind":"experience","amount":6000}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&GrantRecord::Money { amount: Zen(300) }).unwrap(),
+        r#"{"kind":"money","amount":300}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&GrantRecord::Score { amount: Score(600) }).unwrap(),
+        r#"{"kind":"score","amount":600}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&GrantRecord::ItemDrop).unwrap(),
+        r#"{"kind":"item_drop"}"#
+    );
+}
+
+#[test]
+fn mini_game_enter_outcome_every_kind_tag_is_pinned() {
+    for outcome in [
+        EnterOutcome::Entered {
+            slot: RosterSlot(0),
+            placement: placement(),
+        },
+        EnterOutcome::LevelTooLow,
+        EnterOutcome::LevelTooHigh,
+        EnterOutcome::NoTicket,
+        EnterOutcome::NotEnoughZen,
+        EnterOutcome::PlayerKillerBarred,
+        EnterOutcome::NotOpen,
+        EnterOutcome::Full,
+    ] {
+        let expected = match &outcome {
+            EnterOutcome::Entered { .. } => "entered",
+            EnterOutcome::LevelTooLow => "level_too_low",
+            EnterOutcome::LevelTooHigh => "level_too_high",
+            EnterOutcome::NoTicket => "no_ticket",
+            EnterOutcome::NotEnoughZen => "not_enough_zen",
+            EnterOutcome::PlayerKillerBarred => "player_killer_barred",
+            EnterOutcome::NotOpen => "not_open",
+            EnterOutcome::Full => "full",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        serde_json::to_string(&EnterOutcome::Entered {
+            slot: RosterSlot(0),
+            placement: placement(),
+        })
+        .unwrap(),
+        format!(r#"{{"kind":"entered","slot":0,"placement":{PLACEMENT_JSON}}}"#)
     );
 }

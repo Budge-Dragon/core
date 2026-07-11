@@ -13,6 +13,7 @@ pub mod ground;
 pub mod inventory;
 pub mod kill;
 pub mod loot;
+pub mod minigame;
 pub mod monster_ai;
 pub mod movement;
 pub mod party;
