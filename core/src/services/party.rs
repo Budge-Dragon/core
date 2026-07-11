@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::party::{Leadership, MemberSlot, Membership, Vitality};
 use crate::components::spatial::{Radius, WorldPos};
+use crate::components::tile::TerrainGrid;
 use crate::components::units::{
     CarriedZen, CreditOutcome, DurationMs, Exp, Level, MapNumber, Tick, TickDuration, Zen,
 };
@@ -108,10 +109,10 @@ pub struct InviterParty {
 
 /// One member's host-resolved live facts at a kill or pickup — the id-free
 /// `TradeAvailability` grain generalized to N, carrying the three live terms
-/// (`vitality`, `map`, `position`) plus `level`/`experience` for the pool and the
-/// per-member level-up walk. Presence (the fourth term) comes from the
-/// [`PartySession`], joined by `slot`, so core applies the whole four-term
-/// predicate.
+/// (`vitality`, `map`, `position` — the position also met against the anchor's
+/// map's terrain for the safezone term) plus `level`/`experience` for the pool
+/// and the per-member level-up walk. Presence comes from the [`PartySession`],
+/// joined by `slot`, so core applies the whole five-term predicate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemberFact {
     /// The member's slot, joined against the session's presence.
@@ -527,10 +528,11 @@ pub fn advance_invite(invite: PartyInvite, now: Tick) -> (InviteSweep, Vec<Party
 
 /// Distributes one kill's experience across the qualifying party — the only
 /// RNG-drawing service (one jitter word per kill). The killer's fact arrives by
-/// value and seeds the qualifying set `Q` unconditionally — it is definitionally a
-/// participant (its own map, in range of itself, alive, present) — while also
-/// anchoring the share predicate the `others` are tested against. Each qualifier's
-/// pooled, level-proportional share is computed, the split remainder lands on the
+/// value and seeds the qualifying set `Q` unconditionally — it is definitionally
+/// a participant, never tested by the predicate — while anchoring the share
+/// predicate the `others` are tested against; `grid` is the killer's map's
+/// terrain, answering the safezone fifth term. Each qualifier's pooled,
+/// level-proportional share is computed, the split remainder lands on the
 /// killer, and each award carries its own level-up walk. Degenerates to the
 /// byte-identical solo award at `|Q| = 1`.
 #[must_use]
@@ -540,6 +542,7 @@ pub fn distribute_kill_experience(
     others: &[MemberFact],
     victim_level: Level,
     atlas: &Atlas,
+    grid: &TerrainGrid,
     rng: &mut impl RngCore,
 ) -> Vec<MemberAward> {
     let mut qualifiers: Vec<MemberFact> = Vec::with_capacity(others.len() + 1);
@@ -548,7 +551,7 @@ pub fn distribute_kill_experience(
         others
             .iter()
             .copied()
-            .filter(|fact| qualifies(party, &killer, fact)),
+            .filter(|fact| qualifies(party, &killer, fact, grid)),
     );
     let count = saturating_u64(qualifiers.len());
     let level_sum: u64 = qualifiers
@@ -600,12 +603,15 @@ pub fn distribute_kill_experience(
 
 /// Splits one zen pile equally across the qualifying party — no RNG. The picker's
 /// fact and wallet arrive by value and seed the qualifying set `Q` unconditionally
-/// (the picker is definitionally a participant, so the divisor is never zero),
-/// while the picker also anchors the same four-term predicate the `others` are
-/// tested against. The division remainder lands on the picker, and an at-cap
-/// member's share grounds as a fresh pile rather than being destroyed. Conserves
-/// every coin — `credits` deltas plus `to_ground` amounts sum to `pile.amount`.
-/// `other_wallets` is co-indexed with `others` (parallel slices).
+/// (the picker is definitionally a participant, never tested by the predicate, so
+/// the divisor is never zero and a party parked entirely on safe tiles credits
+/// the picker the whole pile), while the picker also anchors the same five-term
+/// predicate the `others` are tested against; `grid` is the picker's map's
+/// terrain, answering the safezone fifth term. The division remainder lands on
+/// the picker, and an at-cap member's share grounds as a fresh pile rather than
+/// being destroyed. Conserves every coin — `credits` deltas plus `to_ground`
+/// amounts sum to `pile.amount`. `other_wallets` is co-indexed with `others`
+/// (parallel slices).
 #[must_use]
 pub fn split_zen_pickup(
     pile: &WorldZen,
@@ -614,6 +620,7 @@ pub fn split_zen_pickup(
     picker_wallet: CarriedZen,
     others: &[MemberFact],
     other_wallets: &[SlotWallet],
+    grid: &TerrainGrid,
 ) -> ZenSplitResult {
     let mut qualifiers: Vec<(MemberFact, CarriedZen)> = Vec::with_capacity(others.len() + 1);
     qualifiers.push((picker, picker_wallet));
@@ -621,7 +628,7 @@ pub fn split_zen_pickup(
         others
             .iter()
             .zip(other_wallets)
-            .filter(|(fact, _)| qualifies(party, &picker, fact))
+            .filter(|(fact, _)| qualifies(party, &picker, fact, grid))
             .map(|(fact, slot_wallet)| (*fact, slot_wallet.wallet)),
     );
     let count = saturating_u64(qualifiers.len());
@@ -729,12 +736,21 @@ fn transfer_event(before: Leadership, after: Leadership) -> Option<PartyEvent> {
     }
 }
 
-/// The shared four-term share predicate: present (`Active` in the session), alive,
-/// on the anchor's map, and within [`party_reach`] of the anchor.
-fn qualifies(party: &PartySession, anchor: &MemberFact, fact: &MemberFact) -> bool {
+/// The shared five-term share predicate: present (`Active` in the session), alive,
+/// on the anchor's map, within [`party_reach`] of the anchor, and not standing on
+/// a safe town tile. `grid` is the anchor's map's terrain; the same-map term is
+/// checked first, so a cross-map fact short-circuits before its position ever
+/// meets the anchor's-map grid.
+fn qualifies(
+    party: &PartySession,
+    anchor: &MemberFact,
+    fact: &MemberFact,
+    grid: &TerrainGrid,
+) -> bool {
     party.is_active(fact.slot)
         && matches!(fact.vitality, Vitality::Alive)
         && reach(anchor.position, anchor.map, fact.position, fact.map)
+        && !grid.safe(fact.position)
 }
 
 /// The classic `1.05^(n-1)` grouping bonus as an exact rational `(num, den)` for a
@@ -800,6 +816,21 @@ mod tests {
 
     fn slot(n: u8) -> MemberSlot {
         MemberSlot(n)
+    }
+
+    /// A fully walkable, nowhere-safe grid — the open field.
+    fn all_unsafe() -> TerrainGrid {
+        TerrainGrid::from_words([u64::MAX; 1024])
+    }
+
+    /// A fully walkable grid whose safe set is exactly the listed tiles.
+    fn safe_at(tiles: &[(u8, u8)]) -> TerrainGrid {
+        let mut safe = [0u64; 1024];
+        for &(x, y) in tiles {
+            let bit = (usize::from(y) << 8) | usize::from(x);
+            safe[bit >> 6] |= 1u64 << (bit & 63);
+        }
+        TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
     }
 
     // --- Invite gates. -------------------------------------------------------
@@ -1289,28 +1320,43 @@ mod tests {
         let party = trio();
         let facts = facts_10_20_30([0, 0, 0]);
         let anchor = facts.first().unwrap();
-        // Slot 2 is present, alive, same-map, in-range -> qualifies.
-        assert!(qualifies(&party, anchor, facts.get(2).unwrap()));
+        let grid = all_unsafe();
+        // Slot 2 is present, alive, same-map, in-range, on the field -> qualifies.
+        assert!(qualifies(&party, anchor, facts.get(2).unwrap(), &grid));
         // Held excludes.
         let held = party
             .clone()
             .with_membership(slot(2), Membership::Held { expires: Tick(1) });
-        assert!(!qualifies(&held, anchor, facts.get(2).unwrap()));
+        assert!(!qualifies(&held, anchor, facts.get(2).unwrap(), &grid));
         // Dead excludes.
         let mut dead = *facts.get(2).unwrap();
         dead.vitality = Vitality::Dead;
-        assert!(!qualifies(&party, anchor, &dead));
+        assert!(!qualifies(&party, anchor, &dead, &grid));
         // Off-map excludes.
         let mut offmap = *facts.get(2).unwrap();
         offmap.map = MapNumber(7);
-        assert!(!qualifies(&party, anchor, &offmap));
+        assert!(!qualifies(&party, anchor, &offmap, &grid));
         // Out of range (13 tiles) excludes; 12 tiles includes.
         let mut far = *facts.get(2).unwrap();
         far.position = pos(13, 0);
-        assert!(!qualifies(&party, anchor, &far));
+        assert!(!qualifies(&party, anchor, &far, &grid));
         let mut edge = *facts.get(2).unwrap();
         edge.position = pos(12, 0);
-        assert!(qualifies(&party, anchor, &edge));
+        assert!(qualifies(&party, anchor, &edge, &grid));
+    }
+
+    #[test]
+    fn the_fifth_term_excludes_a_safezone_stander_and_spares_the_field() {
+        let party = trio();
+        let facts = facts_10_20_30([0, 0, 0]);
+        let anchor = facts.first().unwrap();
+        let grid = safe_at(&[(5, 0)]);
+        let mut town = *facts.get(2).unwrap();
+        town.position = pos(5, 0);
+        assert!(!qualifies(&party, anchor, &town, &grid));
+        let mut field = *facts.get(2).unwrap();
+        field.position = pos(6, 0);
+        assert!(qualifies(&party, anchor, &field, &grid));
     }
 
     // --- Zen split. ----------------------------------------------------------
@@ -1349,6 +1395,7 @@ mod tests {
             picker_wallet.wallet,
             others,
             other_wallets,
+            &all_unsafe(),
         );
         assert!(result.to_ground.is_empty());
         // 33333 each, remainder 1 to picker slot 0.
@@ -1377,6 +1424,7 @@ mod tests {
             picker_wallet.wallet,
             others,
             other_wallets,
+            &all_unsafe(),
         );
         assert_eq!(result.to_ground.len(), 1);
         let grounded = result.to_ground.first().unwrap();
@@ -1405,6 +1453,7 @@ mod tests {
             picker_wallet.wallet,
             others,
             other_wallets,
+            &all_unsafe(),
         );
         // Divisor 2: 45000 each.
         let credited: Vec<(u8, u64)> = result
@@ -1414,6 +1463,63 @@ mod tests {
             .collect();
         assert_eq!(credited, vec![(0, 45_000), (1, 45_000)]);
         assert!(result.to_ground.is_empty());
+    }
+
+    #[test]
+    fn a_safezone_standing_member_is_dropped_from_the_zen_divisor() {
+        let party = trio();
+        let mut facts = facts_10_20_30([0, 0, 0]);
+        facts.get_mut(2).unwrap().position = pos(5, 0);
+        let wallets = wallets_for(&facts, &[0, 0, 0]);
+        let (picker, others) = facts.split_first().unwrap();
+        let (picker_wallet, other_wallets) = wallets.split_first().unwrap();
+        let result = split_zen_pickup(
+            &pile(90_000),
+            &party,
+            *picker,
+            picker_wallet.wallet,
+            others,
+            other_wallets,
+            &safe_at(&[(5, 0)]),
+        );
+        // Divisor 2: the town-stander is not counted, every coin credited.
+        let credited: Vec<(u8, u64)> = result
+            .credits
+            .iter()
+            .map(|c| (c.slot.0, c.wallet.get()))
+            .collect();
+        assert_eq!(credited, vec![(0, 45_000), (1, 45_000)]);
+        assert!(result.to_ground.is_empty());
+    }
+
+    #[test]
+    fn an_all_safezone_party_credits_the_picker_the_whole_pile() {
+        let party = trio();
+        let mut facts = facts_10_20_30([0, 0, 0]);
+        facts.get_mut(0).unwrap().position = pos(5, 0);
+        facts.get_mut(1).unwrap().position = pos(6, 0);
+        facts.get_mut(2).unwrap().position = pos(7, 0);
+        let wallets = wallets_for(&facts, &[0, 0, 0]);
+        let (picker, others) = facts.split_first().unwrap();
+        let (picker_wallet, other_wallets) = wallets.split_first().unwrap();
+        let result = split_zen_pickup(
+            &pile(70_000),
+            &party,
+            *picker,
+            picker_wallet.wallet,
+            others,
+            other_wallets,
+            &safe_at(&[(5, 0), (6, 0), (7, 0)]),
+        );
+        // The picker is seeded unconditionally, so the divisor is 1 — the whole
+        // pile credits to the picker, nothing lost.
+        assert!(result.to_ground.is_empty());
+        let credited: Vec<(u8, u64)> = result
+            .credits
+            .iter()
+            .map(|c| (c.slot.0, c.wallet.get()))
+            .collect();
+        assert_eq!(credited, vec![(0, 70_000)]);
     }
 
     #[test]
@@ -1431,6 +1537,7 @@ mod tests {
             picker_wallet.wallet,
             others,
             other_wallets,
+            &all_unsafe(),
         );
         let b = split_zen_pickup(
             &pile(100_000),
@@ -1439,6 +1546,7 @@ mod tests {
             picker_wallet.wallet,
             others,
             other_wallets,
+            &all_unsafe(),
         );
         assert_eq!(a, b);
     }

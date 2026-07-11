@@ -18,7 +18,7 @@ use crate::components::movement::Movement;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::{Facing, WorldPos, WorldRect};
-use crate::components::tile::WalkGrid;
+use crate::components::tile::TerrainGrid;
 use crate::components::units::{MapNumber, Tick};
 use crate::data::atlas::MapHandle;
 use crate::data::monster_definitions::{MonsterDefinition, MonsterRole};
@@ -134,7 +134,7 @@ fn spawn_at(
 pub fn place_spawn(
     monster: &MonsterDefinition,
     placement: &SpawnPlacement,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     map: MapNumber,
     rng: &mut impl RngCore,
 ) -> SpawnResult {
@@ -199,7 +199,7 @@ pub fn populate_map(handle: &MapHandle<'_>, rng: &mut impl RngCore) -> MapPopula
                 let mut result = place_spawn(
                     entry.monster,
                     &entry.spawn.placement,
-                    handle.walk_grid(),
+                    handle.terrain_grid(),
                     handle.definition().number,
                     rng,
                 );
@@ -234,7 +234,7 @@ mod tests {
     use crate::components::units::{DurationMs, Level, Resistance};
     use crate::data::common::{MonsterNumber, Provenance, SourceVersion};
     use crate::data::monster_definitions::{
-        MobBehavior, MonsterAttack, MonsterCombat, TrapTargeting,
+        MobBehavior, MonsterAttack, MonsterCombat, SafezoneDisposition, TrapTargeting,
     };
 
     /// Deterministic `SplitMix64` for replayable tests; cast-free extraction of
@@ -304,7 +304,7 @@ mod tests {
         }
     }
 
-    fn behavior() -> MobBehavior {
+    fn behavior(disposition: SafezoneDisposition) -> MobBehavior {
         MobBehavior {
             move_range: 0,
             attack_range: 0,
@@ -312,6 +312,7 @@ mod tests {
             move_delay_ms: DurationMs(0),
             attack_delay_ms: DurationMs(0),
             respawn_ms: DurationMs(0),
+            disposition,
         }
     }
 
@@ -329,23 +330,23 @@ mod tests {
             MonsterRole::Monster {
                 combat: combat(hp),
                 resistances: resistances(),
-                behavior: behavior(),
+                behavior: behavior(SafezoneDisposition::Excluded),
                 attack: MonsterAttack::Plain,
             },
         )
     }
 
-    fn grid_with(walkable: &[(u8, u8)]) -> WalkGrid {
+    fn grid_with(walkable: &[(u8, u8)]) -> TerrainGrid {
         let mut words = [0u64; 1024];
         for &(x, y) in walkable {
             let bit = (usize::from(y) << 8) | usize::from(x);
             words[bit >> 6] |= 1u64 << (bit & 63);
         }
-        WalkGrid::from_words(words)
+        TerrainGrid::from_words(words)
     }
 
-    fn all_walkable() -> WalkGrid {
-        WalkGrid::from_words([u64::MAX; 1024])
+    fn all_walkable() -> TerrainGrid {
+        TerrainGrid::from_words([u64::MAX; 1024])
     }
 
     fn position_of(spawned: &Spawned) -> WorldPos {
@@ -547,7 +548,7 @@ mod tests {
             MonsterRole::Guard {
                 combat: combat(15_000),
                 resistances: resistances(),
-                behavior: behavior(),
+                behavior: behavior(SafezoneDisposition::Patrols),
             },
         );
         let trap = definition(
@@ -556,7 +557,7 @@ mod tests {
                 targeting: TrapTargeting::Directional,
                 combat: combat(200),
                 resistances: resistances(),
-                behavior: behavior(),
+                behavior: behavior(SafezoneDisposition::Excluded),
                 attack: MonsterAttack::Plain,
             },
         );

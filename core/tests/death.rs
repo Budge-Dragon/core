@@ -132,7 +132,11 @@ fn assert_landed_inside(
     pos: WorldPos,
     rect: mu_core::components::spatial::WorldRect,
 ) {
-    let grid = or_abort(atlas.walk_grid(MapNumber(map)).ok_or("map has a walk grid"));
+    let grid = or_abort(
+        atlas
+            .terrain_grid(MapNumber(map))
+            .ok_or("map has a terrain grid"),
+    );
     assert!(rect.contains(pos), "landing sits inside the gate area");
     assert!(grid.walkable(pos), "landing sits on a walkable tile");
 }
@@ -976,7 +980,11 @@ fn every_gated_map_resolves_a_walkable_respawn_gate_over_real_data() {
                 .ok_or("gated map resolves a respawn gate"),
         );
         assert_eq!(gate.map, MapNumber(map));
-        let grid = or_abort(atlas.walk_grid(MapNumber(map)).ok_or("map has a walk grid"));
+        let grid = or_abort(
+            atlas
+                .terrain_grid(MapNumber(map))
+                .ok_or("map has a terrain grid"),
+        );
         for &landing in gate.landing.iter() {
             assert!(grid.walkable(landing), "map {map} landing tile is walkable");
         }

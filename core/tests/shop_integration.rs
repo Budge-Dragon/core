@@ -934,9 +934,14 @@ fn pile(amount: u64) -> WorldZen {
     }
 }
 
+/// The picker's locus for the cap-edge pickups — standing on the pile's tile.
+fn picker_pos() -> WorldPos {
+    TileCoord::new(10, 10).to_world()
+}
+
 #[test]
 fn an_exact_fit_pickup_reaches_the_cap_edge() {
-    let (balance, outcome) = pickup_zen(pile(1), zen(1_999_999_999));
+    let (balance, outcome) = pickup_zen(pile(1), zen(1_999_999_999), picker_pos(), MapNumber(0));
     assert_eq!(balance, zen(CarriedZen::CAP));
     assert_eq!(outcome, ZenPickupOutcome::PickedUp);
 }
@@ -944,7 +949,12 @@ fn an_exact_fit_pickup_reaches_the_cap_edge() {
 #[test]
 fn a_one_over_pickup_hands_the_same_world_zen_back() {
     let original = pile(2);
-    let (balance, outcome) = pickup_zen(original.clone(), zen(1_999_999_999));
+    let (balance, outcome) = pickup_zen(
+        original.clone(),
+        zen(1_999_999_999),
+        picker_pos(),
+        MapNumber(0),
+    );
     assert_eq!(balance, zen(1_999_999_999));
     assert_eq!(
         outcome,
@@ -1060,7 +1070,8 @@ fn shop_services_are_bit_identical_on_identical_inputs_with_no_seed() {
     ) -> (RepairSubject, RepairOutcome);
     type RepairAllPort<'a> =
         fn(Equipment, CarriedZen, RepairSite, WorldPos, &'a Atlas) -> (Equipment, RepairAllOutcome);
-    type PickupZenPort = fn(WorldZen, CarriedZen) -> (CarriedZen, ZenPickupOutcome);
+    type PickupZenPort =
+        fn(WorldZen, CarriedZen, WorldPos, MapNumber) -> (CarriedZen, ZenPickupOutcome);
     let buy_port: BuyPort<'_> = buy;
     let sell_port: SellPort<'_> = sell;
     let repair_port: RepairPort<'_> = repair;
@@ -1117,7 +1128,7 @@ fn shop_services_are_bit_identical_on_identical_inputs_with_no_seed() {
         || repair_all_port(worn_set(), zen(10_000), at_npc(), in_range_pos(), &atlas);
     assert_eq!(run_repair_all(), run_repair_all());
 
-    let run_pickup = || pickup_zen_port(pile(40_000), zen(250_000));
+    let run_pickup = || pickup_zen_port(pile(40_000), zen(250_000), picker_pos(), MapNumber(0));
     assert_eq!(run_pickup(), run_pickup());
 }
 

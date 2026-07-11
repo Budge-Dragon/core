@@ -18,6 +18,7 @@
 mod paper_host;
 
 use mu_core::components::active_effect::ActiveEffects;
+use mu_core::components::drop_claim::{DropClaim, PickerStanding};
 use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::inventory::{Cell, Footprint};
 use mu_core::components::item_instance::{
@@ -32,7 +33,7 @@ use mu_core::components::movement::{FlightChange, Movement};
 use mu_core::components::party::{Leadership, MemberSlot, Membership, Vitality};
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Radius, WorldPos};
-use mu_core::components::tile::{TileCoord, TileFacing};
+use mu_core::components::tile::{TerrainGrid, TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Zen};
 use mu_core::data::common::MonsterNumber;
@@ -64,6 +65,7 @@ use mu_core::events::travel::{
     EnterGateOutcome, TownPortalOutcome, WarpAvailability, WarpLockReason, WarpTravelOutcome,
 };
 use mu_core::services::effects::ApplicableBuff;
+use mu_core::services::ground::DropOrigin;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
 use mu_core::services::party;
 use mu_core::services::price::selling_price;
@@ -75,9 +77,9 @@ use paper_host::{
     World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
     dark_wizard, direct_hit_skill, earthshake_skill, fighting_monster_from, first_passive_monster,
     flame_skill, footprint_of, heal_skill, hellfire_skill, is_equippable, item_at_level,
-    item_instance, low_level_monster, lunge_skill, magic_gladiator, monster_instance,
-    none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile, walkable_run,
-    wearer_of, wire, wizardry_direct_skill, zen,
+    item_instance, lightning_direct_skill, low_level_monster, lunge_skill, magic_gladiator,
+    monster_instance, none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile,
+    walkable_run, wearer_of, wire, wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -177,9 +179,11 @@ fn seated_world() -> (World, [usize; 5]) {
     };
     let ground_item = {
         let dropped = item_instance(world.atlas(), DRAGON_ARMOR);
-        world.seat_ground_item(dropped, pos(12, 12), Tick(1200))
+        let stamp = world.stamp_item_drop(DropOrigin::Ownerless, Tick(0));
+        world.seat_ground_item(dropped, pos(12, 12), stamp)
     };
-    let ground_zen = world.seat_ground_zen(Zen(1007), pos(12, 12), Tick(1200));
+    let zen_stamp = world.stamp_zen_drop(DropOrigin::Ownerless, Tick(0));
+    let ground_zen = world.seat_ground_zen(Zen(1007), pos(12, 12), zen_stamp);
     let session = world.seat_session(TradeSession::opened());
     (
         world,
@@ -450,10 +454,11 @@ fn kill_with_equippable_drop() -> Option<(World, usize, usize, usize, ItemInstan
         };
 
         // V1/V7: assemble the ground item from the victim's position (returned),
-        // the world map (context), and a host-chosen despawn tick (no core
-        // source — spec §5.2).
+        // the world map (context), and the core-stamped lifecycle clocks — a
+        // monster kill at tick 0, so the drop appears one second later.
         let position = world.monster(victim).placement.position;
-        let (ground, rolled) = world.drop_item_to_ground(item, level, rarity, position, Tick(1200));
+        let stamp = world.stamp_item_drop(DropOrigin::MonsterKill, Tick(0));
+        let (ground, rolled) = world.drop_item_to_ground(item, level, rarity, position, stamp);
         return Some((world, killer, victim, ground, rolled, item));
     }
     None
@@ -479,8 +484,12 @@ fn a_kills_item_drop_is_rolled_grounded_picked_up_and_worn_as_one_identity() {
         .first_fit(footprint)
         .expect("the partly-full bag has a first-fit region");
 
-    // Pick it up into the real, half-full bag.
-    let picked = world.pickup(killer, ground, anchor);
+    // Pick it up into the real, half-full bag — the killer is the owner, at
+    // the drop's core-stamped appearance tick.
+    let appeared = world
+        .stamp_item_drop(DropOrigin::MonsterKill, Tick(0))
+        .appearance;
+    let picked = world.pickup(killer, ground, anchor, PickerStanding::Owner, appeared);
     assert_eq!(picked, PickupOutcome::PickedUp { at: anchor });
 
     // The bagged instance equals the rolled instance byte-for-byte after persist.
@@ -536,7 +545,10 @@ fn the_rolled_item_survives_every_hop_and_exists_in_exactly_one_place() {
         .expect("the empty bag has a first-fit region");
     assert_eq!(world.ground_item_count(), 1);
 
-    let picked = world.pickup(killer, ground, anchor);
+    let appeared = world
+        .stamp_item_drop(DropOrigin::MonsterKill, Tick(0))
+        .appearance;
+    let picked = world.pickup(killer, ground, anchor, PickerStanding::Owner, appeared);
     assert_eq!(picked, PickupOutcome::PickedUp { at: anchor });
 
     // The item exists in exactly one place: gone from the ground, present in the
@@ -570,7 +582,10 @@ fn a_full_bag_refuses_the_pickup_and_the_item_stays_on_the_ground_intact() {
 
     // Capture the untouched ground item, then attempt the pickup.
     let before = world.ground_item(ground).clone();
-    match world.pickup(killer, ground, cell(0, 0)) {
+    let appeared = world
+        .stamp_item_drop(DropOrigin::MonsterKill, Tick(0))
+        .appearance;
+    match world.pickup(killer, ground, cell(0, 0), PickerStanding::Owner, appeared) {
         PickupOutcome::Rejected { item, .. } => {
             // The reassembled world item is byte-identical to the one on the
             // ground — nothing was dropped on the floor of the code.
@@ -579,7 +594,9 @@ fn a_full_bag_refuses_the_pickup_and_the_item_stays_on_the_ground_intact() {
                 serde_json::to_string(&before).unwrap(),
             );
         }
-        PickupOutcome::PickedUp { .. } => panic!("a full bag must refuse the pickup"),
+        PickupOutcome::PickedUp { .. }
+        | PickupOutcome::OutOfReach { .. }
+        | PickupOutcome::Refused { .. } => panic!("a full bag must refuse the pickup"),
     }
 
     // The ground set still holds exactly that item — still pickable.
@@ -909,8 +926,8 @@ fn a_player_death_docks_penalty_then_respawns_in_town_closing_the_loop() {
     let grid = or_abort(
         world
             .atlas()
-            .walk_grid(placement.map)
-            .ok_or("the respawn map has a walk grid"),
+            .terrain_grid(placement.map)
+            .ok_or("the respawn map has a terrain grid"),
     );
     assert!(
         grid.walkable(placement.position),
@@ -992,7 +1009,8 @@ fn kill_with_zen_drop() -> Option<(World, usize, usize, u64)> {
             continue;
         };
         let position = world.monster(victim).placement.position;
-        let ground = world.seat_ground_zen(Zen(amount), position, Tick(1200));
+        let stamp = world.stamp_zen_drop(DropOrigin::MonsterKill, Tick(0));
+        let ground = world.seat_ground_zen(Zen(amount), position, stamp);
         return Some((world, killer, ground, amount));
     }
     None
@@ -1010,7 +1028,7 @@ fn kill_money_picked_up_off_the_ground_is_the_money_spent_at_the_merchant() {
     assert_eq!(picked, ZenPickupOutcome::PickedUp);
     // Credited from the pile, cap-checked: the wallet is exactly the drop (V1/V7
     // mirror S-KILL for WorldZen — position from victim placement, map from
-    // context, despawn a host-policy tick).
+    // context, despawn from the core stamping seam).
     assert_eq!(world.character(killer).zen(), zen(amount));
 
     // Buy the 20-zen potion from Elf Lala, standing on the merchant's tile.
@@ -1084,7 +1102,8 @@ fn a_pile_one_over_the_carry_cap_is_refused_and_stays_whole_on_the_ground() {
     let knight = world.seat_character(dark_knight(30, 150, tile(10, 10)));
     world.set_wallet(knight, zen(1_999_999_999));
 
-    let ground = world.seat_ground_zen(Zen(2), pos(10, 10), Tick(1200));
+    let stamp = world.stamp_zen_drop(DropOrigin::Ownerless, Tick(0));
+    let ground = world.seat_ground_zen(Zen(2), pos(10, 10), stamp);
     let before = world.ground_zen(ground).clone();
 
     match world.pickup_zen(knight, ground) {
@@ -1096,7 +1115,9 @@ fn a_pile_one_over_the_carry_cap_is_refused_and_stays_whole_on_the_ground() {
                 serde_json::to_string(&before).unwrap(),
             );
         }
-        ZenPickupOutcome::PickedUp => panic!("a pile one over the cap is refused whole"),
+        ZenPickupOutcome::PickedUp | ZenPickupOutcome::OutOfReach { .. } => {
+            panic!("a pile one over the cap is refused whole")
+        }
     }
 
     // The wallet is unchanged and the untouched pile still lies on the ground.
@@ -1405,26 +1426,33 @@ fn an_excellent_rolled_item_survives_the_journey_into_a_partners_bag() {
     world.set_wallet(alpha, zen(500_000));
 
     // An excellent Dragon Armor rolled as a kill's Drop::Item, laid on the ground.
+    let stamp = world.stamp_item_drop(DropOrigin::MonsterKill, Tick(0));
     let (ground, rolled) = world.drop_item_to_ground(
         DRAGON_ARMOR,
         ItemLevel::new(9).expect("level 9 is valid"),
         ItemRarity::Excellent,
         pos(10, 10),
-        Tick(1200),
+        stamp,
     );
     assert!(
         matches!(rolled.roll, RarityRoll::Excellent { .. }),
         "the drop rolled a real excellent instance"
     );
 
-    // Player A picks it up.
+    // Player A — the killer, so the owner — picks it up at the appearance tick.
     let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
     let anchor = world
         .inventory(alpha)
         .first_fit(footprint)
         .expect("the empty bag has room");
     assert_eq!(
-        world.pickup(alpha, ground, anchor),
+        world.pickup(
+            alpha,
+            ground,
+            anchor,
+            PickerStanding::Owner,
+            stamp.appearance
+        ),
         PickupOutcome::PickedUp { at: anchor }
     );
 
@@ -1641,17 +1669,19 @@ fn the_first_actors_pickup_consumes_the_only_ground_item_the_second_finds_nothin
 
     // Exactly one item on the ground.
     let armor = item_instance(world.atlas(), DRAGON_ARMOR);
-    let ground = world.seat_ground_item(armor.clone(), pos(10, 10), Tick(1200));
+    let stamp = world.stamp_item_drop(DropOrigin::Ownerless, Tick(0));
+    let ground = world.seat_ground_item(armor.clone(), pos(10, 10), stamp);
     assert_eq!(world.ground_item_count(), 1);
 
-    // A picks it up into its first-fit anchor.
+    // A picks it up into its first-fit anchor — an ownerless drop, free to any
+    // picker in reach.
     let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
     let anchor = world
         .inventory(alpha)
         .first_fit(footprint)
         .expect("A's empty bag has room");
     assert_eq!(
-        world.pickup(alpha, ground, anchor),
+        world.pickup(alpha, ground, anchor, PickerStanding::Stranger, Tick(0)),
         PickupOutcome::PickedUp { at: anchor }
     );
 
@@ -1760,12 +1790,15 @@ fn scripted_run(seed: u64) -> (String, Vec<TraceStep>) {
         });
     }
 
-    // 3. Step the killer one tile along the corridor (no RNG).
-    let stepped = world.step(killer, mob_tile.to_world());
-    trace.push(TraceStep {
-        label: "step",
-        detail: wire(&stepped),
-    });
+    // 3. Step the killer two tiles along the corridor (no RNG) — into the
+    // three-tile pickup reach of the mob's drop position.
+    for _ in 0..2 {
+        let stepped = world.step(killer, mob_tile.to_world());
+        trace.push(TraceStep {
+            label: "step",
+            detail: wire(&stepped),
+        });
+    }
 
     // 4. Strike the mob to death (each hit rolls the stream).
     loop {
@@ -1790,7 +1823,8 @@ fn scripted_run(seed: u64) -> (String, Vec<TraceStep>) {
     // 6. Materialise the money drop, if any, and pick it up.
     if let Some(amount) = zen_drop(&resolution) {
         let position = world.monster(mob).placement.position;
-        let ground = world.seat_ground_zen(Zen(amount), position, Tick(6_000));
+        let stamp = world.stamp_zen_drop(DropOrigin::MonsterKill, Tick(2_000));
+        let ground = world.seat_ground_zen(Zen(amount), position, stamp);
         let picked = world.pickup_zen(killer, ground);
         trace.push(TraceStep {
             label: "pickup_zen",
@@ -1801,11 +1835,17 @@ fn scripted_run(seed: u64) -> (String, Vec<TraceStep>) {
     // 7. Materialise the first item drop, if any, pick it up, and sell it back.
     if let Some((item, level, rarity)) = item_drops(&resolution).into_iter().next() {
         let position = world.monster(mob).placement.position;
-        let (ground, _rolled) =
-            world.drop_item_to_ground(item, level, rarity, position, Tick(6_000));
+        let stamp = world.stamp_item_drop(DropOrigin::MonsterKill, Tick(2_000));
+        let (ground, _rolled) = world.drop_item_to_ground(item, level, rarity, position, stamp);
         let footprint = footprint_of(world.atlas(), item);
         if let Some(anchor) = world.inventory(killer).first_fit(footprint) {
-            let picked = world.pickup(killer, ground, anchor);
+            let picked = world.pickup(
+                killer,
+                ground,
+                anchor,
+                PickerStanding::Owner,
+                stamp.appearance,
+            );
             let landed = matches!(picked, PickupOutcome::PickedUp { .. });
             trace.push(TraceStep {
                 label: "pickup",
@@ -1929,7 +1969,8 @@ fn skill_kill_with_item_drop() -> Option<SkillKill> {
             continue;
         };
         let position = world.monster(victim).placement.position;
-        let (ground, rolled) = world.drop_item_to_ground(item, level, rarity, position, Tick(1200));
+        let stamp = world.stamp_item_drop(DropOrigin::MonsterKill, Tick(0));
+        let (ground, rolled) = world.drop_item_to_ground(item, level, rarity, position, stamp);
         return Some(SkillKill {
             world,
             caster,
@@ -1982,8 +2023,11 @@ fn a_damaging_skill_cast_kills_a_mob_pays_mana_and_its_loot_is_picked_up() {
         .first_fit(footprint)
         .expect("the empty bag has room");
     assert_eq!(world.ground_item_count(), 1);
+    let appeared = world
+        .stamp_item_drop(DropOrigin::MonsterKill, Tick(0))
+        .appearance;
     assert_eq!(
-        world.pickup(caster, ground, anchor),
+        world.pickup(caster, ground, anchor, PickerStanding::Owner, appeared),
         PickupOutcome::PickedUp { at: anchor }
     );
     assert_eq!(world.ground_item_count(), 0);
@@ -2179,7 +2223,7 @@ fn a_wizardry_absent_or_none_type_cast_persists_the_scratch_never_a_weapon_hit()
 /// the shipped grid on every run, never a hard-coded tile. Returns the two
 /// walkable flanks.
 fn wall_triple(atlas: &mu_core::data::atlas::Atlas, map: MapNumber) -> (TileCoord, TileCoord) {
-    let grid = or_abort(atlas.walk_grid(map).ok_or("no walk grid for map"));
+    let grid = or_abort(atlas.terrain_grid(map).ok_or("no terrain grid for map"));
     for y in 0u8..=u8::MAX {
         for x in 0u8..=u8::MAX - 2 {
             let near = TileCoord::new(x, y);
@@ -2978,7 +3022,8 @@ fn a_hero_earns_attempts_a_warp_too_poor_then_earns_enough_and_warps() {
     let hero = world.seat_character(dark_knight(60, 150, tile(10, 10)));
 
     // Earn: a money pile picked off the ground — below the 2,000-zen fee.
-    let pile = world.seat_ground_zen(Zen(1_500), pos(10, 10), Tick(1_000));
+    let stamp = world.stamp_zen_drop(DropOrigin::Ownerless, Tick(0));
+    let pile = world.seat_ground_zen(Zen(1_500), pos(10, 10), stamp);
     assert_eq!(world.pickup_zen(hero, pile), ZenPickupOutcome::PickedUp);
     assert_eq!(world.character(hero).zen(), zen(1_500));
 
@@ -2999,7 +3044,8 @@ fn a_hero_earns_attempts_a_warp_too_poor_then_earns_enough_and_warps() {
 
     // Earn past the fee and warp: the fee comes off the persisted wallet and
     // the hero stands on a walkable tile of the target map.
-    let pile = world.seat_ground_zen(Zen(3_000), pos(10, 10), Tick(1_000));
+    let stamp = world.stamp_zen_drop(DropOrigin::Ownerless, Tick(0));
+    let pile = world.seat_ground_zen(Zen(3_000), pos(10, 10), stamp);
     assert_eq!(world.pickup_zen(hero, pile), ZenPickupOutcome::PickedUp);
     match world.warp(hero, LORENCIA_WARP) {
         WarpTravelOutcome::Arrived { placement, balance } => {
@@ -3009,8 +3055,8 @@ fn a_hero_earns_attempts_a_warp_too_poor_then_earns_enough_and_warps() {
             let grid = or_abort(
                 world
                     .atlas()
-                    .walk_grid(placement.map)
-                    .ok_or("the target map has a walk grid"),
+                    .terrain_grid(placement.map)
+                    .ok_or("the target map has a terrain grid"),
             );
             assert!(grid.walkable(placement.position), "a walkable landing");
         }
@@ -3085,8 +3131,8 @@ fn discovery_locks_the_menu_until_a_walk_in_and_the_menu_warp_returns() {
             let grid = or_abort(
                 world
                     .atlas()
-                    .walk_grid(placement.map)
-                    .ok_or("Lost Tower has a walk grid"),
+                    .terrain_grid(placement.map)
+                    .ok_or("Lost Tower has a terrain grid"),
             );
             assert!(grid.walkable(placement.position));
         }
@@ -3426,8 +3472,8 @@ fn a_wingless_hero_is_bounced_at_both_icarus_doors_until_a_wing_is_worn() {
             let grid = or_abort(
                 world
                     .atlas()
-                    .walk_grid(placement.map)
-                    .ok_or("Lost Tower has a walk grid"),
+                    .terrain_grid(placement.map)
+                    .ok_or("Lost Tower has a terrain grid"),
             );
             assert!(grid.walkable(placement.position), "a walkable landing");
         }
@@ -3541,9 +3587,24 @@ fn farm_first_kill(world: &mut World, hero: usize, mob_tile: TileCoord) -> Optio
 /// the roll, and wears it. `None` on the empty-bag first-fit gate (never reached).
 /// Every value beat is a hard invariant.
 fn loot_and_gear(world: &mut World, hero: usize, pile: u64, mob_pos: WorldPos) -> Option<()> {
+    // The kill's drops are stamped by the core seam: a monster drop appears a
+    // beat AFTER the kill, and the item is claimed to the killer's snapshot
+    // for the ownership window.
+    let kill_tick = Tick(1);
+    let item_stamp = world.stamp_item_drop(DropOrigin::MonsterKill, kill_tick);
+    let zen_stamp = world.stamp_zen_drop(DropOrigin::MonsterKill, kill_tick);
+    assert!(
+        kill_tick.0 < item_stamp.appearance.0,
+        "the corpse-to-loot beat stages the drop after the kill"
+    );
+    assert!(
+        matches!(item_stamp.claim, DropClaim::Claimed { .. }),
+        "a kill's item drop is claimed to the killer's snapshot"
+    );
+
     // BEAT 6 — Pick up the money pile. The wallet is credited by EXACTLY the pile.
     assert_eq!(world.character(hero).zen(), zen(0));
-    let ground_zen = world.seat_ground_zen(Zen(pile), mob_pos, Tick(6_000));
+    let ground_zen = world.seat_ground_zen(Zen(pile), mob_pos, zen_stamp);
     assert_eq!(
         world.pickup_zen(hero, ground_zen),
         ZenPickupOutcome::PickedUp
@@ -3555,23 +3616,39 @@ fn loot_and_gear(world: &mut World, hero: usize, pile: u64, mob_pos: WorldPos) -
     );
 
     // BEAT 7 — Pick up the kill's item drop (materialised the way the harness lays
-    // any kill drop — drop_item_to_ground rolls the full instance). It leaves the
-    // ground and lands in the bag once, byte-identical to the rolled instance.
+    // any kill drop — drop_item_to_ground rolls the full instance). The owner
+    // picks it inside its claim window, in reach; it leaves the ground and lands
+    // in the bag once, byte-identical to the rolled instance.
     let (ground_item, rolled) = world.drop_item_to_ground(
         DRAGON_ARMOR,
         ItemLevel::ZERO,
         ItemRarity::Normal,
         mob_pos,
-        Tick(6_000),
+        item_stamp,
     );
     let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
     let anchor = world.inventory(hero).first_fit(footprint)?;
     assert_eq!(world.ground_item_count(), 1);
     assert_eq!(
-        world.pickup(hero, ground_item, anchor),
+        world.pickup(
+            hero,
+            ground_item,
+            anchor,
+            PickerStanding::Owner,
+            item_stamp.appearance
+        ),
         PickupOutcome::PickedUp { at: anchor }
     );
     assert_eq!(world.ground_item_count(), 0);
+
+    // BEAT 7b — The leftover drop nobody picked despawns after its minute: the
+    // reaper flips it off the persisted ground and reports it exactly once.
+    let leftover_stamp = world.stamp_zen_drop(DropOrigin::MonsterKill, kill_tick);
+    let _leftover = world.seat_ground_zen(Zen(9), mob_pos, leftover_stamp);
+    assert_eq!(world.ground_zen_count(), 1);
+    let despawns = world.reap_ground(leftover_stamp.despawn);
+    assert_eq!(despawns.len(), 1, "one despawn event for the leftover pile");
+    assert_eq!(world.ground_zen_count(), 0);
     let bagged = or_abort(
         world
             .inventory(hero)
@@ -4223,11 +4300,12 @@ fn a_party_zen_pile_splits_with_remainder_to_picker_and_an_at_cap_share_grounds(
         world.slot_wallet(MemberSlot(1)),
         world.slot_wallet(MemberSlot(2)),
     ];
+    let pile_stamp = world.stamp_zen_drop(DropOrigin::MonsterKill, Tick(0));
     let pile = WorldZen {
         amount: Zen(100_000),
         position: world.character(picker).placement().position,
         map: MapNumber(0),
-        despawn: Tick(9999),
+        despawn: pile_stamp.despawn,
     };
 
     let result = world.split_zen_pickup(party, &pile, &facts, MemberSlot(0), &wallets);
@@ -4243,11 +4321,23 @@ fn a_party_zen_pile_splits_with_remainder_to_picker_and_an_at_cap_share_grounds(
     assert_eq!(result.to_ground.len(), 1);
     assert_eq!(world.ground_zen(0).amount, Zen(33_333));
 
+    // The grounded over-cap share carries the pile's own despawn tick, and the
+    // reaper removes it like any other drop — no special case.
+    assert_eq!(world.ground_zen(0).despawn, pile_stamp.despawn);
+    let despawns = world.reap_ground(pile_stamp.despawn);
+    assert_eq!(
+        despawns.len(),
+        1,
+        "the grounded share despawns like any drop"
+    );
+    assert_eq!(world.ground_zen_count(), 0);
+
     // The solo pickup_zen path is unchanged, exercised alongside the party split.
+    let stamp = world.stamp_zen_drop(DropOrigin::Ownerless, Tick(0));
     let solo_pile = world.seat_ground_zen(
         Zen(1000),
         world.character(third).placement().position,
-        Tick(9999),
+        stamp,
     );
     assert_eq!(
         world.pickup_zen(third, solo_pile),
@@ -4293,4 +4383,407 @@ fn a_full_party_flow_forms_shares_a_kill_and_disbands() {
         party::LeaveOutcome::Disbanded
     );
     assert_eq!(world.party_count(), 0);
+}
+
+// --- W-GROUND: the standing sixth gate (SIM-1..7) over real Lorencia. ---------
+
+/// Whether the tile is walkable and NOT safe on `grid` — an open field tile.
+fn field_tile(grid: &TerrainGrid, x: u8, y: u8) -> bool {
+    let position = TileCoord::new(x, y).to_world();
+    grid.walkable(position) && !grid.safe(position)
+}
+
+/// The first `(field, safe)` +X-adjacent tile pair on real Lorencia — the
+/// town boundary, discovered from the shipped terrain, never hard-coded.
+fn boundary_pair(grid: &TerrainGrid) -> (TileCoord, TileCoord) {
+    for y in 0u8..=u8::MAX {
+        for x in 0u8..u8::MAX {
+            if field_tile(grid, x, y) && grid.safe(TileCoord::new(x + 1, y).to_world()) {
+                return (TileCoord::new(x, y), TileCoord::new(x + 1, y));
+            }
+        }
+    }
+    or_abort(Err::<(TileCoord, TileCoord), _>(
+        "Lorencia has a field tile bordering its safe core",
+    ))
+}
+
+/// The first +X row lane of three field tiles followed by a safe tile — the
+/// push runway into the town core, discovered from the real terrain.
+fn push_lane(grid: &TerrainGrid) -> [TileCoord; 4] {
+    for y in 0u8..=u8::MAX {
+        for x in 0u8..u8::MAX - 3 {
+            if field_tile(grid, x, y)
+                && field_tile(grid, x + 1, y)
+                && field_tile(grid, x + 2, y)
+                && grid.safe(TileCoord::new(x + 3, y).to_world())
+            {
+                return [
+                    TileCoord::new(x, y),
+                    TileCoord::new(x + 1, y),
+                    TileCoord::new(x + 2, y),
+                    TileCoord::new(x + 3, y),
+                ];
+            }
+        }
+    }
+    or_abort(Err::<[TileCoord; 4], _>(
+        "Lorencia has a three-tile field lane into its safe core",
+    ))
+}
+
+/// Lorencia's terrain grid, cloned out of the world's held atlas so the world
+/// stays free to be driven mutably.
+fn lorencia_grid(world: &World) -> TerrainGrid {
+    or_abort(
+        world
+            .atlas()
+            .terrain_grid(MapNumber(0))
+            .ok_or("Lorencia has a terrain grid"),
+    )
+    .clone()
+}
+
+#[test]
+fn sim_gate_a_drop_past_its_minute_flips_off_the_persisted_ground() {
+    // SIM-1: a seated drop stamped 60 s off its appearance leaves the
+    // persisted ground set when the world tick passes it, delivering one
+    // despawn event per removed drop — and survives one tick before.
+    let mut world = World::new(41, MapNumber(0));
+    let armor = item_instance(world.atlas(), DRAGON_ARMOR);
+    let item_stamp = world.stamp_item_drop(DropOrigin::Ownerless, Tick(0));
+    let zen_stamp = world.stamp_zen_drop(DropOrigin::Ownerless, Tick(0));
+    world.seat_ground_item(armor, pos(10, 10), item_stamp);
+    world.seat_ground_zen(Zen(777), pos(10, 10), zen_stamp);
+
+    let events = world.reap_ground(Tick(item_stamp.despawn.0 - 1));
+    assert!(events.is_empty(), "one tick early nothing flips");
+    assert_eq!(world.ground_item_count(), 1);
+    assert_eq!(world.ground_zen_count(), 1);
+
+    let events = world.reap_ground(item_stamp.despawn);
+    assert_eq!(
+        events.len(),
+        2,
+        "the item and the pile share the 60 s clock"
+    );
+    assert_eq!(world.ground_item_count(), 0);
+    assert_eq!(world.ground_zen_count(), 0);
+}
+
+#[test]
+fn sim_gate_walking_into_reach_turns_a_failed_pickup_into_a_success() {
+    // SIM-2 (the S-REACH-1 mirror): eleven tiles out the pickup is refused
+    // OutOfReach by core; the actor walks tile by tile — each step persisted —
+    // and the retry, gated by the walked-to placement, succeeds.
+    let mut world = World::new(42, MapNumber(0));
+    let run = walkable_run(world.atlas(), MapNumber(0), 12);
+    let start = *or_abort(run.first().ok_or("the run has a start"));
+    let item_tile = *or_abort(run.get(11).ok_or("the run has an eleventh tile"));
+
+    let alpha = world.seat_character(dark_knight(30, 150, start));
+    let armor = item_instance(world.atlas(), DRAGON_ARMOR);
+    let stamp = world.stamp_item_drop(DropOrigin::Ownerless, Tick(0));
+    let ground = world.seat_ground_item(armor, item_tile.to_world(), stamp);
+
+    let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
+    let anchor = or_abort(
+        world
+            .inventory(alpha)
+            .first_fit(footprint)
+            .ok_or("the empty bag has room"),
+    );
+    assert!(
+        matches!(
+            world.pickup(alpha, ground, anchor, PickerStanding::Stranger, Tick(0)),
+            PickupOutcome::OutOfReach { .. }
+        ),
+        "eleven tiles out the pickup is out of reach"
+    );
+
+    let reach = Radius::from_tiles(3);
+    while !world
+        .character(alpha)
+        .placement()
+        .position
+        .within_range(item_tile.to_world(), reach)
+    {
+        assert!(
+            matches!(
+                world.step(alpha, item_tile.to_world()),
+                StepOutcome::Resolved { .. }
+            ),
+            "the walkable run never blocks a step"
+        );
+    }
+    assert_eq!(
+        world.pickup(alpha, ground, anchor, PickerStanding::Stranger, Tick(0)),
+        PickupOutcome::PickedUp { at: anchor },
+        "walked into reach, the same pickup lands"
+    );
+}
+
+#[test]
+fn sim_gate_the_ownership_window_refuses_at_five_seconds_and_frees_at_eleven() {
+    // SIM-3: a real monster drop is claimed to the killer's kill-snapshot; a
+    // stranger's pickup at appearance + 5 s is Refused and the same pickup at
+    // appearance + 11 s succeeds.
+    let mut world = World::new(43, MapNumber(0));
+    let stranger = world.seat_character(dark_knight(30, 150, tile(10, 10)));
+    let armor = item_instance(world.atlas(), DRAGON_ARMOR);
+    let stamp = world.stamp_item_drop(DropOrigin::MonsterKill, Tick(0));
+    let ground = world.seat_ground_item(armor, pos(10, 10), stamp);
+
+    let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
+    let anchor = or_abort(
+        world
+            .inventory(stranger)
+            .first_fit(footprint)
+            .ok_or("the empty bag has room"),
+    );
+    let five_seconds_in = Tick(stamp.appearance.0 + 100);
+    let eleven_seconds_in = Tick(stamp.appearance.0 + 220);
+
+    assert!(
+        matches!(
+            world.pickup(
+                stranger,
+                ground,
+                anchor,
+                PickerStanding::Stranger,
+                five_seconds_in
+            ),
+            PickupOutcome::Refused { .. }
+        ),
+        "inside the 10 s window a stranger is refused"
+    );
+    assert_eq!(world.ground_item_count(), 1, "the refused item stays put");
+    assert_eq!(
+        world.pickup(
+            stranger,
+            ground,
+            anchor,
+            PickerStanding::Stranger,
+            eleven_seconds_in
+        ),
+        PickupOutcome::PickedUp { at: anchor },
+        "past the window the drop is free-for-all"
+    );
+    assert_eq!(world.ground_item_count(), 0);
+}
+
+#[test]
+fn sim_gate_a_monster_drop_is_seated_one_second_after_the_kill_and_not_before() {
+    // SIM-4: a real kill at tick T; the core stamp stages the drop's
+    // appearance at T + 1 s, so before that tick the host has seated nothing
+    // and there is no ground drop to pick; at the appearance it is seated and
+    // the pickup proceeds.
+    let mut world = World::new(44, MapNumber(0));
+    let killer = world.seat_character(dark_knight(80, 300, tile(10, 10)));
+    let (number, combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let victim = world.seat_monster(monster_instance(number, combat.hp, tile(10, 10)));
+    loop {
+        match world.strike(killer, victim) {
+            AttackOutcome::Killed { .. } => break,
+            AttackOutcome::Landed { .. } | AttackOutcome::Missed => {}
+        }
+    }
+
+    let kill_tick = Tick(0);
+    let stamp = world.stamp_item_drop(DropOrigin::MonsterKill, kill_tick);
+    assert_eq!(
+        stamp.appearance.0,
+        kill_tick.0 + 20,
+        "the 1 s beat at the 50 ms cadence"
+    );
+    // Before the appearance the host has not seated the drop: nothing is on
+    // the ground to reap or pick.
+    assert_eq!(world.ground_item_count(), 0, "pre-beat there is no drop");
+
+    // At the appearance the host seats it, and the killer picks it up.
+    let position = world.monster(victim).placement.position;
+    let (ground, _rolled) = world.drop_item_to_ground(
+        DRAGON_ARMOR,
+        ItemLevel::ZERO,
+        ItemRarity::Normal,
+        position,
+        stamp,
+    );
+    let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
+    let anchor = or_abort(
+        world
+            .inventory(killer)
+            .first_fit(footprint)
+            .ok_or("the empty bag has room"),
+    );
+    assert_eq!(
+        world.pickup(
+            killer,
+            ground,
+            anchor,
+            PickerStanding::Owner,
+            stamp.appearance
+        ),
+        PickupOutcome::PickedUp { at: anchor }
+    );
+}
+
+#[test]
+fn sim_gate_a_town_cast_is_refused_and_a_town_stander_is_untouched_by_an_aoe() {
+    // SIM-5: a cast from Lorencia's safe core is rejected CasterInSafezone
+    // with no persisted spend, and a field caster's area sweep leaves the
+    // town-standing mob's persisted health untouched while the field mob is
+    // struck.
+    let mut world = World::new(45, MapNumber(0));
+    let grid = lorencia_grid(&world);
+    let (field, safe) = boundary_pair(&grid);
+
+    // A funded caster parked in town: refused, nothing spent.
+    let town_caster = world.seat_character(dark_wizard(50, 200, safe));
+    let skill = direct_hit_skill(world.atlas());
+    let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let prey = world.seat_monster(monster_instance(number, 1_000_000, field));
+    let mana_before = world.character(town_caster).vitals().mana.current();
+    assert_eq!(
+        world.cast_damaging(town_caster, skill, field.to_world(), &[prey]),
+        SkillOutcome::Rejected {
+            reason: CastRejection::CasterInSafezone
+        }
+    );
+    assert_eq!(
+        world.character(town_caster).vitals().mana.current(),
+        mana_before,
+        "no persisted spend on a town-refused cast"
+    );
+
+    // A field caster's Nova covers both standers; only the field one takes
+    // persisted damage.
+    let field_caster_tile = TileCoord::new(field.x().saturating_sub(1), field.y());
+    let field_caster = world.seat_character(dark_wizard(50, 200, field_caster_tile));
+    let nova = nova_skill(world.atlas());
+    let town_mob = world.seat_monster(monster_instance(number, 1_000_000, safe));
+    let town_before = world.monster(town_mob).health.current();
+    let outcome = world.cast_damaging(
+        field_caster,
+        nova,
+        field_caster_tile.to_world(),
+        &[town_mob, prey],
+    );
+    let SkillOutcome::Cast { hits, .. } = outcome else {
+        panic!("a funded field cast resolves");
+    };
+    assert!(!hits.is_empty(), "the field mob is struck");
+    assert_eq!(
+        world.monster(town_mob).health.current(),
+        town_before,
+        "the town-standing mob takes no persisted damage"
+    );
+    assert!(
+        world.monster(prey).health.current() < 1_000_000,
+        "the field mob's persisted health fell"
+    );
+}
+
+#[test]
+fn sim_gate_a_member_parked_in_town_earns_no_exp_and_no_zen() {
+    // SIM-6: a field killer/picker with a party member standing in Lorencia's
+    // safe core — the town-stander's persisted experience and zen are both
+    // unchanged (pins 1-2).
+    let mut world = World::new(46, MapNumber(0));
+    let grid = lorencia_grid(&world);
+    let (field, safe) = boundary_pair(&grid);
+
+    let killer = world.seat_character(dark_knight(20, 150, field)); // slot 0
+    let parked = world.seat_character(dark_knight(20, 150, safe)); // slot 1
+    let party = world.seat_party(PartySession::forming());
+
+    let facts = vec![
+        world.member_fact(MemberSlot(0), Vitality::Alive),
+        world.member_fact(MemberSlot(1), Vitality::Alive),
+    ];
+    let killer_exp_before = world.character(killer).experience().0;
+    let parked_exp_before = world.character(parked).experience().0;
+    let awards =
+        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
+    let slots: Vec<u8> = awards.iter().map(|(award, _events)| award.slot.0).collect();
+    assert_eq!(slots, vec![0], "only the field killer earns");
+    assert!(world.character(killer).experience().0 > killer_exp_before);
+    assert_eq!(
+        world.character(parked).experience().0,
+        parked_exp_before,
+        "the town-stander's persisted experience is unchanged"
+    );
+
+    // The zen split with the same seats: the picker keeps the whole pile.
+    let pile_stamp = world.stamp_zen_drop(DropOrigin::MonsterKill, Tick(0));
+    let pile = WorldZen {
+        amount: Zen(50_001),
+        position: world.character(killer).placement().position,
+        map: MapNumber(0),
+        despawn: pile_stamp.despawn,
+    };
+    let wallets = vec![
+        world.slot_wallet(MemberSlot(0)),
+        world.slot_wallet(MemberSlot(1)),
+    ];
+    let result = world.split_zen_pickup(party, &pile, &facts, MemberSlot(0), &wallets);
+    assert_eq!(result.credits.len(), 1);
+    assert_eq!(
+        world.character(killer).zen(),
+        zen(50_001),
+        "the picker keeps it all"
+    );
+    assert_eq!(
+        world.character(parked).zen(),
+        zen(0),
+        "the town-stander's persisted zen is unchanged"
+    );
+}
+
+#[test]
+fn sim_gate_push_and_jiggle_both_stop_at_the_safezone_line() {
+    // SIM-7: an Earthshake pushing a real mob toward the town core parks its
+    // persisted placement on the last field tile; a lightning jiggle rolled
+    // toward the safe boundary never lands the persisted target on a safe
+    // tile.
+    let mut world = World::new(47, MapNumber(0));
+    let grid = lorencia_grid(&world);
+    let [caster_tile, target_tile, last_field, first_safe] = push_lane(&grid);
+
+    let knight = world.seat_character(dark_knight(80, 300, caster_tile));
+    let quake = earthshake_skill(world.atlas());
+    let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let pushed = world.seat_monster(monster_instance(number, 1_000_000, target_tile));
+    let outcome = world.cast_damaging(knight, quake, caster_tile.to_world(), &[pushed]);
+    assert!(matches!(outcome, SkillOutcome::Cast { .. }));
+    assert_eq!(
+        world.monster(pushed).placement.position,
+        last_field.to_world(),
+        "the persisted push stops on the last field tile"
+    );
+    assert_ne!(
+        world.monster(pushed).placement.position,
+        first_safe.to_world()
+    );
+
+    // The jiggle: fresh wizard + mob per attempt so every cast is funded; the
+    // persisted placement never reads safe, and some attempt lands a move.
+    let bolt = lightning_direct_skill(world.atlas());
+    let wizard_tile = TileCoord::new(target_tile.x().saturating_sub(1), target_tile.y());
+    let mut saw_move = false;
+    for _ in 0..48u32 {
+        let wizard = world.seat_character(dark_wizard(50, 200, wizard_tile));
+        let jiggled = world.seat_monster(monster_instance(number, 1_000_000, target_tile));
+        let outcome = world.cast_damaging(wizard, bolt, target_tile.to_world(), &[jiggled]);
+        assert!(matches!(outcome, SkillOutcome::Cast { .. }));
+        let landed = world.monster(jiggled).placement.position;
+        assert!(
+            !grid.safe(landed),
+            "a jiggled target never lands on a safe tile"
+        );
+        if landed != target_tile.to_world() {
+            saw_move = true;
+        }
+    }
+    assert!(saw_move, "some attempt lands a real jiggle move");
 }

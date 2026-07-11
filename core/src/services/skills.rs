@@ -7,9 +7,13 @@
 //! covered target on that basis, applying elemental ailments and the per-skill
 //! displacement (Earthshake's directional push, the lunge jiggle, the lightning
 //! jiggle), and teleporting the caster on a lunge — and spends the skill's cost
-//! only once the cast commits. Pure and deterministic: the RNG is drawn per
-//! target in a fixed order (the strike, then the element application roll, then
-//! the displacement draws), and the caster's teleport draws nothing.
+//! only once the cast commits. The terrain grid doubles as the safezone
+//! firewall: a caster standing on a safe town tile is rejected before anything
+//! is spent, a safezone-standing target is dropped from the covered set, and
+//! no push or jiggle ever lands a target on a safe tile. Pure and
+//! deterministic: the RNG is drawn per target in a fixed order (the strike,
+//! then the element application roll, then the displacement draws), and the
+//! caster's teleport draws nothing.
 
 use rand_core::RngCore;
 
@@ -24,7 +28,7 @@ use crate::components::spatial::{
     ConeHalfWidth, Displacement, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
 use crate::components::stats::Stats;
-use crate::components::tile::WalkGrid;
+use crate::components::tile::TerrainGrid;
 use crate::components::units::{Tick, TickDuration};
 use crate::components::vitals::Vitals;
 use crate::data::effects::{Ailment, Buff};
@@ -440,8 +444,9 @@ fn bounding_rect(corners: [WorldPos; 4]) -> WorldRect {
     )
 }
 
-/// Resolves a skill cast: rejects for cost or an out-of-range aim before
-/// spending anything, strikes every target the located region covers
+/// Resolves a skill cast: rejects a safezone-standing caster, an unaffordable
+/// cost, or an out-of-range aim before spending anything, strikes every target
+/// the located region covers except those standing on a safe tile
 /// (single-target skills strike the first covered candidate), applies elemental
 /// ailments and the per-skill displacement, teleports the caster on a lunge,
 /// then spends the cost. Returns the caster's vitals after the spend (health
@@ -458,11 +463,11 @@ pub fn cast(
     caster_profile: &CombatProfile,
     located: LocatedCast<'_>,
     targets: &[CombatTarget],
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     rng: &mut impl RngCore,
 ) -> (Vitals, SkillOutcome) {
     let vitals = caster.vitals();
-    if let Some(reason) = cast_rejection(caster, &located) {
+    if let Some(reason) = cast_rejection(caster, &located, grid) {
         return (vitals, SkillOutcome::Rejected { reason });
     }
 
@@ -470,7 +475,10 @@ pub fn cast(
     let mut struck: Vec<(usize, &CombatTarget)> = targets
         .iter()
         .enumerate()
-        .filter(|(_, target)| region.contains(target.placement().position))
+        .filter(|(_, target)| {
+            let position = target.placement().position;
+            region.contains(position) && !grid.safe(position)
+        })
         .collect();
     if is_single_target(located.skill.shape()) {
         struck.truncate(1);
@@ -519,8 +527,17 @@ pub fn cast(
 }
 
 /// The first failing precondition, or `None` when the cast may proceed. Order:
-/// mana, then ability, then the aim gate — nothing is spent yet.
-fn cast_rejection(caster: &Character, located: &LocatedCast<'_>) -> Option<CastRejection> {
+/// the caster's locus (a safe town tile forbids any offensive cast, regardless
+/// of cost or aim), then mana, then ability, then the aim gate — nothing is
+/// spent yet.
+fn cast_rejection(
+    caster: &Character,
+    located: &LocatedCast<'_>,
+    grid: &TerrainGrid,
+) -> Option<CastRejection> {
+    if grid.safe(caster.placement().position) {
+        return Some(CastRejection::CasterInSafezone);
+    }
     if let Some(reason) = affordability(&caster.vitals(), located.skill.cost()) {
         return Some(reason);
     }
@@ -800,15 +817,17 @@ fn elemental_displacement(element: Option<Element>) -> TargetDisplacement {
 }
 
 /// Throws a target up to three tiles 8-way away from the attacker, breaking on
-/// the first unwalkable tile and keeping the tiles already gained. The heading is
-/// the quantized away-vector (attacker → target); on a shared tile it is drawn
-/// uniformly among the eight ([`draw_cardinal`], one word). Reports the final
-/// placement, or `None` if the very first tile was blocked (no ground gained).
-/// Draws zero words off a shared tile, exactly one on it.
+/// the first unwalkable or safe tile and keeping the tiles already gained — a
+/// safe town tile refuses the step like a wall, so no target is ever pushed
+/// into a safezone. The heading is the quantized away-vector (attacker →
+/// target); on a shared tile it is drawn uniformly among the eight
+/// ([`draw_cardinal`], one word). Reports the final placement, or `None` if the
+/// very first tile was refused (no ground gained). Draws zero words off a
+/// shared tile, exactly one on it.
 fn directional_push(
     attacker: Placement,
     target: Placement,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     rng: &mut impl RngCore,
 ) -> Option<Placement> {
     let heading = match (target.position - attacker.position).octant() {
@@ -819,26 +838,29 @@ fn directional_push(
     let mut moved = false;
     for _ in 0..PUSH_TILES {
         match resolve_tile_offset(current, heading, grid) {
-            StepOutcome::Resolved { placement } => {
+            StepOutcome::Resolved { placement } if !grid.safe(placement.position) => {
                 current = placement;
                 moved = true;
             }
-            StepOutcome::Blocked => break,
+            StepOutcome::Resolved { .. } | StepOutcome::Blocked => break,
         }
     }
     moved.then_some(current)
 }
 
 /// The ±1 jiggle: draws a nine-outcome tile offset (dx then dy, two words) and
-/// applies it. A stay(0,0) roll or a blocked destination reports no net move
-/// (`None`); no re-roll — the two words are consumed regardless.
-fn jiggle(target: Placement, grid: &WalkGrid, rng: &mut impl RngCore) -> Option<Placement> {
+/// applies it. A stay(0,0) roll, a blocked destination, or a safe town
+/// destination reports no net move (`None`) — blocked-by-safe is stay, for
+/// players and NPCs alike; no re-roll — the two words are consumed regardless.
+fn jiggle(target: Placement, grid: &TerrainGrid, rng: &mut impl RngCore) -> Option<Placement> {
     let offset = draw_jiggle_offset(rng);
     match resolve_tile_offset(target, offset, grid) {
-        StepOutcome::Resolved { placement } => {
-            (placement.position != target.position).then_some(placement)
+        StepOutcome::Resolved { placement }
+            if placement.position != target.position && !grid.safe(placement.position) =>
+        {
+            Some(placement)
         }
-        StepOutcome::Blocked => None,
+        StepOutcome::Resolved { .. } | StepOutcome::Blocked => None,
     }
 }
 
@@ -855,7 +877,7 @@ fn jiggle(target: Placement, grid: &WalkGrid, rng: &mut impl RngCore) -> Option<
 /// caster's effect-folded profile, the struck target, the skill (element /
 /// ailment / displacement class), the cast-wide strike basis, the attacker
 /// placement (the push's away-vector origin — a placement, never the whole
-/// `Character`), the walk grid, and the injected RNG.
+/// `Character`), the terrain grid, and the injected RNG.
 fn resolve_target_hit(
     index: usize,
     caster_profile: &CombatProfile,
@@ -863,7 +885,7 @@ fn resolve_target_hit(
     skill: DamagingSkillRef<'_>,
     basis: &StrikeBasis,
     attacker: Placement,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     rng: &mut impl RngCore,
 ) -> TargetHit {
     let displacement_kind = target_displacement(skill);
@@ -925,7 +947,7 @@ fn missed_displacement(
     kind: TargetDisplacement,
     attacker: Placement,
     target: Placement,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     rng: &mut impl RngCore,
 ) -> Option<Placement> {
     match kind {
@@ -943,7 +965,7 @@ fn landed_displacement(
     applied: bool,
     attacker: Placement,
     target: Placement,
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     rng: &mut impl RngCore,
 ) -> Option<Placement> {
     match kind {
@@ -1030,8 +1052,29 @@ mod tests {
         }
     }
 
-    fn all_walkable() -> WalkGrid {
-        WalkGrid::from_words([u64::MAX; 1024])
+    fn all_walkable() -> TerrainGrid {
+        TerrainGrid::from_words([u64::MAX; 1024])
+    }
+
+    /// An all-walkable grid whose listed tiles are safe town tiles.
+    fn walkable_with_safe(tiles: &[(u8, u8)]) -> TerrainGrid {
+        let mut safe = [0u64; 1024];
+        for &(x, y) in tiles {
+            let bit = (usize::from(y) << 8) | usize::from(x);
+            safe[bit >> 6] |= 1u64 << (bit & 63);
+        }
+        TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
+    }
+
+    /// An all-walkable grid that is safe everywhere EXCEPT the listed tiles —
+    /// the sealed-by-safezone counterpart of `walkable_with_safe`.
+    fn safe_everywhere_but(tiles: &[(u8, u8)]) -> TerrainGrid {
+        let mut safe = [u64::MAX; 1024];
+        for &(x, y) in tiles {
+            let bit = (usize::from(y) << 8) | usize::from(x);
+            safe[bit >> 6] &= !(1u64 << (bit & 63));
+        }
+        TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
     }
 
     fn skill(
@@ -2036,7 +2079,7 @@ mod tests {
             let bit = (10usize << 8) | usize::from(x);
             words[bit >> 6] |= 1u64 << (bit & 63);
         }
-        let grid = WalkGrid::from_words(words);
+        let grid = TerrainGrid::from_words(words);
         let caster = caster_at((10, 10), 100, 100);
         let bolt_def = skill(
             SkillShape::DirectHit,
@@ -2119,16 +2162,19 @@ mod tests {
         // Ten tiles out: beyond the cast range 6 — rejected, nothing spent.
         let far = TileCoord::new(20, 10).to_world();
         assert_eq!(
-            cast_rejection(&caster, &damaging.locate(far)),
+            cast_rejection(&caster, &damaging.locate(far), &all_walkable()),
             Some(CastRejection::OutOfRange)
         );
         // Four tiles out: within range — no OutOfRange.
         let near = TileCoord::new(14, 10).to_world();
-        assert_eq!(cast_rejection(&caster, &damaging.locate(near)), None);
+        assert_eq!(
+            cast_rejection(&caster, &damaging.locate(near), &all_walkable()),
+            None
+        );
         // The gate is pure: same inputs, same answer, no RngCore in reach.
         assert_eq!(
-            cast_rejection(&caster, &damaging.locate(far)),
-            cast_rejection(&caster, &damaging.locate(far))
+            cast_rejection(&caster, &damaging.locate(far), &all_walkable()),
+            cast_rejection(&caster, &damaging.locate(far), &all_walkable())
         );
     }
 
@@ -2163,7 +2209,10 @@ mod tests {
         ] {
             let damaging = damaging_ref(&definition);
             let absurd = TileCoord::new(250, 250).to_world();
-            assert_eq!(cast_rejection(&caster, &damaging.locate(absurd)), None);
+            assert_eq!(
+                cast_rejection(&caster, &damaging.locate(absurd), &all_walkable()),
+                None
+            );
         }
     }
 
@@ -2274,7 +2323,7 @@ mod tests {
         let mut words = [0u64; 1024];
         let bit = (10usize << 8) | usize::from(11u8);
         words[bit >> 6] |= 1u64 << (bit & 63);
-        let sealed = WalkGrid::from_words(words);
+        let sealed = TerrainGrid::from_words(words);
         let target = placed_at((11, 10));
         for grid in [&all_walkable(), &sealed] {
             for seed in 0u64..16 {
@@ -2319,7 +2368,7 @@ mod tests {
             let bit = (10usize << 8) | usize::from(x);
             words[bit >> 6] |= 1u64 << (bit & 63);
         }
-        let grid = WalkGrid::from_words(words);
+        let grid = TerrainGrid::from_words(words);
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
         let mut rng = TestRng::new(3);
@@ -2334,7 +2383,7 @@ mod tests {
         let mut words = [0u64; 1024];
         let bit = (10usize << 8) | usize::from(12u8);
         words[bit >> 6] |= 1u64 << (bit & 63);
-        let grid = WalkGrid::from_words(words);
+        let grid = TerrainGrid::from_words(words);
         let attacker = placed_at((10, 10));
         let target = placed_at((12, 10));
         let mut rng = TestRng::new(3);
@@ -2357,6 +2406,244 @@ mod tests {
             let mut probe = TestRng::new(seed);
             probe.next_u64();
             assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+        }
+    }
+
+    /// The index a hit reports, on every variant.
+    fn hit_index(hit: &TargetHit) -> usize {
+        match hit {
+            TargetHit::Missed { target_index, .. }
+            | TargetHit::Landed { target_index, .. }
+            | TargetHit::Killed { target_index, .. } => *target_index,
+        }
+    }
+
+    #[test]
+    fn a_safezone_caster_is_rejected_before_any_spend() {
+        // FIRE-1: a funded caster on a safe tile, valid in-range target — the
+        // cast is refused CasterInSafezone, nothing spent, no word drawn.
+        let caster = caster_at((10, 10), 100, 100);
+        let definition = skill(SkillShape::DirectHit, None, None, 3, 30, 10);
+        let damaging = damaging_ref(&definition);
+        let targets = [target_at((11, 10), 0)];
+        let aim = TileCoord::new(11, 10).to_world();
+        let grid = walkable_with_safe(&[(10, 10)]);
+        let mut rng = TestRng::new(5);
+        let (vitals, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging.locate(aim),
+            &targets,
+            &grid,
+            &mut rng,
+        );
+        assert_eq!(vitals, caster.vitals(), "nothing spent");
+        assert_eq!(
+            outcome,
+            SkillOutcome::Rejected {
+                reason: CastRejection::CasterInSafezone
+            }
+        );
+        let mut probe = TestRng::new(5);
+        assert_eq!(rng.next_u64(), probe.next_u64(), "no word drawn");
+    }
+
+    #[test]
+    fn the_safezone_term_precedes_affordability_and_the_aim_gate() {
+        // White-box order: a broke caster aiming out of range from a safe tile
+        // surfaces CasterInSafezone — the locus gate dominates.
+        let broke = caster_at((10, 10), 0, 0);
+        let definition = skill(SkillShape::DirectHit, None, None, 2, 50, 50);
+        let damaging = damaging_ref(&definition);
+        let far = TileCoord::new(30, 10).to_world();
+        assert_eq!(
+            cast_rejection(
+                &broke,
+                &damaging.locate(far),
+                &walkable_with_safe(&[(10, 10)])
+            ),
+            Some(CastRejection::CasterInSafezone)
+        );
+    }
+
+    #[test]
+    fn a_safezone_standing_target_is_dropped_from_the_covered_set() {
+        // FIRE-2: both targets are geometrically covered; the safe-tile one
+        // produces no TargetHit while the open-ground one is struck.
+        let caster = caster_at((10, 10), 100, 100);
+        let quake = area_skill(
+            AreaGeometry::CasterCircle { radius_x2: 10 },
+            AreaDisplacement::None,
+            None,
+            10,
+        );
+        let damaging = damaging_ref(&quake);
+        let targets = [target_at((11, 10), 0), target_at((12, 10), 0)];
+        let aim = TileCoord::new(10, 10).to_world();
+        let grid = walkable_with_safe(&[(11, 10)]);
+        for seed in 0u64..8 {
+            let mut rng = TestRng::new(seed);
+            let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                damaging.locate(aim),
+                &targets,
+                &grid,
+                &mut rng,
+            )
+            .1
+            else {
+                panic!("the open-ground target keeps the cast resolving");
+            };
+            assert_eq!(hits.len(), 1, "seed {seed}");
+            assert_eq!(hit_index(&hits[0]), 1, "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn a_direct_hit_is_refused_on_both_sides_of_the_safezone_line() {
+        // FIRE-3: the attacker-in-safezone cast is rejected CasterInSafezone;
+        // the target-in-safezone cast strikes no one. Nothing spent either way.
+        let definition = skill(SkillShape::DirectHit, None, None, 3, 20, 5);
+        let damaging = damaging_ref(&definition);
+        let aim = TileCoord::new(11, 10).to_world();
+        let targets = [target_at((11, 10), 0)];
+
+        let attacker_safe = caster_at((10, 10), 100, 100);
+        let mut rng = TestRng::new(4);
+        let (vitals, outcome) = cast(
+            &attacker_safe,
+            &base_profile_of(&attacker_safe),
+            damaging.locate(aim),
+            &targets,
+            &walkable_with_safe(&[(10, 10)]),
+            &mut rng,
+        );
+        assert_eq!(vitals, attacker_safe.vitals());
+        assert_eq!(
+            outcome,
+            SkillOutcome::Rejected {
+                reason: CastRejection::CasterInSafezone
+            }
+        );
+
+        let attacker_open = caster_at((10, 10), 100, 100);
+        let mut rng = TestRng::new(4);
+        let (vitals, outcome) = cast(
+            &attacker_open,
+            &base_profile_of(&attacker_open),
+            damaging.locate(aim),
+            &targets,
+            &walkable_with_safe(&[(11, 10)]),
+            &mut rng,
+        );
+        assert_eq!(vitals, attacker_open.vitals());
+        assert_eq!(
+            outcome,
+            SkillOutcome::Rejected {
+                reason: CastRejection::NoTargetsInRegion
+            }
+        );
+    }
+
+    #[test]
+    fn the_push_stops_at_a_safe_tile_keeping_gained_ground() {
+        // FIRE-4: heading +x from (12,10); (13,10) is open, (14,10) is safe —
+        // the safe tile refuses the step like a wall, prior ground kept, and
+        // the away-vector push still draws nothing.
+        let attacker = placed_at((10, 10));
+        let target = placed_at((12, 10));
+        let mut rng = TestRng::new(3);
+        let moved = directional_push(attacker, target, &walkable_with_safe(&[(14, 10)]), &mut rng)
+            .expect("one open step is kept");
+        assert_eq!(moved.position, TileCoord::new(13, 10).to_world());
+        let mut probe = TestRng::new(3);
+        assert_eq!(rng.next_u64(), probe.next_u64(), "no word drawn");
+    }
+
+    #[test]
+    fn the_push_reports_none_when_the_first_tile_is_safe() {
+        // A safe first step gains no ground — `None`, exactly like the wall.
+        let attacker = placed_at((10, 10));
+        let target = placed_at((12, 10));
+        let mut rng = TestRng::new(3);
+        assert_eq!(
+            directional_push(attacker, target, &walkable_with_safe(&[(13, 10)]), &mut rng),
+            None
+        );
+    }
+
+    #[test]
+    fn a_safe_stopped_same_tile_push_still_draws_its_one_word() {
+        // The RNG contract is commit-independent: the shared-tile fallback
+        // draws its heading word even when every landing is a safe tile.
+        let attacker = placed_at((10, 10));
+        let target = placed_at((10, 10));
+        let grid = safe_everywhere_but(&[(10, 10)]);
+        for seed in 0u64..16 {
+            let mut rng = TestRng::new(seed);
+            assert_eq!(directional_push(attacker, target, &grid, &mut rng), None);
+            let mut probe = TestRng::new(seed);
+            probe.next_u64();
+            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn a_jiggle_onto_a_safe_destination_stays_and_draws_no_third_word() {
+        // FIRE-6: every neighbouring tile is safe, so every non-stay roll is
+        // refused — no move, no re-roll, the two words consumed regardless.
+        let target = placed_at((11, 10));
+        let grid = safe_everywhere_but(&[(11, 10)]);
+        for seed in 0u64..16 {
+            let mut rng = TestRng::new(seed);
+            assert_eq!(jiggle(target, &grid, &mut rng), None, "seed {seed}");
+            let mut probe = TestRng::new(seed);
+            probe.next_u32();
+            probe.next_u32();
+            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn the_firewall_is_inert_where_no_safe_tile_is_touched() {
+        // FIRE-7: with the only safe tile far away, cast, push, and jiggle are
+        // byte-identical to the walk-only grid under every seed.
+        let caster = caster_at((10, 10), 100, 100);
+        let remote = walkable_with_safe(&[(200, 200)]);
+        let quake = earthshake_skill();
+        let bolt = skill(
+            SkillShape::DirectHit,
+            Some(Element::Lightning),
+            None,
+            3,
+            0,
+            0,
+        );
+        let lunge_def = skill(SkillShape::Lunge, None, None, 4, 0, 0);
+        for definition in [&quake, &bolt, &lunge_def] {
+            let damaging = damaging_ref(definition);
+            let targets = [target_at((12, 10), 0)];
+            let aim = TileCoord::new(12, 10).to_world();
+            for seed in 0u64..8 {
+                let open = cast(
+                    &caster,
+                    &base_profile_of(&caster),
+                    damaging.locate(aim),
+                    &targets,
+                    &all_walkable(),
+                    &mut TestRng::new(seed),
+                );
+                let remote_safe = cast(
+                    &caster,
+                    &base_profile_of(&caster),
+                    damaging.locate(aim),
+                    &targets,
+                    &remote,
+                    &mut TestRng::new(seed),
+                );
+                assert_eq!(open, remote_safe, "seed {seed}");
+            }
         }
     }
 

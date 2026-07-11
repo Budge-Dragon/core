@@ -29,7 +29,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -65,7 +66,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -101,7 +103,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -137,7 +140,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -173,7 +177,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -209,7 +214,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1200,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -245,7 +251,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -282,7 +289,8 @@
           "view_range": 3,
           "move_delay_ms": 400,
           "attack_delay_ms": 2200,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -318,7 +326,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -355,7 +364,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2200,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -393,7 +403,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -430,7 +441,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -467,7 +479,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -504,7 +517,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -541,7 +555,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -577,7 +592,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -613,7 +629,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -649,7 +666,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -685,7 +703,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -722,7 +741,8 @@
           "view_range": 6,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -759,7 +779,8 @@
           "view_range": 6,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -796,7 +817,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -832,7 +854,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -869,7 +892,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -905,7 +929,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -941,7 +966,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 50000
+          "respawn_ms": 50000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -979,7 +1005,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1016,7 +1043,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1052,7 +1080,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1088,7 +1117,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1124,7 +1154,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1160,7 +1191,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1196,7 +1228,8 @@
           "view_range": 3,
           "move_delay_ms": 400,
           "attack_delay_ms": 2200,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1232,7 +1265,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1268,7 +1302,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -1306,7 +1341,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1343,7 +1379,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1380,7 +1417,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -1418,7 +1456,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 150000
+          "respawn_ms": 150000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1455,7 +1494,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -1493,7 +1533,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1530,7 +1571,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1567,7 +1609,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 600000
+          "respawn_ms": 600000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1604,7 +1647,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 100000
+          "respawn_ms": 100000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1641,7 +1685,8 @@
           "view_range": 4,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 8000
+          "respawn_ms": 8000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1678,7 +1723,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 8000
+          "respawn_ms": 8000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -1716,7 +1762,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 8000
+          "respawn_ms": 8000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1753,7 +1800,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 15000
+          "respawn_ms": 15000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -1791,7 +1839,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 150000
+          "respawn_ms": 150000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1828,7 +1877,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 150000
+          "respawn_ms": 150000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1865,7 +1915,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 15000
+          "respawn_ms": 15000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1902,7 +1953,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 15000
+          "respawn_ms": 15000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -1940,7 +1992,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 600000
+          "respawn_ms": 600000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -1977,7 +2030,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1800,
-          "respawn_ms": 600000
+          "respawn_ms": 600000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2014,7 +2068,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2051,7 +2106,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 20000
+          "respawn_ms": 20000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2088,7 +2144,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 150000
+          "respawn_ms": 150000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2125,7 +2182,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2162,7 +2220,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 20000
+          "respawn_ms": 20000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -2200,7 +2259,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2237,7 +2297,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 150000
+          "respawn_ms": 150000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2274,7 +2335,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2311,7 +2373,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 2000,
-          "respawn_ms": 100000
+          "respawn_ms": 100000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2348,7 +2411,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 70000
+          "respawn_ms": 70000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2385,7 +2449,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 200000
+          "respawn_ms": 200000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2422,7 +2487,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -2460,7 +2526,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -2498,7 +2565,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2535,7 +2603,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2572,7 +2641,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 20000
+          "respawn_ms": 20000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2609,7 +2679,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2646,7 +2717,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2683,7 +2755,8 @@
           "view_range": 5,
           "move_delay_ms": 400,
           "attack_delay_ms": 1400,
-          "respawn_ms": 10000
+          "respawn_ms": 10000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -2721,7 +2794,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1500,
-          "respawn_ms": 15000
+          "respawn_ms": 15000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2759,7 +2833,8 @@
           "view_range": 4,
           "move_delay_ms": 0,
           "attack_delay_ms": 1000,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2796,7 +2871,8 @@
           "view_range": 1,
           "move_delay_ms": 0,
           "attack_delay_ms": 1000,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2833,7 +2909,8 @@
           "view_range": 1,
           "move_delay_ms": 0,
           "attack_delay_ms": 1000,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -2870,7 +2947,8 @@
           "view_range": 1,
           "move_delay_ms": 500,
           "attack_delay_ms": 1000,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "skill",
@@ -2907,7 +2985,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1600,
-          "respawn_ms": 100000
+          "respawn_ms": 100000,
+          "disposition": "excluded"
         },
         "attack": {
           "kind": "plain"
@@ -3045,7 +3124,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1500,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "patrols"
         }
       }
     },
@@ -3086,7 +3166,8 @@
           "view_range": 7,
           "move_delay_ms": 400,
           "attack_delay_ms": 1500,
-          "respawn_ms": 3000
+          "respawn_ms": 3000,
+          "disposition": "patrols"
         }
       }
     },

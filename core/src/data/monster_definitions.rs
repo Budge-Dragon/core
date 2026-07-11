@@ -88,6 +88,40 @@ pub struct MonsterCombat {
     pub defense_rate: u16,
 }
 
+/// Whether a fighting entity acts inside a safezone. A pure function of the
+/// role (a guard patrols and attacks on safe tiles; a monster or trap is
+/// suppressed there), stored on [`MobBehavior`] so the monster-AI decision
+/// reads it in the existing behavior slot. The role⟺disposition law is proven
+/// at parse (`check_monster_dispositions`), so an inconsistent value cannot
+/// load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SafezoneDisposition {
+    /// Basic monsters and traps: never attack from, never step onto, a safe
+    /// tile.
+    Excluded,
+    /// Guards: patrol across and attack from safe town tiles.
+    Patrols,
+}
+
+impl MonsterRole {
+    /// The safezone disposition this role confers — the single source the
+    /// parse-time reconciliation holds every stored
+    /// [`MobBehavior::disposition`] against. `None` for the two roles that
+    /// carry no [`MobBehavior`] (`Npc`, `SoccerBall`). Total over
+    /// [`MonsterRole`].
+    #[must_use]
+    pub fn safezone_disposition(&self) -> Option<SafezoneDisposition> {
+        match self {
+            MonsterRole::Guard { .. } => Some(SafezoneDisposition::Patrols),
+            MonsterRole::Monster { .. } | MonsterRole::Trap { .. } => {
+                Some(SafezoneDisposition::Excluded)
+            }
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
+        }
+    }
+}
+
 /// The Monster.txt movement/timing columns shared by every fighting kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MobBehavior {
@@ -103,6 +137,9 @@ pub struct MobBehavior {
     pub attack_delay_ms: DurationMs,
     /// Delay before a dead instance respawns.
     pub respawn_ms: DurationMs,
+    /// The safezone disposition this kind's role confers (Guard `Patrols`,
+    /// Monster/Trap `Excluded`), reconciled against the role at parse.
+    pub disposition: SafezoneDisposition,
 }
 
 /// How a fighting entity attacks, kind-tagged.
@@ -147,4 +184,108 @@ pub enum TrapTargeting {
     AreaWhenPressed,
     /// Fires along its fixed facing at anything in range (Fire Trap #102).
     Directional,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn behavior(disposition: SafezoneDisposition) -> MobBehavior {
+        MobBehavior {
+            move_range: 3,
+            attack_range: 1,
+            view_range: 5,
+            move_delay_ms: DurationMs(400),
+            attack_delay_ms: DurationMs(1600),
+            respawn_ms: DurationMs(10_000),
+            disposition,
+        }
+    }
+
+    fn combat() -> MonsterCombat {
+        MonsterCombat {
+            level: Level::MIN,
+            hp: 60,
+            min_phys_damage: 4,
+            max_phys_damage: 7,
+            defense: 2,
+            attack_rate: 20,
+            defense_rate: 4,
+        }
+    }
+
+    fn resistances() -> PerElement<Resistance> {
+        PerElement {
+            ice: Resistance(0),
+            poison: Resistance(0),
+            lightning: Resistance(0),
+            fire: Resistance(0),
+            earth: Resistance(0),
+            wind: Resistance(0),
+            water: Resistance(0),
+        }
+    }
+
+    #[test]
+    fn disposition_round_trips_as_bare_snake_case() {
+        for (disposition, wire) in [
+            (SafezoneDisposition::Excluded, "\"excluded\""),
+            (SafezoneDisposition::Patrols, "\"patrols\""),
+        ] {
+            assert_eq!(serde_json::to_string(&disposition).unwrap(), wire);
+            assert_eq!(
+                serde_json::from_str::<SafezoneDisposition>(wire).unwrap(),
+                disposition
+            );
+        }
+    }
+
+    #[test]
+    fn mob_behavior_carries_its_disposition_on_the_wire() {
+        for disposition in [SafezoneDisposition::Excluded, SafezoneDisposition::Patrols] {
+            let value = behavior(disposition);
+            let wire = serde_json::to_string(&value).unwrap();
+            assert_eq!(serde_json::from_str::<MobBehavior>(&wire).unwrap(), value);
+        }
+        let wire = serde_json::to_string(&behavior(SafezoneDisposition::Patrols)).unwrap();
+        assert!(wire.contains("\"disposition\":\"patrols\""));
+    }
+
+    #[test]
+    fn each_role_confers_its_disposition() {
+        let monster = MonsterRole::Monster {
+            combat: combat(),
+            resistances: resistances(),
+            behavior: behavior(SafezoneDisposition::Excluded),
+            attack: MonsterAttack::Plain,
+        };
+        let guard = MonsterRole::Guard {
+            combat: combat(),
+            resistances: resistances(),
+            behavior: behavior(SafezoneDisposition::Patrols),
+        };
+        let trap = MonsterRole::Trap {
+            targeting: TrapTargeting::Directional,
+            combat: combat(),
+            resistances: resistances(),
+            behavior: behavior(SafezoneDisposition::Excluded),
+            attack: MonsterAttack::Plain,
+        };
+        let npc = MonsterRole::Npc { window: None };
+
+        assert_eq!(
+            monster.safezone_disposition(),
+            Some(SafezoneDisposition::Excluded)
+        );
+        assert_eq!(
+            trap.safezone_disposition(),
+            Some(SafezoneDisposition::Excluded)
+        );
+        assert_eq!(
+            guard.safezone_disposition(),
+            Some(SafezoneDisposition::Patrols)
+        );
+        assert_eq!(npc.safezone_disposition(), None);
+        assert_eq!(MonsterRole::SoccerBall.safezone_disposition(), None);
+    }
 }

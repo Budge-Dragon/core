@@ -21,6 +21,9 @@ v2 shape:
   * attack is kind-tagged {plain | skill{skill}}. The 14 records OpenMU points
     at skill 150 (an S6 phantom pre-S3) ship as plain with a review note; no
     phantom skill number ships anywhere.
+  * MobBehavior carries a safezone disposition authored from the role
+    (guard -> patrols, monster/trap -> excluded); Atlas::parse reconciles it
+    against the role, so the two can never drift.
   * Spawn placement is kind-tagged {fixed | spot | area}; schedule is
     {permanent | wandering}. Map is a bare MapNumber. Devil Square wave rows
     are omitted (their residue lives in the monsters_spawns v2 section).
@@ -269,7 +272,14 @@ def build_combat(seg, var):
     return columns, resistances, water_slot
 
 
-def build_behavior(seg, var):
+DISPOSITION = {  # authored from the role: guards patrol town, the rest are barred
+    "Monster": "excluded",
+    "Trap": "excluded",
+    "Guard": "patrols",
+}
+
+
+def build_behavior(seg, var, kind):
     return {
         "move_range": grab_int(seg, var, "MoveRange"),
         "attack_range": grab_int(seg, var, "AttackRange"),
@@ -277,6 +287,7 @@ def build_behavior(seg, var):
         "move_delay_ms": delay_ms(seg, var, "MoveDelay"),
         "attack_delay_ms": delay_ms(seg, var, "AttackDelay"),
         "respawn_ms": delay_ms(seg, var, "RespawnDelay"),
+        "disposition": DISPOSITION[kind],
     }
 
 
@@ -307,7 +318,7 @@ def parse_monster(seg, var, version, skill_numbers):
 
     if kind in ("Monster", "Guard", "Trap"):
         combat, resistances, water_slot = build_combat(seg, var)
-        behavior = build_behavior(seg, var)
+        behavior = build_behavior(seg, var, kind)
         if kind == "Guard":
             if grab(seg, var, "AttackSkill", r".+") is not None:
                 raise SystemExit(f"guard {number} carries an AttackSkill")
@@ -627,6 +638,10 @@ def main():
             "move/attack/respawn delays are treated as authentic Monster.txt "
             "content per the v2 section (D11), not OpenMU-invented tuning; they "
             "carry no review",
+            "MobBehavior.disposition is authored from the role (guard->patrols, "
+            "monster/trap->excluded, the OpenMU CanWalkOnSafezone rule as a role "
+            "law); Atlas::parse reconciles the stored value against the role at "
+            "load, so an inconsistent hand-edit cannot ship",
         ],
     })
 

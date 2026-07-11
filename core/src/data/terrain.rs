@@ -1,13 +1,15 @@
-//! Host-filled terrain sidecar port: raw per-map walkability bytes, length-
-//! checked at the load boundary into a fixed-size holder so downstream parsing
-//! into a [`WalkGrid`](crate::components::tile::WalkGrid) is total.
+//! Host-filled terrain sidecar port: raw per-map terrain-attribute bytes,
+//! length-checked at the load boundary into a fixed-size holder so downstream
+//! parsing into a [`TerrainGrid`](crate::components::tile::TerrainGrid) is
+//! total.
 //!
 //! Wire contract — the sole source of truth for the byte format the host fills:
 //! each of the `256 x 256` bytes is one tile's attribute set at index
 //! `y*256 + x`, in the dataset's on-disk layout `SafeZone 0x01`, `NoMove 0x02`,
 //! `NoGround 0x04`, `Water 0x08`. A tile is walkable iff neither `NoMove` nor
-//! `NoGround` is set; `Water` is traversable
-//! (see [`WalkGrid::from_terrain`](crate::components::tile::WalkGrid::from_terrain)).
+//! `NoGround` is set; `Water` is traversable; a walkable `SafeZone` tile is
+//! safe (see
+//! [`TerrainGrid::from_terrain`](crate::components::tile::TerrainGrid::from_terrain)).
 
 use crate::components::tile::TERRAIN_LEN;
 

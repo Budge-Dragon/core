@@ -2,7 +2,8 @@
 //! example against the shipped exp curve and jitter band, the seed-independent
 //! conservation invariant, the exactly-one-draw determinism pin, the byte-identical
 //! `|Q| = 1` degeneration to the solo `award_kill_experience`, and the
-//! qualification exclusions (dead / off-map / out-of-range shrink the pool).
+//! qualification exclusions (dead / off-map / out-of-range / safezone-standing
+//! shrink the pool).
 //!
 //! Load failures route through `or_abort`; every assertion is a `#[test]` body so
 //! `unwrap` is exempt.
@@ -16,7 +17,7 @@ use rand_core::RngCore;
 
 use mu_core::components::party::{MemberSlot, Membership, Vitality};
 use mu_core::components::spatial::WorldPos;
-use mu_core::components::tile::TileCoord;
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{Exp, Level, MapNumber};
 use mu_core::data::atlas::Atlas;
 use mu_core::entities::character::Character;
@@ -30,6 +31,22 @@ use rng::TestRng;
 
 fn pos(x: u8, y: u8) -> WorldPos {
     TileCoord::new(x, y).to_world()
+}
+
+/// A fully walkable, nowhere-safe grid — the open field.
+fn all_unsafe() -> TerrainGrid {
+    TerrainGrid::from_words([u64::MAX; 1024])
+}
+
+/// A fully walkable grid whose safe set is exactly the listed tiles.
+fn safe_at(tiles: &[(u8, u8)]) -> TerrainGrid {
+    let mut safe = [0u64; 1024];
+    for &(x, y) in tiles {
+        let bit = (usize::from(y) << 8) | usize::from(x);
+        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        *word |= 1u64 << (bit & 63);
+    }
+    TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
 }
 
 fn map0() -> MapNumber {
@@ -109,6 +126,7 @@ fn the_three_member_worked_example_matches_378_757_1137_summing_to_2272() {
         &[fact(0, 10, 0), fact(1, 20, 0)],
         level(30),
         &atlas,
+        &all_unsafe(),
         &mut rng,
     );
 
@@ -133,8 +151,15 @@ fn the_split_invariant_holds_across_a_seed_sweep() {
 
     for seed in 0u64..64 {
         let mut rng = TestRng::new(seed);
-        let awards =
-            distribute_kill_experience(&party, killer_fact, &others, level(30), &atlas, &mut rng);
+        let awards = distribute_kill_experience(
+            &party,
+            killer_fact,
+            &others,
+            level(30),
+            &atlas,
+            &all_unsafe(),
+            &mut rng,
+        );
         let pool: u64 = awards.iter().map(|a| a.gained.0).sum();
 
         let mut floor_sum = 0u64;
@@ -196,8 +221,15 @@ fn exactly_one_rng_word_is_consumed_per_kill_for_any_party_size() {
         let _ = uniform_in_inclusive(band, &mut probe);
 
         let mut rng = TestRng::new(7);
-        let _ =
-            distribute_kill_experience(&party, killer_fact, &others, level(40), &atlas, &mut rng);
+        let _ = distribute_kill_experience(
+            &party,
+            killer_fact,
+            &others,
+            level(40),
+            &atlas,
+            &all_unsafe(),
+            &mut rng,
+        );
 
         assert_eq!(
             rng.next_u64(),
@@ -232,6 +264,7 @@ fn the_solo_q_of_one_path_is_byte_identical_to_award_kill_experience() {
             &others,
             level(victim),
             &atlas,
+            &all_unsafe(),
             &mut party_rng,
         );
 
@@ -264,8 +297,15 @@ fn excluding_a_dead_or_off_map_or_out_of_range_member_shrinks_the_qualifying_set
 
     // Baseline: all three qualify.
     let mut rng = TestRng::new(seed);
-    let full =
-        distribute_kill_experience(&party, killer_fact, &others, level(30), &atlas, &mut rng);
+    let full = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &others,
+        level(30),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
     assert_eq!(full.len(), 3);
 
     // Slot 2 (others[1]) dead -> excluded from the award and the denominator.
@@ -274,7 +314,15 @@ fn excluding_a_dead_or_off_map_or_out_of_range_member_shrinks_the_qualifying_set
         f.vitality = Vitality::Dead;
     }
     let mut rng = TestRng::new(seed);
-    let two = distribute_kill_experience(&party, killer_fact, &dead, level(30), &atlas, &mut rng);
+    let two = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &dead,
+        level(30),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
     assert_eq!(two.len(), 2);
     assert!(two.iter().all(|a| a.slot != MemberSlot(2)));
 
@@ -284,7 +332,15 @@ fn excluding_a_dead_or_off_map_or_out_of_range_member_shrinks_the_qualifying_set
         f.map = MapNumber(7);
     }
     let mut rng = TestRng::new(seed);
-    let off = distribute_kill_experience(&party, killer_fact, &offmap, level(30), &atlas, &mut rng);
+    let off = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &offmap,
+        level(30),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
     assert_eq!(off.len(), 2);
 
     // Slot 2 at 13 tiles -> excluded; at 12 tiles -> included (inclusive edge).
@@ -293,7 +349,15 @@ fn excluding_a_dead_or_off_map_or_out_of_range_member_shrinks_the_qualifying_set
         f.position = pos(13, 0);
     }
     let mut rng = TestRng::new(seed);
-    let out = distribute_kill_experience(&party, killer_fact, &far, level(30), &atlas, &mut rng);
+    let out = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &far,
+        level(30),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
     assert_eq!(out.len(), 2);
 
     let mut edge = others;
@@ -301,8 +365,59 @@ fn excluding_a_dead_or_off_map_or_out_of_range_member_shrinks_the_qualifying_set
         f.position = pos(12, 0);
     }
     let mut rng = TestRng::new(seed);
-    let inc = distribute_kill_experience(&party, killer_fact, &edge, level(30), &atlas, &mut rng);
+    let inc = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &edge,
+        level(30),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
     assert_eq!(inc.len(), 3, "the 12-tile edge is inclusive");
+}
+
+#[test]
+fn a_safezone_standing_member_is_excluded_from_the_exp_pool_and_award_list() {
+    let atlas = real_atlas();
+    let party = active_party(3);
+    let killer_fact = fact(0, 10, 0);
+    let mut others = [fact(1, 20, 0), fact(2, 30, 0)];
+    if let Some(f) = others.get_mut(1) {
+        f.position = pos(5, 0);
+    }
+    let seed = seed_with_jitter(&atlas, 100);
+
+    // The same locus qualifies over an all-unsafe grid — the exclusion below is
+    // the fifth term, not reach.
+    let mut rng = TestRng::new(seed);
+    let full = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &others,
+        level(30),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
+    assert_eq!(full.len(), 3);
+
+    let mut rng = TestRng::new(seed);
+    let awards = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &others,
+        level(30),
+        &atlas,
+        &safe_at(&[(5, 0)]),
+        &mut rng,
+    );
+    assert_eq!(awards.len(), 2, "the town-stander is dropped from the pool");
+    assert!(awards.iter().all(|a| a.slot != MemberSlot(2)));
+    assert!(
+        awards.iter().any(|a| a.slot == MemberSlot(0)),
+        "the killer is seeded unconditionally"
+    );
 }
 
 #[test]
@@ -316,8 +431,15 @@ fn a_share_crossing_a_curve_boundary_lists_the_crossed_levels_ascending() {
     let others = [fact(1, 5, boundary.saturating_sub(1))];
     let mut rng = TestRng::new(seed_with_jitter(&atlas, 120));
 
-    let awards =
-        distribute_kill_experience(&party, killer_fact, &others, level(40), &atlas, &mut rng);
+    let awards = distribute_kill_experience(
+        &party,
+        killer_fact,
+        &others,
+        level(40),
+        &atlas,
+        &all_unsafe(),
+        &mut rng,
+    );
     let slot1 = or_abort(
         awards
             .iter()

@@ -28,7 +28,7 @@ use mu_core::components::movement::{Mobility, Movement};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::Facing;
-use mu_core::components::tile::TileCoord;
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{
     DurationMs, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
 };
@@ -44,7 +44,7 @@ use mu_core::data::gates_warps::GateWarpRecord;
 use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::map_definitions::MapDefinition;
 use mu_core::data::monster_definitions::{
-    MobBehavior, MonsterCombat, MonsterDefinition, MonsterRole,
+    MobBehavior, MonsterCombat, MonsterDefinition, MonsterRole, SafezoneDisposition,
 };
 use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
@@ -278,6 +278,34 @@ fn town_tile(tile: TileCoord) -> Placement {
     }
 }
 
+/// The first horizontal run of `length` consecutive walkable, NON-safe tiles
+/// whose row neighbours above and below are also walkable and non-safe — an
+/// open field patch discovered from the real terrain, never a hard-coded tile.
+/// The displacement fixtures stand here: town tiles are live safezones now,
+/// where a cast is refused and a push or jiggle stops.
+fn open_field_run(grid: &TerrainGrid, length: usize) -> Vec<TileCoord> {
+    let clear = |x: u8, y: u8| {
+        let pos = TileCoord::new(x, y).to_world();
+        grid.walkable(pos) && !grid.safe(pos)
+    };
+    for y in 1u8..u8::MAX {
+        let mut run: Vec<TileCoord> = Vec::new();
+        for x in 0u8..=u8::MAX {
+            if clear(x, y) && clear(x, y - 1) && clear(x, y + 1) {
+                run.push(TileCoord::new(x, y));
+                if run.len() == length {
+                    return run;
+                }
+            } else {
+                run.clear();
+            }
+        }
+    }
+    or_abort(Err::<Vec<TileCoord>, _>(
+        "Lorencia has no open-field run of that length",
+    ))
+}
+
 /// Beats a monster to zero health with repeated strikes; returns the strike
 /// count. Bounded — the level-scaled minimum-damage floor guarantees progress.
 fn beat_to_death(
@@ -388,12 +416,14 @@ fn a_shoved_monster_re_chases_its_attacker() {
     let atlas = real_atlas();
     let (_, combat, _) = low_level_monster(&atlas, 20);
     let grid = atlas
-        .walk_grid(MapNumber(0))
-        .expect("Lorencia has a walk grid")
+        .terrain_grid(MapNumber(0))
+        .expect("Lorencia has a terrain grid")
         .clone();
 
-    let caster = dark_knight(50, 200, TileCoord::new(135, 125));
-    let monster_tile = TileCoord::new(138, 125);
+    let field = open_field_run(&grid, 8);
+    let caster_tile = *or_abort(field.first().ok_or("the field run has a first tile"));
+    let monster_tile = *or_abort(field.get(3).ok_or("the field run has a fourth tile"));
+    let caster = dark_knight(50, 200, caster_tile);
     let target = CombatTarget::new(
         monster_profile(&combat, &zero_resistances(), combat.level),
         Pool::full(combat.hp),
@@ -412,6 +442,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
         move_delay_ms: DurationMs(400),
         attack_delay_ms: DurationMs(1000),
         respawn_ms: DurationMs(0),
+        disposition: SafezoneDisposition::Excluded,
     };
     let tick = TickDuration::new(50).unwrap();
 
@@ -748,13 +779,16 @@ fn a_landed_lightning_strike_jiggles_its_target_within_one_tile_per_axis() {
     // reddens this.
     let atlas = real_atlas();
     let (_, combat, _) = low_level_monster(&atlas, 20);
-    let grid = atlas.walk_grid(MapNumber(0)).unwrap().clone();
-    let caster = dark_knight(50, 200, TileCoord::new(135, 125));
-    let start = TileCoord::new(136, 125).to_world();
+    let grid = atlas.terrain_grid(MapNumber(0)).unwrap().clone();
+    let field = open_field_run(&grid, 8);
+    let caster_tile = *or_abort(field.first().ok_or("the field run has a first tile"));
+    let target_tile = *or_abort(field.get(1).ok_or("the field run has a second tile"));
+    let caster = dark_knight(50, 200, caster_tile);
+    let start = target_tile.to_world();
     let target = CombatTarget::new(
         monster_profile(&combat, &zero_resistances(), combat.level),
         Pool::full(combat.hp),
-        town_tile(TileCoord::new(136, 125)),
+        town_tile(target_tile),
         ActiveEffects::EMPTY,
     );
     let bolt_def = lightning_bolt();

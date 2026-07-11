@@ -2,21 +2,25 @@
 //! outcome)` adapters over the [`Inventory`] and [`Equipment`] components,
 //! plus the ground-pickup pair — [`pickup`] lifts a [`WorldItem`] into the
 //! inventory and [`pickup_zen`] merges a [`WorldZen`] pile into a
-//! [`CarriedZen`] balance. Each folds the component's `Result` into a
-//! per-operation outcome enum with no `unwrap` — both arms bound — and never
-//! re-implements a geometry or cap rule. The equip service is the one place
-//! item-kind/slot compatibility and two-handed dual-hand occupancy are
-//! decided (the component accepts any instance in any slot). Container
-//! operations draw zero RNG.
+//! [`CarriedZen`] balance. Both pickups gate on the picker's locus first
+//! (same map, within [`pickup_reach`]); item pickup then consults the drop's
+//! [`DropClaim`] window before the store step. Each folds the component's
+//! `Result` into a per-operation outcome enum with no `unwrap` — both arms
+//! bound — and never re-implements a geometry or cap rule. The equip service
+//! is the one place item-kind/slot compatibility and two-handed dual-hand
+//! occupancy are decided (the component accepts any instance in any slot).
+//! Container operations draw zero RNG.
 
 use serde::{Deserialize, Serialize};
 
 use crate::components::class::CharacterClass;
+use crate::components::drop_claim::PickerStanding;
 use crate::components::equipment::{Equipment, EquipmentSlot};
 use crate::components::inventory::{Cell, Footprint, Inventory, PlacementRejection};
 use crate::components::item_instance::{ItemInstance, RolledNormalOption};
+use crate::components::spatial::{Radius, WorldPos};
 use crate::components::stats::Stats;
-use crate::components::units::{CarriedZen, CreditOutcome, Level};
+use crate::components::units::{CarriedZen, CreditOutcome, Level, MapNumber, Tick};
 use crate::data::atlas::Atlas;
 use crate::data::item_definitions::{ItemDefinition, ItemKind, WeaponHandling, WearRequirements};
 use crate::entities::world_item::WorldItem;
@@ -76,9 +80,10 @@ pub fn move_item(inventory: Inventory, from: Cell, to: Cell) -> (Inventory, Move
 }
 
 /// What a ground-item pickup produced, kind-tagged: the item entered the
-/// inventory, or the placement was rejected and the untouched world item handed
-/// back. Lives in the service (not `events`) because it carries a whole
-/// [`WorldItem`] entity, and an event never imports an entity.
+/// inventory, the placement was rejected, the picker stood out of reach, or
+/// the claim window refused a stranger — every refusal hands the untouched
+/// world item back. Lives in the service (not `events`) because it carries a
+/// whole [`WorldItem`] entity, and an event never imports an entity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PickupOutcome {
@@ -87,32 +92,63 @@ pub enum PickupOutcome {
         /// The anchor cell it was stored at.
         at: Cell,
     },
-    /// The pickup was rejected; the untouched ground item is handed back.
+    /// The inventory had no room; the untouched ground item is handed back.
     Rejected {
         /// Why the pickup was rejected.
         reason: PlacementRejection,
         /// The ground item, reassembled exactly as it was.
         item: WorldItem,
     },
+    /// Off-map or beyond three tiles; the untouched ground item is handed
+    /// back. Mirrors [`crate::events::shop::BuyOutcome::OutOfRange`].
+    OutOfReach {
+        /// The ground item, exactly as it was.
+        item: WorldItem,
+    },
+    /// A stranger reached inside the claim window; the untouched ground item
+    /// is handed back, still on the ground, still pickable once the window
+    /// elapses.
+    Refused {
+        /// The ground item, exactly as it was.
+        item: WorldItem,
+    },
 }
 
-/// Picks a ground item up into the inventory at `anchor`. On success the world
-/// item is consumed; on rejection the inventory is unchanged and the untouched
-/// world item is reassembled from the handed-back instance plus its original
-/// position, map, and despawn tick. `footprint` comes from the caller's Atlas
-/// lookup.
+/// Picks a ground item up into the inventory at `anchor`. Gate order: reach
+/// first (same map AND within [`pickup_reach`] — `OutOfReach`), then the
+/// drop's claim window ([`crate::components::drop_claim::DropClaim::admits`]
+/// — `Refused`), then the store step. On success the world item is consumed;
+/// on any refusal the inventory is unchanged and the untouched world item
+/// rides the outcome back. `footprint` comes from the caller's Atlas lookup;
+/// `standing` is the host-resolved kill-snapshot relation; `now` is the
+/// window clock. No liveness gate — core assumes an admitted picker is alive.
+/// Eight parameters, each a distinct non-bundleable domain input: the drop
+/// (carrying its own locus and claim), the destination inventory, the
+/// placement geometry pair, the picker locus pair, the claim relation, and
+/// the clock.
 #[must_use]
 pub fn pickup(
     world_item: WorldItem,
     inventory: Inventory,
     anchor: Cell,
     footprint: Footprint,
+    actor_pos: WorldPos,
+    actor_map: MapNumber,
+    standing: PickerStanding,
+    now: Tick,
 ) -> (Inventory, PickupOutcome) {
+    if !in_reach(actor_pos, actor_map, world_item.position, world_item.map) {
+        return (inventory, PickupOutcome::OutOfReach { item: world_item });
+    }
+    if !world_item.claim.admits(standing, now) {
+        return (inventory, PickupOutcome::Refused { item: world_item });
+    }
     let WorldItem {
         instance,
         position,
         map,
         despawn,
+        claim,
     } = world_item;
     match inventory.place(anchor, footprint, instance) {
         Ok(inventory) => (inventory, PickupOutcome::PickedUp { at: anchor }),
@@ -125,18 +161,37 @@ pub fn pickup(
                     position,
                     map,
                     despawn,
+                    claim,
                 },
             },
         ),
     }
 }
 
+/// The pickup reach — three tiles, the `merchant_reach` convention.
+#[must_use]
+pub fn pickup_reach() -> Radius {
+    Radius::from_tiles(3)
+}
+
+/// Same map AND within pickup reach — the folded gate, `party::reach`'s
+/// shape; a cross-map pair fails it.
+fn in_reach(
+    actor_pos: WorldPos,
+    actor_map: MapNumber,
+    item_pos: WorldPos,
+    item_map: MapNumber,
+) -> bool {
+    actor_map == item_map && actor_pos.within_range(item_pos, pickup_reach())
+}
+
 /// What a zen pickup produced, kind-tagged: the whole pile merged into the
-/// balance, or crediting it would overflow the carry cap and the untouched
-/// pile is handed back — intact, still on the ground, still pickable. No
-/// partial pickup exists. Lives in the service (not `events`) because the
-/// rejection carries a whole [`WorldZen`] entity, and an event never imports
-/// an entity.
+/// balance, crediting it would overflow the carry cap, or the picker stood
+/// out of reach — every refusal hands the untouched pile back, intact, still
+/// on the ground, still pickable. No partial pickup exists. Zen carries no
+/// claim, so there is no `Refused` arm. Lives in the service (not `events`)
+/// because the rejections carry a whole [`WorldZen`] entity, and an event
+/// never imports an entity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ZenPickupOutcome {
@@ -148,14 +203,28 @@ pub enum ZenPickupOutcome {
         /// The pile, exactly as it was.
         world_zen: WorldZen,
     },
+    /// Off-map or beyond three tiles; the untouched pile is handed back.
+    OutOfReach {
+        /// The pile, exactly as it was.
+        world_zen: WorldZen,
+    },
 }
 
 /// Picks a whole zen pile up, merging it through [`CarriedZen::credit`]. The
+/// reach gate runs first (same map AND within [`pickup_reach`] —
+/// `OutOfReach`); zen carries no claim, so no window and no `now` follow. The
 /// returned balance is authoritative: the new total on a pickup, the
-/// unchanged balance on an over-cap rejection. Range gating follows the
-/// item-[`pickup`] seam unchanged — the host owns pickup reach.
+/// unchanged balance on any refusal.
 #[must_use]
-pub fn pickup_zen(world_zen: WorldZen, zen: CarriedZen) -> (CarriedZen, ZenPickupOutcome) {
+pub fn pickup_zen(
+    world_zen: WorldZen,
+    zen: CarriedZen,
+    actor_pos: WorldPos,
+    actor_map: MapNumber,
+) -> (CarriedZen, ZenPickupOutcome) {
+    if !in_reach(actor_pos, actor_map, world_zen.position, world_zen.map) {
+        return (zen, ZenPickupOutcome::OutOfReach { world_zen });
+    }
     match zen.credit(world_zen.amount) {
         CreditOutcome::Credited { balance } => (balance, ZenPickupOutcome::PickedUp),
         CreditOutcome::OverCap { balance } => (balance, ZenPickupOutcome::OverCap { world_zen }),
@@ -691,6 +760,30 @@ mod tests {
         assert!(inventory.placed().is_empty());
     }
 
+    use crate::components::drop_claim::DropClaim;
+    use crate::components::spatial::UNITS_PER_TILE;
+
+    /// A world position at whole-tile coordinates.
+    fn tile_pos(x: i64, y: i64) -> WorldPos {
+        WorldPos::clamped(x * UNITS_PER_TILE, y * UNITS_PER_TILE)
+    }
+
+    fn ground_item(claim: DropClaim, position: WorldPos, map: MapNumber) -> WorldItem {
+        WorldItem {
+            instance: item(9),
+            position,
+            map,
+            despawn: Tick(1200),
+            claim,
+        }
+    }
+
+    /// The stock drop for the pickup tests: unclaimed, at tile (10, 10) on
+    /// map 3, so a same-position picker is trivially in reach.
+    fn free_drop() -> WorldItem {
+        ground_item(DropClaim::Unclaimed, tile_pos(10, 10), MapNumber(3))
+    }
+
     #[test]
     fn pickup_reject_reassembles_the_untouched_world_item() {
         let occupied = place_item(
@@ -702,22 +795,25 @@ mod tests {
             },
         )
         .0;
-        let world_item = WorldItem {
-            instance: item(9),
-            position: WorldPos::clamped(100, 200),
-            map: MapNumber(3),
-            despawn: Tick(1200),
-        };
-        let (inventory, outcome) = pickup(world_item, occupied, cell(0, 0), footprint(2, 2));
+        let world_item = free_drop();
+        let (inventory, outcome) = pickup(
+            world_item,
+            occupied,
+            cell(0, 0),
+            footprint(2, 2),
+            tile_pos(10, 10),
+            MapNumber(3),
+            PickerStanding::Stranger,
+            Tick(0),
+        );
         match outcome {
             PickupOutcome::Rejected { reason, item } => {
                 assert_eq!(reason, PlacementRejection::CellsOccupied);
-                assert_eq!(item.instance.item.number, 9);
-                assert_eq!(item.position, WorldPos::clamped(100, 200));
-                assert_eq!(item.map, MapNumber(3));
-                assert_eq!(item.despawn, Tick(1200));
+                assert_eq!(item, free_drop());
             }
-            PickupOutcome::PickedUp { .. } => panic!("full grid should reject"),
+            PickupOutcome::PickedUp { .. }
+            | PickupOutcome::OutOfReach { .. }
+            | PickupOutcome::Refused { .. } => panic!("full grid should reject"),
         }
         // The inventory is unchanged (still just the 4x4 filler).
         assert_eq!(inventory.placed().len(), 1);
@@ -725,26 +821,177 @@ mod tests {
 
     #[test]
     fn pickup_success_consumes_the_world_item() {
-        let world_item = WorldItem {
-            instance: item(9),
-            position: WorldPos::clamped(100, 200),
-            map: MapNumber(3),
-            despawn: Tick(1200),
-        };
         let (inventory, outcome) = pickup(
-            world_item,
+            free_drop(),
             Inventory::empty(8, 8),
             cell(0, 0),
             footprint(1, 1),
+            tile_pos(10, 10),
+            MapNumber(3),
+            PickerStanding::Stranger,
+            Tick(0),
         );
         assert_eq!(outcome, PickupOutcome::PickedUp { at: cell(0, 0) });
         assert_eq!(inventory.placed().len(), 1);
     }
 
+    #[test]
+    fn pickup_beyond_three_tiles_is_out_of_reach_with_the_item_handed_back() {
+        let (inventory, outcome) = pickup(
+            free_drop(),
+            Inventory::empty(8, 8),
+            cell(0, 0),
+            footprint(1, 1),
+            tile_pos(14, 10),
+            MapNumber(3),
+            PickerStanding::Stranger,
+            Tick(0),
+        );
+        assert_eq!(outcome, PickupOutcome::OutOfReach { item: free_drop() });
+        assert!(inventory.placed().is_empty());
+    }
+
+    #[test]
+    fn pickup_at_three_tiles_or_less_proceeds_to_place() {
+        for actor_pos in [tile_pos(13, 10), tile_pos(12, 10), tile_pos(10, 10)] {
+            let (inventory, outcome) = pickup(
+                free_drop(),
+                Inventory::empty(8, 8),
+                cell(0, 0),
+                footprint(1, 1),
+                actor_pos,
+                MapNumber(3),
+                PickerStanding::Stranger,
+                Tick(0),
+            );
+            assert_eq!(outcome, PickupOutcome::PickedUp { at: cell(0, 0) });
+            assert_eq!(inventory.placed().len(), 1);
+        }
+    }
+
+    #[test]
+    fn pickup_on_another_map_is_out_of_reach() {
+        let (_, outcome) = pickup(
+            free_drop(),
+            Inventory::empty(8, 8),
+            cell(0, 0),
+            footprint(1, 1),
+            tile_pos(10, 10),
+            MapNumber(0),
+            PickerStanding::Stranger,
+            Tick(0),
+        );
+        assert_eq!(outcome, PickupOutcome::OutOfReach { item: free_drop() });
+    }
+
+    #[test]
+    fn reach_is_gated_before_the_claim_window() {
+        let claimed = ground_item(
+            DropClaim::Claimed { until: Tick(200) },
+            tile_pos(10, 10),
+            MapNumber(3),
+        );
+        let (_, outcome) = pickup(
+            claimed.clone(),
+            Inventory::empty(8, 8),
+            cell(0, 0),
+            footprint(1, 1),
+            tile_pos(14, 10),
+            MapNumber(3),
+            PickerStanding::Stranger,
+            Tick(0),
+        );
+        assert_eq!(outcome, PickupOutcome::OutOfReach { item: claimed });
+    }
+
+    #[test]
+    fn an_owner_picks_a_claimed_drop_inside_the_window() {
+        let claimed = ground_item(
+            DropClaim::Claimed { until: Tick(200) },
+            tile_pos(10, 10),
+            MapNumber(3),
+        );
+        let (inventory, outcome) = pickup(
+            claimed,
+            Inventory::empty(8, 8),
+            cell(0, 0),
+            footprint(1, 1),
+            tile_pos(10, 10),
+            MapNumber(3),
+            PickerStanding::Owner,
+            Tick(0),
+        );
+        assert_eq!(outcome, PickupOutcome::PickedUp { at: cell(0, 0) });
+        assert_eq!(inventory.placed().len(), 1);
+    }
+
+    #[test]
+    fn a_stranger_is_refused_inside_the_window_with_the_item_handed_back() {
+        let claimed = ground_item(
+            DropClaim::Claimed { until: Tick(200) },
+            tile_pos(10, 10),
+            MapNumber(3),
+        );
+        let (inventory, outcome) = pickup(
+            claimed.clone(),
+            Inventory::empty(8, 8),
+            cell(0, 0),
+            footprint(1, 1),
+            tile_pos(10, 10),
+            MapNumber(3),
+            PickerStanding::Stranger,
+            Tick(199),
+        );
+        assert_eq!(outcome, PickupOutcome::Refused { item: claimed });
+        assert!(inventory.placed().is_empty());
+    }
+
+    #[test]
+    fn anyone_picks_a_claimed_drop_once_the_window_elapsed() {
+        let claimed = ground_item(
+            DropClaim::Claimed { until: Tick(200) },
+            tile_pos(10, 10),
+            MapNumber(3),
+        );
+        let (_, outcome) = pickup(
+            claimed,
+            Inventory::empty(8, 8),
+            cell(0, 0),
+            footprint(1, 1),
+            tile_pos(10, 10),
+            MapNumber(3),
+            PickerStanding::Stranger,
+            Tick(200),
+        );
+        assert_eq!(outcome, PickupOutcome::PickedUp { at: cell(0, 0) });
+    }
+
+    #[test]
+    fn an_unclaimed_drop_is_picked_up_by_anyone_at_any_tick() {
+        for standing in [PickerStanding::Owner, PickerStanding::Stranger] {
+            let (_, outcome) = pickup(
+                free_drop(),
+                Inventory::empty(8, 8),
+                cell(0, 0),
+                footprint(1, 1),
+                tile_pos(10, 10),
+                MapNumber(3),
+                standing,
+                Tick(0),
+            );
+            assert_eq!(outcome, PickupOutcome::PickedUp { at: cell(0, 0) });
+        }
+    }
+
+    #[test]
+    fn pickup_reach_is_three_tiles() {
+        assert_eq!(pickup_reach(), Radius::from_tiles(3));
+    }
+
     fn pile(amount: u64) -> WorldZen {
         WorldZen {
             amount: Zen(amount),
-            position: WorldPos::clamped(100, 200),
+            position: tile_pos(10, 10),
             map: MapNumber(3),
             despawn: Tick(1200),
         }
@@ -752,16 +999,44 @@ mod tests {
 
     #[test]
     fn pickup_zen_merges_the_whole_pile() {
-        let (balance, outcome) = pickup_zen(pile(40_000), CarriedZen::new(250_000).unwrap());
+        let (balance, outcome) = pickup_zen(
+            pile(40_000),
+            CarriedZen::new(250_000).unwrap(),
+            tile_pos(12, 10),
+            MapNumber(3),
+        );
         assert_eq!(balance, CarriedZen::new(290_000).unwrap());
         assert_eq!(outcome, ZenPickupOutcome::PickedUp);
     }
 
     #[test]
     fn pickup_zen_over_cap_hands_the_untouched_pile_back() {
-        let (balance, outcome) = pickup_zen(pile(2), CarriedZen::new(1_999_999_999).unwrap());
+        let (balance, outcome) = pickup_zen(
+            pile(2),
+            CarriedZen::new(1_999_999_999).unwrap(),
+            tile_pos(10, 10),
+            MapNumber(3),
+        );
         assert_eq!(balance, CarriedZen::new(1_999_999_999).unwrap());
         assert_eq!(outcome, ZenPickupOutcome::OverCap { world_zen: pile(2) });
+    }
+
+    #[test]
+    fn pickup_zen_beyond_three_tiles_or_off_map_is_out_of_reach() {
+        let balance = CarriedZen::new(250_000).unwrap();
+        for (actor_pos, actor_map) in [
+            (tile_pos(14, 10), MapNumber(3)),
+            (tile_pos(10, 10), MapNumber(0)),
+        ] {
+            let (unchanged, outcome) = pickup_zen(pile(40_000), balance, actor_pos, actor_map);
+            assert_eq!(unchanged, balance);
+            assert_eq!(
+                outcome,
+                ZenPickupOutcome::OutOfReach {
+                    world_zen: pile(40_000)
+                }
+            );
+        }
     }
 
     #[test]
@@ -775,6 +1050,31 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<ZenPickupOutcome>(&json).unwrap(),
             rejected
+        );
+        let out_of_reach = ZenPickupOutcome::OutOfReach { world_zen: pile(7) };
+        let json = serde_json::to_string(&out_of_reach).unwrap();
+        assert!(json.starts_with(r#"{"kind":"out_of_reach""#));
+        assert_eq!(
+            serde_json::from_str::<ZenPickupOutcome>(&json).unwrap(),
+            out_of_reach
+        );
+    }
+
+    #[test]
+    fn pickup_outcome_new_arms_wire_round_trip() {
+        let out_of_reach = PickupOutcome::OutOfReach { item: free_drop() };
+        let json = serde_json::to_string(&out_of_reach).unwrap();
+        assert!(json.starts_with(r#"{"kind":"out_of_reach""#));
+        assert_eq!(
+            serde_json::from_str::<PickupOutcome>(&json).unwrap(),
+            out_of_reach
+        );
+        let refused = PickupOutcome::Refused { item: free_drop() };
+        let json = serde_json::to_string(&refused).unwrap();
+        assert!(json.starts_with(r#"{"kind":"refused""#));
+        assert_eq!(
+            serde_json::from_str::<PickupOutcome>(&json).unwrap(),
+            refused
         );
     }
 

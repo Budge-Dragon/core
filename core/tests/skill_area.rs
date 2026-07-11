@@ -28,7 +28,7 @@ use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::spatial::{Facing, UNITS_PER_TILE, WorldPos};
-use mu_core::components::tile::{TileCoord, WalkGrid};
+use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{Level, MapNumber, Resistance};
 use mu_core::components::vitals::Vitals;
 use mu_core::data::atlas::Atlas;
@@ -106,19 +106,19 @@ fn seated(tile: (u8, u8), hp: u32, defense_rate: u16, lightning: u8) -> CombatTa
     CombatTarget::new(profile, Pool::full(hp), placement, ActiveEffects::EMPTY)
 }
 
-fn all_walkable() -> WalkGrid {
-    WalkGrid::from_words([u64::MAX; 1024])
+fn all_walkable() -> TerrainGrid {
+    TerrainGrid::from_words([u64::MAX; 1024])
 }
 
 /// A grid whose walkable set is exactly the listed tiles.
-fn grid_with(walkable: &[(u8, u8)]) -> WalkGrid {
+fn grid_with(walkable: &[(u8, u8)]) -> TerrainGrid {
     let mut words = [0u64; 1024];
     for &(x, y) in walkable {
         let bit = (usize::from(y) << 8) | usize::from(x);
         let word = or_abort(words.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word |= 1u64 << (bit & 63);
     }
-    WalkGrid::from_words(words)
+    TerrainGrid::from_words(words)
 }
 
 /// The real skill record numbered `number` — the §0 ratification table is keyed
@@ -147,7 +147,7 @@ fn cast_once(
     skill: &Skill,
     aim: WorldPos,
     targets: &[CombatTarget],
-    grid: &WalkGrid,
+    grid: &TerrainGrid,
     seed: u64,
 ) -> (Vitals, SkillOutcome) {
     cast(

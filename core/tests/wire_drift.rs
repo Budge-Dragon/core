@@ -15,6 +15,7 @@ use mu_core::components::active_effect::{
 use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
 use mu_core::components::combat_profile::{CombatProfile, WeaponMode};
+use mu_core::components::drop_claim::DropClaim;
 use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, PlacementRejection};
@@ -51,6 +52,7 @@ use mu_core::entities::world_zen::WorldZen;
 use mu_core::events::combat::{AttackOutcome, Damage, DamageModifiers, Hit, HitQuality};
 use mu_core::events::craft::{Casualty, MixOutcome, RejectReason};
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
+use mu_core::events::ground::DespawnEvent;
 use mu_core::events::inventory::{
     EquipOutcome, EquipRejection, MoveOutcome, PlaceOutcome, RemoveOutcome, UnequipOutcome,
 };
@@ -73,7 +75,7 @@ use mu_core::events::travel::{
     EnterGateOutcome, TownPortalOutcome, WarpAvailability, WarpEntryStatus, WarpLockReason,
     WarpTravelOutcome,
 };
-use mu_core::services::inventory::ZenPickupOutcome;
+use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
 use mu_core::services::party;
 use mu_core::services::trade::{AcceptOutcome, LockResult, RequestOutcome, TradeAvailability};
 use mu_core::services::wear::WearEvent;
@@ -485,6 +487,7 @@ fn target_hit_every_kind_tag_is_pinned() {
 #[test]
 fn cast_rejection_every_wire_string_is_pinned() {
     for reason in [
+        CastRejection::CasterInSafezone,
         CastRejection::InsufficientMana,
         CastRejection::InsufficientAbility,
         CastRejection::OutOfRange,
@@ -492,6 +495,7 @@ fn cast_rejection_every_wire_string_is_pinned() {
     ] {
         let actual = serde_json::to_string(&reason).unwrap();
         let expected = match &reason {
+            CastRejection::CasterInSafezone => r#""caster_in_safezone""#,
             CastRejection::InsufficientMana => r#""insufficient_mana""#,
             CastRejection::InsufficientAbility => r#""insufficient_ability""#,
             CastRejection::OutOfRange => r#""out_of_range""#,
@@ -1094,15 +1098,26 @@ fn excellent_armor_set_wire_is_a_slot_sorted_name_array() {
 
 #[test]
 fn world_item_wire_is_pinned() {
-    let world_item = WorldItem {
+    // The W-GROUND ledgered break: WorldItem gains its kill-locked claim key
+    // after `despawn` — both claim variants pinned.
+    let claimed = WorldItem {
         instance: normal_instance(),
         position: WorldPos::clamped(163_840, 229_376),
         map: MapNumber(0),
         despawn: Tick(1200),
+        claim: DropClaim::Claimed { until: Tick(220) },
     };
     assert_eq!(
-        serde_json::to_string(&world_item).unwrap(),
-        r#"{"instance":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}},"position":{"x":163840,"y":229376},"map":0,"despawn":1200}"#
+        serde_json::to_string(&claimed).unwrap(),
+        r#"{"instance":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}},"position":{"x":163840,"y":229376},"map":0,"despawn":1200,"claim":{"kind":"claimed","until":220}}"#
+    );
+    let unclaimed = WorldItem {
+        claim: DropClaim::Unclaimed,
+        ..claimed
+    };
+    assert_eq!(
+        serde_json::to_string(&unclaimed).unwrap(),
+        r#"{"instance":{"item":{"group":0,"number":3},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":30,"max":30},"augment":{"kind":"none"}},"position":{"x":163840,"y":229376},"map":0,"despawn":1200,"claim":{"kind":"unclaimed"}}"#
     );
 }
 
@@ -1393,26 +1408,89 @@ fn repair_all_outcome_every_kind_tag_is_pinned() {
 
 #[test]
 fn zen_pickup_outcome_every_kind_tag_is_pinned() {
+    let pile = WorldZen {
+        amount: Zen(1),
+        position: WorldPos::clamped(0, 0),
+        map: MapNumber(0),
+        despawn: Tick(0),
+    };
     for outcome in [
         ZenPickupOutcome::PickedUp,
         ZenPickupOutcome::OverCap {
-            world_zen: WorldZen {
-                amount: Zen(1),
-                position: WorldPos::clamped(0, 0),
-                map: MapNumber(0),
-                despawn: Tick(0),
-            },
+            world_zen: pile.clone(),
         },
+        ZenPickupOutcome::OutOfReach { world_zen: pile },
     ] {
         let expected = match &outcome {
             ZenPickupOutcome::PickedUp => "picked_up",
             ZenPickupOutcome::OverCap { .. } => "over_cap",
+            ZenPickupOutcome::OutOfReach { .. } => "out_of_reach",
         };
         assert_eq!(
             kind_tag(&serde_json::to_value(outcome).unwrap()),
             Some(expected)
         );
     }
+}
+
+#[test]
+fn pickup_outcome_every_kind_tag_is_pinned() {
+    let ground = WorldItem {
+        instance: normal_instance(),
+        position: WorldPos::clamped(0, 0),
+        map: MapNumber(0),
+        despawn: Tick(0),
+        claim: DropClaim::Unclaimed,
+    };
+    for outcome in [
+        PickupOutcome::PickedUp {
+            at: Cell { row: 0, col: 0 },
+        },
+        PickupOutcome::Rejected {
+            reason: PlacementRejection::CellsOccupied,
+            item: ground.clone(),
+        },
+        PickupOutcome::OutOfReach {
+            item: ground.clone(),
+        },
+        PickupOutcome::Refused { item: ground },
+    ] {
+        let expected = match &outcome {
+            PickupOutcome::PickedUp { .. } => "picked_up",
+            PickupOutcome::Rejected { .. } => "rejected",
+            PickupOutcome::OutOfReach { .. } => "out_of_reach",
+            PickupOutcome::Refused { .. } => "refused",
+        };
+        assert_eq!(
+            kind_tag(&serde_json::to_value(outcome).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn despawn_event_wire_shapes_are_pinned() {
+    assert_eq!(
+        serde_json::to_string(&DespawnEvent::ItemDespawned {
+            position: WorldPos::clamped(163_840, 229_376),
+            map: MapNumber(0),
+            item: ItemRef {
+                group: 0,
+                number: 3,
+            },
+        })
+        .unwrap(),
+        r#"{"kind":"item_despawned","position":{"x":163840,"y":229376},"map":0,"item":{"group":0,"number":3}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&DespawnEvent::ZenDespawned {
+            position: WorldPos::clamped(163_840, 229_376),
+            map: MapNumber(0),
+            amount: Zen(40_000),
+        })
+        .unwrap(),
+        r#"{"kind":"zen_despawned","position":{"x":163840,"y":229376},"map":0,"amount":40000}"#
+    );
 }
 
 // -- Chaos-machine mix outcome wire pins. --------------------------------------

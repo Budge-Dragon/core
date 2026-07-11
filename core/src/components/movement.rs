@@ -1,5 +1,5 @@
 //! Traversal mode: the two-state classification of how an entity crosses the
-//! ground plane. Its only rule is whether the tile walk-grid check applies —
+//! ground plane. Its only rule is whether the tile walkability check applies —
 //! no altitude, no air combat, no anti-air.
 
 use core::num::NonZeroU32;
@@ -12,12 +12,12 @@ use serde::{Deserialize, Serialize};
 pub enum Movement {
     /// Bound to walkable tiles.
     Grounded,
-    /// Free of the walk grid.
+    /// Free of the terrain grid's walkability constraint.
     Flying,
 }
 
 impl Movement {
-    /// Whether traversal is constrained by the tile walk grid.
+    /// Whether traversal is constrained by the terrain grid's walkability.
     #[must_use]
     pub fn checks_walkability(self) -> bool {
         match self {

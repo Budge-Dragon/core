@@ -301,6 +301,7 @@
     "Bali #150 defined identically in the 075 and 095d SkillsInitializers; deduped to source_version 075",
     "dropped with their mechanism: NumberOfMaximumItemDrops (drops-service const), monster-bound drop groups (drops domain, keyed by number), poison_damage_multiplier (skills_effects poison-tick rule), the opaque Attribute byte, MapRef.discriminator on spawns",
     "spawn placement is kind-tagged: 244 fixed (facing-bearing stationary objects, quantity 1), spot (single-tile mobile spawns, incl. the two Devias #20 quantity-10 rows), area (rectangle spawns); the degenerate-rect / point-as-rect convention is gone",
-    "move/attack/respawn delays are treated as authentic Monster.txt content per the v2 section (D11), not OpenMU-invented tuning; they carry no review"
+    "move/attack/respawn delays are treated as authentic Monster.txt content per the v2 section (D11), not OpenMU-invented tuning; they carry no review",
+    "MobBehavior.disposition is authored from the role (guard->patrols, monster/trap->excluded, the OpenMU CanWalkOnSafezone rule as a role law); Atlas::parse reconciles the stored value against the role at load, so an inconsistent hand-edit cannot ship"
   ]
 }
