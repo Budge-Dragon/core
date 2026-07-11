@@ -41,10 +41,10 @@ use crate::events::combat::AttackOutcome;
 use crate::events::effect::BuffCastOutcome;
 use crate::events::movement::StepOutcome;
 use crate::events::skills::{CastRejection, SkillOutcome, TargetHit};
-use crate::services::chance::{draw_jiggle_offset, roll_apply_elemental};
+use crate::services::chance::{draw_heading, roll_apply_elemental};
 use crate::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 use crate::services::effects::{ApplicableBuff, apply_buff};
-use crate::services::movement::{lunge_teleport, resolve_step, resolve_tile_offset};
+use crate::services::movement::{lunge_teleport, resolve_drift, resolve_step};
 use crate::services::profile::effective_profile;
 use crate::services::ratio::{nonzero, scale_ratio};
 
@@ -63,6 +63,11 @@ const PUSH_DISTANCE: Fixed = Fixed::from_raw(PUSH_TILES * UNITS_PER_TILE);
 /// Each increment is one tile, so the count is [`PUSH_TILES`]; that ≤1-tile
 /// bound is what keeps each destination-only walkability check sound.
 const PUSH_STEPS: i64 = PUSH_TILES;
+
+/// The jiggle's nudge distance — one tile. The ≤1-tile magnitude keeps
+/// [`resolve_drift`]'s destination-only walkability check sound (no tunnelling),
+/// exactly as an ordinary step's.
+const JIGGLE_MAGNITUDE: StepMagnitude = StepMagnitude::ONE_TILE;
 
 // W-SRC: Heal restores 5 + Energy/5 health, applied instantly (no timed effect).
 /// Heal flat base, before the energy term.
@@ -782,10 +787,11 @@ fn is_single_target(shape: DamagingSkill) -> bool {
 enum TargetDisplacement {
     /// Earthshake: directional 3-tile push, element-independent (no element roll).
     Push,
-    /// Lunge (MovesTarget): random ±1 jiggle, fires pre-roll on missed or landed.
+    /// Lunge (MovesTarget): a continuous ~1-tile nudge, fires pre-roll on missed
+    /// or landed.
     LungeJiggle,
-    /// A lightning-element (non-Earthshake) hit's ±1 jiggle, gated on the element
-    /// roll landing (landed hits only).
+    /// A lightning-element (non-Earthshake) hit's continuous ~1-tile nudge, gated
+    /// on the element roll landing (landed hits only).
     ElementalJiggle,
     /// No displacement.
     None,
@@ -860,13 +866,16 @@ fn directional_push(
     moved.then_some(current)
 }
 
-/// The ±1 jiggle: draws a nine-outcome tile offset (dx then dy, two words) and
-/// applies it. A stay(0,0) roll, a blocked destination, or a safe town
-/// destination reports no net move (`None`) — blocked-by-safe is stay, for
-/// players and NPCs alike; no re-roll — the two words are consumed regardless.
+/// The continuous jiggle: draws a free heading and nudges the target one bounded
+/// increment along it. A blocked destination or a safe town destination reports
+/// no net move (`None`) — blocked-by-safe is stay, for players and NPCs alike;
+/// no re-roll. The heading always picks a direction, so an unobstructed jiggle
+/// always moves ~one tile; only a wall or safezone refuses it. Draws a variable
+/// but deterministic-per-seed number of words (the heading's disk-rejection
+/// sample), matching the continuous wander drift.
 fn jiggle(target: Placement, grid: &TerrainGrid, rng: &mut impl RngCore) -> Option<Placement> {
-    let offset = draw_jiggle_offset(rng);
-    match resolve_tile_offset(target, offset, grid) {
+    let heading = draw_heading(rng);
+    match resolve_drift(target, heading, JIGGLE_MAGNITUDE, grid) {
         StepOutcome::Resolved { placement }
             if placement.position != target.position && !grid.safe(placement.position) =>
         {
@@ -2307,31 +2316,59 @@ mod tests {
     }
 
     #[test]
-    fn the_jiggle_reaches_all_nine_outcomes_within_one_tile_per_axis() {
+    fn the_jiggle_nudges_within_one_tile_over_a_spread_of_directions() {
+        // The continuous jiggle always nudges ~1 tile on open ground (the old
+        // stay(0,0) outcome is gone — a heading is always drawn), each axis
+        // bounded to one tile, and it reaches a spread of directions across all
+        // four quadrants — not a snapped 8-way hop.
         let target = placed_at((11, 10));
         let grid = all_walkable();
-        let mut outcomes = std::collections::BTreeSet::new();
+        let mut quadrants = [false; 4];
+        let mut distinct = std::collections::BTreeSet::new();
         for seed in 0u64..512 {
             let mut rng = TestRng::new(seed);
-            let (dx, dy) = if let Some(moved) = jiggle(target, &grid, &mut rng) {
-                let dx = (moved.position.x().raw() - target.position.x().raw()) / TILE;
-                let dy = (moved.position.y().raw() - target.position.y().raw()) / TILE;
-                assert!((-1..=1).contains(&dx), "seed {seed}");
-                assert!((-1..=1).contains(&dy), "seed {seed}");
-                (dx, dy)
-            } else {
-                (0, 0)
-            };
-            outcomes.insert((dx, dy));
+            let moved = jiggle(target, &grid, &mut rng).expect("open ground always nudges");
+            let dx = moved.position.x().raw() - target.position.x().raw();
+            let dy = moved.position.y().raw() - target.position.y().raw();
+            assert!(
+                dx.abs() <= TILE && dy.abs() <= TILE,
+                "seed {seed}: within one tile per axis"
+            );
+            assert_ne!(
+                moved.position, target.position,
+                "seed {seed}: a nudge moves"
+            );
+            if dx > 0 && dy > 0 {
+                quadrants[0] = true;
+            }
+            if dx < 0 && dy > 0 {
+                quadrants[1] = true;
+            }
+            if dx < 0 && dy < 0 {
+                quadrants[2] = true;
+            }
+            if dx > 0 && dy < 0 {
+                quadrants[3] = true;
+            }
+            distinct.insert((dx, dy));
         }
-        // All nine dx,dy pairs incl. stay(0,0) and the four diagonals.
-        assert_eq!(outcomes.len(), 9);
+        assert!(
+            quadrants.iter().all(|&hit| hit),
+            "every quadrant reached: {quadrants:?}"
+        );
+        assert!(
+            distinct.len() > 8,
+            "a continuous spread, not an 8-way hop: {}",
+            distinct.len()
+        );
     }
 
     #[test]
-    fn the_jiggle_draws_exactly_two_words_even_when_blocked_or_staying() {
-        // Only the target's own tile is walkable: every non-stay roll is
-        // blocked, yet the two words are consumed — no re-roll.
+    fn the_jiggle_is_deterministic_per_seed_whether_blocked_or_open() {
+        // The continuous jiggle draws a variable (heading-dependent) number of
+        // words, but the same seed reproduces the same outcome and consumes the
+        // same words bit-for-bit — on open ground and on a sealed grid alike (a
+        // blocked destination is a stay, never a re-roll).
         let mut words = [0u64; 1024];
         let bit = (10usize << 8) | usize::from(11u8);
         words[bit >> 6] |= 1u64 << (bit & 63);
@@ -2339,12 +2376,15 @@ mod tests {
         let target = placed_at((11, 10));
         for grid in [&all_walkable(), &sealed] {
             for seed in 0u64..16 {
-                let mut rng = TestRng::new(seed);
-                let _ = jiggle(target, grid, &mut rng);
-                let mut probe = TestRng::new(seed);
-                probe.next_u32();
-                probe.next_u32();
-                assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+                let mut a = TestRng::new(seed);
+                let mut b = TestRng::new(seed);
+                assert_eq!(
+                    jiggle(target, grid, &mut a),
+                    jiggle(target, grid, &mut b),
+                    "seed {seed}"
+                );
+                // Equal words consumed: the next word still agrees.
+                assert_eq!(a.next_u64(), b.next_u64(), "seed {seed}");
             }
         }
     }
@@ -2577,18 +2617,19 @@ mod tests {
     }
 
     #[test]
-    fn a_jiggle_onto_a_safe_destination_stays_and_draws_no_third_word() {
-        // FIRE-6: every neighbouring tile is safe, so every non-stay roll is
-        // refused — no move, no re-roll, the two words consumed regardless.
+    fn a_jiggle_onto_a_safe_destination_stays() {
+        // FIRE-6: every neighbouring tile is safe, so every drawn heading nudges
+        // onto a safe tile and is refused — no move, deterministic per seed, no
+        // re-roll.
         let target = placed_at((11, 10));
         let grid = safe_everywhere_but(&[(11, 10)]);
         for seed in 0u64..16 {
-            let mut rng = TestRng::new(seed);
-            assert_eq!(jiggle(target, &grid, &mut rng), None, "seed {seed}");
-            let mut probe = TestRng::new(seed);
-            probe.next_u32();
-            probe.next_u32();
-            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+            let mut a = TestRng::new(seed);
+            let mut b = TestRng::new(seed);
+            assert_eq!(jiggle(target, &grid, &mut a), None, "seed {seed}");
+            assert_eq!(jiggle(target, &grid, &mut b), None, "seed {seed}");
+            // Deterministic draw: both runs consumed the same words.
+            assert_eq!(a.next_u64(), b.next_u64(), "seed {seed}");
         }
     }
 

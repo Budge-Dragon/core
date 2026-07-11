@@ -579,65 +579,6 @@ impl StepMagnitude {
     }
 }
 
-/// One axis of a grid-neighbour offset: a single cell in the negative
-/// direction, no move, or the positive direction. A three-state enum, so a
-/// tile offset can never carry an out-of-range magnitude.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TileDelta {
-    /// One cell toward the negative axis (−1 tile).
-    Neg,
-    /// No movement on this axis (0).
-    Zero,
-    /// One cell toward the positive axis (+1 tile).
-    Pos,
-}
-
-impl TileDelta {
-    /// The signed tile count this delta contributes (−1, 0, or +1).
-    #[must_use]
-    pub const fn signum(self) -> i64 {
-        match self {
-            TileDelta::Neg => -1,
-            TileDelta::Zero => 0,
-            TileDelta::Pos => 1,
-        }
-    }
-}
-
-/// A single grid-neighbour offset: each axis in {−1, 0, +1}, applied as a
-/// full-tile world offset. The nine values are the eight neighbours plus `STAY`.
-/// Every value is valid by construction (no fallible constructor), so the ±1
-/// jiggle's nine outcomes are all expressible and none can be malformed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TileOffset {
-    dx: TileDelta,
-    dy: TileDelta,
-}
-
-impl TileOffset {
-    /// The no-move offset (the jiggle's stay outcome).
-    pub const STAY: Self = Self {
-        dx: TileDelta::Zero,
-        dy: TileDelta::Zero,
-    };
-
-    /// Builds a tile offset from its two axis deltas. Total.
-    #[must_use]
-    pub const fn new(dx: TileDelta, dy: TileDelta) -> Self {
-        Self { dx, dy }
-    }
-
-    /// This offset as a full-tile world displacement — each axis delta scaled to
-    /// one whole tile. `STAY` yields the zero vector.
-    #[must_use]
-    pub fn world_offset(self) -> WorldVec {
-        WorldVec::new(
-            Fixed::from_raw(self.dx.signum().saturating_mul(UNITS_PER_TILE)),
-            Fixed::from_raw(self.dy.signum().saturating_mul(UNITS_PER_TILE)),
-        )
-    }
-}
-
 /// A continuous heading as a non-zero direction vector. Set by snapping to a
 /// direction (e.g. `target - pos`), never gradually rotated; cone half-widths
 /// are `<= 90 deg`. If turn-rate-limited rotation is ever needed, a Binary
@@ -1367,15 +1308,6 @@ mod tests {
                 .get()
                 .raw(),
             0
-        );
-    }
-
-    #[test]
-    fn tile_offset_world_offset_scales_to_whole_tiles() {
-        assert_eq!(TileOffset::STAY.world_offset(), WorldVec::ZERO);
-        assert_eq!(
-            TileOffset::new(TileDelta::Pos, TileDelta::Neg).world_offset(),
-            vec(UNITS_PER_TILE, -UNITS_PER_TILE)
         );
     }
 

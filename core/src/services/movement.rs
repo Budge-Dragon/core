@@ -2,8 +2,8 @@
 //! an entity crosses the ground plane. Flight-mode changes gate on host-supplied
 //! eligibility facts then transition; grounded/flying steps resolve a greedy
 //! seek-with-arrival move against the terrain grid, bounded to at most one tile by
-//! [`StepMagnitude`] so the destination-only walkability check is sound;
-//! tile-offset steps move by a whole grid neighbour; the lunge teleport lands a
+//! [`StepMagnitude`] so the destination-only walkability check is sound; a drift
+//! steps one bounded increment along a fixed facing; the lunge teleport lands a
 //! caster on its target's exact cell with no terrain check; warp/gate arrivals
 //! pick a walkable landing tile; spawn-gate landings seat a traveler on a town
 //! gate's parse-proven walkable set. Every outcome is a returned event value.
@@ -19,9 +19,7 @@ use rand_core::RngCore;
 use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::movement::{CombatLock, FlightChange, Movement, Wings};
 use crate::components::placement::Placement;
-use crate::components::spatial::{
-    Displacement, Facing, Fixed, StepMagnitude, TileOffset, WorldPos, WorldVec,
-};
+use crate::components::spatial::{Displacement, Facing, Fixed, StepMagnitude, WorldPos, WorldVec};
 use crate::components::tile::TerrainGrid;
 use crate::data::atlas::{Landing, SpawnGateView};
 use crate::data::map_definitions::MapEnvironment;
@@ -199,23 +197,6 @@ pub fn resolve_drift(
         Displacement::NoDirection => StepOutcome::Resolved { placement },
         Displacement::Scaled { vector } => commit(placement, vector, grid),
     }
-}
-
-/// Steps a placement by one grid-neighbour tile offset applied as a full-tile
-/// world offset, destination-cell walkability-gated. A `STAY` offset resolves in
-/// place (its own tile is walkable); a blocked destination is `Blocked` (no
-/// move). The direct-offset displacement primitive for the ±1 jiggle and each
-/// tile of the directional push — a whole grid neighbour, never an
-/// arrival-clamped Euclidean step (which undershoots diagonals). Reuses `commit`,
-/// so a diagonal offset lands on the diagonal neighbour and the facing follows
-/// the offset (a `STAY` keeps the prior facing). Draws no RNG.
-#[must_use]
-pub fn resolve_tile_offset(
-    placement: Placement,
-    offset: TileOffset,
-    grid: &TerrainGrid,
-) -> StepOutcome {
-    commit(placement, offset.world_offset(), grid)
 }
 
 /// Teleports the caster onto a target's exact cell — the classic lunge dash.
@@ -590,42 +571,6 @@ mod tests {
                 assert!(grid.walkable(placement.position));
             }
             StepOutcome::Blocked => panic!("the corner cut is a DECIDED non-rule"),
-        }
-    }
-
-    #[test]
-    fn a_tile_offset_lands_on_the_diagonal_neighbour_with_both_orthogonals_blocked() {
-        use crate::components::spatial::{TileDelta, TileOffset};
-        let grid = grid_with(&[(10, 10), (11, 11)]);
-        let start = placed((10, 10), Movement::Grounded);
-        let offset = TileOffset::new(TileDelta::Pos, TileDelta::Pos);
-        match resolve_tile_offset(start, offset, &grid) {
-            StepOutcome::Resolved { placement } => {
-                assert_eq!(placement.position, TileCoord::new(11, 11).to_world());
-                // Faces along the diagonal offset.
-                assert!(placement.facing.vector().x().raw() > 0);
-                assert!(placement.facing.vector().y().raw() > 0);
-            }
-            StepOutcome::Blocked => panic!("the diagonal neighbour is walkable"),
-        }
-    }
-
-    #[test]
-    fn a_blocked_tile_offset_stays_and_a_stay_offset_keeps_facing() {
-        use crate::components::spatial::{TileDelta, TileOffset};
-        let grid = grid_with(&[(10, 10)]);
-        let start = placed((10, 10), Movement::Grounded);
-        assert_eq!(
-            resolve_tile_offset(
-                start,
-                TileOffset::new(TileDelta::Pos, TileDelta::Zero),
-                &grid
-            ),
-            StepOutcome::Blocked
-        );
-        match resolve_tile_offset(start, TileOffset::STAY, &grid) {
-            StepOutcome::Resolved { placement } => assert_eq!(placement, start),
-            StepOutcome::Blocked => panic!("a stay offset resolves in place"),
         }
     }
 
