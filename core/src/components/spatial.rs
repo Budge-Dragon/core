@@ -121,12 +121,6 @@ impl Fixed {
         self.0
     }
 
-    /// Builds a scalar from whole tiles plus a sub-unit remainder.
-    #[must_use]
-    pub fn from_tile_parts(whole_tiles: i64, sub_units: i64) -> Self {
-        Self((whole_tiles << TILE_SHIFT).saturating_add(sub_units))
-    }
-
     /// A magnitude spanning `half_tiles` half-tiles (the ×2 schema grain).
     /// Total: the widest `u8` maps to `255 * HALF_TILE` (`8_355_840`), far
     /// inside the scalar's range, so the value needs no fallible path.
@@ -703,12 +697,6 @@ impl ConeHalfWidth {
         num: 1,
         den: NonZeroU64::MIN.saturating_add(1),
     };
-    /// A 90-degree half-width (`cos^2 90 = 0`).
-    pub const DEG_90: Self = Self {
-        num: 0,
-        den: NonZeroU64::MIN,
-    };
-
     /// Builds a cone half-width.
     ///
     /// # Errors
@@ -983,8 +971,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_from_tile_parts_and_raw() {
-        assert_eq!(Fixed::from_tile_parts(3, 128).raw(), 196_736);
+    fn fixed_from_raw() {
         assert_eq!(Fixed::from_raw(-5000).raw(), -5000);
     }
 
@@ -1079,7 +1066,6 @@ mod tests {
         let east = facing(1, 0);
         let apex = pos(0, 0);
         let d45 = ConeHalfWidth::DEG_45;
-        let d90 = ConeHalfWidth::DEG_90;
         // straight ahead: in 45.
         assert!(east.frontal_contains(apex, pos(10, 0), d45));
         // behind (d < 0): out.
@@ -1088,9 +1074,8 @@ mod tests {
         assert!(east.frontal_contains(apex, pos(5, 5), d45));
         // just outside 45 (50 >= 61 false): out.
         assert!(!east.frontal_contains(apex, pos(5, 6), d45));
-        // straight up: out of 45, in 90.
+        // straight up: out of 45.
         assert!(!east.frontal_contains(apex, pos(0, 5), d45));
-        assert!(east.frontal_contains(apex, pos(0, 5), d90));
         // magnitude invariance.
         assert_eq!(
             east.frontal_contains(apex, pos(5, 5), d45),
