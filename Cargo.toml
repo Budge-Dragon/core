@@ -41,3 +41,13 @@ wildcard_enum_match_arm = "warn"
 # type is review-enforced — a disallowed-types entry for f32/f64 would
 # false-positive on serde's derived visitors.)
 float_arithmetic = "warn"
+# Total ban on `as` casts, including the lossless ones pedantic permits. The
+# codebase already converts exclusively through From/TryFrom at boundaries
+# (0 `as` casts in core), so this is a zero-cost lock-in that keeps every
+# numeric/pointer conversion an explicit, fallible boundary op.
+as_conversions = "warn"
+# Flags asymmetric operand groupings in binary expressions — the copy-paste
+# transposition class (`a.x == b.x && a.x == b.y`). A real correctness guard in
+# the formula-dense, determinism-critical fixed-point/stat math. Nursery, but
+# effectively zero false-positive here (0 current hits).
+suspicious_operation_groupings = "warn"

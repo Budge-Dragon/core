@@ -64,6 +64,18 @@ disallowed-types = [
     { path = "std::collections::HashSet", reason = "RandomState is entropy-seeded — a hidden non-injected randomness source with nondeterministic, cross-target-divergent iteration order; use BTreeSet (keys are Ord newtypes)" },
     { path = "std::hash::RandomState", reason = "entropy-seeded hasher — a hidden non-injected randomness source; core is determinism-first" },
     { path = "std::collections::hash_map::RandomState", reason = "entropy-seeded hasher — a hidden non-injected randomness source; core is determinism-first" },
+    # Interior mutability and lazy hidden state. The "No hidden state" rule bans
+    # these in domain types; previously review-only, now mechanically enforced.
+    # All state flows through parameters and return values; total structures are
+    # built at load time, never lazily memoized.
+    { path = "std::cell::Cell", reason = "no interior mutability in domain types; state flows through parameters and return values (No hidden state)" },
+    { path = "std::cell::RefCell", reason = "no interior mutability in domain types (No hidden state)" },
+    { path = "std::cell::OnceCell", reason = "no lazy hidden state; total structures are built at load time (No hidden state)" },
+    { path = "std::cell::LazyCell", reason = "no lazy hidden state (No hidden state)" },
+    { path = "std::sync::Mutex", reason = "no locking or interior mutability in domain types (No hidden state)" },
+    { path = "std::sync::RwLock", reason = "no locking or interior mutability in domain types (No hidden state)" },
+    { path = "std::sync::OnceLock", reason = "no lazy hidden state (No hidden state)" },
+    { path = "std::sync::LazyLock", reason = "no lazy hidden state (No hidden state)" },
 ]
 
 disallowed-methods = [
