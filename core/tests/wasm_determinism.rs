@@ -314,39 +314,12 @@ use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
-use mu_core::components::spatial::{Facing, TileDelta, TileOffset};
+use mu_core::components::spatial::Facing;
 use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::MapNumber;
 use mu_core::data::skills::Skill;
 use mu_core::entities::character::Character;
-use mu_core::services::chance::draw_jiggle_offset;
 use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
-
-#[test]
-fn draw_jiggle_offset_sequence_is_identical_across_targets() {
-    // The ±1 jiggle draw (dx then dy, two `uniform_below(3)` words per call)
-    // under SEED: the nine-outcome offsets below are the cross-target contract.
-    let mut rng = SplitMix64::new(SEED);
-    let seq: Vec<TileOffset> = (0..12).map(|_| draw_jiggle_offset(&mut rng)).collect();
-    let offset = |dx: TileDelta, dy: TileDelta| TileOffset::new(dx, dy);
-    assert_eq!(
-        seq,
-        vec![
-            offset(TileDelta::Neg, TileDelta::Zero),
-            offset(TileDelta::Zero, TileDelta::Neg),
-            offset(TileDelta::Neg, TileDelta::Zero),
-            offset(TileDelta::Neg, TileDelta::Neg),
-            offset(TileDelta::Zero, TileDelta::Neg),
-            offset(TileDelta::Neg, TileDelta::Zero),
-            offset(TileDelta::Neg, TileDelta::Zero),
-            offset(TileDelta::Pos, TileDelta::Pos),
-            offset(TileDelta::Pos, TileDelta::Neg),
-            offset(TileDelta::Neg, TileDelta::Pos),
-            offset(TileDelta::Neg, TileDelta::Zero),
-            offset(TileDelta::Pos, TileDelta::Zero),
-        ]
-    );
-}
 
 /// A hand-pinned level-50 Dark Knight caster at tile (10, 10) facing +X, built
 /// through the wire (the only door an external test has) so the fixture needs
@@ -521,11 +494,13 @@ fn a_fixed_lunge_cast_serializes_identically_across_targets() {
     assert_eq!(vitals.mana.current(), 391, "the lunge's 9 mana is spent");
     // Draw-by-draw under SEED: the strike lands normal for 89 (the bare
     // [33,50] span ×2030/1000); the caster teleports onto the target's (12,10)
-    // cell facing east; the victim's two jiggle words land the (−1,−1)
-    // diagonal, one tile toward the origin corner at (11,9).
+    // cell facing east; the victim's continuous jiggle draws a free heading and
+    // nudges it ~one tile along it, to (854089,632649) — this exact continuous
+    // displacement is the cross-target contract, reproduced bit-for-bit on
+    // native and wasm.
     assert_eq!(
         or_abort(serde_json::to_string(&outcome)),
-        r#"{"kind":"cast","caster_placement":{"position":{"x":819200,"y":688128},"facing":{"x":131072,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":89,"quality":"normal","modifiers":[]},"health":{"current":99911,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":753664,"y":622592},"facing":{"x":-65536,"y":-65536},"movement":"grounded","map":0}}]}"#
+        r#"{"kind":"cast","caster_placement":{"position":{"x":819200,"y":688128},"facing":{"x":131072,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":89,"quality":"normal","modifiers":[]},"health":{"current":99911,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":854089,"y":632649},"facing":{"x":34889,"y":-55479},"movement":"grounded","map":0}}]}"#
     );
 }
 

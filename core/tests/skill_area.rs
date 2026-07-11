@@ -5,8 +5,8 @@
 //! (continuous swept knockback along the real away-vector, 3 tiles, per-tile
 //! wall/safe stop, same-point no-push, on-miss but never on-kill), the lunge
 //! teleport-onto-target across walls with its
-//! `MovesTarget` jiggle, the lightning ±1 jiggle, and the fixed per-branch RNG
-//! draw discipline — all proven through the public `route`/`locate`/`cast`
+//! `MovesTarget` jiggle, the lightning continuous ~1-tile jiggle, and the
+//! per-branch RNG draw discipline — all proven through the public `route`/`locate`/`cast`
 //! ports against the shipped skill roster.
 //!
 //! Load failures route through `or_abort`; every assertion is a `#[test]` body
@@ -1064,9 +1064,9 @@ fn a_real_lightning_skill_jiggles_a_landed_target_and_never_a_missed_one() {
     let start = TileCoord::new(11, 10).to_world();
     let targets = [seated((11, 10), 1_000_000, 10, 0)];
     let aim = start;
+    let tile = UNITS_PER_TILE;
     let mut saw_move = false;
-    let mut saw_diagonal = false;
-    let mut saw_stay = false;
+    let mut directions = BTreeSet::new();
     for seed in 0u64..128 {
         let (_, outcome) = cast_once(&hero, bolt, aim, &targets, &all_walkable(), seed);
         let SkillOutcome::Cast { hits, .. } = outcome else {
@@ -1077,26 +1077,33 @@ fn a_real_lightning_skill_jiggles_a_landed_target_and_never_a_missed_one() {
                 displacement: Some(moved),
                 ..
             } => {
-                let (dx, dy) = tile_delta(start, moved);
+                let dx = moved.position.x().raw() - start.x().raw();
+                let dy = moved.position.y().raw() - start.y().raw();
                 assert!(
-                    dx.abs() <= 1 && dy.abs() <= 1,
-                    "seed {seed}: within ±1 per axis"
+                    dx.abs() <= tile && dy.abs() <= tile,
+                    "seed {seed}: within one tile per axis"
                 );
                 assert_ne!(moved.position, start);
                 saw_move = true;
-                saw_diagonal |= dx.abs() == 1 && dy.abs() == 1;
+                directions.insert((dx.signum(), dy.signum()));
             }
+            // The continuous jiggle always nudges on open ground — a landed
+            // applied hit never reports a stay.
             TargetHit::Landed {
                 displacement: None, ..
-            } => saw_stay = true,
+            } => {}
             // The elemental jiggle is landed-only: a miss never displaces.
             TargetHit::Missed { displacement, .. } => assert_eq!(displacement, None),
             TargetHit::Killed { .. } => panic!("a million-HP target cannot be killed"),
         }
     }
     assert!(
-        saw_move && saw_diagonal && saw_stay,
-        "the sweep reaches a move, a diagonal, and a stay"
+        saw_move,
+        "a seed in 0..128 lands an applied jiggle that moves"
+    );
+    assert!(
+        directions.len() > 2,
+        "the continuous nudge reaches a spread of directions: {directions:?}"
     );
 }
 
@@ -1362,12 +1369,13 @@ fn earthshake_draws_no_element_roll_and_no_push_word() {
 }
 
 #[test]
-fn the_lunge_jiggle_draws_exactly_two_words_on_missed_and_landed_hits() {
+fn the_lunge_jiggle_draws_a_variable_surplus_on_missed_and_landed_hits() {
     // The first non-elemental direct hit is the lunge's draw-count twin: same
     // strike sequence per branch, no element roll on either, and no
-    // displacement on the direct hit — so the lunge's constant surplus of two
-    // words IS the jiggle (dx then dy), on the missed AND the landed branch
-    // alike (DET-1/3).
+    // displacement on the direct hit — so the lunge's surplus over it IS the
+    // jiggle's continuous heading draw (a variable, deterministic-per-seed count
+    // of at least two words), present on the missed AND the landed branch alike
+    // (DET-1/3).
     let atlas = real_atlas();
     let lunge = lunge_skill(&atlas);
     let direct = or_abort(
@@ -1392,10 +1400,15 @@ fn the_lunge_jiggle_draws_exactly_two_words_on_missed_and_landed_hits() {
         let (direct_words, direct_outcome) = counted_cast(&hero, direct, aim, &targets, seed);
         let kind = hit_kind(&lunge_outcome);
         assert_eq!(kind, hit_kind(&direct_outcome), "seed {seed}");
+        assert!(
+            lunge_words >= direct_words + 2,
+            "seed {seed} ({kind}): the jiggle draws at least the two-axis heading surplus"
+        );
+        // Deterministic per seed: a re-run consumes the identical word count.
+        let (lunge_words_again, _) = counted_cast(&hero, lunge, aim, &targets, seed);
         assert_eq!(
-            lunge_words,
-            direct_words + 2,
-            "seed {seed} ({kind}): the jiggle is exactly two words"
+            lunge_words, lunge_words_again,
+            "seed {seed}: the jiggle's word count is deterministic per seed"
         );
         saw.insert(kind);
     }
@@ -1406,12 +1419,13 @@ fn the_lunge_jiggle_draws_exactly_two_words_on_missed_and_landed_hits() {
 }
 
 #[test]
-fn the_lightning_jiggle_draws_element_then_two_words_and_immunity_draws_none() {
+fn the_lightning_jiggle_draws_element_then_a_variable_surplus_and_immunity_draws_none() {
     // Against the same non-elemental direct-hit twin: a landed lightning hit on
     // a zero-resist target draws the element-application roll (one word) then
-    // the jiggle (two) — three extra; a missed one draws nothing extra (no roll
-    // on a miss); an immune (resist 255) target short-circuits the roll, so a
-    // landed hit draws nothing extra either (JIG-5 / the §5 table).
+    // the jiggle's continuous heading (at least two, variable) — a surplus of at
+    // least three; a missed one draws nothing extra (no roll on a miss); an
+    // immune (resist 255) target short-circuits the roll, so a landed hit draws
+    // nothing extra either (JIG-5 / the §5 table).
     let atlas = real_atlas();
     let bolt = lightning_direct_skill(&atlas);
     let direct = or_abort(
@@ -1437,14 +1451,19 @@ fn the_lightning_jiggle_draws_element_then_two_words_and_immunity_draws_none() {
         let (direct_words, direct_outcome) = counted_cast(&hero, direct, aim, &vulnerable, seed);
         let kind = hit_kind(&bolt_outcome);
         assert_eq!(kind, hit_kind(&direct_outcome), "seed {seed}");
-        let expected = match kind {
-            // Zero resistance always applies: 1 element word + 2 jiggle words.
-            "landed" => direct_words + 3,
+        match kind {
+            // Zero resistance always applies: 1 element word then the heading.
+            "landed" => assert!(
+                bolt_words >= direct_words + 3,
+                "seed {seed} (landed): element roll then the heading surplus"
+            ),
             // A miss rolls no element and no jiggle.
-            "missed" => direct_words,
+            "missed" => assert_eq!(
+                bolt_words, direct_words,
+                "seed {seed} (missed): no roll, no jiggle"
+            ),
             other => panic!("unexpected branch {other}"),
-        };
-        assert_eq!(bolt_words, expected, "seed {seed} ({kind})");
+        }
         saw.insert(kind);
     }
     assert!(

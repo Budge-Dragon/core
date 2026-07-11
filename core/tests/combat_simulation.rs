@@ -774,12 +774,10 @@ fn a_passive_victim_yields_no_reward_and_draws_no_randomness() {
 #[test]
 fn a_landed_lightning_strike_jiggles_its_target_within_one_tile_per_axis() {
     // Drives the real cast service over the shipped data: a landed, applied
-    // lightning strike jiggles its target — every reported displacement stays
-    // within ±1 tile on EACH axis (dx, dy each in {−1, 0, +1}; diagonals and
-    // the stay outcome included), a missed strike never displaces, and at least
-    // one seed lands a real move. The W-AREA G3 contract: a mutation reviving
-    // the old always-moves cardinal shove (or dropping the jiggle composition)
-    // reddens this.
+    // lightning strike jiggles its target — a continuous ~1-tile nudge in any
+    // direction (fractional offsets, bounded to ≤1 tile per axis; no {−1,0,+1}
+    // snap, and no open-ground stay outcome now that a heading is always drawn),
+    // a missed strike never displaces, and at least one seed lands a real move.
     let atlas = real_atlas();
     let (_, combat, _) = low_level_monster(&atlas, 20);
     let grid = atlas.terrain_grid(MapNumber(0)).unwrap().clone();
