@@ -40,7 +40,7 @@ use mu_core::components::movement::{CombatLock, FlightChange, Movement, Wings};
 use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
-use mu_core::components::spatial::{Facing, Fixed, UNITS_PER_TILE, WorldPos};
+use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
 use mu_core::components::tile::{TileCoord, WalkGrid};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{
@@ -54,7 +54,7 @@ use mu_core::data::item_definitions::ItemDefinition;
 use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::option_roll::OptionRollPolicy;
-use mu_core::data::skills::{AreaPattern, DamageType};
+use mu_core::data::skills::{AreaDisplacement, AreaGeometry, DamageType, Skill};
 use mu_core::data::spawns::SpawnPlacement;
 use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
@@ -96,7 +96,9 @@ use mu_core::services::movement::resolve_step;
 use mu_core::services::party;
 use mu_core::services::profile::{effective_profile, equipped_profile, monster_profile};
 use mu_core::services::shop::{RepairSite, RepairSubject, repair};
-use mu_core::services::skills::{DamagingSkill, SkillRouting, cast, cast_heal, route};
+use mu_core::services::skills::{
+    DamagingSkill, DamagingSkillRef, SkillRouting, cast, cast_heal, route,
+};
 use mu_core::services::spawn::{SpawnResult, place_spawn};
 use mu_core::services::trade::{
     AcceptOutcome, Holdings, LockResult, RequestOutcome, TradeAvailability, accept, cancel, lock,
@@ -699,11 +701,13 @@ impl World {
     /// one), derives the caster's own combat profile and one [`CombatTarget`] per
     /// batch monster from held state, resolves [`cast`] over the map's grid and the
     /// world's stream, persists the caster's spent vitals (K1), then writes each
-    /// struck target's returned health, effects, and any knockback displacement
-    /// back onto its monster *through* the persist seam — mapping each hit's
-    /// batch-position `target_index` to the monster index the caller supplied.
-    /// Returns the [`SkillOutcome`]. A rejection spends nothing and touches no
-    /// target.
+    /// struck target's returned health, effects, and any displacement (a push
+    /// or a jiggle) back onto its monster *through* the persist seam — mapping
+    /// each hit's batch-position `target_index` to the monster index the caller
+    /// supplied — and writes the outcome's authoritative `caster_placement`
+    /// back onto the caster (a lunge teleports the caster onto its target;
+    /// every other cast returns the unchanged placement). Returns the
+    /// [`SkillOutcome`]. A rejection spends nothing and touches no target.
     pub fn cast_damaging(
         &mut self,
         caster_index: usize,
@@ -762,8 +766,7 @@ impl World {
             cast(
                 caster,
                 &equipped_profile(caster, caster_worn, &self.atlas),
-                damaging,
-                aim,
+                damaging.locate(aim),
                 &targets,
                 grid,
                 &mut self.rng,
@@ -771,7 +774,13 @@ impl World {
         };
         let vitals_value = or_abort(serde_json::to_value(spent_vitals));
         self.persist_character_with(caster_index, "vitals", vitals_value);
-        if let SkillOutcome::Cast { hits, .. } = &outcome {
+        if let SkillOutcome::Cast {
+            caster_placement,
+            hits,
+        } = &outcome
+        {
+            let placement_value = or_abort(serde_json::to_value(caster_placement));
+            self.persist_character_with(caster_index, "placement", placement_value);
             for hit in hits {
                 self.write_back_target_hit(target_indices, hit);
             }
@@ -817,18 +826,19 @@ impl World {
     /// and persists the updated instance through the seam.
     fn write_back_target_hit(&mut self, target_indices: &[usize], hit: &TargetHit) {
         let (batch_index, health, active_effects, displacement) = match hit {
-            TargetHit::Missed {
-                target_index,
-                health,
-                active_effects,
-            }
-            | TargetHit::Killed {
+            TargetHit::Killed {
                 target_index,
                 health,
                 active_effects,
                 ..
             } => (*target_index, *health, *active_effects, None),
-            TargetHit::Landed {
+            TargetHit::Missed {
+                target_index,
+                health,
+                active_effects,
+                displacement,
+            }
+            | TargetHit::Landed {
                 target_index,
                 health,
                 active_effects,
@@ -2307,6 +2317,27 @@ pub fn heal_skill(atlas: &Atlas) -> SkillNumber {
     )
 }
 
+/// The number of the first damaging skill matching `predicate` — the shared
+/// scaffold of the pattern-found finders below: walk the catalog, keep the
+/// damaging routes, and abort with `err` when no record matches.
+fn find_damaging_skill(
+    atlas: &Atlas,
+    predicate: impl Fn(&Skill, DamagingSkillRef<'_>) -> bool,
+    err: &str,
+) -> SkillNumber {
+    or_abort(
+        atlas
+            .skills()
+            .find_map(|skill| match route(skill) {
+                SkillRouting::Damaging(reference) => {
+                    predicate(skill, reference).then_some(skill.number)
+                }
+                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
+            })
+            .ok_or(err),
+    )
+}
+
 /// The number of the first non-elemental single-target damaging skill — a clean
 /// `DirectHit` carrying a real mana cost, re-found from the shipped catalog on
 /// every run (the router is the source, never a hard-coded skill id). Chosen
@@ -2314,19 +2345,14 @@ pub fn heal_skill(atlas: &Atlas) -> SkillNumber {
 /// keeping the kill-chain writeback a pure health drain.
 #[must_use]
 pub fn direct_hit_skill(atlas: &Atlas) -> SkillNumber {
-    or_abort(
-        atlas
-            .skills()
-            .find_map(|skill| match route(skill) {
-                SkillRouting::Damaging(reference) => {
-                    (matches!(reference.shape(), DamagingSkill::DirectHit)
-                        && skill.element.is_none()
-                        && skill.cost.mana > 0)
-                        .then_some(skill.number)
-                }
-                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
-            })
-            .ok_or("the dataset has no non-elemental direct-hit skill"),
+    find_damaging_skill(
+        atlas,
+        |skill, reference| {
+            matches!(reference.shape(), DamagingSkill::DirectHit)
+                && skill.element.is_none()
+                && skill.cost.mana > 0
+        },
+        "the dataset has no non-elemental direct-hit skill",
     )
 }
 
@@ -2336,19 +2362,14 @@ pub fn direct_hit_skill(atlas: &Atlas) -> SkillNumber {
 /// catalog, never hard-coded.
 #[must_use]
 pub fn wizardry_direct_skill(atlas: &Atlas) -> SkillNumber {
-    or_abort(
-        atlas
-            .skills()
-            .find_map(|skill| match route(skill) {
-                SkillRouting::Damaging(reference) => {
-                    (matches!(reference.shape(), DamagingSkill::DirectHit)
-                        && reference.damage_type() == DamageType::Wizardry
-                        && skill.element.is_none())
-                    .then_some(skill.number)
-                }
-                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
-            })
-            .ok_or("the dataset has no non-elemental wizardry direct-hit skill"),
+    find_damaging_skill(
+        atlas,
+        |skill, reference| {
+            matches!(reference.shape(), DamagingSkill::DirectHit)
+                && reference.damage_type() == DamageType::Wizardry
+                && skill.element.is_none()
+        },
+        "the dataset has no non-elemental wizardry direct-hit skill",
     )
 }
 
@@ -2357,38 +2378,106 @@ pub fn wizardry_direct_skill(atlas: &Atlas) -> SkillNumber {
 /// lands the floor-times-multiplier scratch. Re-found from the catalog.
 #[must_use]
 pub fn none_type_skill(atlas: &Atlas) -> SkillNumber {
-    or_abort(
-        atlas
-            .skills()
-            .find_map(|skill| match route(skill) {
-                SkillRouting::Damaging(reference) => {
-                    (reference.damage_type() == DamageType::None).then_some(skill.number)
-                }
-                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
-            })
-            .ok_or("the dataset has no None-type damaging skill"),
+    find_damaging_skill(
+        atlas,
+        |_, reference| reference.damage_type() == DamageType::None,
+        "the dataset has no None-type damaging skill",
     )
 }
 
-/// The number of the first caster-centred area skill — a `Nova`-pattern strike
-/// whose region is a disc around the caster, so one cast sweeps every seated mob
-/// within range. Re-found from the catalog, never hard-coded.
+/// The number of the Nova release — found by pattern, never hard-coded: the
+/// fire-element wizardry caster-circle at the authored r=6 (`radius_x2 == 12`)
+/// is uniquely Nova (Evil Spirit is non-elemental; Hellfire/Inferno are r=2/4),
+/// a strike whose region is a disc around the caster, so one cast sweeps every
+/// seated mob within it.
 #[must_use]
 pub fn nova_skill(atlas: &Atlas) -> SkillNumber {
-    or_abort(
-        atlas
-            .skills()
-            .find_map(|skill| match route(skill) {
-                SkillRouting::Damaging(reference) => matches!(
-                    reference.shape(),
-                    DamagingSkill::Area {
-                        pattern: AreaPattern::Nova
-                    }
-                )
-                .then_some(skill.number),
-                SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => None,
-            })
-            .ok_or("the dataset has no nova area skill"),
+    find_damaging_skill(
+        atlas,
+        |skill, reference| {
+            matches!(
+                reference.shape(),
+                DamagingSkill::Area {
+                    geometry: AreaGeometry::CasterCircle { radius_x2: 12 },
+                    ..
+                }
+            ) && skill.damage_type == DamageType::Wizardry
+                && skill.element == Some(mu_core::components::element::Element::Fire)
+        },
+        "the dataset has no nova area skill",
+    )
+}
+
+/// The number of the Flame release — found by pattern, never hard-coded: the
+/// fire-element wizardry AIM circle at the authored r=1 (`radius_x2 == 2`) is
+/// uniquely Flame (the other aim circles are lightning / ice / wind / plain),
+/// the pinpoint burst whose one-tile disc the AOE-size gate drives.
+#[must_use]
+pub fn flame_skill(atlas: &Atlas) -> SkillNumber {
+    find_damaging_skill(
+        atlas,
+        |skill, reference| {
+            matches!(
+                reference.shape(),
+                DamagingSkill::Area {
+                    geometry: AreaGeometry::AimCircle { radius_x2: 2 },
+                    ..
+                }
+            ) && skill.damage_type == DamageType::Wizardry
+                && skill.element == Some(mu_core::components::element::Element::Fire)
+        },
+        "the dataset has no flame aim-circle skill",
+    )
+}
+
+/// The number of the Hellfire eruption — found by pattern, never hard-coded:
+/// the fire-element CASTER circle at the authored r=2 (`radius_x2 == 4`) is
+/// uniquely Hellfire (Twisting Slash is the wind r=2 circle; Inferno/Nova are
+/// r=4/6), the revived range-0 skill the AOE-size gate drives.
+#[must_use]
+pub fn hellfire_skill(atlas: &Atlas) -> SkillNumber {
+    find_damaging_skill(
+        atlas,
+        |skill, reference| {
+            matches!(
+                reference.shape(),
+                DamagingSkill::Area {
+                    geometry: AreaGeometry::CasterCircle { radius_x2: 4 },
+                    ..
+                }
+            ) && skill.element == Some(mu_core::components::element::Element::Fire)
+        },
+        "the dataset has no hellfire caster-circle skill",
+    )
+}
+
+/// The number of the Earthshake quake — found by pattern, never hard-coded:
+/// the one area record whose authored displacement is the directional push.
+#[must_use]
+pub fn earthshake_skill(atlas: &Atlas) -> SkillNumber {
+    find_damaging_skill(
+        atlas,
+        |_, reference| {
+            matches!(
+                reference.shape(),
+                DamagingSkill::Area {
+                    displacement: AreaDisplacement::DirectionalPush,
+                    ..
+                }
+            )
+        },
+        "the dataset has no directional-push area skill",
+    )
+}
+
+/// The number of the first lunge-shaped skill — found by pattern, never
+/// hard-coded: the DK weapon dash whose caster teleports onto its target.
+#[must_use]
+pub fn lunge_skill(atlas: &Atlas) -> SkillNumber {
+    find_damaging_skill(
+        atlas,
+        |_, reference| matches!(reference.shape(), DamagingSkill::Lunge),
+        "the dataset has no lunge skill",
     )
 }
 
@@ -2479,7 +2568,7 @@ pub fn is_equippable(atlas: &Atlas, id: ItemRef, wearer: &Wearer) -> bool {
 
 /// One-tile-per-step movement grain — the speed the step drive method walks a
 /// character at, so each [`resolve_step`] lands exactly on the next tile centre.
-const ONE_TILE: Fixed = Fixed::from_raw(UNITS_PER_TILE);
+const ONE_TILE: StepMagnitude = StepMagnitude::ONE_TILE;
 
 /// The host's fixed 50 ms tick cadence — the clock the host owns (U1), fed to
 /// every service that converts millisecond durations to absolute ticks (the AI

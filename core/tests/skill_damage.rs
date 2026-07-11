@@ -146,8 +146,7 @@ fn cast_damage(caster: &Character, skill: &Skill, seed: u64) -> Option<u32> {
     let (_, outcome) = cast(
         caster,
         &character_profile(caster).0,
-        damaging_ref(skill),
-        aim,
+        damaging_ref(skill).locate(aim),
         &targets,
         &all_walkable(),
         &mut TestRng::new(seed),
@@ -597,8 +596,7 @@ fn counted_cast(hero: &Character, skill: &Skill, seed: u64) -> (u32, bool) {
     let (_, outcome) = cast(
         hero,
         &character_profile(hero).0,
-        damaging_ref(skill),
-        aim,
+        damaging_ref(skill).locate(aim),
         &targets,
         &all_walkable(),
         &mut rng,
@@ -674,8 +672,7 @@ fn identical_inputs_and_seeds_replay_byte_identical() {
         let (vitals, outcome) = cast(
             &wizard,
             &character_profile(&wizard).0,
-            damaging_ref(skill),
-            aim,
+            damaging_ref(skill).locate(aim),
             &targets,
             &all_walkable(),
             &mut TestRng::new(41),

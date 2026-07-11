@@ -262,10 +262,11 @@ fn skill_event_wire_shapes_are_pinned() {
         target_index: 1,
         health: Pool::new(35, 35).unwrap(),
         active_effects: ActiveEffects::EMPTY,
+        displacement: None,
     };
     assert_eq!(
         serde_json::to_string(&missed).unwrap(),
-        r#"{"kind":"missed","target_index":1,"health":{"current":35,"max":35},"active_effects":[]}"#
+        r#"{"kind":"missed","target_index":1,"health":{"current":35,"max":35},"active_effects":[],"displacement":null}"#
     );
     let killed = TargetHit::Killed {
         target_index: 2,
@@ -452,6 +453,7 @@ fn target_hit_every_kind_tag_is_pinned() {
             target_index: 0,
             health,
             active_effects: ActiveEffects::EMPTY,
+            displacement: None,
         },
         TargetHit::Landed {
             target_index: 0,

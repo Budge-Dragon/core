@@ -57,7 +57,7 @@ use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
 use mu_core::events::party::PartyEvent;
 use mu_core::events::progression::GrowthEvent;
 use mu_core::events::shop::{BuyOutcome, RepairOutcome, SellOutcome};
-use mu_core::events::skills::{SkillOutcome, TargetHit};
+use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
 use mu_core::events::trade::{CancelReason, OfferOutcome, ZenOfferOutcome};
 use mu_core::events::travel::{
@@ -73,10 +73,11 @@ use mu_core::services::wear::WearEvent;
 
 use paper_host::{
     World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
-    dark_wizard, direct_hit_skill, fighting_monster_from, first_passive_monster, footprint_of,
-    heal_skill, is_equippable, item_at_level, item_instance, low_level_monster, magic_gladiator,
-    monster_instance, none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile,
-    walkable_run, wearer_of, wire, wizardry_direct_skill, zen,
+    dark_wizard, direct_hit_skill, earthshake_skill, fighting_monster_from, first_passive_monster,
+    flame_skill, footprint_of, heal_skill, hellfire_skill, is_equippable, item_at_level,
+    item_instance, low_level_monster, lunge_skill, magic_gladiator, monster_instance,
+    none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile, walkable_run,
+    wearer_of, wire, wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -2168,6 +2169,287 @@ fn a_wizardry_absent_or_none_type_cast_persists_the_scratch_never_a_weapon_hit()
         }
     }
     assert!(scratched, "a None-type cast lands within 64 tries");
+}
+
+// --- W-AREA standing gates: authored geometry, the aim bound, the push, the ---
+// --- lunge teleport, and the ≤1-tile step — all through persist. --------------
+
+/// The first walkable / blocked / walkable horizontal triple on `map`'s real
+/// terrain — a genuine one-tile wall with ground on both sides, re-found from
+/// the shipped grid on every run, never a hard-coded tile. Returns the two
+/// walkable flanks.
+fn wall_triple(atlas: &mu_core::data::atlas::Atlas, map: MapNumber) -> (TileCoord, TileCoord) {
+    let grid = or_abort(atlas.walk_grid(map).ok_or("no walk grid for map"));
+    for y in 0u8..=u8::MAX {
+        for x in 0u8..=u8::MAX - 2 {
+            let near = TileCoord::new(x, y);
+            let wall = TileCoord::new(x + 1, y);
+            let far = TileCoord::new(x + 2, y);
+            if grid.walkable(near.to_world())
+                && !grid.walkable(wall.to_world())
+                && grid.walkable(far.to_world())
+            {
+                return (near, far);
+            }
+        }
+    }
+    or_abort(Err::<(TileCoord, TileCoord), _>(
+        "the map has a walkable-blocked-walkable triple",
+    ))
+}
+
+#[test]
+fn a_flame_cast_strikes_the_mob_inside_its_authored_circle_and_spares_the_one_outside() {
+    // AOE-SIZE gate (Flame small): the authored r=1 aim circle end-to-end —
+    // the mob one tile from the aim is struck and its persisted health falls;
+    // the mob two tiles out is never even covered (the old range-derived r=6
+    // disc swallowed both).
+    let mut proven = false;
+    for seed in 0u64..64 {
+        let mut world = World::new(seed, MapNumber(0));
+        let wizard = world.seat_character(dark_wizard(50, 400, tile(10, 10)));
+        let flame = flame_skill(world.atlas());
+        let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+        let near = world.seat_monster(monster_instance(number, 10_000, tile(11, 10)));
+        let far = world.seat_monster(monster_instance(number, 10_000, tile(12, 10)));
+        let outcome = world.cast_damaging(wizard, flame, pos(10, 10), &[near, far]);
+        let SkillOutcome::Cast { hits, .. } = outcome else {
+            panic!("a funded flame over a covered mob resolves");
+        };
+        // Coverage is the authored size: only the near mob (batch index 0) is hit.
+        assert_eq!(hits.len(), 1, "seed {seed}: exactly one mob is covered");
+        assert!(
+            hits.iter().all(|hit| matches!(
+                hit,
+                TargetHit::Missed {
+                    target_index: 0,
+                    ..
+                } | TargetHit::Landed {
+                    target_index: 0,
+                    ..
+                } | TargetHit::Killed {
+                    target_index: 0,
+                    ..
+                }
+            )),
+            "seed {seed}: the covered mob is the near one"
+        );
+        assert_eq!(
+            world.monster(far).health.current(),
+            10_000,
+            "seed {seed}: the mob two tiles out is untouched"
+        );
+        if world.monster(near).health.current() < 10_000 {
+            proven = true;
+            break;
+        }
+    }
+    assert!(proven, "a seed in 0..64 lands the flame on the near mob");
+}
+
+#[test]
+fn a_revived_hellfire_strikes_an_adjacent_mob_and_persists_its_damage() {
+    // AOE-SIZE gate (Hellfire revived): the data-range-0 skill projects its
+    // authored r=2 caster circle — the eruption covers the adjacent mob and its
+    // persisted health falls. The range-0 dead-skill NoTargetsInRegion is gone.
+    let mut proven = false;
+    for seed in 0u64..64 {
+        let mut world = World::new(seed, MapNumber(0));
+        let wizard = world.seat_character(dark_wizard(50, 400, tile(10, 10)));
+        let hellfire = hellfire_skill(world.atlas());
+        let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+        let mob = world.seat_monster(monster_instance(number, 10_000, tile(12, 10)));
+        let outcome = world.cast_damaging(wizard, hellfire, pos(10, 10), &[mob]);
+        assert!(
+            matches!(outcome, SkillOutcome::Cast { .. }),
+            "seed {seed}: the revived hellfire covers its adjacent mob"
+        );
+        if world.monster(mob).health.current() < 10_000 {
+            proven = true;
+            break;
+        }
+    }
+    assert!(
+        proven,
+        "a seed in 0..64 lands the hellfire on the adjacent mob"
+    );
+}
+
+#[test]
+fn an_aim_beyond_cast_range_is_rejected_and_no_mana_spend_persists() {
+    // REJECT-FAR-AIM gate: an aim-centered area cast pointed past its cast
+    // range is refused OutOfRange before any spend — the persisted mana is
+    // untouched and the far mob never struck (the invariant-6 aim bound).
+    let mut world = World::new(7, MapNumber(0));
+    let wizard = world.seat_character(dark_wizard(50, 400, tile(10, 10)));
+    let flame = flame_skill(world.atlas());
+    let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let mob = world.seat_monster(monster_instance(number, 10_000, tile(30, 10)));
+    let mana_before = world.character(wizard).vitals().mana.current();
+    let outcome = world.cast_damaging(wizard, flame, pos(30, 10), &[mob]);
+    assert_eq!(
+        outcome,
+        SkillOutcome::Rejected {
+            reason: CastRejection::OutOfRange
+        }
+    );
+    assert_eq!(
+        world.character(wizard).vitals().mana.current(),
+        mana_before,
+        "no mana spend persists on the refused far aim"
+    );
+    assert_eq!(world.monster(mob).health.current(), 10_000);
+}
+
+#[test]
+fn an_earthshake_scatters_struck_and_missed_mobs_and_a_killed_mob_stays_put() {
+    // EARTHSHAKE-PUSH gate: the quake throws every caught mob directly away
+    // from the caster — the persisted placements move exactly three tiles east
+    // along the open corridor, a MISSED mob is scattered too (G2), and a killed
+    // mob stays on its tile.
+    let mut killed_stays = false;
+    let mut missed_scattered = false;
+    for seed in 0u64..128 {
+        let mut world = World::new(seed, MapNumber(0));
+        let run = walkable_run(world.atlas(), MapNumber(0), 8);
+        let caster_tile = *or_abort(run.first().ok_or("run start"));
+        let frail_tile = *or_abort(run.get(1).ok_or("run tile 1"));
+        let sturdy_tile = *or_abort(run.get(2).ok_or("run tile 2"));
+        let pushed_to = *or_abort(run.get(5).ok_or("run tile 5"));
+        let knight = world.seat_character(dark_knight(80, 300, caster_tile));
+        let quake = earthshake_skill(world.atlas());
+        let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+        let frail = world.seat_monster(monster_instance(number, 1, frail_tile));
+        let sturdy = world.seat_monster(monster_instance(number, 1_000_000, sturdy_tile));
+
+        let outcome = world.cast_damaging(knight, quake, caster_tile.to_world(), &[frail, sturdy]);
+        let SkillOutcome::Cast { hits, .. } = outcome else {
+            panic!("seed {seed}: a funded quake over covered mobs resolves");
+        };
+
+        // The sturdy mob (batch index 1) is never killed: struck or missed, its
+        // persisted placement is thrown exactly three tiles further east.
+        assert_eq!(
+            world.monster(sturdy).placement.position,
+            pushed_to.to_world(),
+            "seed {seed}: the sturdy mob is scattered three tiles away"
+        );
+        for hit in &hits {
+            match hit {
+                TargetHit::Missed {
+                    target_index: 1,
+                    displacement,
+                    ..
+                } => {
+                    assert!(displacement.is_some(), "seed {seed}: a missed mob scatters");
+                    missed_scattered = true;
+                }
+                TargetHit::Killed {
+                    target_index: 0, ..
+                } => {
+                    // The killed frail mob stays put: its persisted placement is
+                    // its seat, untouched by the push.
+                    assert_eq!(
+                        world.monster(frail).placement.position,
+                        frail_tile.to_world(),
+                        "seed {seed}: a killed mob is never pushed"
+                    );
+                    killed_stays = true;
+                }
+                TargetHit::Missed { .. } | TargetHit::Landed { .. } | TargetHit::Killed { .. } => {}
+            }
+        }
+        if killed_stays && missed_scattered {
+            break;
+        }
+    }
+    assert!(
+        killed_stays && missed_scattered,
+        "the sweep reaches a killed-stays and a missed-scattered quake"
+    );
+}
+
+#[test]
+fn a_lunge_cast_lands_the_persisted_caster_on_its_target_across_a_wall() {
+    // LUNGE-ACROSS-WALL gate: a real one-tile wall on Lorencia terrain stands
+    // between the knight and its mark; the lunge teleports the caster onto the
+    // target's exact cell and THAT placement persists — the classic dash,
+    // proven end-to-end through the persist seam.
+    let mut world = World::new(11, MapNumber(0));
+    let (near, far) = wall_triple(world.atlas(), MapNumber(0));
+    let knight = world.seat_character(dark_knight(80, 300, near));
+    let lunge = lunge_skill(world.atlas());
+    let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let mob = world.seat_monster(monster_instance(number, 10_000, far));
+    let outcome = world.cast_damaging(knight, lunge, far.to_world(), &[mob]);
+    assert!(
+        matches!(outcome, SkillOutcome::Cast { .. }),
+        "a funded lunge over its covered target resolves"
+    );
+    assert_eq!(
+        world.character(knight).placement().position,
+        far.to_world(),
+        "the persisted caster placement is the target's tile, wall notwithstanding"
+    );
+}
+
+#[test]
+fn an_ordinary_step_toward_ground_across_a_wall_is_blocked_and_the_walker_stays() {
+    // The ≤1-tile ordinary-step invariant through the paper host: the walker
+    // faces walkable ground two tiles away with a real wall between. The step
+    // drive can only hand `resolve_step` a `StepMagnitude` (whose constructors
+    // bound every ordinary step to at most one tile — the deleted DASH_SPEED is
+    // unrepresentable), so the step lands on the wall tile and is refused; the
+    // persisted walker never tunnels.
+    let mut world = World::new(3, MapNumber(0));
+    let (near, far) = wall_triple(world.atlas(), MapNumber(0));
+    let walker = world.seat_character(dark_knight(30, 150, near));
+    assert_eq!(world.step(walker, far.to_world()), StepOutcome::Blocked);
+    assert_eq!(
+        world.character(walker).placement().position,
+        near.to_world(),
+        "the persisted walker stays on its side of the wall"
+    );
+}
+
+#[test]
+fn an_area_cast_clears_the_cluster_inside_its_authored_radius_and_the_outsider_survives() {
+    // The golden-path area beat as its own flow (the threaded golden-path
+    // identity is a Dark Knight mid-corridor; the authored-size beat needs a
+    // wizard and a placed cluster, so it plays here — spec §3.3 allows the
+    // dedicated scenario): one Flame cast kills the two frail mobs inside its
+    // one-tile circle, the frail mob just outside survives untouched, and each
+    // kill pays out its own reward.
+    let mut proven = false;
+    for seed in 0u64..64 {
+        let mut world = World::new(seed, MapNumber(0));
+        let wizard = world.seat_character(dark_wizard(50, 900, tile(10, 10)));
+        let flame = flame_skill(world.atlas());
+        let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+        let in_east = world.seat_monster(monster_instance(number, 1, tile(11, 10)));
+        let in_south = world.seat_monster(monster_instance(number, 1, tile(10, 11)));
+        let outside = world.seat_monster(monster_instance(number, 1, tile(12, 10)));
+        let outcome =
+            world.cast_damaging(wizard, flame, pos(10, 10), &[in_east, in_south, outside]);
+        assert!(matches!(outcome, SkillOutcome::Cast { .. }));
+        assert_eq!(
+            world.monster(outside).health.current(),
+            1,
+            "seed {seed}: the mob just outside the authored radius survives"
+        );
+        if world.monster(in_east).health.current() != 0
+            || world.monster(in_south).health.current() != 0
+        {
+            continue;
+        }
+        let reward_east = world.resolve_kill_of(wizard, in_east);
+        let reward_south = world.resolve_kill_of(wizard, in_south);
+        assert!(reward_east.experience.gained.0 > 0);
+        assert!(reward_south.experience.gained.0 > 0);
+        proven = true;
+        break;
+    }
+    assert!(proven, "a seed in 0..64 clears the in-circle cluster");
 }
 
 // --- Equip gating: the refused branch W-SIM never asserted (seam 1). ---------

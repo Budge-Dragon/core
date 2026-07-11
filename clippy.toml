@@ -14,6 +14,10 @@ doc-valid-idents = ["SpacetimeDB", "NPCs", "OpenMU", "MonsterSetBase", ".."]
 # any of these into a config struct is the banned Extract-Parameter-Object patch
 # (CLAUDE.md, "Deep modules, not shallow ones"), so the threshold is raised at the
 # config layer rather than suppressed at the call site.
+# services::skills::resolve_target_hit shares the same shape at eight (the batch
+# index, two profiles, the skill, the strike basis, the attacker placement for
+# the push's away-vector, the walk grid, and the injected RNG) — each justified
+# in its doc comment, none bundleable.
 too-many-arguments-threshold = 8
 
 # data::atlas::resolve::resolve_chaos_recipe is the total record-to-resolved

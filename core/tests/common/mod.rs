@@ -22,7 +22,7 @@ pub mod rng;
 
 use std::collections::BTreeMap;
 
-use mu_core::components::spatial::{Fixed, UNITS_PER_TILE};
+use mu_core::components::spatial::StepMagnitude;
 use mu_core::components::tile::WalkGrid;
 use mu_core::components::units::{Tick, TickDuration};
 use mu_core::data::atlas::{Atlas, MapHandle};
@@ -39,9 +39,9 @@ use dataset::or_abort;
 pub use dataset::real_atlas;
 pub use rng::TestRng;
 
-/// A one-tile step in sub-units — the mob movement grain used by the step
-/// services in the integration tests.
-pub const ONE_TILE: Fixed = Fixed::from_raw(UNITS_PER_TILE);
+/// A one-tile step — the mob movement grain used by the step services in the
+/// integration tests.
+pub const ONE_TILE: StepMagnitude = StepMagnitude::ONE_TILE;
 
 /// The simulation tick length shared by the whole suite: 50 ms.
 #[must_use]

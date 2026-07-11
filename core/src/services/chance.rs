@@ -10,7 +10,7 @@ use rand_core::RngCore;
 
 use crate::components::collections::OneOrMore;
 use crate::components::interval::Interval;
-use crate::components::spatial::Facing;
+use crate::components::spatial::{Facing, TileDelta, TileOffset};
 use crate::components::units::{ChancePer10000, Percent, Resistance};
 use crate::rng::{uniform_below, uniform_below_usize};
 
@@ -42,6 +42,32 @@ pub fn draw_cardinal(rng: &mut impl RngCore) -> Facing {
         position = position.saturating_add(1);
     }
     Facing::POS_X
+}
+
+/// The `uniform_below(3)` bound — a tile delta drawn as {0,1,2} → {−1,0,+1}.
+const THREE: NonZeroU32 = NonZeroU32::MIN.saturating_add(2);
+
+/// Draws the ±1 jiggle offset — dx then dy, each uniform in {−1, 0, +1} — for a
+/// nine-outcome shove (the eight neighbours plus stay). Advances the RNG by
+/// exactly two `uniform_below(3)` draws in the order dx, dy, always — even for
+/// the stay(0,0) outcome — so replay is bit-identical regardless of which of the
+/// nine lands (STEP-PATH / lightning-jiggle draw contract).
+#[must_use]
+pub fn draw_jiggle_offset(rng: &mut impl RngCore) -> TileOffset {
+    let dx = draw_delta(rng);
+    let dy = draw_delta(rng);
+    TileOffset::new(dx, dy)
+}
+
+/// One axis delta drawn uniformly from {−1, 0, +1} — one `uniform_below(3)` draw.
+fn draw_delta(rng: &mut impl RngCore) -> TileDelta {
+    // The `_` covers the integer `2` (uniform_below(3) yields only {0,1,2}) —
+    // an integer catch-all, not a domain-enum wildcard.
+    match uniform_below(THREE, rng) {
+        0 => TileDelta::Neg,
+        1 => TileDelta::Zero,
+        _ => TileDelta::Pos,
+    }
 }
 
 /// Rolls a per-10,000 chance: `true` iff `uniform_below(10_000) < numerator`.
@@ -364,6 +390,39 @@ mod tests {
         }
         // Around 2000 of 8000; a wide band proves the curve without flaking.
         assert!((1500..2500).contains(&applied), "applied {applied}");
+    }
+
+    #[test]
+    fn draw_jiggle_offset_reaches_all_nine_outcomes() {
+        let deltas = [TileDelta::Neg, TileDelta::Zero, TileDelta::Pos];
+        let mut seen = [[false; 3]; 3];
+        let mut rng = TestRng::new(21);
+        for _ in 0..2000 {
+            let offset = draw_jiggle_offset(&mut rng);
+            for (dx_index, &dx) in deltas.iter().enumerate() {
+                for (dy_index, &dy) in deltas.iter().enumerate() {
+                    if offset == TileOffset::new(dx, dy) {
+                        seen[dx_index][dy_index] = true;
+                    }
+                }
+            }
+        }
+        assert!(
+            seen.iter().all(|row| row.iter().all(|&hit| hit)),
+            "all nine dx,dy outcomes incl. stay and diagonals must be reachable"
+        );
+    }
+
+    #[test]
+    fn draw_jiggle_offset_consumes_exactly_two_words() {
+        for seed in 0u64..16 {
+            let mut rng = TestRng::new(seed);
+            let _ = draw_jiggle_offset(&mut rng);
+            let mut probe = TestRng::new(seed);
+            probe.next_u32();
+            probe.next_u32();
+            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+        }
     }
 
     #[test]

@@ -1,13 +1,15 @@
-//! Skill casting: the one resolver that turns a caster, a damaging skill, an aim
-//! point, and a batch of candidate targets into a rejection or a resolved cast.
-//! It composes the profile, combat, and movement services — deriving the
-//! caster's profile and the skill's DamageType-selected strike basis once per
-//! cast, striking each covered target on that basis, applying elemental
-//! ailments and knockback, and dashing the caster on a lunge — and
-//! spends the skill's cost only once the cast commits. Pure and deterministic:
-//! the RNG is drawn per target in a fixed order (the strike, then the element
-//! application roll, then the knockback heading), and the caster's dash is
-//! deterministic.
+//! Skill casting: the one resolver that turns a caster, a located damaging
+//! cast, and a batch of candidate targets into a rejection or a resolved cast.
+//! It composes the profile, combat, and movement services — minting the cast's
+//! region descriptor from the skill's authored geometry (the aim bound in only
+//! where the geometry demands one), deriving the caster's profile and the
+//! skill's DamageType-selected strike basis once per cast, striking each
+//! covered target on that basis, applying elemental ailments and the per-skill
+//! displacement (Earthshake's directional push, the lunge jiggle, the lightning
+//! jiggle), and teleporting the caster on a lunge — and spends the skill's cost
+//! only once the cast commits. Pure and deterministic: the RNG is drawn per
+//! target in a fixed order (the strike, then the element application roll, then
+//! the displacement draws), and the caster's teleport draws nothing.
 
 use rand_core::RngCore;
 
@@ -19,37 +21,36 @@ use crate::components::interval::Interval;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::{
-    ConeHalfWidth, Displacement, Fixed, HALF_TILE, Radius, Region, UNITS_PER_TILE, WorldPos,
-    WorldRect, WorldVec,
+    ConeHalfWidth, Displacement, Fixed, Radius, Region, WorldPos, WorldRect, WorldVec,
 };
 use crate::components::stats::Stats;
 use crate::components::tile::WalkGrid;
 use crate::components::units::{Tick, TickDuration};
 use crate::components::vitals::Vitals;
 use crate::data::effects::{Ailment, Buff};
-use crate::data::skills::{AreaPattern, CastCost, DamageType, Skill, SkillShape};
+use crate::data::skills::{
+    AreaDisplacement, AreaGeometry, CastCost, DamageType, Skill, SkillShape,
+};
 use crate::entities::character::Character;
 use crate::events::combat::AttackOutcome;
 use crate::events::effect::BuffCastOutcome;
 use crate::events::movement::StepOutcome;
 use crate::events::skills::{CastRejection, SkillOutcome, TargetHit};
-use crate::services::chance::{draw_cardinal, roll_apply_elemental};
+use crate::services::chance::{draw_cardinal, draw_jiggle_offset, roll_apply_elemental};
 use crate::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 use crate::services::effects::{ApplicableBuff, apply_buff};
-use crate::services::movement::{resolve_drift, resolve_step};
+use crate::services::movement::{lunge_teleport, resolve_tile_offset};
 use crate::services::profile::effective_profile;
 use crate::services::ratio::{nonzero, scale_ratio};
 
-// W-SRC: invented movement grains — no data file carries a skill knockback or
-// dash distance. One tile is the knockback grain (mirrors monster_ai's step);
-// a lunge dash covers the whole melee gap so the caster ends on the target.
-/// The one-tile knockback/shove step distance.
-const ONE_TILE_SPEED: Fixed = Fixed::from_raw(UNITS_PER_TILE);
-/// A lunge dash distance, large enough to close any melee-range gap in one step.
-const DASH_SPEED: Fixed = Fixed::from_raw(8 * UNITS_PER_TILE);
 /// The pick radius (tiles) around the aim point for a single-target skill — the
 /// clicked target's cell.
 const SINGLE_TARGET_RADIUS_TILES: u8 = 1;
+
+// W-SRC: the push distance is the authentic Earthshake shove — OpenMU's
+// EarthShakeSkillPlugIn throws the victim exactly three tiles away.
+/// The number of one-tile steps Earthshake's push throws a target.
+const PUSH_TILES: u8 = 3;
 
 // W-SRC: Heal restores 5 + Energy/5 health, applied instantly (no timed effect).
 /// Heal flat base, before the energy term.
@@ -83,13 +84,16 @@ fn zero_span() -> Interval<u16> {
 pub enum DamagingSkill {
     /// A single-target strike on the aimed cell.
     DirectHit,
-    /// A single-target strike that knocks the victim back and dashes the caster
-    /// in (the DK weapon skills).
+    /// A single-target strike that jiggles the victim and teleports the caster
+    /// onto it (the DK weapon skills).
     Lunge,
-    /// A multi-target strike resolved by a bespoke area pattern.
+    /// A multi-target strike over an authored region, with a per-skill
+    /// displacement.
     Area {
-        /// Which area pattern shapes the region.
-        pattern: AreaPattern,
+        /// The authored region the strike covers.
+        geometry: AreaGeometry,
+        /// The authored displacement each struck target takes.
+        displacement: AreaDisplacement,
     },
 }
 
@@ -142,6 +146,105 @@ impl DamagingSkillRef<'_> {
     #[must_use]
     pub fn attack_damage(self) -> u16 {
         self.skill.attack_damage
+    }
+}
+
+impl<'a> DamagingSkillRef<'a> {
+    /// Pairs this skill with the region descriptor its geometry projects for a
+    /// host-supplied aim. An aimed skill (single-target strike or aim-circle
+    /// area) binds the aim into `AimedDisc`; a caster-anchored skill discards it
+    /// — the returned descriptor holds no aim, so the aim can never reach a
+    /// caster-anchored cast. The host always has an aim (the click point); this
+    /// is the parse-boundary fold that decides whether the skill consults it.
+    #[must_use]
+    pub fn locate(self, aim: WorldPos) -> LocatedCast<'a> {
+        let geometry = match self.shape() {
+            DamagingSkill::DirectHit | DamagingSkill::Lunge => CastGeometry::AimedDisc {
+                aim,
+                radius: Radius::from_tiles(SINGLE_TARGET_RADIUS_TILES),
+            },
+            DamagingSkill::Area { geometry, .. } => locate_area(geometry, aim),
+        };
+        LocatedCast {
+            skill: self,
+            geometry,
+        }
+    }
+}
+
+/// The region a located cast projects, with the aim already bound in where the
+/// geometry demands one. `AimedDisc` is the only variant carrying an aim — the
+/// single-target strikes (`DirectHit` / `Lunge`) and the aim-circle areas; the
+/// three caster-anchored families carry none, so a caster-anchored cast is
+/// aimless by construction. Magnitudes are resolved (`Radius` / `Fixed`), not
+/// the ×2 wire grain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CastGeometry {
+    /// A disc at the aim point — single-target strikes and aim-circle areas.
+    AimedDisc {
+        /// The bound aim point.
+        aim: WorldPos,
+        /// The disc radius.
+        radius: Radius,
+    },
+    /// A disc around the caster (caster-circle areas).
+    CasterDisc {
+        /// The disc radius.
+        radius: Radius,
+    },
+    /// A frontal cone at the caster's facing (cone areas).
+    Cone {
+        /// The cone length.
+        range: Radius,
+        /// The cone half-angle as an exact squared cosine.
+        half_angle: ConeHalfWidth,
+    },
+    /// A forward beam rectangle along the caster's facing (beam areas).
+    Beam {
+        /// The beam length.
+        length: Fixed,
+        /// The beam half-width, to each side of the axis.
+        half_width: Fixed,
+    },
+}
+
+/// A damaging cast located in the world: the routed skill paired with the
+/// resolved region descriptor its geometry demands, from the host's aim. Minted
+/// only by [`DamagingSkillRef::locate`], so the pairing is always consistent — a
+/// caster-anchored skill's descriptor holds no aim, and a single-target skill's
+/// always does. [`cast`] consumes one of these; the aim never reaches it loose.
+#[derive(Debug, Clone, Copy)]
+pub struct LocatedCast<'a> {
+    skill: DamagingSkillRef<'a>,
+    geometry: CastGeometry,
+}
+
+/// The region descriptor an authored area geometry projects for a host aim: only
+/// the aim-circle binds the aim; the other three families are caster-anchored.
+/// Exhaustive over [`AreaGeometry`] — a new family breaks the build.
+fn locate_area(geometry: AreaGeometry, aim: WorldPos) -> CastGeometry {
+    match geometry {
+        AreaGeometry::AimCircle { radius_x2 } => CastGeometry::AimedDisc {
+            aim,
+            radius: Radius::from_half_tiles(radius_x2),
+        },
+        AreaGeometry::CasterCircle { radius_x2 } => CastGeometry::CasterDisc {
+            radius: Radius::from_half_tiles(radius_x2),
+        },
+        AreaGeometry::Cone {
+            length_x2,
+            half_angle,
+        } => CastGeometry::Cone {
+            range: Radius::from_half_tiles(length_x2),
+            half_angle,
+        },
+        AreaGeometry::Beam {
+            length_x2,
+            half_width_x2,
+        } => CastGeometry::Beam {
+            length: Fixed::from_half_tiles(length_x2),
+            half_width: Fixed::from_half_tiles(half_width_x2),
+        },
     }
 }
 
@@ -219,9 +322,15 @@ pub fn route(skill: &Skill) -> SkillRouting<'_> {
             skill,
             shape: DamagingSkill::Lunge,
         }),
-        SkillShape::Area { pattern } => SkillRouting::Damaging(DamagingSkillRef {
+        SkillShape::Area {
+            geometry,
+            displacement,
+        } => SkillRouting::Damaging(DamagingSkillRef {
             skill,
-            shape: DamagingSkill::Area { pattern },
+            shape: DamagingSkill::Area {
+                geometry,
+                displacement,
+            },
         }),
         SkillShape::BuffSelf { buff } | SkillShape::BuffPlayer { buff } => route_buff(skill, buff),
         SkillShape::Heal => SkillRouting::Heal(HealRef { skill }),
@@ -258,56 +367,41 @@ fn route_buff(skill: &Skill, buff: Buff) -> SkillRouting<'_> {
     }
 }
 
-/// The region an area pattern covers: caster-centered discs, target-centered
-/// discs, frontal cones, and forward line beams. Exhaustive over all eighteen
-/// patterns; a new pattern breaks the build until its region is defined.
-#[must_use]
-fn area_region(pattern: AreaPattern, caster: Placement, aim: WorldPos, range: u8) -> Region {
-    match pattern {
-        AreaPattern::EvilSpirit
-        | AreaPattern::Hellfire
-        | AreaPattern::Inferno
-        | AreaPattern::Nova
-        | AreaPattern::TwistingSlash
-        | AreaPattern::RagefulBlow
-        | AreaPattern::Earthshake => Region::Circle {
-            center: caster.position,
-            radius: Radius::from_tiles(range),
-        },
-        AreaPattern::Flame
-        | AreaPattern::Cometfall
-        | AreaPattern::IceStorm
-        | AreaPattern::FireBurst
-        | AreaPattern::DeathStab => Region::Circle {
+/// The region a located cast covers, given where the caster stands. Total over
+/// [`CastGeometry`] — single-target and every area family in one exhaustive
+/// match; a new descriptor variant breaks the build.
+fn region_of(geometry: CastGeometry, caster: Placement) -> Region {
+    match geometry {
+        CastGeometry::AimedDisc { aim, radius } => Region::Circle {
             center: aim,
-            radius: Radius::from_tiles(range),
+            radius,
         },
-        AreaPattern::TripleShot | AreaPattern::FireSlash => {
-            cone_region(caster, range, ConeHalfWidth::DEG_45)
-        }
-        AreaPattern::PowerSlash => cone_region(caster, range, ConeHalfWidth::DEG_90),
-        AreaPattern::Twister | AreaPattern::AquaBeam | AreaPattern::Penetration => {
-            line_region(caster, range)
-        }
+        CastGeometry::CasterDisc { radius } => Region::Circle {
+            center: caster.position,
+            radius,
+        },
+        CastGeometry::Cone { range, half_angle } => cone_region(caster, range, half_angle),
+        CastGeometry::Beam { length, half_width } => beam_rect(caster, length, half_width),
     }
 }
 
-fn cone_region(caster: Placement, range: u8, half_width: ConeHalfWidth) -> Region {
+fn cone_region(caster: Placement, range: Radius, half_width: ConeHalfWidth) -> Region {
     Region::Cone {
         apex: caster.position,
         facing: caster.facing,
         half_width,
-        range: Radius::from_tiles(range),
+        range,
     }
 }
 
-/// A forward line beam as the axis-aligned box spanning the caster and the point
-/// `range` tiles along its facing, half a tile wide on each side.
-fn line_region(caster: Placement, range: u8) -> Region {
+/// A forward beam as the axis-aligned box spanning the caster and the point
+/// `length` along its facing, `half_width` wide on each side — both authored
+/// magnitudes.
+fn beam_rect(caster: Placement, length: Fixed, half_width: Fixed) -> Region {
     let facing = caster.facing.vector();
-    let along = scaled_or_zero(facing, tiles(range));
+    let along = scaled_or_zero(facing, length);
     let perpendicular = WorldVec::new(facing.y().scale(-1), facing.x());
-    let half = scaled_or_zero(perpendicular, Fixed::from_raw(HALF_TILE));
+    let half = scaled_or_zero(perpendicular, half_width);
     let endpoint = caster.position + along;
     let corners = [
         caster.position + half,
@@ -325,10 +419,6 @@ fn scaled_or_zero(direction: WorldVec, magnitude: Fixed) -> WorldVec {
         Displacement::Scaled { vector } => vector,
         Displacement::NoDirection => WorldVec::ZERO,
     }
-}
-
-fn tiles(count: u8) -> Fixed {
-    Fixed::from_raw(i64::from(count).saturating_mul(UNITS_PER_TILE))
 }
 
 /// The axis-aligned bounding box of four corners. Destructuring the array binds
@@ -350,11 +440,12 @@ fn bounding_rect(corners: [WorldPos; 4]) -> WorldRect {
     )
 }
 
-/// Resolves a skill cast: rejects for cost or range before spending anything,
-/// strikes every target the region covers (single-target skills strike the first
-/// covered candidate), applies elemental ailments and knockback, dashes the
-/// caster on a lunge, then spends the cost. Returns the caster's vitals after the
-/// spend (health unchanged) and the [`SkillOutcome`].
+/// Resolves a skill cast: rejects for cost or an out-of-range aim before
+/// spending anything, strikes every target the located region covers
+/// (single-target skills strike the first covered candidate), applies elemental
+/// ailments and the per-skill displacement, teleports the caster on a lunge,
+/// then spends the cost. Returns the caster's vitals after the spend (health
+/// unchanged) and the [`SkillOutcome`].
 ///
 /// `caster_profile` is the caster's BASE strike view, pre-derived by the host —
 /// the equipment fold's output for a geared caster, or the bare
@@ -365,24 +456,23 @@ fn bounding_rect(corners: [WorldPos; 4]) -> WorldRect {
 pub fn cast(
     caster: &Character,
     caster_profile: &CombatProfile,
-    skill: DamagingSkillRef<'_>,
-    aim: WorldPos,
+    located: LocatedCast<'_>,
     targets: &[CombatTarget],
     grid: &WalkGrid,
     rng: &mut impl RngCore,
 ) -> (Vitals, SkillOutcome) {
     let vitals = caster.vitals();
-    if let Some(reason) = cast_rejection(caster, skill, aim) {
+    if let Some(reason) = cast_rejection(caster, &located) {
         return (vitals, SkillOutcome::Rejected { reason });
     }
 
-    let region = skill_region(skill, caster.placement(), aim);
+    let region = region_of(located.geometry, caster.placement());
     let mut struck: Vec<(usize, &CombatTarget)> = targets
         .iter()
         .enumerate()
         .filter(|(_, target)| region.contains(target.placement().position))
         .collect();
-    if is_single_target(skill.shape()) {
+    if is_single_target(located.skill.shape()) {
         struck.truncate(1);
     }
     if struck.is_empty() {
@@ -395,19 +485,30 @@ pub fn cast(
     }
 
     let effective = effective_profile(*caster_profile, &caster.active_effects());
-    let basis = skill_strike_basis(caster, &effective, skill);
+    let basis = skill_strike_basis(caster, &effective, located.skill);
+    let attacker = caster.placement();
     let mut hits = Vec::with_capacity(struck.len());
     for &(index, target) in &struck {
         hits.push(resolve_target_hit(
-            index, &effective, target, skill, &basis, grid, rng,
+            index,
+            &effective,
+            target,
+            located.skill,
+            &basis,
+            attacker,
+            grid,
+            rng,
         ));
     }
 
-    let caster_placement = match skill.shape() {
-        DamagingSkill::Lunge => lunge_dash(caster.placement(), &struck, grid),
-        DamagingSkill::DirectHit | DamagingSkill::Area { .. } => caster.placement(),
+    let caster_placement = match located.skill.shape() {
+        DamagingSkill::Lunge => match struck.first() {
+            Some((_, target)) => lunge_teleport(attacker, target.placement()),
+            None => attacker,
+        },
+        DamagingSkill::DirectHit | DamagingSkill::Area { .. } => attacker,
     };
-    let spent = spend_cost(vitals, skill.cost());
+    let spent = spend_cost(vitals, located.skill.cost());
     (
         spent,
         SkillOutcome::Cast {
@@ -418,23 +519,33 @@ pub fn cast(
 }
 
 /// The first failing precondition, or `None` when the cast may proceed. Order:
-/// mana, then ability, then (single-target only) range — nothing is spent yet.
-fn cast_rejection(
-    caster: &Character,
-    skill: DamagingSkillRef<'_>,
-    aim: WorldPos,
-) -> Option<CastRejection> {
-    if let Some(reason) = affordability(&caster.vitals(), skill.cost()) {
+/// mana, then ability, then the aim gate — nothing is spent yet.
+fn cast_rejection(caster: &Character, located: &LocatedCast<'_>) -> Option<CastRejection> {
+    if let Some(reason) = affordability(&caster.vitals(), located.skill.cost()) {
         return Some(reason);
     }
-    let out_of_range = !caster
-        .placement()
-        .position
-        .within_range(aim, Radius::from_tiles(skill.range()));
-    if is_single_target(skill.shape()) && out_of_range {
+    if out_of_range(
+        caster.placement().position,
+        located.skill.range(),
+        located.geometry,
+    ) {
         return Some(CastRejection::OutOfRange);
     }
     None
+}
+
+/// Whether the cast's aim lies beyond the caster's cast range. Only an aimed
+/// disc consults the aim (single-target strikes and aim-circle areas); the
+/// three caster-anchored families never do. Exhaustive over [`CastGeometry`].
+fn out_of_range(caster_pos: WorldPos, cast_range: u8, geometry: CastGeometry) -> bool {
+    match geometry {
+        CastGeometry::AimedDisc { aim, .. } => {
+            !caster_pos.within_range(aim, Radius::from_tiles(cast_range))
+        }
+        CastGeometry::CasterDisc { .. } | CastGeometry::Cone { .. } | CastGeometry::Beam { .. } => {
+            false
+        }
+    }
 }
 
 /// The affordability precondition shared by every cast: insufficient mana, then
@@ -636,31 +747,126 @@ fn is_single_target(shape: DamagingSkill) -> bool {
     }
 }
 
-fn skill_region(skill: DamagingSkillRef<'_>, caster: Placement, aim: WorldPos) -> Region {
+/// How a struck target is displaced this cast — selected per skill, not inferred
+/// from the element tag alone. Earthshake's push is authored
+/// ([`AreaDisplacement`]); the lunge jiggle is the DK weapon-skill move; the
+/// elemental jiggle is the generic lightning modifier, still element-driven
+/// (authentic). `Push` also marks the skill's element inert, so its
+/// element-application roll is skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TargetDisplacement {
+    /// Earthshake: directional 3-tile push, element-independent (no element roll).
+    Push,
+    /// Lunge (MovesTarget): random ±1 jiggle, fires pre-roll on missed or landed.
+    LungeJiggle,
+    /// A lightning-element (non-Earthshake) hit's ±1 jiggle, gated on the element
+    /// roll landing (landed hits only).
+    ElementalJiggle,
+    /// No displacement.
+    None,
+}
+
+/// The displacement a skill applies to its struck targets. Authored push wins on
+/// an area skill; a lunge always jiggles; otherwise the element decides.
+/// Exhaustive over the shape and (via [`elemental_displacement`]) over
+/// [`Element`].
+fn target_displacement(skill: DamagingSkillRef<'_>) -> TargetDisplacement {
     match skill.shape() {
-        DamagingSkill::DirectHit | DamagingSkill::Lunge => Region::Circle {
-            center: aim,
-            radius: Radius::from_tiles(SINGLE_TARGET_RADIUS_TILES),
+        DamagingSkill::Lunge => TargetDisplacement::LungeJiggle,
+        DamagingSkill::DirectHit => elemental_displacement(skill.element()),
+        DamagingSkill::Area { displacement, .. } => match displacement {
+            AreaDisplacement::DirectionalPush => TargetDisplacement::Push,
+            AreaDisplacement::None => elemental_displacement(skill.element()),
         },
-        DamagingSkill::Area { pattern } => area_region(pattern, caster, aim, skill.range()),
+    }
+}
+
+/// The displacement an element confers: lightning jiggles, everything else (and
+/// non-elemental) does not. Exhaustive over [`Element`], so a new element breaks
+/// the build — never an `==` comparison.
+fn elemental_displacement(element: Option<Element>) -> TargetDisplacement {
+    match element {
+        Some(Element::Lightning) => TargetDisplacement::ElementalJiggle,
+        Some(
+            Element::Ice
+            | Element::Poison
+            | Element::Fire
+            | Element::Earth
+            | Element::Wind
+            | Element::Water,
+        )
+        | None => TargetDisplacement::None,
+    }
+}
+
+/// Throws a target up to three tiles 8-way away from the attacker, breaking on
+/// the first unwalkable tile and keeping the tiles already gained. The heading is
+/// the quantized away-vector (attacker → target); on a shared tile it is drawn
+/// uniformly among the eight ([`draw_cardinal`], one word). Reports the final
+/// placement, or `None` if the very first tile was blocked (no ground gained).
+/// Draws zero words off a shared tile, exactly one on it.
+fn directional_push(
+    attacker: Placement,
+    target: Placement,
+    grid: &WalkGrid,
+    rng: &mut impl RngCore,
+) -> Option<Placement> {
+    let heading = match (target.position - attacker.position).octant() {
+        Some(offset) => offset,
+        None => draw_cardinal(rng).to_tile_offset(),
+    };
+    let mut current = target;
+    let mut moved = false;
+    for _ in 0..PUSH_TILES {
+        match resolve_tile_offset(current, heading, grid) {
+            StepOutcome::Resolved { placement } => {
+                current = placement;
+                moved = true;
+            }
+            StepOutcome::Blocked => break,
+        }
+    }
+    moved.then_some(current)
+}
+
+/// The ±1 jiggle: draws a nine-outcome tile offset (dx then dy, two words) and
+/// applies it. A stay(0,0) roll or a blocked destination reports no net move
+/// (`None`); no re-roll — the two words are consumed regardless.
+fn jiggle(target: Placement, grid: &WalkGrid, rng: &mut impl RngCore) -> Option<Placement> {
+    let offset = draw_jiggle_offset(rng);
+    match resolve_tile_offset(target, offset, grid) {
+        StepOutcome::Resolved { placement } => {
+            (placement.position != target.position).then_some(placement)
+        }
+        StepOutcome::Blocked => None,
     }
 }
 
 /// Resolves one target's hit: folds the target's own defensive effects into the
-/// profile it is struck against (so the two-sided fold is authoritative in core),
-/// then the strike on the cast-wide basis, then — only on a landed (non-lethal)
-/// hit — the elemental ailment and the single knockback. A lethal strike clears
-/// the victim's whole effect store (every effect is `StopByDeath`). RNG order:
-/// strike, element application roll, knockback heading.
+/// profile it is struck against (so the two-sided fold is authoritative in
+/// core), then the strike on the cast-wide basis, then the elemental ailment
+/// (landed hits of non-push skills only) and the per-skill displacement. A
+/// lethal strike clears the victim's whole effect store (every effect is
+/// `StopByDeath`) and is never displaced. RNG order: strike, element
+/// application roll, displacement draws.
+///
+/// The eight parameters are each a distinct, non-bundleable domain input:
+/// the batch index (event identity), the
+/// caster's effect-folded profile, the struck target, the skill (element /
+/// ailment / displacement class), the cast-wide strike basis, the attacker
+/// placement (the push's away-vector origin — a placement, never the whole
+/// `Character`), the walk grid, and the injected RNG.
 fn resolve_target_hit(
     index: usize,
     caster_profile: &CombatProfile,
     target: &CombatTarget,
     skill: DamagingSkillRef<'_>,
     basis: &StrikeBasis,
+    attacker: Placement,
     grid: &WalkGrid,
     rng: &mut impl RngCore,
 ) -> TargetHit {
+    let displacement_kind = target_displacement(skill);
     let target_profile = effective_profile(*target.profile(), &target.active_effects());
     let (health, outcome) =
         resolve_attack(caster_profile, &target_profile, target.health(), basis, rng);
@@ -669,22 +875,38 @@ fn resolve_target_hit(
             target_index: index,
             health,
             active_effects: target.active_effects(),
+            displacement: missed_displacement(
+                displacement_kind,
+                attacker,
+                target.placement(),
+                grid,
+                rng,
+            ),
         },
         AttackOutcome::Landed { hit } => {
-            let applied = apply_element(target, skill, rng);
-            let inflicted = if applied { skill.inflicts() } else { None };
-            let displacement = if knockback_triggered(skill, applied) {
-                knockback(target.placement(), grid, rng)
-            } else {
-                None
+            // A Push skill's element is inert (SkipElementalModifier): no roll,
+            // no draw; the other kinds roll the element as shipped.
+            let applied = match displacement_kind {
+                TargetDisplacement::Push => false,
+                TargetDisplacement::LungeJiggle
+                | TargetDisplacement::ElementalJiggle
+                | TargetDisplacement::None => apply_element(target, skill, rng),
             };
+            let inflicted = if applied { skill.inflicts() } else { None };
             TargetHit::Landed {
                 target_index: index,
                 hit,
                 health,
                 active_effects: target.active_effects(),
                 inflicted,
-                displacement,
+                displacement: landed_displacement(
+                    displacement_kind,
+                    applied,
+                    attacker,
+                    target.placement(),
+                    grid,
+                    rng,
+                ),
             }
         }
         AttackOutcome::Killed { hit } => TargetHit::Killed {
@@ -693,6 +915,48 @@ fn resolve_target_hit(
             health,
             active_effects: ActiveEffects::EMPTY,
         },
+    }
+}
+
+/// The pre-roll displacement on a MISS: only the push and the lunge jiggle fire
+/// (both run before the damage roll); the elemental jiggle and the none-case
+/// draw nothing on a miss. Exhaustive.
+fn missed_displacement(
+    kind: TargetDisplacement,
+    attacker: Placement,
+    target: Placement,
+    grid: &WalkGrid,
+    rng: &mut impl RngCore,
+) -> Option<Placement> {
+    match kind {
+        TargetDisplacement::Push => directional_push(attacker, target, grid, rng),
+        TargetDisplacement::LungeJiggle => jiggle(target, grid, rng),
+        TargetDisplacement::ElementalJiggle | TargetDisplacement::None => None,
+    }
+}
+
+/// The displacement on a LANDED hit: push and lunge jiggle always fire; the
+/// elemental jiggle fires only if the element applied; none does nothing.
+/// Exhaustive.
+fn landed_displacement(
+    kind: TargetDisplacement,
+    applied: bool,
+    attacker: Placement,
+    target: Placement,
+    grid: &WalkGrid,
+    rng: &mut impl RngCore,
+) -> Option<Placement> {
+    match kind {
+        TargetDisplacement::Push => directional_push(attacker, target, grid, rng),
+        TargetDisplacement::LungeJiggle => jiggle(target, grid, rng),
+        TargetDisplacement::ElementalJiggle => {
+            if applied {
+                jiggle(target, grid, rng)
+            } else {
+                None
+            }
+        }
+        TargetDisplacement::None => None,
     }
 }
 
@@ -707,39 +971,6 @@ fn apply_element(
     match skill.element() {
         Some(element) => roll_apply_elemental(target.resistance(element), rng),
         None => true,
-    }
-}
-
-/// Whether a landed hit knocks the target back: a lunge always does, and a
-/// lightning-element hit does when its application landed. When both would fire
-/// the target is still knocked once — this predicate is queried once per hit.
-fn knockback_triggered(skill: DamagingSkillRef<'_>, element_applied: bool) -> bool {
-    let lunge = matches!(skill.shape(), DamagingSkill::Lunge);
-    let lightning = element_applied && skill.element() == Some(Element::Lightning);
-    lunge || lightning
-}
-
-/// Knocks the target one tile along a drawn heading; a blocked drift leaves it in
-/// place (no displacement reported).
-fn knockback(target: Placement, grid: &WalkGrid, rng: &mut impl RngCore) -> Option<Placement> {
-    let heading = draw_cardinal(rng);
-    match resolve_drift(target, heading, ONE_TILE_SPEED, grid) {
-        StepOutcome::Resolved { placement } => Some(placement),
-        StepOutcome::Blocked => None,
-    }
-}
-
-/// The caster's placement after a lunge dash toward its single struck target; a
-/// blocked dash leaves the caster in place.
-fn lunge_dash(caster: Placement, struck: &[(usize, &CombatTarget)], grid: &WalkGrid) -> Placement {
-    match struck.first() {
-        Some((_, target)) => {
-            match resolve_step(caster, target.placement().position, DASH_SPEED, grid) {
-                StepOutcome::Resolved { placement } => placement,
-                StepOutcome::Blocked => caster,
-            }
-        }
-        None => caster,
     }
 }
 
@@ -969,7 +1200,8 @@ mod tests {
         assert!(matches!(
             route(&skill(
                 SkillShape::Area {
-                    pattern: AreaPattern::Nova
+                    geometry: AreaGeometry::CasterCircle { radius_x2: 12 },
+                    displacement: AreaDisplacement::None,
                 },
                 None,
                 None,
@@ -1029,68 +1261,202 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn area_region_is_total_over_every_pattern() {
-        let caster = Placement {
-            position: TileCoord::new(10, 10).to_world(),
+    fn placed_at(tile: (u8, u8)) -> Placement {
+        Placement {
+            position: TileCoord::new(tile.0, tile.1).to_world(),
             facing: Facing::POS_X,
             movement: Movement::Grounded,
             map: MapNumber(0),
-        };
+        }
+    }
+
+    /// The region a hand-built area skill covers for a caster and aim — the
+    /// authored-geometry read exercised end-to-end through `locate` + `region_of`.
+    fn area_region_of(
+        geometry: AreaGeometry,
+        range: u8,
+        caster: Placement,
+        aim: WorldPos,
+    ) -> Region {
+        let definition = skill(
+            SkillShape::Area {
+                geometry,
+                displacement: AreaDisplacement::None,
+            },
+            None,
+            None,
+            range,
+            0,
+            0,
+        );
+        let located = damaging_ref(&definition).locate(aim);
+        region_of(located.geometry, caster)
+    }
+
+    #[test]
+    fn region_of_is_total_over_every_descriptor() {
+        let caster = placed_at((10, 10));
         let aim = TileCoord::new(14, 10).to_world();
-        for pattern in [
-            AreaPattern::Flame,
-            AreaPattern::Twister,
-            AreaPattern::EvilSpirit,
-            AreaPattern::Hellfire,
-            AreaPattern::AquaBeam,
-            AreaPattern::Cometfall,
-            AreaPattern::Inferno,
-            AreaPattern::TripleShot,
-            AreaPattern::IceStorm,
-            AreaPattern::Nova,
-            AreaPattern::TwistingSlash,
-            AreaPattern::RagefulBlow,
-            AreaPattern::DeathStab,
-            AreaPattern::Penetration,
-            AreaPattern::FireSlash,
-            AreaPattern::PowerSlash,
-            AreaPattern::FireBurst,
-            AreaPattern::Earthshake,
-        ] {
-            // Every pattern yields a region containing at least its own centre.
-            let region = area_region(pattern, caster, aim, 5);
+        let descriptors = [
+            CastGeometry::AimedDisc {
+                aim,
+                radius: Radius::from_half_tiles(2),
+            },
+            CastGeometry::CasterDisc {
+                radius: Radius::from_half_tiles(4),
+            },
+            CastGeometry::Cone {
+                range: Radius::from_half_tiles(12),
+                half_angle: ConeHalfWidth::DEG_45,
+            },
+            CastGeometry::Beam {
+                length: Fixed::from_half_tiles(8),
+                half_width: Fixed::from_half_tiles(3),
+            },
+        ];
+        for descriptor in descriptors {
+            // Every descriptor yields a region containing its own centre.
+            let region = region_of(descriptor, caster);
             assert!(
                 region.contains(caster.position) || region.contains(aim),
-                "{pattern:?}"
+                "{descriptor:?}"
             );
         }
     }
 
     #[test]
-    fn cone_region_excludes_behind_the_caster() {
-        let caster = Placement {
-            position: TileCoord::new(20, 20).to_world(),
-            facing: Facing::POS_X,
-            movement: Movement::Grounded,
-            map: MapNumber(0),
-        };
-        let region = area_region(AreaPattern::PowerSlash, caster, caster.position, 6);
-        assert!(region.contains(TileCoord::new(23, 20).to_world()));
-        assert!(!region.contains(TileCoord::new(17, 20).to_world()));
+    fn an_aim_circle_covers_its_authored_radius_not_the_cast_range() {
+        // Flame's shrink: AimCircle{radius_x2: 2} covers one tile from the aim
+        // and excludes two, regardless of the cast range 6.
+        let caster = placed_at((10, 10));
+        let aim = TileCoord::new(10, 10).to_world();
+        let region = area_region_of(AreaGeometry::AimCircle { radius_x2: 2 }, 6, caster, aim);
+        assert!(region.contains(TileCoord::new(11, 10).to_world()));
+        assert!(!region.contains(TileCoord::new(12, 10).to_world()));
     }
 
     #[test]
-    fn circle_region_excludes_outside_the_radius() {
-        let caster = Placement {
-            position: TileCoord::new(20, 20).to_world(),
-            facing: Facing::POS_X,
-            movement: Movement::Grounded,
-            map: MapNumber(0),
-        };
-        let region = area_region(AreaPattern::Nova, caster, caster.position, 3);
-        assert!(region.contains(TileCoord::new(22, 20).to_world()));
-        assert!(!region.contains(TileCoord::new(30, 20).to_world()));
+    fn a_half_tile_aim_circle_covers_the_diagonal_neighbour() {
+        // IceStorm's 1.5: √2 ≈ 1.414 < 1.5 <= 2, expressible only at the
+        // half-tile grain.
+        let caster = placed_at((10, 10));
+        let aim = TileCoord::new(10, 10).to_world();
+        let region = area_region_of(AreaGeometry::AimCircle { radius_x2: 3 }, 6, caster, aim);
+        assert!(region.contains(TileCoord::new(11, 11).to_world()));
+        assert!(!region.contains(TileCoord::new(12, 10).to_world()));
+    }
+
+    #[test]
+    fn a_caster_circle_centres_on_the_caster_and_ignores_range_zero() {
+        // Hellfire revived: a data-range-0 skill still projects its authored
+        // r=2 disc around the CASTER, not the aim.
+        let caster = placed_at((10, 10));
+        let aim = TileCoord::new(50, 50).to_world();
+        let region = area_region_of(AreaGeometry::CasterCircle { radius_x2: 4 }, 0, caster, aim);
+        assert!(region.contains(TileCoord::new(12, 10).to_world()));
+        assert!(!region.contains(TileCoord::new(13, 10).to_world()));
+        assert!(!region.contains(aim));
+    }
+
+    #[test]
+    fn the_triple_shot_cone_uses_the_exact_ratio_and_its_authored_length() {
+        let caster = placed_at((10, 10));
+        let aim = caster.position;
+        let half_angle = ConeHalfWidth::new(196, core::num::NonZeroU64::new(277).unwrap()).unwrap();
+        let region = area_region_of(
+            AreaGeometry::Cone {
+                length_x2: 14,
+                half_angle,
+            },
+            6,
+            caster,
+            aim,
+        );
+        // Six ahead, three off-axis: cos² = 0.8, distance √45 ≈ 6.7 ≤ 7 —
+        // inside 196/277 ≈ 0.708 and in range. (The BDD spec's (17,13) worked
+        // vector sits at Euclidean √58 ≈ 7.62 > 7 from the apex, outside the
+        // design doc's Euclidean cone range — flagged, not silently adopted.)
+        assert!(region.contains(TileCoord::new(16, 13).to_world()));
+        // Five ahead, four off-axis: cos² ≈ 0.61 — outside the exact ratio,
+        // though inside the old DEG_45 (0.5), and within range √41 ≈ 6.4.
+        assert!(!region.contains(TileCoord::new(15, 14).to_world()));
+        // The authored length 7 reaches past the cast range 6 (decoupled).
+        assert!(region.contains(TileCoord::new(17, 10).to_world()));
+        assert!(!region.contains(TileCoord::new(18, 10).to_world()));
+    }
+
+    #[test]
+    fn the_power_slash_cone_excludes_a_ninety_degree_off_facing_target() {
+        // The re-pin from the shipped DEG_90 semicircle to the authentic DEG_45.
+        let caster = placed_at((10, 10));
+        let region = area_region_of(
+            AreaGeometry::Cone {
+                length_x2: 12,
+                half_angle: ConeHalfWidth::DEG_45,
+            },
+            5,
+            caster,
+            caster.position,
+        );
+        assert!(region.contains(TileCoord::new(13, 10).to_world()));
+        assert!(!region.contains(TileCoord::new(10, 15).to_world()));
+        assert!(!region.contains(TileCoord::new(7, 10).to_world()));
+    }
+
+    #[test]
+    fn a_beam_carries_its_authored_half_width() {
+        // Twister: length 4, half-width 1.5 covers a 1-tile-off target the
+        // shipped half-tile beam missed.
+        let caster = placed_at((10, 10));
+        let region = area_region_of(
+            AreaGeometry::Beam {
+                length_x2: 8,
+                half_width_x2: 3,
+            },
+            6,
+            caster,
+            caster.position,
+        );
+        assert!(region.contains(TileCoord::new(13, 11).to_world()));
+        assert!(!region.contains(TileCoord::new(13, 12).to_world()));
+    }
+
+    #[test]
+    fn a_short_wide_beam_is_a_rect_not_a_cone() {
+        // Fire Slash: length 2, half-width 2 — one ahead, two off-axis is in
+        // (a cone of any half-angle ≤ 45° would exclude it); three ahead is out.
+        let caster = placed_at((10, 10));
+        let region = area_region_of(
+            AreaGeometry::Beam {
+                length_x2: 4,
+                half_width_x2: 4,
+            },
+            2,
+            caster,
+            caster.position,
+        );
+        assert!(region.contains(TileCoord::new(11, 12).to_world()));
+        assert!(!region.contains(TileCoord::new(13, 10).to_world()));
+    }
+
+    #[test]
+    fn a_caster_anchored_region_is_invariant_to_the_aim() {
+        let caster = placed_at((10, 10));
+        for geometry in [
+            AreaGeometry::CasterCircle { radius_x2: 8 },
+            AreaGeometry::Cone {
+                length_x2: 12,
+                half_angle: ConeHalfWidth::DEG_45,
+            },
+            AreaGeometry::Beam {
+                length_x2: 8,
+                half_width_x2: 3,
+            },
+        ] {
+            let near = area_region_of(geometry, 6, caster, TileCoord::new(11, 10).to_world());
+            let absurd = area_region_of(geometry, 6, caster, TileCoord::new(250, 3).to_world());
+            assert_eq!(near, absurd, "{geometry:?}");
+        }
     }
 
     #[test]
@@ -1104,8 +1470,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging,
-            aim,
+            damaging.locate(aim),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1130,8 +1495,7 @@ mod tests {
         let (_, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging,
-            aim,
+            damaging.locate(aim),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1155,8 +1519,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging,
-            aim,
+            damaging.locate(aim),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1175,7 +1538,8 @@ mod tests {
         let caster = caster_at((10, 10), 100, 100);
         let definition = skill(
             SkillShape::Area {
-                pattern: AreaPattern::Nova,
+                geometry: AreaGeometry::CasterCircle { radius_x2: 12 },
+                displacement: AreaDisplacement::None,
             },
             None,
             None,
@@ -1184,15 +1548,14 @@ mod tests {
             0,
         );
         let damaging = damaging_ref(&definition);
-        // Target far outside the caster-centred nova radius.
+        // Target far outside the caster-centred r=6 disc.
         let targets = [target_at((40, 40), 0)];
         let aim = TileCoord::new(10, 10).to_world();
         let mut rng = TestRng::new(1);
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging,
-            aim,
+            damaging.locate(aim),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1217,8 +1580,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging,
-            aim,
+            damaging.locate(aim),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1271,8 +1633,7 @@ mod tests {
                 cast(
                     &plain,
                     &base_profile_of(&plain),
-                    damaging,
-                    aim,
+                    damaging.locate(aim),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -1283,8 +1644,7 @@ mod tests {
                 cast(
                     &buffed,
                     &base_profile_of(&buffed),
-                    damaging,
-                    aim,
+                    damaging.locate(aim),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -1346,8 +1706,7 @@ mod tests {
                 cast(
                     &caster,
                     &base_profile_of(&caster),
-                    damaging,
-                    aim,
+                    damaging.locate(aim),
                     targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -1405,8 +1764,7 @@ mod tests {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging,
-                aim,
+                damaging.locate(aim),
                 &targets,
                 &all_walkable(),
                 &mut TestRng::new(seed),
@@ -1444,8 +1802,7 @@ mod tests {
         if let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &base_profile_of(&caster),
-            plain,
-            aim,
+            plain.locate(aim),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1471,8 +1828,7 @@ mod tests {
         if let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &base_profile_of(&caster),
-            icy,
-            aim,
+            icy.locate(aim),
             &immune,
             &all_walkable(),
             &mut rng,
@@ -1485,8 +1841,11 @@ mod tests {
         }
     }
 
+    /// One tile in sub-units — the jiggle's per-axis bound.
+    const TILE: i64 = crate::components::spatial::UNITS_PER_TILE;
+
     #[test]
-    fn a_lightning_hit_shoves_the_target_one_tile() {
+    fn a_landed_lightning_hit_jiggles_within_one_tile_per_axis() {
         let caster = caster_at((10, 10), 100, 100);
         let bolt_def = skill(
             SkillShape::DirectHit,
@@ -1498,67 +1857,180 @@ mod tests {
         );
         let bolt = damaging_ref(&bolt_def);
         let targets = [target_at((11, 10), 0)];
+        let start = targets[0].placement().position;
         let aim = TileCoord::new(11, 10).to_world();
-        let mut rng = TestRng::new(4);
-        let (_, outcome) = cast(
-            &caster,
-            &base_profile_of(&caster),
-            bolt,
-            aim,
-            &targets,
-            &all_walkable(),
-            &mut rng,
-        );
-        match outcome {
-            SkillOutcome::Cast { hits, .. } => match hits[0] {
-                TargetHit::Landed { displacement, .. } => {
-                    let moved = displacement.expect("a landed lightning hit shoves");
-                    assert_ne!(moved.position, targets[0].placement().position);
+        let mut jiggled = false;
+        for seed in 0u64..32 {
+            let mut rng = TestRng::new(seed);
+            let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                bolt.locate(aim),
+                &targets,
+                &all_walkable(),
+                &mut rng,
+            )
+            .1
+            else {
+                panic!("cast should resolve");
+            };
+            match hits[0] {
+                TargetHit::Landed {
+                    displacement: Some(moved),
+                    ..
+                } => {
+                    // The jiggle is at most one tile on each axis.
+                    assert!((moved.position.x().raw() - start.x().raw()).abs() <= TILE);
+                    assert!((moved.position.y().raw() - start.y().raw()).abs() <= TILE);
+                    assert_ne!(moved.position, start, "a reported move is a net move");
+                    jiggled = true;
                 }
-                TargetHit::Killed { .. } | TargetHit::Missed { .. } => {}
-            },
-            SkillOutcome::Rejected { .. } => panic!("cast should resolve"),
+                // A missed lightning hit never jiggles (the element rolls on
+                // landed hits only).
+                TargetHit::Missed { displacement, .. } => assert_eq!(displacement, None),
+                TargetHit::Landed {
+                    displacement: None, ..
+                }
+                | TargetHit::Killed { .. } => {}
+            }
         }
+        assert!(
+            jiggled,
+            "a seed in 0..32 lands an applied jiggle that moves"
+        );
     }
 
     #[test]
-    fn a_lunge_knocks_the_target_back_and_dashes_the_caster_in() {
+    fn a_missed_lightning_hit_draws_no_element_roll_and_no_jiggle() {
+        // White-box: the elemental jiggle never fires on a miss, and the
+        // dispatch draws nothing.
+        let target = placed_at((11, 10));
+        let attacker = placed_at((10, 10));
+        let mut rng = TestRng::new(7);
+        let displaced = missed_displacement(
+            TargetDisplacement::ElementalJiggle,
+            attacker,
+            target,
+            &all_walkable(),
+            &mut rng,
+        );
+        assert_eq!(displaced, None);
+        let mut probe = TestRng::new(7);
+        assert_eq!(rng.next_u64(), probe.next_u64(), "no word drawn");
+    }
+
+    #[test]
+    fn an_unapplied_elemental_jiggle_neither_moves_nor_draws() {
+        // White-box: a landed lightning hit whose element roll failed skips
+        // the jiggle entirely — no move, no words.
+        let target = placed_at((11, 10));
+        let attacker = placed_at((10, 10));
+        let mut rng = TestRng::new(9);
+        let displaced = landed_displacement(
+            TargetDisplacement::ElementalJiggle,
+            false,
+            attacker,
+            target,
+            &all_walkable(),
+            &mut rng,
+        );
+        assert_eq!(displaced, None);
+        let mut probe = TestRng::new(9);
+        assert_eq!(rng.next_u64(), probe.next_u64(), "no word drawn");
+    }
+
+    #[test]
+    fn a_lunge_teleports_the_caster_onto_the_target_and_jiggles_the_victim() {
         let caster = caster_at((10, 10), 100, 100);
         let lunge_def = skill(SkillShape::Lunge, None, None, 4, 0, 0);
         let lunge = damaging_ref(&lunge_def);
         let targets = [target_at((13, 10), 0)];
+        let start = targets[0].placement().position;
         let aim = TileCoord::new(13, 10).to_world();
-        let mut rng = TestRng::new(5);
-        let (_, outcome) = cast(
-            &caster,
-            &base_profile_of(&caster),
-            lunge,
-            aim,
-            &targets,
-            &all_walkable(),
-            &mut rng,
-        );
-        match outcome {
-            SkillOutcome::Cast {
+        for seed in 0u64..16 {
+            let mut rng = TestRng::new(seed);
+            let SkillOutcome::Cast {
                 caster_placement,
                 hits,
-            } => {
-                // The caster dashed toward the target (moved east from x=10).
-                assert!(
-                    caster_placement.position.x().raw() > caster.placement().position.x().raw()
-                );
-                if let TargetHit::Landed { displacement, .. } = hits[0] {
-                    assert!(displacement.is_some(), "a landed lunge knocks the target");
+            } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                lunge.locate(aim),
+                &targets,
+                &all_walkable(),
+                &mut rng,
+            )
+            .1
+            else {
+                panic!("lunge should resolve");
+            };
+            // The caster teleports onto the target's exact cell, every outcome.
+            assert_eq!(caster_placement.position, start, "seed {seed}");
+            match hits[0] {
+                // The victim's jiggle fires on missed AND landed hits alike.
+                TargetHit::Landed {
+                    displacement: Some(moved),
+                    ..
                 }
+                | TargetHit::Missed {
+                    displacement: Some(moved),
+                    ..
+                } => {
+                    assert!((moved.position.x().raw() - start.x().raw()).abs() <= TILE);
+                    assert!((moved.position.y().raw() - start.y().raw()).abs() <= TILE);
+                }
+                TargetHit::Landed {
+                    displacement: None, ..
+                }
+                | TargetHit::Missed {
+                    displacement: None, ..
+                }
+                | TargetHit::Killed { .. } => {}
             }
-            SkillOutcome::Rejected { .. } => panic!("lunge should resolve"),
         }
     }
 
     #[test]
-    fn a_blocked_knockback_leaves_the_target_in_place() {
-        // A grid where only the caster/target row is walkable: a drift off it is
-        // blocked, so a landed shove reports no displacement.
+    fn a_lunge_that_kills_does_not_jiggle_but_still_teleports() {
+        let caster = caster_at((10, 10), 100, 100);
+        let lunge_def = skill(SkillShape::Lunge, None, None, 4, 0, 0);
+        let lunge = damaging_ref(&lunge_def);
+        // A frail 1-HP victim: any landing strike kills it.
+        let targets = [target_with((13, 10), 0, 0, 1, ActiveEffects::EMPTY)];
+        let aim = TileCoord::new(13, 10).to_world();
+        let mut saw_kill = false;
+        for seed in 0u64..16 {
+            let mut rng = TestRng::new(seed);
+            let SkillOutcome::Cast {
+                caster_placement,
+                hits,
+            } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                lunge.locate(aim),
+                &targets,
+                &all_walkable(),
+                &mut rng,
+            )
+            .1
+            else {
+                continue;
+            };
+            assert_eq!(caster_placement.position, aim, "the teleport still fires");
+            if let TargetHit::Killed { .. } = hits[0] {
+                // Killed carries no displacement field at all — the victim
+                // stays; only the RNG-draw contract is left to check: the
+                // strike sequence is the whole consumption (no jiggle words).
+                saw_kill = true;
+            }
+        }
+        assert!(saw_kill, "a landing strike kills the 1-HP victim");
+    }
+
+    #[test]
+    fn a_blocked_jiggle_leaves_the_target_in_place() {
+        // A grid where only the caster/target row is walkable: a jiggle off it
+        // is blocked, so a landed shove reports no displacement (no re-roll).
         let mut words = [0u64; 1024];
         for x in 0u16..256 {
             let bit = (10usize << 8) | usize::from(x);
@@ -1583,8 +2055,7 @@ mod tests {
             if let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                bolt,
-                aim,
+                bolt.locate(aim),
                 &targets,
                 &grid,
                 &mut rng,
@@ -1601,6 +2072,411 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A hand-built area skill of the given geometry, displacement, element,
+    /// and range — the dispatch/aim-gate tests' fixture.
+    fn area_skill(
+        geometry: AreaGeometry,
+        displacement: AreaDisplacement,
+        element: Option<Element>,
+        range: u8,
+    ) -> Skill {
+        skill(
+            SkillShape::Area {
+                geometry,
+                displacement,
+            },
+            element,
+            None,
+            range,
+            0,
+            0,
+        )
+    }
+
+    /// An Earthshake-shaped skill: caster circle r=5, directional push, an
+    /// inert lightning tag.
+    fn earthshake_skill() -> Skill {
+        area_skill(
+            AreaGeometry::CasterCircle { radius_x2: 10 },
+            AreaDisplacement::DirectionalPush,
+            Some(Element::Lightning),
+            10,
+        )
+    }
+
+    #[test]
+    fn an_aim_centered_area_cast_gates_its_aim_before_spend() {
+        let caster = caster_at((10, 10), 100, 100);
+        let flame = area_skill(
+            AreaGeometry::AimCircle { radius_x2: 2 },
+            AreaDisplacement::None,
+            Some(Element::Fire),
+            6,
+        );
+        let damaging = damaging_ref(&flame);
+        // Ten tiles out: beyond the cast range 6 — rejected, nothing spent.
+        let far = TileCoord::new(20, 10).to_world();
+        assert_eq!(
+            cast_rejection(&caster, &damaging.locate(far)),
+            Some(CastRejection::OutOfRange)
+        );
+        // Four tiles out: within range — no OutOfRange.
+        let near = TileCoord::new(14, 10).to_world();
+        assert_eq!(cast_rejection(&caster, &damaging.locate(near)), None);
+        // The gate is pure: same inputs, same answer, no RngCore in reach.
+        assert_eq!(
+            cast_rejection(&caster, &damaging.locate(far)),
+            cast_rejection(&caster, &damaging.locate(far))
+        );
+    }
+
+    #[test]
+    fn a_caster_anchored_cast_never_rejects_out_of_range() {
+        let caster = caster_at((10, 10), 100, 100);
+        for definition in [
+            area_skill(
+                AreaGeometry::CasterCircle { radius_x2: 4 },
+                AreaDisplacement::None,
+                None,
+                0,
+            ),
+            area_skill(
+                AreaGeometry::Cone {
+                    length_x2: 12,
+                    half_angle: ConeHalfWidth::DEG_45,
+                },
+                AreaDisplacement::None,
+                None,
+                5,
+            ),
+            area_skill(
+                AreaGeometry::Beam {
+                    length_x2: 8,
+                    half_width_x2: 3,
+                },
+                AreaDisplacement::None,
+                None,
+                6,
+            ),
+        ] {
+            let damaging = damaging_ref(&definition);
+            let absurd = TileCoord::new(250, 250).to_world();
+            assert_eq!(cast_rejection(&caster, &damaging.locate(absurd)), None);
+        }
+    }
+
+    #[test]
+    fn a_caster_anchored_cast_is_invariant_to_the_aim() {
+        // The observable proof of the aim split: two absurdly different aims,
+        // byte-identical outcomes under the same seed.
+        let caster = caster_at((10, 10), 100, 100);
+        let hellfire = area_skill(
+            AreaGeometry::CasterCircle { radius_x2: 4 },
+            AreaDisplacement::None,
+            Some(Element::Fire),
+            0,
+        );
+        let damaging = damaging_ref(&hellfire);
+        let targets = [target_at((12, 10), 0)];
+        let run = |aim: WorldPos| {
+            let mut rng = TestRng::new(11);
+            cast(
+                &caster,
+                &base_profile_of(&caster),
+                damaging.locate(aim),
+                &targets,
+                &all_walkable(),
+                &mut rng,
+            )
+        };
+        assert_eq!(
+            run(TileCoord::new(10, 10).to_world()),
+            run(TileCoord::new(250, 3).to_world())
+        );
+    }
+
+    #[test]
+    fn the_displacement_dispatch_selects_per_skill_never_per_element() {
+        // Earthshake (lightning) pushes; a lunge jiggles; a plain lightning
+        // strike jiggles on the element; everything else is None.
+        let quake = earthshake_skill();
+        assert_eq!(
+            target_displacement(damaging_ref(&quake)),
+            TargetDisplacement::Push
+        );
+        let lunge_def = skill(SkillShape::Lunge, None, None, 2, 0, 0);
+        assert_eq!(
+            target_displacement(damaging_ref(&lunge_def)),
+            TargetDisplacement::LungeJiggle
+        );
+        let bolt = skill(
+            SkillShape::DirectHit,
+            Some(Element::Lightning),
+            None,
+            6,
+            0,
+            0,
+        );
+        assert_eq!(
+            target_displacement(damaging_ref(&bolt)),
+            TargetDisplacement::ElementalJiggle
+        );
+        let lightning_area = area_skill(
+            AreaGeometry::AimCircle { radius_x2: 2 },
+            AreaDisplacement::None,
+            Some(Element::Lightning),
+            3,
+        );
+        assert_eq!(
+            target_displacement(damaging_ref(&lightning_area)),
+            TargetDisplacement::ElementalJiggle
+        );
+        let plain = skill(SkillShape::DirectHit, Some(Element::Fire), None, 6, 0, 0);
+        assert_eq!(
+            target_displacement(damaging_ref(&plain)),
+            TargetDisplacement::None
+        );
+        let non_elemental = skill(SkillShape::DirectHit, None, None, 6, 0, 0);
+        assert_eq!(
+            target_displacement(damaging_ref(&non_elemental)),
+            TargetDisplacement::None
+        );
+    }
+
+    #[test]
+    fn the_jiggle_reaches_all_nine_outcomes_within_one_tile_per_axis() {
+        let target = placed_at((11, 10));
+        let grid = all_walkable();
+        let mut outcomes = std::collections::BTreeSet::new();
+        for seed in 0u64..512 {
+            let mut rng = TestRng::new(seed);
+            let (dx, dy) = if let Some(moved) = jiggle(target, &grid, &mut rng) {
+                let dx = (moved.position.x().raw() - target.position.x().raw()) / TILE;
+                let dy = (moved.position.y().raw() - target.position.y().raw()) / TILE;
+                assert!((-1..=1).contains(&dx), "seed {seed}");
+                assert!((-1..=1).contains(&dy), "seed {seed}");
+                (dx, dy)
+            } else {
+                (0, 0)
+            };
+            outcomes.insert((dx, dy));
+        }
+        // All nine dx,dy pairs incl. stay(0,0) and the four diagonals.
+        assert_eq!(outcomes.len(), 9);
+    }
+
+    #[test]
+    fn the_jiggle_draws_exactly_two_words_even_when_blocked_or_staying() {
+        // Only the target's own tile is walkable: every non-stay roll is
+        // blocked, yet the two words are consumed — no re-roll.
+        let mut words = [0u64; 1024];
+        let bit = (10usize << 8) | usize::from(11u8);
+        words[bit >> 6] |= 1u64 << (bit & 63);
+        let sealed = WalkGrid::from_words(words);
+        let target = placed_at((11, 10));
+        for grid in [&all_walkable(), &sealed] {
+            for seed in 0u64..16 {
+                let mut rng = TestRng::new(seed);
+                let _ = jiggle(target, grid, &mut rng);
+                let mut probe = TestRng::new(seed);
+                probe.next_u32();
+                probe.next_u32();
+                assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_push_throws_three_tiles_directly_away_and_draws_nothing() {
+        let attacker = placed_at((10, 10));
+        let target = placed_at((12, 10));
+        let mut rng = TestRng::new(3);
+        let moved = directional_push(attacker, target, &all_walkable(), &mut rng)
+            .expect("open ground: the push moves");
+        assert_eq!(moved.position, TileCoord::new(15, 10).to_world());
+        // Zero words: the away-vector heading and per-tile stepping draw nothing.
+        let mut probe = TestRng::new(3);
+        assert_eq!(rng.next_u64(), probe.next_u64());
+    }
+
+    #[test]
+    fn the_push_quantizes_a_diagonal_away_vector_to_a_diagonal_heading() {
+        let attacker = placed_at((10, 10));
+        let target = placed_at((12, 12));
+        let mut rng = TestRng::new(3);
+        let moved = directional_push(attacker, target, &all_walkable(), &mut rng)
+            .expect("open ground: the push moves");
+        assert_eq!(moved.position, TileCoord::new(15, 15).to_world());
+    }
+
+    #[test]
+    fn the_push_stops_at_the_first_unwalkable_tile_keeping_gained_ground() {
+        // (13,10) and (14,10) walkable, (15,10) blocked: two steps kept.
+        let mut words = [0u64; 1024];
+        for x in [12u8, 13, 14] {
+            let bit = (10usize << 8) | usize::from(x);
+            words[bit >> 6] |= 1u64 << (bit & 63);
+        }
+        let grid = WalkGrid::from_words(words);
+        let attacker = placed_at((10, 10));
+        let target = placed_at((12, 10));
+        let mut rng = TestRng::new(3);
+        let moved = directional_push(attacker, target, &grid, &mut rng)
+            .expect("two walkable steps are kept");
+        assert_eq!(moved.position, TileCoord::new(14, 10).to_world());
+    }
+
+    #[test]
+    fn the_push_reports_none_when_the_first_tile_is_blocked() {
+        // Only the target's own tile walkable: no ground gained.
+        let mut words = [0u64; 1024];
+        let bit = (10usize << 8) | usize::from(12u8);
+        words[bit >> 6] |= 1u64 << (bit & 63);
+        let grid = WalkGrid::from_words(words);
+        let attacker = placed_at((10, 10));
+        let target = placed_at((12, 10));
+        let mut rng = TestRng::new(3);
+        assert_eq!(directional_push(attacker, target, &grid, &mut rng), None);
+    }
+
+    #[test]
+    fn the_same_tile_push_draws_exactly_one_word_and_moves_three_tiles() {
+        let attacker = placed_at((10, 10));
+        let target = placed_at((10, 10));
+        for seed in 0u64..16 {
+            let mut rng = TestRng::new(seed);
+            let moved = directional_push(attacker, target, &all_walkable(), &mut rng)
+                .expect("open ground: the drawn heading moves");
+            // Exactly three tiles along one 8-way heading (Chebyshev 3).
+            let dx = (moved.position.x().raw() - target.position.x().raw()) / TILE;
+            let dy = (moved.position.y().raw() - target.position.y().raw()) / TILE;
+            assert_eq!(dx.abs().max(dy.abs()), 3, "seed {seed}");
+            // Exactly one word consumed (the draw_cardinal fallback).
+            let mut probe = TestRng::new(seed);
+            probe.next_u64();
+            assert_eq!(rng.next_u64(), probe.next_u64(), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn earthshake_pushes_missed_and_landed_targets_but_never_killed_ones() {
+        let caster = caster_at((10, 10), 100, 100);
+        let quake = earthshake_skill();
+        let damaging = damaging_ref(&quake);
+        let aim = TileCoord::new(10, 10).to_world();
+        let start = TileCoord::new(12, 10).to_world();
+
+        // Sturdy target: missed and landed hits both push over open ground.
+        let sturdy = [target_at((12, 10), 0)];
+        let mut saw_missed = false;
+        let mut saw_landed = false;
+        for seed in 0u64..64 {
+            let mut rng = TestRng::new(seed);
+            let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                damaging.locate(aim),
+                &sturdy,
+                &all_walkable(),
+                &mut rng,
+            )
+            .1
+            else {
+                panic!("earthshake should resolve");
+            };
+            match hits[0] {
+                TargetHit::Missed { displacement, .. } => {
+                    let moved = displacement.expect("a missed quake still scatters");
+                    assert_ne!(moved.position, start);
+                    saw_missed = true;
+                }
+                TargetHit::Landed { displacement, .. } => {
+                    let moved = displacement.expect("a landed quake scatters");
+                    assert_ne!(moved.position, start);
+                    saw_landed = true;
+                }
+                TargetHit::Killed { .. } => {}
+            }
+        }
+        assert!(saw_missed && saw_landed, "both outcomes reached in 0..64");
+
+        // Frail target: a kill is never pushed (Killed carries no field) and
+        // the element roll is skipped, so the strike is the only consumption.
+        let frail = [target_with((12, 10), 0, 0, 1, ActiveEffects::EMPTY)];
+        let mut saw_kill = false;
+        for seed in 0u64..32 {
+            let mut rng = TestRng::new(seed);
+            if let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                damaging.locate(aim),
+                &frail,
+                &all_walkable(),
+                &mut rng,
+            )
+            .1
+            {
+                if matches!(hits[0], TargetHit::Killed { .. }) {
+                    saw_kill = true;
+                }
+            }
+        }
+        assert!(saw_kill, "a landing strike kills the 1-HP victim");
+    }
+
+    #[test]
+    fn earthshake_draws_no_element_roll_on_a_landed_hit() {
+        // The inert-lightning pin: against a fully inert twin (same strike,
+        // no element, no displacement) the quake's word stream is identical —
+        // Earthshake skips the element roll and its off-tile push draws
+        // nothing, so the strike sequence is the whole consumption for both.
+        let caster = caster_at((10, 10), 100, 100);
+        let quake = earthshake_skill();
+        let inert_twin = area_skill(
+            AreaGeometry::CasterCircle { radius_x2: 10 },
+            AreaDisplacement::None,
+            None,
+            10,
+        );
+        let targets = [target_at((12, 10), 0)];
+        let aim = TileCoord::new(10, 10).to_world();
+        let mut compared = false;
+        for seed in 0u64..32 {
+            let mut quake_rng = TestRng::new(seed);
+            let SkillOutcome::Cast { hits, .. } = cast(
+                &caster,
+                &base_profile_of(&caster),
+                damaging_ref(&quake).locate(aim),
+                &targets,
+                &all_walkable(),
+                &mut quake_rng,
+            )
+            .1
+            else {
+                panic!("earthshake should resolve");
+            };
+            if !matches!(hits[0], TargetHit::Landed { .. }) {
+                continue;
+            }
+            let mut twin_rng = TestRng::new(seed);
+            let _ = cast(
+                &caster,
+                &base_profile_of(&caster),
+                damaging_ref(&inert_twin).locate(aim),
+                &targets,
+                &all_walkable(),
+                &mut twin_rng,
+            );
+            assert_eq!(
+                quake_rng.next_u64(),
+                twin_rng.next_u64(),
+                "seed {seed}: the quake drew a word beyond the strike sequence"
+            );
+            compared = true;
+        }
+        assert!(compared, "a seed in 0..32 lands a non-lethal quake hit");
     }
 
     #[test]
@@ -1622,8 +2498,7 @@ mod tests {
             cast(
                 &caster,
                 &base_profile_of(&caster),
-                lunge,
-                aim,
+                lunge.locate(aim),
                 &targets,
                 &all_walkable(),
                 &mut rng,
@@ -2057,8 +2932,7 @@ mod tests {
             let outcome = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging,
-                aim,
+                damaging.locate(aim),
                 &targets,
                 &all_walkable(),
                 &mut TestRng::new(seed),
@@ -2093,8 +2967,7 @@ mod tests {
                 cast(
                     &caster,
                     &base_profile_of(&caster),
-                    damaging,
-                    aim,
+                    damaging.locate(aim),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),

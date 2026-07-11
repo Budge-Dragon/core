@@ -18,7 +18,7 @@ use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::{AmmoLevel, EnhanceLevel};
 use mu_core::components::movement::Movement;
 use mu_core::components::placement::Placement;
-use mu_core::components::spatial::{Facing, Fixed, WorldPos};
+use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
 use mu_core::components::tile::{TileArea, TileCoord, WalkGrid};
 use mu_core::components::units::{ItemLevel, Level};
 use mu_core::data::ancient_sets::{AncientRoster, AncientSet};
@@ -733,8 +733,8 @@ fn map_handles_enumerate_every_map_and_join_spawns() {
 
 // --- Movement and flight over the real Atlas.
 
-/// A one-tile step in sub-units — the mob movement grain.
-const ONE_TILE: Fixed = Fixed::from_raw(65_536);
+/// A one-tile step — the mob movement grain.
+const ONE_TILE: StepMagnitude = StepMagnitude::ONE_TILE;
 
 fn grounded(tile: (u8, u8), map: MapNumber) -> Placement {
     Placement {

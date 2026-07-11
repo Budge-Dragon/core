@@ -1,6 +1,6 @@
 //! The outcome of one skill cast, kind-tagged: a rejection that spent nothing,
 //! or a resolved cast with its per-target hits and the caster's resulting
-//! placement (a lunge dashes the caster). One service
+//! placement (a lunge teleports the caster onto its target). One service
 //! ([`crate::services::skills::cast`]), one outcome enum.
 
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,8 @@ pub enum SkillOutcome {
     },
     /// The cast resolved.
     Cast {
-        /// Where the caster stands after the cast (a lunge dashes the caster;
-        /// otherwise unchanged).
+        /// Where the caster stands after the cast (a lunge teleports the
+        /// caster onto its target; otherwise unchanged).
         caster_placement: Placement,
         /// One hit per struck target, in target-batch order.
         hits: Vec<TargetHit>,
@@ -41,7 +41,7 @@ pub enum CastRejection {
     InsufficientMana,
     /// The caster lacked the ability (AG) the skill costs.
     InsufficientAbility,
-    /// A single-target skill was aimed beyond its range.
+    /// A single-target or aim-centered area skill was aimed beyond its range.
     OutOfRange,
     /// No target fell inside the skill's region.
     NoTargetsInRegion,
@@ -51,13 +51,18 @@ pub enum CastRejection {
 /// [`crate::events::combat::AttackOutcome`]'s missed/landed/killed split so the
 /// two agree by construction. `target_index` is the position of the target in
 /// the batch the caller supplied (the Nth candidate `CombatTarget`), not any
-/// host identity. Ailment and knockback exist only on [`TargetHit::Landed`] —
-/// a miss touches nothing and a kill ends the target — and stay optional there
-/// (a landed hit need not inflict, and need not move the target).
+/// host identity. The ailment exists only on [`TargetHit::Landed`]; a
+/// displacement exists on [`TargetHit::Landed`] and [`TargetHit::Missed`] (the
+/// pre-roll displacements — an Earthshake push or a lunge jiggle — move even a
+/// missed target) and stays optional there; [`TargetHit::Killed`] carries none
+/// (a kill is never pushed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TargetHit {
-    /// The strike missed; the target is unchanged.
+    /// The strike missed; the target is unchanged in health/effects but a
+    /// pre-roll displacement (an Earthshake push or a lunge jiggle) may still
+    /// have moved it — `None` when nothing displaced it, mirroring `Landed`'s
+    /// field.
     Missed {
         /// Index of the struck target in the supplied batch.
         target_index: usize,
@@ -66,6 +71,8 @@ pub enum TargetHit {
         /// The target's timed effects after the strike — the authoritative
         /// store the host persists; a miss leaves it unchanged.
         active_effects: ActiveEffects,
+        /// The target's new placement, if a pre-roll displacement moved it.
+        displacement: Option<Placement>,
     },
     /// The strike landed and the target survived.
     Landed {
@@ -81,7 +88,8 @@ pub enum TargetHit {
         active_effects: ActiveEffects,
         /// The ailment inflicted, if any.
         inflicted: Option<Ailment>,
-        /// The target's new placement, if the hit displaced it (knockback).
+        /// The target's new placement, if the hit displaced it (an Earthshake
+        /// push or a jiggle).
         displacement: Option<Placement>,
     },
     /// The strike landed and reduced the target's health to zero.
@@ -158,6 +166,14 @@ mod tests {
                     target_index: 1,
                     health: Pool::new(35, 35).unwrap(),
                     active_effects: ActiveEffects::EMPTY,
+                    displacement: None,
+                },
+                // A pushed miss: the pre-roll displacement moved the target.
+                TargetHit::Missed {
+                    target_index: 3,
+                    health: Pool::new(35, 35).unwrap(),
+                    active_effects: ActiveEffects::EMPTY,
+                    displacement: Some(placement()),
                 },
                 TargetHit::Killed {
                     target_index: 2,
@@ -174,5 +190,50 @@ mod tests {
         let json = serde_json::to_string(&cast).unwrap();
         assert!(json.starts_with(r#"{"kind":"cast""#));
         assert_eq!(serde_json::from_str::<SkillOutcome>(&json).unwrap(), cast);
+    }
+
+    #[test]
+    fn missed_serializes_its_displacement_present_or_null() {
+        let pushed = TargetHit::Missed {
+            target_index: 1,
+            health: Pool::new(300, 300).unwrap(),
+            active_effects: ActiveEffects::EMPTY,
+            displacement: Some(placement()),
+        };
+        let pushed_json = serde_json::to_string(&pushed).unwrap();
+        assert!(pushed_json.contains(r#""displacement":{"position""#));
+        assert_eq!(
+            serde_json::from_str::<TargetHit>(&pushed_json).unwrap(),
+            pushed
+        );
+
+        let ordinary = TargetHit::Missed {
+            target_index: 0,
+            health: Pool::new(35, 35).unwrap(),
+            active_effects: ActiveEffects::EMPTY,
+            displacement: None,
+        };
+        let ordinary_json = serde_json::to_string(&ordinary).unwrap();
+        assert!(ordinary_json.contains(r#""displacement":null"#));
+        assert_eq!(
+            serde_json::from_str::<TargetHit>(&ordinary_json).unwrap(),
+            ordinary
+        );
+    }
+
+    #[test]
+    fn killed_carries_no_displacement_key() {
+        let killed = TargetHit::Killed {
+            target_index: 2,
+            hit: Hit {
+                damage: Damage(50),
+                quality: HitQuality::Critical,
+                modifiers: DamageModifiers::NONE,
+            },
+            health: Pool::new(0, 40).unwrap(),
+            active_effects: ActiveEffects::EMPTY,
+        };
+        let json = serde_json::to_string(&killed).unwrap();
+        assert!(!json.contains("displacement"));
     }
 }

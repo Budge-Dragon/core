@@ -8,7 +8,7 @@
 //! [`crate::components::tile`], which depends on this module and never the
 //! reverse.
 
-use core::num::NonZeroU64;
+use core::num::{NonZeroU32, NonZeroU64};
 use core::ops::{Add, Div, Mul, Sub};
 
 use serde::{Deserialize, Serialize};
@@ -125,6 +125,15 @@ impl Fixed {
     #[must_use]
     pub fn from_tile_parts(whole_tiles: i64, sub_units: i64) -> Self {
         Self((whole_tiles << TILE_SHIFT).saturating_add(sub_units))
+    }
+
+    /// A magnitude spanning `half_tiles` half-tiles (the ×2 schema grain).
+    /// Total: the widest `u8` maps to `255 * HALF_TILE` (`8_355_840`), far
+    /// inside the scalar's range, so the value needs no fallible path.
+    /// `from_half_tiles(2)` is one tile; `from_half_tiles(3)` is 1.5 tiles.
+    #[must_use]
+    pub fn from_half_tiles(half_tiles: u8) -> Fixed {
+        Fixed(i64::from(half_tiles).saturating_mul(HALF_TILE))
     }
 
     /// Saturating scalar multiply by an integer factor — total and
@@ -488,6 +497,16 @@ impl Radius {
     pub fn from_tiles(tiles: u8) -> Radius {
         Radius(u64::from(tiles).saturating_mul(UNITS_PER_TILE.unsigned_abs()))
     }
+
+    /// A radius spanning `half_tiles` half-tiles (the ×2 schema grain). Total:
+    /// the widest `u8` maps to `255 * HALF_TILE` (`8_355_840`), far below
+    /// [`RADIUS_MAX`], so the value is always in range and needs no fallible
+    /// path. `from_half_tiles(2) == from_tiles(1)`; `from_half_tiles(3)` is
+    /// 1.5 tiles.
+    #[must_use]
+    pub fn from_half_tiles(half_tiles: u8) -> Radius {
+        Radius(u64::from(half_tiles).saturating_mul(HALF_TILE.unsigned_abs()))
+    }
 }
 
 impl TryFrom<u64> for Radius {
@@ -522,6 +541,152 @@ impl DistanceSq {
     #[must_use]
     pub fn isqrt(self) -> u64 {
         u64_from_u128_low(self.0.isqrt())
+    }
+}
+
+/// An ordinary-step magnitude, bounded to at most one whole tile by
+/// construction. `resolve_step`/`resolve_drift` consume it, so an ordinary step
+/// can never span more than a tile — which makes their destination-only
+/// walkability check sound: a step of magnitude `m <= UNITS_PER_TILE` moves at
+/// most one tile on each axis (`|Δx|,|Δy| <= m`), so the destination tile is
+/// Chebyshev-adjacent (within ±1 in each axis) to the source — a diagonal
+/// neighbour included (Euclidean √2, *not* excluded by a ≤1-tile *magnitude*
+/// bound). With no tile between source and a Chebyshev-1 destination, a step can
+/// never cross a blocked cell it did not land on. Only two magnitudes are
+/// constructible — a whole tile and a fraction of one — and both are `<= ONE_TILE`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StepMagnitude(Fixed);
+
+impl StepMagnitude {
+    /// One whole tile — the mob/knockback step grain.
+    pub const ONE_TILE: Self = Self(Fixed::from_raw(UNITS_PER_TILE));
+
+    /// One tile scaled by `num/den`, capped at the whole tile — the slowed
+    /// ordinary step. Total: `num` is capped at `den`, so the ratio never
+    /// exceeds one and the result stays within the ≤1-tile bound by
+    /// construction (no fallible path, no fabricated fallback).
+    #[must_use]
+    pub fn tile_fraction(num: u32, den: NonZeroU32) -> Self {
+        let capped = u64::from(num.min(den.get()));
+        let scaled = capped.saturating_mul(UNITS_PER_TILE.unsigned_abs()) / u64::from(den.get());
+        Self(Fixed::from_raw(saturate_i64(i128::from(scaled))))
+    }
+
+    /// The underlying magnitude, for the seek arithmetic inside movement.
+    #[must_use]
+    pub const fn get(self) -> Fixed {
+        self.0
+    }
+}
+
+/// One axis of a grid-neighbour offset: a single cell in the negative
+/// direction, no move, or the positive direction. A three-state enum, so a
+/// tile offset can never carry an out-of-range magnitude.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileDelta {
+    /// One cell toward the negative axis (−1 tile).
+    Neg,
+    /// No movement on this axis (0).
+    Zero,
+    /// One cell toward the positive axis (+1 tile).
+    Pos,
+}
+
+impl TileDelta {
+    /// The signed tile count this delta contributes (−1, 0, or +1).
+    #[must_use]
+    pub const fn signum(self) -> i64 {
+        match self {
+            TileDelta::Neg => -1,
+            TileDelta::Zero => 0,
+            TileDelta::Pos => 1,
+        }
+    }
+}
+
+/// A single grid-neighbour offset: each axis in {−1, 0, +1}, applied as a
+/// full-tile world offset. The nine values are the eight neighbours plus `STAY`.
+/// Every value is valid by construction (no fallible constructor), so the ±1
+/// jiggle's nine outcomes and the push's eight headings are all expressible and
+/// none can be malformed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TileOffset {
+    dx: TileDelta,
+    dy: TileDelta,
+}
+
+impl TileOffset {
+    /// The no-move offset (the jiggle's stay outcome).
+    pub const STAY: Self = Self {
+        dx: TileDelta::Zero,
+        dy: TileDelta::Zero,
+    };
+
+    /// Builds a tile offset from its two axis deltas. Total.
+    #[must_use]
+    pub const fn new(dx: TileDelta, dy: TileDelta) -> Self {
+        Self { dx, dy }
+    }
+
+    /// This offset as a full-tile world displacement — each axis delta scaled to
+    /// one whole tile. `STAY` yields the zero vector.
+    #[must_use]
+    pub fn world_offset(self) -> WorldVec {
+        WorldVec::new(
+            Fixed::from_raw(self.dx.signum().saturating_mul(UNITS_PER_TILE)),
+            Fixed::from_raw(self.dy.signum().saturating_mul(UNITS_PER_TILE)),
+        )
+    }
+}
+
+// W-SRC: the 408/985 pin — the rational tan(22.5°) the 8-way quantizer
+// compares against; see the constant's doc for the convergent derivation.
+/// The pinned rational tan(22.5°) ≈ 0.41421356 — the sector boundary between a
+/// cardinal (axis-aligned) heading and a diagonal one. tan(22.5°) = √2−1 is
+/// irrational; `408/985` is its continued-fraction convergent [0;2,2,2,2,2,2,2,2]
+/// (√2−1 = [0;2̄]), accurate to 3.6e-7 — the closest convergent whose numerator
+/// and denominator both stay well inside i64 after the ×|component| multiply, so
+/// the cross-product test is exact in i128 with no saturation on any in-world
+/// vector.
+const TAN_2250_NUM: i128 = 408;
+/// The pinned denominator of the rational tan(22.5°) — see [`TAN_2250_NUM`].
+const TAN_2250_DEN: i128 = 985;
+
+impl WorldVec {
+    /// The 8-way grid heading this offset points along — the away-vector
+    /// quantizer. `None` for the zero vector (no direction). Integer-exact, no
+    /// `atan2`, no float, no sqrt: it compares the ratio |Δy|/|Δx| against
+    /// tan(22.5°) and its reciprocal (tan 67.5° = 985/408) by i128
+    /// cross-multiplication. A vector exactly on a 22.5° sector boundary
+    /// resolves to the **diagonal** sector (pinned tie rule — both strict
+    /// axis-tests fail, so the diagonal arm is taken). Draws no RNG.
+    #[must_use]
+    pub fn octant(self) -> Option<TileOffset> {
+        let (sx, sy) = (delta_of_sign(self.x.0), delta_of_sign(self.y.0));
+        if let (TileDelta::Zero, TileDelta::Zero) = (sx, sy) {
+            return None;
+        }
+        let x = i128::from(self.x.0.unsigned_abs());
+        let y = i128::from(self.y.0.unsigned_abs());
+        // Near the x-axis: |Δy|/|Δx| < tan22.5  ⇔  y·985 < x·408.
+        if y * TAN_2250_DEN < x * TAN_2250_NUM {
+            return Some(TileOffset::new(sx, TileDelta::Zero));
+        }
+        // Near the y-axis: |Δx|/|Δy| < tan22.5  ⇔  x·985 < y·408.
+        if x * TAN_2250_DEN < y * TAN_2250_NUM {
+            return Some(TileOffset::new(TileDelta::Zero, sy));
+        }
+        // Otherwise (incl. boundary-exact): the diagonal sector.
+        Some(TileOffset::new(sx, sy))
+    }
+}
+
+/// The tile delta of a raw component's sign.
+fn delta_of_sign(v: i64) -> TileDelta {
+    match v.cmp(&0) {
+        core::cmp::Ordering::Less => TileDelta::Neg,
+        core::cmp::Ordering::Equal => TileDelta::Zero,
+        core::cmp::Ordering::Greater => TileDelta::Pos,
     }
 }
 
@@ -580,6 +745,14 @@ impl Facing {
     #[must_use]
     pub const fn vector(self) -> WorldVec {
         self.0
+    }
+
+    /// The grid-neighbour offset this facing's sign vector points to — total for
+    /// every facing (each component's sign in {−1,0,+1}). The bridge from a drawn
+    /// cardinal to a tile-offset step (the push's same-tile fallback).
+    #[must_use]
+    pub fn to_tile_offset(self) -> TileOffset {
+        TileOffset::new(delta_of_sign(self.0.x.0), delta_of_sign(self.0.y.0))
     }
 
     /// Whether `target` lies within the frontal cone of half-width `half`
@@ -1219,6 +1392,117 @@ mod tests {
     }
 
     #[test]
+    fn radius_from_half_tiles_matches_the_tile_grain() {
+        assert_eq!(Radius::from_half_tiles(2), Radius::from_tiles(1));
+        assert_eq!(Radius::from_half_tiles(3).get(), 98_304); // 1.5 tiles
+        assert_eq!(Radius::from_half_tiles(0).get(), 0);
+        assert_eq!(
+            Radius::from_half_tiles(255).get(),
+            255 * HALF_TILE.unsigned_abs()
+        );
+        assert!(Radius::from_half_tiles(255).get() <= RADIUS_MAX);
+    }
+
+    #[test]
+    fn fixed_from_half_tiles_matches_the_tile_grain() {
+        assert_eq!(Fixed::from_half_tiles(2), Fixed::from_raw(UNITS_PER_TILE));
+        assert_eq!(Fixed::from_half_tiles(3).raw(), 98_304); // 1.5 tiles
+        assert_eq!(Fixed::from_half_tiles(0).raw(), 0);
+        assert_eq!(Fixed::from_half_tiles(255).raw(), 255 * HALF_TILE);
+    }
+
+    #[test]
+    fn step_magnitude_one_tile_and_fractions() {
+        assert_eq!(StepMagnitude::ONE_TILE.get().raw(), UNITS_PER_TILE);
+        let half = StepMagnitude::tile_fraction(1, NonZeroU32::new(2).unwrap());
+        assert_eq!(half.get().raw(), UNITS_PER_TILE / 2);
+        // A ratio above one is capped at the whole tile.
+        assert_eq!(
+            StepMagnitude::tile_fraction(7, NonZeroU32::new(3).unwrap()),
+            StepMagnitude::ONE_TILE
+        );
+        // An extreme slow may reach zero — trivially sound (no move).
+        assert_eq!(
+            StepMagnitude::tile_fraction(0, NonZeroU32::new(4).unwrap())
+                .get()
+                .raw(),
+            0
+        );
+    }
+
+    #[test]
+    fn octant_zero_vector_has_no_direction() {
+        assert_eq!(WorldVec::ZERO.octant(), None);
+    }
+
+    #[test]
+    fn octant_near_boundary_vectors_resolve_per_the_pinned_tie_rule() {
+        // Sub-unit vectors straddling the 22.5-degree sector boundary, where
+        // y*985 vs x*408 flips.
+        assert_eq!(
+            vec(985, 407).octant(),
+            Some(TileOffset::new(TileDelta::Pos, TileDelta::Zero)) // East
+        );
+        // Boundary-exact (y·985 == x·408): the diagonal sector wins.
+        assert_eq!(
+            vec(985, 408).octant(),
+            Some(TileOffset::new(TileDelta::Pos, TileDelta::Pos)) // North-East
+        );
+        assert_eq!(
+            vec(985, 409).octant(),
+            Some(TileOffset::new(TileDelta::Pos, TileDelta::Pos))
+        );
+        assert_eq!(
+            vec(0, 65_536).octant(),
+            Some(TileOffset::new(TileDelta::Zero, TileDelta::Pos)) // North
+        );
+        // 2 tiles east, 1 tile north (atan ≈ 26.6° > 22.5°): diagonal.
+        assert_eq!(
+            vec(131_072, 65_536).octant(),
+            Some(TileOffset::new(TileDelta::Pos, TileDelta::Pos))
+        );
+        // Sign symmetry: the mirrored vector lands in the mirrored sector.
+        assert_eq!(
+            vec(-985, -407).octant(),
+            Some(TileOffset::new(TileDelta::Neg, TileDelta::Zero)) // West
+        );
+        assert_eq!(
+            vec(-985, -408).octant(),
+            Some(TileOffset::new(TileDelta::Neg, TileDelta::Neg)) // South-West
+        );
+    }
+
+    #[test]
+    fn tile_offset_world_offset_scales_to_whole_tiles() {
+        assert_eq!(TileOffset::STAY.world_offset(), WorldVec::ZERO);
+        assert_eq!(
+            TileOffset::new(TileDelta::Pos, TileDelta::Neg).world_offset(),
+            vec(UNITS_PER_TILE, -UNITS_PER_TILE)
+        );
+    }
+
+    #[test]
+    fn facing_to_tile_offset_covers_the_eight_cardinals() {
+        assert_eq!(
+            Facing::POS_X.to_tile_offset(),
+            TileOffset::new(TileDelta::Pos, TileDelta::Zero)
+        );
+        assert_eq!(
+            Facing::NEG_X_NEG_Y.to_tile_offset(),
+            TileOffset::new(TileDelta::Neg, TileDelta::Neg)
+        );
+        assert_eq!(
+            Facing::POS_X_NEG_Y.to_tile_offset(),
+            TileOffset::new(TileDelta::Pos, TileDelta::Neg)
+        );
+        // A non-unit facing quantizes by sign, not magnitude.
+        assert_eq!(
+            facing(300, -7).to_tile_offset(),
+            TileOffset::new(TileDelta::Pos, TileDelta::Neg)
+        );
+    }
+
+    #[test]
     fn zero_vector_normalizes_to_no_direction() {
         assert_eq!(
             WorldVec::ZERO.normalized_to(Fixed::from_raw(100)),
@@ -1301,6 +1585,16 @@ mod tests {
             let zero = WorldVec::new(Fixed::from_raw(0), Fixed::from_raw(0));
             prop_assert_eq!((a + d) - d, a);
             prop_assert_eq!(a - a, zero);
+        }
+
+        #[test]
+        fn step_magnitude_never_exceeds_one_tile(
+            num in 0u32..=u32::MAX,
+            den in 1u32..=u32::MAX,
+        ) {
+            let magnitude = StepMagnitude::tile_fraction(num, NonZeroU32::new(den).unwrap());
+            prop_assert!(magnitude.get().raw() >= 0);
+            prop_assert!(magnitude.get().raw() <= UNITS_PER_TILE);
         }
 
         #[test]

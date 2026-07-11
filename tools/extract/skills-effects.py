@@ -20,11 +20,13 @@ initializers named below (identical to v1; only the emit shape changed):
                                         "s6", each carrying a review line
 
 What v1's sim model is GONE in v2 (became Rust, not data):
-  * AreaSkillSettings (frustum/circle geometry, deferred_hits, per-tile and
+  * AreaSkillSettings timing/probability knobs (deferred_hits, per-tile and
     between-hit delays, hits_per_target, hits_per_attack_range,
-    hit_chance_per_distance, projectile_count, effect_range) -> the closed
-    AreaPattern tag; per-pattern tile math + flagged geometry constants live
-    in services::area (W-SRC re-sources the invented values).
+    hit_chance_per_distance, projectile_count) -> dropped (instant one-hit
+    resolution is a decided pin). The GEOMETRY survives as authored data:
+    each area record carries a flat geometry (aim_circle / caster_circle /
+    cone / beam at x2 half-tile grain) + a displacement selector, ratified
+    per-skill at W-AREA (see NOTES).
   * SkillTarget / TargetRestriction / moves_to_target / moves_target ->
     folded into SkillShape (buff variants carry their own targeting; Lunge
     is the one variant for the five DK weapon skills' knock-forward fact).
@@ -42,7 +44,7 @@ What v1's sim model is GONE in v2 (became Rust, not data):
 Teleport (6) is corrected to damage_type "none" (the 075 initializer's
 wizardry tag was residue). Cometfall (13) resolves to an area skill despite
 095d tagging it a direct hit (it attaches area settings; the S6 dataset
-agrees). Nova is two records: Area{nova} (40) + NovaCharge (58).
+agrees). Nova is two records: the Area release (40) + NovaCharge (58).
 """
 
 import os
@@ -61,8 +63,27 @@ def lunge():
     return {"kind": "lunge"}
 
 
-def area(pattern):
-    return {"kind": "area", "pattern": pattern}
+def aim_circle(radius_x2):
+    return {"kind": "aim_circle", "radius_x2": radius_x2}
+
+
+def caster_circle(radius_x2):
+    return {"kind": "caster_circle", "radius_x2": radius_x2}
+
+
+def cone(length_x2, num, den):
+    return {"kind": "cone", "length_x2": length_x2,
+            "half_angle": {"num": num, "den": den}}
+
+
+def beam(length_x2, half_width_x2):
+    return {"kind": "beam", "length_x2": length_x2,
+            "half_width_x2": half_width_x2}
+
+
+def area(geometry, displacement="none"):
+    return {"kind": "area", "geometry": geometry,
+            "displacement": displacement}
 
 
 def buff_self(buff):
@@ -142,7 +163,7 @@ SKILLS = [
           energy=72),
     skill(4, "Fire Ball", "075", direct_hit(), DW_MG, attack_damage=8,
           damage_type="wizardry", element="fire", rng=6, mana=3, energy=40),
-    skill(5, "Flame", "075", area("flame"), DW_MG, attack_damage=25,
+    skill(5, "Flame", "075", area(aim_circle(2)), DW_MG, attack_damage=25,
           damage_type="wizardry", element="fire", rng=6, mana=50,
           energy=160),
     skill(6, "Teleport", "075", teleport(), ("dark_wizard",),
@@ -150,29 +171,29 @@ SKILLS = [
     skill(7, "Ice", "075", direct_hit(), DW_MG, attack_damage=10,
           damage_type="wizardry", element="ice", inflicts="iced",
           rng=6, mana=38, energy=120),
-    skill(8, "Twister", "075", area("twister"), DW_MG, attack_damage=35,
+    skill(8, "Twister", "075", area(beam(8, 3)), DW_MG, attack_damage=35,
           damage_type="wizardry", element="wind", rng=6, mana=60,
           energy=180),
-    skill(9, "Evil Spirit", "095d", area("evil_spirit"), DW_MG,
+    skill(9, "Evil Spirit", "095d", area(caster_circle(12)), DW_MG,
           attack_damage=45, damage_type="wizardry", rng=6, mana=90,
           energy=220,
           review="carries the 095d values (range 6, magic_gladiator "
                  "included); the true 075 record is range 7 and "
                  "dark_wizard-only - labeled by value provenance"),
-    skill(10, "Hellfire", "075", area("hellfire"), DW_MG, attack_damage=120,
+    skill(10, "Hellfire", "075", area(caster_circle(4)), DW_MG, attack_damage=120,
           damage_type="wizardry", element="fire", mana=160, energy=260),
     skill(11, "Power Wave", "075", direct_hit(), DW_MG, attack_damage=14,
           damage_type="wizardry", rng=6, mana=5, energy=56),
-    skill(12, "Aqua Beam", "075", area("aqua_beam"), DW_MG, attack_damage=80,
+    skill(12, "Aqua Beam", "075", area(beam(16, 3)), DW_MG, attack_damage=80,
           damage_type="wizardry", element="water", rng=6, mana=140,
           energy=345),
-    skill(13, "Cometfall", "095d", area("cometfall"), DW_MG,
+    skill(13, "Cometfall", "095d", area(aim_circle(2)), DW_MG,
           attack_damage=70, damage_type="wizardry", element="lightning",
           rng=3, mana=150, energy=436,
           review="095d source marks it a plain direct hit yet attaches "
                  "area-of-effect settings; encoded as an area skill (AoE "
                  "intent; the S6 dataset also treats it as an area skill)"),
-    skill(14, "Inferno", "095d", area("inferno"), DW_MG, attack_damage=100,
+    skill(14, "Inferno", "095d", area(caster_circle(8)), DW_MG, attack_damage=100,
           damage_type="wizardry", element="fire", mana=200, energy=578),
     skill(17, "Energy Ball", "075", direct_hit(), DW_MG, attack_damage=3,
           damage_type="wizardry", rng=6, mana=1),
@@ -187,7 +208,7 @@ SKILLS = [
           damage_type="physical", rng=2, mana=9),
     skill(23, "Slash", "075", lunge(), DK_MG,
           damage_type="physical", rng=2, mana=10),
-    skill(24, "Triple Shot", "075", area("triple_shot"), ELF,
+    skill(24, "Triple Shot", "075", area(cone(14, 196, 277)), ELF,
           damage_type="physical", rng=6, mana=5),
     skill(26, "Heal", "075", heal(), ELF, rng=6, mana=20, energy=52),
     skill(27, "Greater Defense", "075", buff_player("greater_defense"), ELF,
@@ -204,7 +225,7 @@ SKILLS = [
     skill(34, "Summon Dark Knight", "075", summon(10), ELF, mana=200,
           energy=250),
     skill(35, "Summon Bali", "075", summon(150), ELF, mana=250, energy=260),
-    skill(41, "Twisting Slash", "095d", area("twisting_slash"), DK_MG,
+    skill(41, "Twisting Slash", "095d", area(caster_circle(4)), DK_MG,
           damage_type="physical", element="wind", rng=2, mana=10),
     skill(47, "Impale", "095d", direct_hit(), DK_MG, attack_damage=15,
           damage_type="physical", rng=3, mana=8, level=28),
@@ -219,12 +240,12 @@ SKILLS = [
           review="retail 0.97/1.0 Soul Master skill; values from the S6 "
                  "initializer; S6 allows casting on party members - retail "
                  "may be self-only"),
-    skill(39, "Ice Storm", "s6", area("ice_storm"), ("soul_master",),
+    skill(39, "Ice Storm", "s6", area(aim_circle(3)), ("soul_master",),
           attack_damage=80, damage_type="wizardry", element="ice",
           inflicts="iced", rng=6, mana=100, ability=5, energy=849,
           review="retail 1.0-era Soul Master AoE; absent from 075/095d, "
                  "values from S6"),
-    skill(40, "Nova", "s6", area("nova"), ("soul_master",),
+    skill(40, "Nova", "s6", area(caster_circle(12)), ("soul_master",),
           damage_type="wizardry", element="fire", rng=6, mana=15, level=100,
           energy=1052,
           review="retail 1.0 Soul Master skill; mana 15 = 180 per full "
@@ -234,12 +255,12 @@ SKILLS = [
           ability=45, level=100, energy=1052,
           review="charge-phase companion of the Nova backport (skill 40); "
                  "not on the curated list but Nova is unusable without it"),
-    skill(42, "Rageful Blow", "s6", area("rageful_blow"), ("blade_knight",),
+    skill(42, "Rageful Blow", "s6", area(caster_circle(6)), ("blade_knight",),
           attack_damage=60, damage_type="physical", element="earth",
           rng=3, mana=25, ability=20, level=170,
           review="retail 0.97/1.0 Blade Knight skill; absent from 075/095d, "
                  "values from S6"),
-    skill(43, "Death Stab", "s6", area("death_stab"), ("blade_knight",),
+    skill(43, "Death Stab", "s6", area(aim_circle(2)), ("blade_knight",),
           attack_damage=70, damage_type="physical", element="wind",
           rng=2, mana=15, ability=12, level=160,
           review="retail 0.97/1.0 Blade Knight skill; absent from 075/095d, "
@@ -254,28 +275,28 @@ SKILLS = [
           review="retail 1.0 Muse Elf skill; absent from 075/095d, values "
                  "from S6; S6 skill_multiplier rebalance relationship not "
                  "extracted (see gaps)"),
-    skill(52, "Penetration", "s6", area("penetration"),
+    skill(52, "Penetration", "s6", area(beam(16, 2)),
           ("fairy_elf", "muse_elf"), attack_damage=70,
           damage_type="physical", element="wind", rng=6, mana=7, ability=9,
           level=130,
           review="retail 1.0 elf skill; absent from 075/095d, values from "
                  "S6; S6 skill_multiplier rebalance relationship not "
                  "extracted (see gaps)"),
-    skill(55, "Fire Slash", "s6", area("fire_slash"), ("magic_gladiator",),
+    skill(55, "Fire Slash", "s6", area(beam(4, 4)), ("magic_gladiator",),
           attack_damage=80, damage_type="physical", element="fire",
           inflicts="defense_reduction", rng=2, mana=15, ability=20,
           review="retail 1.0-era Magic Gladiator skill; absent from "
                  "075/095d, values from S6"),
-    skill(56, "Power Slash", "s6", area("power_slash"), ("magic_gladiator",),
+    skill(56, "Power Slash", "s6", area(cone(12, 1, 2)), ("magic_gladiator",),
           damage_type="physical", rng=5, mana=15,
           review="retail 1.0-era Magic Gladiator skill; absent from "
                  "075/095d, values from S6"),
-    skill(61, "Fire Burst", "s6", area("fire_burst"), ("dark_lord",),
+    skill(61, "Fire Burst", "s6", area(aim_circle(2)), ("dark_lord",),
           attack_damage=100, damage_type="physical", rng=6, mana=25,
           energy=79,
           review="Dark Lord backport (DL is 0.97/1.0 content, only in the "
                  "S6 dataset)"),
-    skill(62, "Earthshake", "s6", area("earthshake"), ("dark_lord",),
+    skill(62, "Earthshake", "s6", area(caster_circle(10), "directional_push"), ("dark_lord",),
           attack_damage=150, damage_type="physical", element="lightning",
           rng=10, ability=50,
           review="Dark Lord backport; S6 horse_level*10 damage term dropped "
@@ -314,10 +335,9 @@ GAPS = [
     "base-class masks; whether soul_master/blade_knight/muse_elf inherit "
     "base-class skills is a class/rules concern. s6 backports carry the S6 "
     "masks filtered to pre-S3 classes",
-    "nova per-stage damage, and the Hellfire/Inferno/Nova caster-centered "
-    "radii, are OpenMU engine-default resolved values with no authentic "
-    "source - named open review items in services::area/skill_damage "
-    "(W-SRC), no number invented into the data",
+    "nova per-stage damage: the 12-stage charge bonus table is S6 attribute "
+    "plumbing, not a pre-S3 fact - NovaCharge stays deferred; only Nova's "
+    "release geometry (caster_circle radius_x2=12) is authored data",
 ]
 
 NOTES = [
@@ -336,12 +356,20 @@ NOTES = [
     "generic_monster_skill (150) is dropped: it was OpenMU's placeholder for "
     "its own dangling monster attack_skill=150 refs; monsters_spawns models "
     "monster attacks natively and the phantom referencers ship as plain",
-    "AreaSkillSettings sim-knobs (geometry, deferred_hits, per-tile / "
+    "area geometry is AUTHORED data (W-AREA): every area record carries a "
+    "flat geometry (aim_circle / caster_circle / cone / beam, sizes as x2 "
+    "half-tile integers) plus a displacement selector (none / "
+    "directional_push - Earthshake alone pushes). Sizes are OpenMU's "
+    "server-side reconstruction (AreaSkillSettings frustum/circle figures, "
+    "S6 primary), ratified per-skill at W-AREA, riding the client-declared-"
+    "hits era caveat (0.75 trusted client hit lists; the server-side shapes "
+    "are how OpenMU rebuilt them). Hellfire (r=2) and Inferno (r=4) are "
+    "revived from their range-0 dead rows via the S6 figures; effect size is "
+    "decoupled from cast range, which gates aim_circle aims only. The "
+    "remaining AreaSkillSettings sim-knobs (deferred_hits, per-tile / "
     "between-hit delays, hit_chance_per_distance, projectile_count, "
-    "effect_range, hits_per_* budgets) are dropped from the data: the closed "
-    "AreaPattern tag carries the authentic 'this is an area skill of family "
-    "X' fact, and per-pattern tile math + flagged geometry constants live in "
-    "services::area (invented values re-sourced under W-SRC)",
+    "hits_per_* budgets) stay dropped: instant one-hit-per-covered-target "
+    "resolution is a decided gameplay pin",
     "teleport (6) damage_type corrected to none (075 wizardry tag was "
     "residue); cometfall (13) resolves to area despite the 095d direct-hit "
     "tag; nova is two records - area{nova} (40) plus nova_charge (58)",
@@ -361,11 +389,12 @@ BUFFS = {"defense", "greater_damage", "greater_defense", "soul_barrier",
          "swell_life", "critical_damage_increase", "infinite_arrow",
          "alcohol"}
 DAMAGE_TYPES = {"none", "physical", "wizardry"}
-AREA_PATTERNS = {"flame", "twister", "evil_spirit", "hellfire", "aqua_beam",
-                 "cometfall", "inferno", "triple_shot", "ice_storm", "nova",
-                 "twisting_slash", "rageful_blow", "death_stab",
-                 "penetration", "fire_slash", "power_slash", "fire_burst",
-                 "earthshake"}
+# geometry kind -> its required integral size fields (half_angle checked apart)
+GEOMETRY_FIELDS = {"aim_circle": ("radius_x2",),
+                   "caster_circle": ("radius_x2",),
+                   "cone": ("length_x2",),
+                   "beam": ("length_x2", "half_width_x2")}
+DISPLACEMENTS = {"none", "directional_push"}
 BUFF_KINDS = {"buff_self", "buff_player", "buff_party_member", "buff_party"}
 SHAPE_KINDS = ({"direct_hit", "lunge", "area", "heal", "summon", "teleport",
                 "nova_charge", "recall_party"} | BUFF_KINDS)
@@ -397,7 +426,19 @@ def check(skills):
         kind = shape["kind"]
         assert kind in SHAPE_KINDS, (sid, kind)
         if kind == "area":
-            assert shape["pattern"] in AREA_PATTERNS, (sid, shape["pattern"])
+            geometry = shape["geometry"]
+            gkind = geometry["kind"]
+            assert gkind in GEOMETRY_FIELDS, (sid, gkind)
+            for field in GEOMETRY_FIELDS[gkind]:
+                assert isinstance(geometry[field], int), (sid, field)
+                assert 0 <= geometry[field] <= 255, (sid, field)
+            if gkind == "cone":
+                half = geometry["half_angle"]
+                assert isinstance(half["num"], int), sid
+                assert isinstance(half["den"], int) and half["den"] > 0, sid
+                assert half["num"] <= half["den"], sid
+            assert shape["displacement"] in DISPLACEMENTS, (
+                sid, shape["displacement"])
         elif kind in BUFF_KINDS:
             assert shape["buff"] in BUFFS, (sid, shape["buff"])
         elif kind == "summon":
