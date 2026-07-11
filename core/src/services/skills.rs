@@ -1451,7 +1451,7 @@ mod tests {
 
     #[test]
     fn the_power_slash_cone_excludes_a_ninety_degree_off_facing_target() {
-        // The re-pin from the shipped DEG_90 semicircle to the authentic DEG_45.
+        // The re-pin from the shipped 90-degree semicircle to the authentic DEG_45.
         let caster = placed_at((10, 10));
         let region = area_region_of(
             AreaGeometry::Cone {

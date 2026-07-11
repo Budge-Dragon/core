@@ -262,7 +262,7 @@ fn every_area_record_carries_its_ratified_authored_geometry() {
         (43, aim_circle(2), none),      // Death Stab — tightened to r=1
         (52, beam(16, 2), none),        // Penetration — length 8, half 1
         (55, beam(4, 4), none),         // Fire Slash — rect, not a cone
-        (56, cone(12, 1, 2), none),     // Power Slash — DEG_45, not DEG_90
+        (56, cone(12, 1, 2), none),     // Power Slash — DEG_45, not 90-degree
         (61, aim_circle(2), none),      // Fire Burst — tightened to r=1
         (62, caster_circle(10), push),  // Earthshake — r=5, the one push
     ];
@@ -400,7 +400,7 @@ fn the_real_power_slash_cone_excludes_a_ninety_degree_flank() {
     let slash = skill_number(&atlas, 56);
     let hero = caster("dark_knight", 200, 30);
     let aim = hero.placement().position;
-    // Straight ahead is in; 90° off the facing — covered by the shipped DEG_90
+    // Straight ahead is in; 90° off the facing — covered by the shipped 90-degree
     // semicircle — is out under the authentic DEG_45.
     let targets = [
         seated((13, 10), 100_000, 0, 0),
