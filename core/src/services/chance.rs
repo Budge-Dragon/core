@@ -415,6 +415,26 @@ mod tests {
     }
 
     #[test]
+    fn draw_cardinal_reaches_all_eight_facings() {
+        // Over many draws every one of the eight cardinal facings is reached, so
+        // the uniform heading draw is not stuck on a subset.
+        let mut rng = TestRng::new(9);
+        let mut seen = [false; 8];
+        for _ in 0..1000 {
+            let facing = draw_cardinal(&mut rng);
+            for (index, &cardinal) in CARDINALS.iter().enumerate() {
+                if facing == cardinal {
+                    seen[index] = true;
+                }
+            }
+        }
+        assert!(
+            seen.iter().all(|&hit| hit),
+            "not every cardinal facing was reached"
+        );
+    }
+
+    #[test]
     fn pick_one_covers_every_index() {
         // Over many draws every position of a small list is reached, so the
         // uniform index draw is not stuck on one element.

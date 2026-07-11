@@ -659,10 +659,10 @@ fn position_of(spawned: &Spawned) -> WorldPos {
 fn expected_instances(placement: SpawnPlacement, grid: &TerrainGrid) -> usize {
     match placement {
         SpawnPlacement::Fixed { .. } => 1,
-        SpawnPlacement::Spot { quantity, .. } => usize::from(quantity),
+        SpawnPlacement::Spot { quantity, .. } => usize::from(quantity.get()),
         SpawnPlacement::Area { area, quantity } => {
             if grid.walkable_positions_in(area.to_world()).next().is_some() {
-                usize::from(quantity)
+                usize::from(quantity.get())
             } else {
                 0
             }
