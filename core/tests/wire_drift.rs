@@ -2180,6 +2180,28 @@ fn party_membership_leadership_and_session_wire_is_pinned() {
 }
 
 #[test]
+fn party_zen_split_result_wire_is_pinned() {
+    // A non-empty `credits` transitively freezes the `SlotWallet {slot, wallet}`
+    // shape; `to_ground` pins the field's presence even when empty.
+    let split = party::ZenSplitResult {
+        credits: vec![party::SlotWallet {
+            slot: MemberSlot(1),
+            wallet: CarriedZen::new(250_000).unwrap(),
+        }],
+        to_ground: Vec::new(),
+    };
+    assert_eq!(
+        serde_json::to_string(&split).unwrap(),
+        r#"{"credits":[{"slot":1,"wallet":250000}],"to_ground":[]}"#
+    );
+    let json = serde_json::to_string(&split).unwrap();
+    assert_eq!(
+        serde_json::from_str::<party::ZenSplitResult>(&json).unwrap(),
+        split
+    );
+}
+
+#[test]
 fn party_outcome_every_kind_tag_is_pinned() {
     let invite = PartyInvite { expires: Tick(660) };
     let session = party_of_three_with_a_held_seat();

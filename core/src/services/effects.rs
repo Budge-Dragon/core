@@ -513,6 +513,39 @@ mod tests {
     }
 
     #[test]
+    fn a_poison_death_clears_a_coexisting_non_poison_buff() {
+        // Seed a still-active Greater Damage buff (expiry Tick(1200)) alongside a
+        // lethal poison, then kill before that expiry (Tick(100) < 1200): only the
+        // death-clear — not the buff's own expiry — can empty the store, which the
+        // poison-only kill test cannot distinguish.
+        let (buffed, _) = apply_buff(
+            ApplicableBuff::GreaterDamage,
+            70,
+            ActiveEffects::EMPTY,
+            Tick(0),
+            tick50(),
+        );
+        let (store, _) = apply_ailment(Ailment::Poisoned, 500, buffed, Tick(0), tick50());
+        assert!(
+            store.greater_damage().is_some(),
+            "the buff coexists with the poison before the lethal tick"
+        );
+        let frail = Pool::full(poison_per_tick(500) - 1);
+        let (after, health, events) = advance_effects(store, frail, Tick(100));
+        assert_eq!(health.current(), 0);
+        assert_eq!(
+            after,
+            ActiveEffects::EMPTY,
+            "a poison death clears every effect, the buff included"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EffectEvent::PoisonKilled { .. }))
+        );
+    }
+
+    #[test]
     fn a_weak_casters_poison_does_strictly_less_total_than_a_strong_casters() {
         let big_pool = Pool::full(10_000_000);
         let total = |energy: u16| {

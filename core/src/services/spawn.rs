@@ -152,7 +152,7 @@ pub fn place_spawn(
                 spawned: Vec::new(),
                 events: Vec::new(),
             };
-            for _ in 0..*quantity {
+            for _ in 0..quantity.get() {
                 let facing = draw_cardinal(rng);
                 let (spawned, event) = spawn_at(monster, centre, facing, map);
                 result.spawned.push(spawned);
@@ -172,7 +172,7 @@ pub fn place_spawn(
                         spawned: Vec::new(),
                         events: Vec::new(),
                     };
-                    for _ in 0..*quantity {
+                    for _ in 0..quantity.get() {
                         let position = *pick_one(&cells, rng);
                         let facing = draw_cardinal(rng);
                         let (spawned, event) = spawn_at(monster, position, facing, map);
@@ -229,6 +229,8 @@ pub fn populate_map(handle: &MapHandle<'_>, rng: &mut impl RngCore) -> MapPopula
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::num::NonZeroU16;
+
     use crate::components::element::PerElement;
     use crate::components::tile::{TileArea, TileCoord, TileFacing};
     use crate::components::units::{DurationMs, Level, Resistance};
@@ -438,7 +440,7 @@ mod tests {
             &monster(7, 60),
             &SpawnPlacement::Spot {
                 position: TileCoord::new(2, 3),
-                quantity: 3,
+                quantity: NonZeroU16::new(3).unwrap(),
             },
             &grid_with(&[]),
             MapNumber(0),
@@ -463,7 +465,10 @@ mod tests {
         let mut rng = TestRng::new(11);
         let result = place_spawn(
             &monster(7, 60),
-            &SpawnPlacement::Area { area, quantity: 45 },
+            &SpawnPlacement::Area {
+                area,
+                quantity: NonZeroU16::new(45).unwrap(),
+            },
             &grid,
             MapNumber(0),
             &mut rng,
@@ -484,7 +489,10 @@ mod tests {
         let mut rng = TestRng::new(7);
         let result = place_spawn(
             &monster(7, 60),
-            &SpawnPlacement::Area { area, quantity: 30 },
+            &SpawnPlacement::Area {
+                area,
+                quantity: NonZeroU16::new(30).unwrap(),
+            },
             &grid_with(&[]),
             MapNumber(0),
             &mut rng,
@@ -501,7 +509,10 @@ mod tests {
         let mut rng = TestRng::new(5);
         let result = place_spawn(
             &monster(7, 60),
-            &SpawnPlacement::Area { area, quantity: 10 },
+            &SpawnPlacement::Area {
+                area,
+                quantity: NonZeroU16::new(10).unwrap(),
+            },
             &grid,
             MapNumber(0),
             &mut rng,
@@ -518,7 +529,10 @@ mod tests {
         let mut rng = TestRng::new(21);
         let result = place_spawn(
             &monster(7, 60),
-            &SpawnPlacement::Area { area, quantity: 12 },
+            &SpawnPlacement::Area {
+                area,
+                quantity: NonZeroU16::new(12).unwrap(),
+            },
             &all_walkable(),
             MapNumber(0),
             &mut rng,
@@ -593,7 +607,10 @@ mod tests {
     #[test]
     fn same_seed_yields_identical_placements_and_consumption() {
         let area = TileArea::new(0, 0, 40, 40).unwrap();
-        let placement = SpawnPlacement::Area { area, quantity: 25 };
+        let placement = SpawnPlacement::Area {
+            area,
+            quantity: NonZeroU16::new(25).unwrap(),
+        };
         let mut a = TestRng::new(7);
         let mut b = TestRng::new(7);
         let ra = place_spawn(
@@ -619,7 +636,10 @@ mod tests {
     #[test]
     fn different_seeds_diverge_over_a_large_area() {
         let area = TileArea::new(0, 0, 40, 40).unwrap();
-        let placement = SpawnPlacement::Area { area, quantity: 20 };
+        let placement = SpawnPlacement::Area {
+            area,
+            quantity: NonZeroU16::new(20).unwrap(),
+        };
         let mut a = TestRng::new(7);
         let mut b = TestRng::new(42);
         let ra = place_spawn(
@@ -651,7 +671,10 @@ mod tests {
             let mut rng = TestRng::new(seed);
             let result = place_spawn(
                 &monster(7, 60),
-                &SpawnPlacement::Area { area, quantity: 30 },
+                &SpawnPlacement::Area {
+                    area,
+                    quantity: NonZeroU16::new(30).unwrap(),
+                },
                 &grid,
                 MapNumber(0),
                 &mut rng,

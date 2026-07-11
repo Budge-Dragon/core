@@ -5,6 +5,8 @@
 //! only-unwalkable tiles places zero instances, and every landing/facing draw
 //! comes from the injected RNG in area order.
 
+use core::num::NonZeroU16;
+
 use rand_core::RngCore;
 
 use crate::components::units::Tick;
@@ -34,7 +36,7 @@ pub(super) fn spawn_wave(
     for area in &wave.areas {
         let placement = SpawnPlacement::Area {
             area: area.area,
-            quantity: area.quantity.get(),
+            quantity: area.quantity,
         };
         let result = place_spawn(
             &area.monster,
@@ -75,7 +77,7 @@ pub(super) fn fire_respawns(
         };
         let placement = SpawnPlacement::Area {
             area: area.area,
-            quantity: 1,
+            quantity: NonZeroU16::MIN,
         };
         let result = place_spawn(
             &area.monster,

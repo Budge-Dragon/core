@@ -1,6 +1,8 @@
 //! Record shape of `spawns.json` — world population, the classic
 //! MonsterSetBase roster.
 
+use core::num::NonZeroU16;
+
 use serde::{Deserialize, Serialize};
 
 use crate::components::tile::{TileArea, TileCoord, TileFacing};
@@ -42,14 +44,14 @@ pub enum SpawnPlacement {
         /// The tile.
         position: TileCoord,
         /// Instances kept alive at this spot.
-        quantity: u16,
+        quantity: NonZeroU16,
     },
     /// Mobile monsters spawned at random walkable tiles in a rectangle.
     Area {
         /// The spawn rectangle.
         area: TileArea,
         /// Instances kept alive inside the rectangle.
-        quantity: u16,
+        quantity: NonZeroU16,
     },
 }
 
