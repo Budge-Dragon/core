@@ -237,6 +237,24 @@ pub struct Ticks(
     pub u64,
 );
 
+impl Ticks {
+    /// This tick span as whole seconds — the reverse read of
+    /// [`DurationMs::in_ticks`], flooring so a partial second never counts.
+    /// Pure integer math (a saturating widen, then floor division), so the
+    /// same count comes out on every target.
+    #[must_use]
+    pub fn whole_seconds(self, tick: TickDuration) -> u64 {
+        self.0.saturating_mul(u64::from(tick.millis().get())) / 1000
+    }
+
+    /// This tick span as whole minutes — sixty whole seconds per minute,
+    /// flooring so a partial minute never counts.
+    #[must_use]
+    pub fn whole_minutes(self, tick: TickDuration) -> u64 {
+        self.whole_seconds(tick) / 60
+    }
+}
+
 impl Add<Ticks> for Tick {
     type Output = Tick;
 
@@ -686,6 +704,41 @@ mod tests {
         assert_eq!(DurationMs(410).in_ticks(per), Ticks(9));
         assert_eq!(DurationMs(1).in_ticks(per), Ticks(1));
         assert_eq!(DurationMs(0).in_ticks(per), Ticks(0));
+    }
+
+    #[test]
+    fn ticks_whole_seconds_floors_partial_seconds() {
+        let per = TickDuration::new(100).unwrap();
+        assert_eq!(Ticks(0).whole_seconds(per), 0);
+        assert_eq!(Ticks(9).whole_seconds(per), 0);
+        assert_eq!(Ticks(10).whole_seconds(per), 1);
+        assert_eq!(Ticks(19).whole_seconds(per), 1);
+        assert_eq!(Ticks(300).whole_seconds(per), 30);
+    }
+
+    #[test]
+    fn ticks_whole_seconds_reverses_in_ticks() {
+        let per = TickDuration::new(100).unwrap();
+        assert_eq!(DurationMs(30_000).in_ticks(per).whole_seconds(per), 30);
+        assert_eq!(
+            DurationMs(1_200_000).in_ticks(per).whole_seconds(per),
+            1_200
+        );
+    }
+
+    #[test]
+    fn ticks_whole_minutes_floors_partial_minutes() {
+        let per = TickDuration::new(100).unwrap();
+        assert_eq!(Ticks(599).whole_minutes(per), 0);
+        assert_eq!(Ticks(600).whole_minutes(per), 1);
+        assert_eq!(Ticks(3_000).whole_minutes(per), 5);
+        assert_eq!(Ticks(3_599).whole_minutes(per), 5);
+    }
+
+    #[test]
+    fn ticks_whole_seconds_saturates_at_the_ceiling() {
+        let per = TickDuration::new(1_000).unwrap();
+        assert_eq!(Ticks(u64::MAX).whole_seconds(per), u64::MAX / 1_000);
     }
 
     #[test]

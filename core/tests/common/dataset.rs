@@ -105,6 +105,11 @@ pub fn real_static_data() -> StaticData {
         classes: load::<ClassRecord>("classes"),
         exp_tables: load::<ExpTable>("exp_tables"),
         game_config: load::<GameConfig>("game_config"),
+        // Schema-only family: no minigame.json ships this era, so the real
+        // dataset's absent-file default is the empty record list.
+        mini_games: DataFile {
+            records: Vec::new(),
+        },
         terrain: load_terrain(),
     }
 }

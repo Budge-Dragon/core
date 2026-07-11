@@ -20,6 +20,7 @@ pub mod game_config;
 pub mod gates_warps;
 pub mod item_definitions;
 pub mod map_definitions;
+pub mod minigame;
 pub mod monster_definitions;
 pub mod npc_shops;
 pub mod option_roll;

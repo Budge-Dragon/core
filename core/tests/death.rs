@@ -3,7 +3,8 @@
 //! shipped experience curve, class table, maps, and spawn gates. Proves the exp
 //! band-dock with its no-de-level floor, the sub-10 and max-level exemptions, the
 //! 1/2/3% zen brackets, the integer-floor tiny balance, Dead-marking with vitals
-//! and effects untouched, idempotence, gate selection (own map / Lorencia
+//! and effects untouched, idempotence, the [`DeathPenalty`] waiver (zero dock,
+//! same transition), gate selection (own map / Lorencia
 //! fallback / first-of-many), the walkable landing, the three-vital refill, the
 //! effect clear, determinism, and the full die -> penalty -> respawn -> persist
 //! loop.
@@ -27,7 +28,7 @@ use mu_core::components::units::{CarriedZen, Exp, MapNumber, Tick, TickDuration,
 use mu_core::data::atlas::Atlas;
 use mu_core::entities::character::Character;
 use mu_core::events::death::{DeathEvent, Respawned};
-use mu_core::services::death::{resolve_death, respawn};
+use mu_core::services::death::{DeathPenalty, resolve_death, respawn};
 use mu_core::services::profile::character_profile;
 
 use dataset::{or_abort, real_atlas};
@@ -160,7 +161,8 @@ fn a_mid_band_level_100_kill_docks_one_percent_of_the_band_and_never_de_levels()
         no_effects(),
         alive(),
     );
-    let (dead_hero, events) = resolve_death(&hero, Tick(500), tick(), &atlas);
+    let (dead_hero, events) =
+        resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(dead_hero.level().get(), 100, "the floor never de-levels");
     assert_eq!(dead_hero.experience(), Exp(exp - expected_loss));
@@ -203,7 +205,7 @@ fn a_death_a_sliver_past_the_level_threshold_floors_at_the_level_start() {
         no_effects(),
         alive(),
     );
-    let (dead_hero, events) = resolve_death(&hero, Tick(0), tick(), &atlas);
+    let (dead_hero, events) = resolve_death(&hero, Tick(0), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(dead_hero.level().get(), 100, "no de-level");
     assert_eq!(
@@ -240,7 +242,7 @@ fn a_death_below_level_ten_is_free_of_experience_and_zen() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(40), tick(), &atlas);
+    let (dead_hero, events) = resolve_death(&hero, Tick(40), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(dead_hero.experience(), Exp(exp), "experience untouched");
     assert_eq!(
@@ -272,7 +274,7 @@ fn a_max_level_death_loses_no_experience_but_still_pays_the_zen() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(10), tick(), &atlas);
+    let (dead_hero, events) = resolve_death(&hero, Tick(10), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(
         dead_hero.experience(),
@@ -313,7 +315,7 @@ fn an_untrusted_over_cap_level_docks_no_experience_and_never_overflows() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(10), tick(), &atlas);
+    let (dead_hero, events) = resolve_death(&hero, Tick(10), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(
         dead_hero.experience(),
@@ -350,7 +352,8 @@ fn the_zen_brackets_dock_one_two_and_three_percent_at_real_levels() {
             alive(),
         );
 
-        let (dead_hero, events) = resolve_death(&hero, Tick(1), tick(), &atlas);
+        let (dead_hero, events) =
+            resolve_death(&hero, Tick(1), tick(), &atlas, DeathPenalty::Applied);
 
         assert_eq!(
             dead_hero.zen(),
@@ -387,7 +390,7 @@ fn a_tiny_balance_docks_no_zen_because_the_percentage_floors_to_zero() {
         alive(),
     );
 
-    let (dead_hero, events) = resolve_death(&hero, Tick(1), tick(), &atlas);
+    let (dead_hero, events) = resolve_death(&hero, Tick(1), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(
         dead_hero.zen(),
@@ -422,7 +425,8 @@ fn resolve_death_marks_dead_leaving_vitals_at_zero_and_a_poison_in_place() {
         "the hero died with a poison active"
     );
 
-    let (dead_hero, _events) = resolve_death(&hero, Tick(900), tick(), &atlas);
+    let (dead_hero, _events) =
+        resolve_death(&hero, Tick(900), tick(), &atlas, DeathPenalty::Applied);
 
     assert_eq!(
         dead_hero.life(),
@@ -458,8 +462,15 @@ fn a_second_resolve_death_on_a_dead_character_is_a_no_op() {
         alive(),
     );
 
-    let (dead_once, _events) = resolve_death(&hero, Tick(500), tick(), &atlas);
-    let (dead_twice, events) = resolve_death(&dead_once, Tick(9_999), tick(), &atlas);
+    let (dead_once, _events) =
+        resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Applied);
+    let (dead_twice, events) = resolve_death(
+        &dead_once,
+        Tick(9_999),
+        tick(),
+        &atlas,
+        DeathPenalty::Applied,
+    );
 
     assert!(events.is_empty(), "a re-death emits no event");
     assert_eq!(
@@ -467,6 +478,93 @@ fn a_second_resolve_death_on_a_dead_character_is_a_no_op() {
         or_abort(serde_json::to_string(&dead_once)),
         "the input is returned byte-identical — no second penalty, no re-mark"
     );
+}
+
+#[test]
+fn a_waived_death_marks_dead_with_zero_exp_and_zen_dock() {
+    let atlas = real_atlas();
+    // Mid-band experience and a seven-figure balance: under Applied BOTH docks
+    // would engage, so a clean pass-through proves the waiver skips them.
+    let t100 = total(&atlas, 100);
+    let exp = t100 + (total(&atlas, 101) - t100) / 2;
+    let hero = dark_knight(
+        100,
+        exp,
+        1_000_000,
+        3,
+        full_vitals(500, 400, 400),
+        no_effects(),
+        alive(),
+    );
+
+    let (dead_hero, events) = resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Waived);
+
+    assert_eq!(dead_hero.experience(), Exp(exp), "no experience is docked");
+    assert_eq!(
+        dead_hero.zen(),
+        or_abort(CarriedZen::new(1_000_000)),
+        "no zen is docked"
+    );
+    assert_eq!(
+        dead_hero.life(),
+        LifeState::Dead {
+            respawn_at: Tick(500 + RESPAWN_DELAY_TICKS)
+        },
+        "the same Dead transition is taken"
+    );
+    assert_eq!(
+        events,
+        vec![DeathEvent::Died {
+            respawn_at: Tick(500 + RESPAWN_DELAY_TICKS)
+        }],
+        "Died alone — no dock events"
+    );
+}
+
+#[test]
+fn applied_and_waived_deaths_schedule_the_same_respawn_and_differ_only_in_docks() {
+    let atlas = real_atlas();
+    let t100 = total(&atlas, 100);
+    let exp = t100 + (total(&atlas, 101) - t100) / 2;
+    let hero = dark_knight(
+        100,
+        exp,
+        1_000_000,
+        3,
+        full_vitals(500, 400, 400),
+        no_effects(),
+        alive(),
+    );
+
+    let (applied, applied_events) =
+        resolve_death(&hero, Tick(40), tick(), &atlas, DeathPenalty::Applied);
+    let (waived, waived_events) =
+        resolve_death(&hero, Tick(40), tick(), &atlas, DeathPenalty::Waived);
+
+    assert_eq!(
+        applied.life(),
+        LifeState::Dead {
+            respawn_at: Tick(40 + RESPAWN_DELAY_TICKS)
+        }
+    );
+    assert_eq!(
+        applied.life(),
+        waived.life(),
+        "one respawn schedule, either policy"
+    );
+    assert!(
+        applied.experience() < hero.experience(),
+        "Applied docks experience"
+    );
+    assert!(applied.zen() < hero.zen(), "Applied docks zen");
+    assert_eq!(waived.experience(), hero.experience());
+    assert_eq!(waived.zen(), hero.zen());
+    assert_eq!(
+        applied_events.len(),
+        3,
+        "Died plus both docks under Applied"
+    );
+    assert_eq!(waived_events.len(), 1, "Died alone under Waived");
 }
 
 #[test]
@@ -915,7 +1013,8 @@ fn the_full_loop_dies_takes_the_penalty_respawns_and_persists() {
     );
 
     // Die: penalty applied, marked Dead, vitals and poison left in place.
-    let (dead_hero, _death_events) = resolve_death(&hero, Tick(500), tick(), &atlas);
+    let (dead_hero, _death_events) =
+        resolve_death(&hero, Tick(500), tick(), &atlas, DeathPenalty::Applied);
     assert_eq!(
         dead_hero.life(),
         LifeState::Dead {

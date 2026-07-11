@@ -124,6 +124,9 @@ fn real_atlas() -> Atlas {
         classes: load::<ClassRecord>("classes"),
         exp_tables: load::<ExpTable>("exp_tables"),
         game_config: load::<GameConfig>("game_config"),
+        mini_games: DataFile {
+            records: Vec::new(),
+        },
         terrain: load_terrain(),
     };
     or_abort(Atlas::parse(data))

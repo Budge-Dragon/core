@@ -18,6 +18,7 @@ pub mod item_roll;
 pub mod item_rules;
 pub mod kill;
 pub mod loot;
+pub mod minigame;
 pub mod monster_ai;
 pub mod movement;
 pub mod party;

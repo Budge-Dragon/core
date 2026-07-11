@@ -4,7 +4,8 @@
 //! all draw through the injected RNG in a fixed order (category, then category
 //! payload, then special drops in dataset order). The category rates partition a
 //! `0..10000` space proven at load, so the "nothing" remainder is a real bucket,
-//! never a fallback.
+//! never a fallback. [`roll_drop_group`] is the second declared entry point: a
+//! uniform pick among a self-contained item group at a fixed plus level.
 
 use rand_core::RngCore;
 
@@ -13,7 +14,7 @@ use crate::components::interval::Interval;
 use crate::components::item_quality::ItemRarity;
 use crate::components::units::{ChancePer10000, Exp, ItemLevel, Level, Zen};
 use crate::data::atlas::Atlas;
-use crate::data::common::MapNumber;
+use crate::data::common::{ItemRef, MapNumber};
 use crate::data::drop_config::DropConfig;
 use crate::data::item_definitions::ItemDefinition;
 use crate::data::special_drops::SpecialDrop;
@@ -68,6 +69,23 @@ pub fn resolve_kill_drops(
     };
     let specials = special_drops(victim, victim_level, map, atlas, rng);
     DropResolution { category, specials }
+}
+
+/// Rolls a self-contained drop group: one uniform pick among the group's
+/// items, at the fixed `item_level`, normal rarity — the same pick-from-a-set
+/// grain as a monster-bound special drop, declared as its own entry point.
+/// Draws exactly one random word.
+#[must_use]
+pub fn roll_drop_group(
+    items: &OneOrMore<ItemRef>,
+    item_level: ItemLevel,
+    rng: &mut impl RngCore,
+) -> Drop {
+    Drop::Item {
+        item: *pick_one(items, rng),
+        level: item_level,
+        rarity: ItemRarity::Normal,
+    }
 }
 
 /// Walks the four category rates cumulatively over a `0..10000` draw; a roll past
@@ -214,10 +232,138 @@ fn narrow_u8(value: u16) -> u8 {
 mod tests {
     use super::*;
 
+    /// Deterministic `SplitMix64` for replayable tests; cast-free extraction of
+    /// the low 32 bits keeps clippy's cast lints quiet in test code too.
+    struct TestRng {
+        state: u64,
+    }
+
+    impl TestRng {
+        fn new(seed: u64) -> Self {
+            Self { state: seed }
+        }
+    }
+
+    impl RngCore for TestRng {
+        fn next_u64(&mut self) -> u64 {
+            self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = self.state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+
+        fn next_u32(&mut self) -> u32 {
+            let [b0, b1, b2, b3, _, _, _, _] = self.next_u64().to_le_bytes();
+            u32::from_le_bytes([b0, b1, b2, b3])
+        }
+
+        fn fill_bytes(&mut self, dst: &mut [u8]) {
+            for chunk in dst.chunks_mut(8) {
+                let bytes = self.next_u64().to_le_bytes();
+                for (slot, byte) in chunk.iter_mut().zip(bytes.iter()) {
+                    *slot = *byte;
+                }
+            }
+        }
+    }
+
+    /// Wraps [`TestRng`] and counts the 64-bit words drawn.
+    struct CountingRng {
+        inner: TestRng,
+        words: u64,
+    }
+
+    impl CountingRng {
+        fn new(seed: u64) -> Self {
+            Self {
+                inner: TestRng::new(seed),
+                words: 0,
+            }
+        }
+    }
+
+    impl RngCore for CountingRng {
+        fn next_u64(&mut self) -> u64 {
+            self.words += 1;
+            self.inner.next_u64()
+        }
+
+        fn next_u32(&mut self) -> u32 {
+            let [b0, b1, b2, b3, _, _, _, _] = self.next_u64().to_le_bytes();
+            u32::from_le_bytes([b0, b1, b2, b3])
+        }
+
+        fn fill_bytes(&mut self, dst: &mut [u8]) {
+            self.inner.fill_bytes(dst);
+        }
+    }
+
+    fn item(group: u8, number: u16) -> ItemRef {
+        ItemRef { group, number }
+    }
+
+    fn a_group() -> OneOrMore<ItemRef> {
+        OneOrMore::with_head(item(12, 15), vec![item(13, 0), item(14, 13)])
+    }
+
     #[test]
     fn narrow_u8_saturates_above_255() {
         assert_eq!(narrow_u8(0), 0);
         assert_eq!(narrow_u8(200), 200);
         assert_eq!(narrow_u8(300), 255);
+    }
+
+    #[test]
+    fn roll_drop_group_picks_a_group_member_at_the_fixed_level() {
+        let group = a_group();
+        let level = ItemLevel::new(7).unwrap();
+        for seed in 0..32 {
+            let mut rng = TestRng::new(seed);
+            match roll_drop_group(&group, level, &mut rng) {
+                Drop::Item {
+                    item: picked,
+                    level: rolled_level,
+                    rarity,
+                } => {
+                    assert!(group.iter().any(|member| *member == picked));
+                    assert_eq!(rolled_level, level);
+                    assert_eq!(rarity, ItemRarity::Normal);
+                }
+                Drop::Zen { .. } | Drop::Nothing => {
+                    panic!("a group roll always produces an item")
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn roll_drop_group_on_a_single_item_group_is_certain() {
+        let group = OneOrMore::with_head(item(14, 13), Vec::new());
+        let mut rng = TestRng::new(9);
+        assert_eq!(
+            roll_drop_group(&group, ItemLevel::ZERO, &mut rng),
+            Drop::Item {
+                item: item(14, 13),
+                level: ItemLevel::ZERO,
+                rarity: ItemRarity::Normal,
+            }
+        );
+    }
+
+    #[test]
+    fn roll_drop_group_is_deterministic_for_a_seed() {
+        let group = a_group();
+        let level = ItemLevel::new(3).unwrap();
+        let first = roll_drop_group(&group, level, &mut TestRng::new(42));
+        let second = roll_drop_group(&group, level, &mut TestRng::new(42));
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn roll_drop_group_draws_exactly_one_word() {
+        let mut rng = CountingRng::new(7);
+        let _ = roll_drop_group(&a_group(), ItemLevel::ZERO, &mut rng);
+        assert_eq!(rng.words, 1);
     }
 }

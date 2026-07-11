@@ -1,7 +1,8 @@
-//! The monster-kill death lifecycle: the death step that docks the penalty and
-//! marks a character dead, and the later respawn that seats it back in town. Two
-//! pure transitions over the character's [`LifeState`], each a value in and a
-//! value out with no in-place edit.
+//! The monster-kill death lifecycle: the death step that docks the penalty —
+//! or waives it, per the caller's [`DeathPenalty`] policy — and marks a
+//! character dead, and the later respawn that seats it back in town. Two pure
+//! transitions over the character's [`LifeState`], each a value in and a value
+//! out with no in-place edit.
 //!
 //! [`resolve_death`] draws **no** randomness — the penalty is pure integer ratio
 //! math floored at the current level's threshold, so it never de-levels — and is
@@ -39,19 +40,33 @@ const PENALTY_FREE_BELOW_LEVEL: u16 = 10;
 /// is one part, the zen loss one, two, or three by level bracket.
 const PERCENT_DENOMINATOR: u64 = 100;
 
-/// The monster-kill death step: docks the experience and zen penalty and marks
-/// the character dead, scheduling its respawn `RESPAWN_DELAY_MS` after `at`. A
-/// pure deterministic transition — no RNG (the penalty is integer ratio math),
-/// no in-place edit. On an already-dead character it is a no-op: the input is
-/// returned byte-identical with an empty event list, so a second death applies
-/// no second penalty. The events are `Died` first, then the exp and zen docks
-/// only when their magnitude is non-zero.
+/// Whether a death docks the experience/zen penalty. `Waived` is the SAME
+/// death transition with the penalties skipped — never a second death path. A
+/// plain service-input enum, not persisted state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeathPenalty {
+    /// Dock the experience and zen penalty (every normal death).
+    Applied,
+    /// Dock nothing (a death inside a mini-game).
+    Waived,
+}
+
+/// The monster-kill death step: docks the experience and zen penalty — under
+/// [`DeathPenalty::Applied`]; [`DeathPenalty::Waived`] docks nothing — and
+/// marks the character dead, scheduling its respawn `RESPAWN_DELAY_MS` after
+/// `at`. A pure deterministic transition — no RNG (the penalty is integer
+/// ratio math), no in-place edit. On an already-dead character it is a no-op:
+/// the input is returned byte-identical with an empty event list, so a second
+/// death applies no second penalty. The events are `Died` first, then — under
+/// `Applied` only — the exp and zen docks when their magnitude is non-zero; a
+/// waived death emits `Died` alone.
 #[must_use]
 pub fn resolve_death(
     character: &Character,
     at: Tick,
     tick: TickDuration,
     atlas: &Atlas,
+    penalty: DeathPenalty,
 ) -> (Character, Vec<DeathEvent>) {
     match character.life() {
         LifeState::Dead { .. } => (character.clone(), Vec::new()),
@@ -59,29 +74,38 @@ pub fn resolve_death(
             let respawn_at = at + RESPAWN_DELAY_MS.in_ticks(tick);
             let mut events = vec![DeathEvent::Died { respawn_at }];
 
-            let after_exp = match exp_penalty(character, atlas) {
-                ExpPenalty::None => character.clone(),
-                ExpPenalty::Docked { new_exp, lost } => {
-                    events.push(DeathEvent::ExperienceDocked {
-                        lost,
-                        remaining: new_exp,
-                    });
-                    character.with_progress(character.level(), new_exp, character.unspent_points())
+            let docked = match penalty {
+                DeathPenalty::Waived => character.clone(),
+                DeathPenalty::Applied => {
+                    let after_exp = match exp_penalty(character, atlas) {
+                        ExpPenalty::None => character.clone(),
+                        ExpPenalty::Docked { new_exp, lost } => {
+                            events.push(DeathEvent::ExperienceDocked {
+                                lost,
+                                remaining: new_exp,
+                            });
+                            character.with_progress(
+                                character.level(),
+                                new_exp,
+                                character.unspent_points(),
+                            )
+                        }
+                    };
+
+                    match zen_penalty(character.level(), character.zen()) {
+                        ZenPenalty::None => after_exp,
+                        ZenPenalty::Docked { balance, lost } => {
+                            events.push(DeathEvent::ZenDocked {
+                                lost,
+                                remaining: balance,
+                            });
+                            after_exp.with_zen(balance)
+                        }
+                    }
                 }
             };
 
-            let after_zen = match zen_penalty(character.level(), character.zen()) {
-                ZenPenalty::None => after_exp,
-                ZenPenalty::Docked { balance, lost } => {
-                    events.push(DeathEvent::ZenDocked {
-                        lost,
-                        remaining: balance,
-                    });
-                    after_exp.with_zen(balance)
-                }
-            };
-
-            (after_zen.with_life(LifeState::Dead { respawn_at }), events)
+            (docked.with_life(LifeState::Dead { respawn_at }), events)
         }
     }
 }

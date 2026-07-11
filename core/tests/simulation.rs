@@ -39,8 +39,13 @@ use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, T
 use mu_core::data::common::MonsterNumber;
 use mu_core::data::effects::Ailment;
 use mu_core::data::gates_warps::WarpIndex;
+use mu_core::data::minigame::{
+    EventLevel, PlayerCount, RewardKind, RosterSlot, RosterStatus, Score, SuccessFlag, WaveNumber,
+    WaveRespawn, WinnerStanding,
+};
 use mu_core::data::npc_shops::ShelfSlot;
 use mu_core::data::spawns::SpawnPlacement;
+use mu_core::entities::minigame_session::{MiniGamePhase, WaveState};
 use mu_core::entities::party_session::{PartyMember, PartySession};
 use mu_core::entities::spawned::Spawned;
 use mu_core::entities::trade_session::TradeSession;
@@ -53,6 +58,7 @@ use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::inventory::{EquipOutcome, EquipRejection, PlaceOutcome, RemoveOutcome};
 use mu_core::events::kill::KillResolution;
 use mu_core::events::loot::Drop;
+use mu_core::events::minigame::MiniGameEvent;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
 use mu_core::events::party::PartyEvent;
@@ -67,6 +73,7 @@ use mu_core::events::travel::{
 use mu_core::services::effects::ApplicableBuff;
 use mu_core::services::ground::DropOrigin;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
+use mu_core::services::minigame::{EnterOutcome, GrantDecision, PkStanding};
 use mu_core::services::party;
 use mu_core::services::price::selling_price;
 use mu_core::services::profile::{character_profile, equipped_profile};
@@ -75,11 +82,13 @@ use mu_core::services::wear::WearEvent;
 
 use paper_host::{
     World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
-    dark_wizard, direct_hit_skill, earthshake_skill, fighting_monster_from, first_passive_monster,
-    flame_skill, footprint_of, heal_skill, hellfire_skill, is_equippable, item_at_level,
-    item_instance, lightning_direct_skill, low_level_monster, lunge_skill, magic_gladiator,
-    monster_instance, none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, tile,
-    walkable_run, wearer_of, wire, wizardry_direct_skill, zen,
+    dark_wizard, devil_square_definition, devil_square_key, devil_square_ticket,
+    devil_square_ticket_ref, direct_hit_skill, earthshake_skill, fighting_monster_from,
+    first_passive_monster, flame_skill, footprint_of, heal_skill, hellfire_skill, is_equippable,
+    item_at_level, item_instance, lightning_direct_skill, low_level_monster, lunge_skill,
+    magic_gladiator, monster_instance, none_type_skill, nova_skill, or_abort, persist, pos,
+    pressing_monster, respawning_wave_monster, reward_drop_group, reward_entry, spawn_wave, tile,
+    walkable_area, walkable_run, wearer_of, wire, wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -278,6 +287,7 @@ fn the_snapshot_serialises_exactly_the_live_sets_and_never_the_atlas() {
             "ground_items",
             "ground_zen",
             "inventories",
+            "mini_sessions",
             "monsters",
             "parties",
             "pending_invites",
@@ -4786,4 +4796,845 @@ fn sim_gate_push_and_jiggle_both_stop_at_the_safezone_line() {
         }
     }
     assert!(saw_move, "some attempt lands a real jiggle move");
+}
+
+// --- W-MINIGAME standing sixth gate: the shared event framework through the ---
+// --- persist seam — a full event, its byte-for-byte replay, the min-player ----
+// --- abort refund, the waived-death eject and dead-flagged finish, the --------
+// --- empty-roster end, the declared-winner early end, and the overlapping -----
+// --- wave schedule with wave-scoped respawn. Every session value crosses the --
+// --- persist seam between calls; the host CALLS the framework seams and reads -
+// --- the core-computed deadlines off the returned phase, never re-deriving ----
+// --- the phase/deadline/score arithmetic inline. --------------------------------
+
+/// The event tier every mini-game scenario authors at.
+fn sim_level() -> EventLevel {
+    or_abort(EventLevel::new(3))
+}
+
+/// Seats a Dark Knight at `level` carrying `wallet` zen with a `charges`-charge
+/// Devil's Invitation in its bag — a ready entrant. Scenarios seat in roster
+/// order, so the entrant at character index `i` is admitted to `RosterSlot(i)`
+/// (the positional account↔slot convention the reward fan-out reads back).
+fn seat_ticketed_entrant(world: &mut World, level: u16, wallet: u64, charges: u8) -> usize {
+    let index = world.seat_character(dark_knight(level, 300, tile(10, 10)));
+    world.set_wallet(index, zen(wallet));
+    let ticket_ref = devil_square_ticket_ref(world.atlas());
+    let ticket = devil_square_ticket(ticket_ref, charges, or_abort(ItemLevel::new(2)));
+    let placed = world.place_in_bag(index, ticket, or_abort(Footprint::new(1, 1)), cell(0, 0));
+    assert!(
+        matches!(placed, PlaceOutcome::Placed { .. }),
+        "the ticket seats into the entrant's bag: {placed:?}"
+    );
+    index
+}
+
+/// Advances the session at `s` through the entrance close and the 30 s countdown
+/// into Playing — reading each core-computed deadline off the returned phase —
+/// and returns the game-start events (the `GameStarted` freeze plus any wave that
+/// fires at offset zero).
+fn advance_to_playing(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
+    let MiniGamePhase::Open { closes_at, .. } = world.mini_session(s).phase else {
+        return or_abort(Err(format!(
+            "expected Open, got {:?}",
+            world.mini_session(s).phase
+        )));
+    };
+    world.advance_mini_session(s, closes_at);
+    let MiniGamePhase::Closing { starts_at } = world.mini_session(s).phase else {
+        return or_abort(Err(format!(
+            "expected Closing, got {:?}",
+            world.mini_session(s).phase
+        )));
+    };
+    world.advance_mini_session(s, starts_at)
+}
+
+/// Advances the Playing session at `s` to its scheduled end tick (read off the
+/// phase) and returns the end events.
+fn advance_to_end(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
+    let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
+        return or_abort(Err(format!(
+            "expected Playing, got {:?}",
+            world.mini_session(s).phase
+        )));
+    };
+    world.advance_mini_session(s, ends_at)
+}
+
+/// Advances the Ended session at `s` to its dispose tick (read off the phase) and
+/// returns the dispose events (the alive warp-outs, then `Disposed`).
+fn advance_to_dispose(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
+    let MiniGamePhase::Ended { disposes_at, .. } = world.mini_session(s).phase else {
+        return or_abort(Err(format!(
+            "expected Ended, got {:?}",
+            world.mini_session(s).phase
+        )));
+    };
+    world.advance_mini_session(s, disposes_at)
+}
+
+/// The lifecycle state of wave `number` in the session at `s`.
+fn wave_state(world: &World, s: usize, number: WaveNumber) -> WaveState {
+    or_abort(
+        world
+            .mini_session(s)
+            .waves
+            .waves
+            .iter()
+            .find(|track| track.number == number)
+            .map(|track| track.state)
+            .ok_or("no such wave track"),
+    )
+}
+
+/// The id of the first live monster spawned by wave `number` in the session at
+/// `s` — a server-computed instance id the host references when reporting a kill.
+fn first_live_of_wave(
+    world: &World,
+    s: usize,
+    number: WaveNumber,
+) -> mu_core::data::minigame::SessionMonsterId {
+    or_abort(
+        world
+            .mini_session(s)
+            .monsters
+            .live
+            .iter()
+            .find(|instanced| instanced.origin == number)
+            .map(|instanced| instanced.id)
+            .ok_or("no live monster of that wave"),
+    )
+}
+
+/// Drives one whole mini-game event over a single seeded stream in one fixed
+/// order — enter x3, countdown into Playing (a wave spawns), scored kills, the
+/// timeout end, the reward payout, and the dispose warp-out — recording each
+/// step by its canonical wire form. Returns the final persisted snapshot and the
+/// ordered event trace. The construction seed is the only entropy source (entry
+/// landings, wave positions, and the item-drop roll all sample it), so two calls
+/// with the same seed reproduce bit-for-bit. The replay twin of [`scripted_run`]
+/// for the mini-game framework.
+fn scripted_mini_event(seed: u64) -> (String, Vec<TraceStep>) {
+    let atlas = paper_host::real_atlas();
+    let monster = respawning_wave_monster(&atlas);
+    let floor = walkable_area(&atlas, MapNumber(9), 8);
+    let waves = vec![spawn_wave(
+        1,
+        0,
+        240_000,
+        WaveRespawn::RespawningWhileOpen,
+        monster,
+        4,
+        floor,
+    )];
+    let rewards = vec![
+        reward_entry(
+            Some(1),
+            Vec::new(),
+            RewardKind::Experience { amount: Exp(6000) },
+        ),
+        reward_entry(Some(2), Vec::new(), RewardKind::Money { amount: Zen(500) }),
+        reward_entry(
+            None,
+            vec![SuccessFlag::Alive],
+            RewardKind::ItemDrop {
+                group: reward_drop_group(SWORD, ItemLevel::ZERO),
+            },
+        ),
+    ];
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, waves, rewards);
+    let mut world = World::with_mini_games(seed, MapNumber(9), vec![definition]);
+    let mut trace = Vec::new();
+
+    let entrants = [
+        seat_ticketed_entrant(&mut world, 60, 100_000, 2),
+        seat_ticketed_entrant(&mut world, 60, 100_000, 2),
+        seat_ticketed_entrant(&mut world, 60, 100_000, 2),
+    ];
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    for entrant in entrants {
+        let outcome = world.enter_mini_session(s, entrant, PkStanding::Clear);
+        trace.push(TraceStep {
+            label: "enter",
+            detail: wire(&outcome),
+        });
+    }
+
+    let start_events = advance_to_playing(&mut world, s);
+    trace.push(TraceStep {
+        label: "start",
+        detail: wire(&start_events),
+    });
+
+    let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
+        return (world.snapshot(), trace);
+    };
+    let kill_tick = Tick(4000);
+    let ids = {
+        let live = &world.mini_session(s).monsters.live;
+        [
+            live.first().map(|instanced| instanced.id),
+            live.get(1).map(|instanced| instanced.id),
+            live.get(2).map(|instanced| instanced.id),
+        ]
+    };
+    let credits = [RosterSlot(1), RosterSlot(1), RosterSlot(0)];
+    for (id, credit) in ids.into_iter().zip(credits) {
+        if let Some(id) = id {
+            world.report_mini_kill(s, id, credit, Score(3), kill_tick);
+        }
+    }
+    trace.push(TraceStep {
+        label: "scored",
+        detail: wire(&world.mini_session(s).roster),
+    });
+
+    let end_events = advance_to_end(&mut world, s);
+    trace.push(TraceStep {
+        label: "end",
+        detail: wire(&end_events),
+    });
+
+    let outcome = world.pay_out_mini_rewards(s, ends_at);
+    trace.push(TraceStep {
+        label: "rewards",
+        detail: wire(&outcome.events),
+    });
+
+    let dispose_events = advance_to_dispose(&mut world, s);
+    trace.push(TraceStep {
+        label: "dispose",
+        detail: wire(&dispose_events),
+    });
+
+    (world.snapshot(), trace)
+}
+
+#[test]
+fn a_full_mini_game_event_plays_enter_to_payout_through_the_paper_host() {
+    // SIM-1: the headline sixth-gate run — a test-authored event over the real
+    // square, driven entirely through the framework seams and the persist seam.
+    let atlas = paper_host::real_atlas();
+    let monster = respawning_wave_monster(&atlas);
+    let floor = walkable_area(&atlas, MapNumber(9), 8);
+    let waves = vec![spawn_wave(
+        1,
+        0,
+        240_000,
+        WaveRespawn::RespawningWhileOpen,
+        monster,
+        4,
+        floor,
+    )];
+    let rewards = vec![
+        reward_entry(
+            Some(1),
+            Vec::new(),
+            RewardKind::Experience { amount: Exp(6000) },
+        ),
+        reward_entry(Some(2), Vec::new(), RewardKind::Money { amount: Zen(500) }),
+        reward_entry(Some(3), Vec::new(), RewardKind::Money { amount: Zen(250) }),
+        reward_entry(
+            None,
+            vec![SuccessFlag::Alive],
+            RewardKind::ItemDrop {
+                group: reward_drop_group(SWORD, ItemLevel::ZERO),
+            },
+        ),
+    ];
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, waves, rewards);
+    let mut world = World::with_mini_games(11, MapNumber(9), vec![definition]);
+
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e1 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e2 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    assert_eq!(world.mini_session_count(), 1);
+
+    // Each entrant is admitted; the fee is debited and one ticket charge spent,
+    // both surviving the persist round-trip.
+    for entrant in [e0, e1, e2] {
+        let outcome = world.enter_mini_session(s, entrant, PkStanding::Clear);
+        assert!(
+            matches!(outcome, EnterOutcome::Entered { .. }),
+            "entrant {entrant} admitted: {outcome:?}"
+        );
+        assert_eq!(world.character(entrant).zen().get(), 75_000);
+        let bag = world.inventory(entrant);
+        let ticket = or_abort(bag.placed().first().ok_or("the ticket survives one entry"));
+        assert_eq!(ticket.item.durability.current(), 1);
+    }
+
+    // The countdown starts the game and freezes the snapshot at three; the
+    // zero-offset wave populates the session's own instanced live-set.
+    let start_events = advance_to_playing(&mut world, s);
+    assert!(start_events.contains(&MiniGameEvent::GameStarted {
+        players: PlayerCount(3)
+    }));
+    assert!(start_events.contains(&MiniGameEvent::WaveStarted {
+        number: WaveNumber(1)
+    }));
+    assert_eq!(world.mini_session(s).start_snapshot(), Some(PlayerCount(3)));
+    assert_eq!(world.mini_session(s).monsters.live.len(), 4);
+
+    // Server-attributed kills credit the crediting seats: slot 1 outscores slot
+    // 0, slot 2 stays scoreless.
+    let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
+        panic!("expected Playing, got {:?}", world.mini_session(s).phase);
+    };
+    let kill_tick = Tick(4000);
+    let [id0, id1, id2] = {
+        let live = &world.mini_session(s).monsters.live;
+        [
+            or_abort(live.first().ok_or("live 0")).id,
+            or_abort(live.get(1).ok_or("live 1")).id,
+            or_abort(live.get(2).ok_or("live 2")).id,
+        ]
+    };
+    world.report_mini_kill(s, id0, RosterSlot(1), Score(3), kill_tick);
+    world.report_mini_kill(s, id1, RosterSlot(1), Score(3), kill_tick);
+    world.report_mini_kill(s, id2, RosterSlot(0), Score(3), kill_tick);
+    assert_eq!(
+        or_abort(world.mini_session(s).member(RosterSlot(1)).ok_or("slot 1")).score,
+        Score(6)
+    );
+    assert_eq!(
+        or_abort(world.mini_session(s).member(RosterSlot(0)).ok_or("slot 0")).score,
+        Score(3)
+    );
+
+    // The game runs to its duration; the remaining roster are the finishers.
+    let end_events = advance_to_end(&mut world, s);
+    assert!(end_events.contains(&MiniGameEvent::GameEnded {
+        finishers: vec![RosterSlot(0), RosterSlot(1), RosterSlot(2)],
+    }));
+
+    // Rewards rank descending by score; every applied grant is persisted onto
+    // its finisher through the existing per-character seams.
+    let exp1_before = world.character(e1).experience();
+    let ground_before = world.ground_item_count();
+    let outcome = world.pay_out_mini_rewards(s, ends_at);
+    let Some(MiniGameEvent::ScoreTable { rows }) = outcome.events.last() else {
+        panic!("the score table rides last: {:?}", outcome.events);
+    };
+    let ranked: Vec<(u8, u16)> = rows.iter().map(|row| (row.slot.0, row.rank.0)).collect();
+    assert_eq!(ranked, vec![(1, 1), (0, 2), (2, 3)]);
+    let award1 = or_abort(
+        outcome
+            .awards
+            .iter()
+            .find(|award| award.slot == RosterSlot(1))
+            .ok_or("rank-1 award"),
+    );
+    assert!(
+        award1
+            .grants
+            .contains(&GrantDecision::Experience { amount: Exp(6000) }),
+        "the rank-1 finisher's award carries the experience grant"
+    );
+    assert_eq!(world.character(e1).experience().0, exp1_before.0 + 6000);
+    assert_eq!(world.character(e0).zen().get(), 75_000 + 500);
+    assert_eq!(world.character(e2).zen().get(), 75_000 + 250);
+    // Each alive finisher's Alive-gated item drop landed a real ground item.
+    assert_eq!(world.ground_item_count(), ground_before + 3);
+
+    // The exit window warps every alive finisher to town and disposes.
+    let dispose_events = advance_to_dispose(&mut world, s);
+    assert!(
+        dispose_events
+            .iter()
+            .filter(|event| matches!(event, MiniGameEvent::WarpedOut { .. }))
+            .count()
+            == 3
+    );
+    assert_eq!(dispose_events.last(), Some(&MiniGameEvent::Disposed));
+    assert_eq!(world.mini_session(s).phase, MiniGamePhase::Disposed);
+    assert!(world.mini_session(s).roster.is_empty());
+}
+
+#[test]
+fn the_full_mini_game_event_replays_byte_for_byte_under_one_seed() {
+    // SIM-2: same seed -> identical final snapshot AND identical ordered event
+    // trace. The snapshot proves totality (nothing unpersisted drifts); the
+    // trace localises any divergence to the exact step.
+    let (snap_a, trace_a) = scripted_mini_event(11);
+    let (snap_b, trace_b) = scripted_mini_event(11);
+    assert_eq!(snap_a, snap_b, "the whole event replays byte-for-byte");
+    assert_eq!(
+        trace_a, trace_b,
+        "the ordered event trace replays identically"
+    );
+    assert!(
+        trace_a.len() > 4,
+        "a substantive multi-step event trace, not an empty log"
+    );
+
+    // The seed is load-bearing: a different seed drives a different world — entry
+    // landings, wave spawn positions, and the item-drop roll all sample it.
+    let (snap_c, _) = scripted_mini_event(29);
+    assert_ne!(
+        snap_a, snap_c,
+        "a different seed yields a different final world"
+    );
+}
+
+#[test]
+fn a_lone_entrants_fee_is_refunded_and_the_event_disposes_without_starting() {
+    // SIM-3: the one refund path, end-to-end and AUTHENTIC — the min-player check
+    // fires at the entrance close, BEFORE the countdown.
+    let atlas = paper_host::real_atlas();
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, Vec::new(), Vec::new());
+    let mut world = World::with_mini_games(5, MapNumber(9), vec![definition]);
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    assert!(matches!(
+        world.enter_mini_session(s, e0, PkStanding::Clear),
+        EnterOutcome::Entered { .. }
+    ));
+    assert_eq!(world.character(e0).zen().get(), 75_000);
+
+    // Advance to the entrance close: too few alive -> abort, refund, town warp,
+    // dispose — no countdown, no game start.
+    let MiniGamePhase::Open { closes_at, .. } = world.mini_session(s).phase else {
+        panic!("expected Open, got {:?}", world.mini_session(s).phase);
+    };
+    let events = world.advance_mini_session(s, closes_at);
+    assert!(events.iter().any(|event| matches!(
+        event,
+        MiniGameEvent::MinPlayersAbort {
+            present: PlayerCount(1),
+            required: PlayerCount(2),
+        }
+    )));
+    // The host applies each FeeRefunded decision by crediting the member.
+    for event in &events {
+        if let MiniGameEvent::FeeRefunded { slot, amount } = event {
+            world.refund_fee(usize::from(slot.0), *amount);
+        }
+    }
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, MiniGameEvent::WarpedOut { .. }))
+    );
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        MiniGameEvent::CountdownStarted { .. } | MiniGameEvent::GameStarted { .. }
+    )));
+    // The refund restored the fee; the session disposed without starting.
+    assert_eq!(world.character(e0).zen().get(), 100_000);
+    assert_eq!(world.mini_session(s).phase, MiniGamePhase::Disposed);
+    assert!(world.mini_session(s).roster.is_empty());
+    assert_eq!(world.mini_session(s).start_snapshot(), None);
+}
+
+#[test]
+fn a_waived_death_ejected_before_the_end_leaves_the_roster_and_wins_no_grant() {
+    // SIM-4: a death inside the event docks nothing (Waived), is ejected via the
+    // existing respawn at its LifeState deadline, and — gone before the end —
+    // finishes as no finisher and earns no grant (pins 2/3, ruling A).
+    let atlas = paper_host::real_atlas();
+    let rewards = vec![reward_entry(
+        None,
+        Vec::new(),
+        RewardKind::Money { amount: Zen(1000) },
+    )];
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, Vec::new(), rewards);
+    let mut world = World::with_mini_games(13, MapNumber(9), vec![definition]);
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e1 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    for entrant in [e0, e1] {
+        assert!(matches!(
+            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            EnterOutcome::Entered { .. }
+        ));
+    }
+    advance_to_playing(&mut world, s);
+    let zen1 = world.character(e1).zen().get();
+    let exp1 = world.character(e1).experience();
+
+    // The mini-game truce: the SAME resolve_death, penalty Waived — zero dock.
+    let deaths = world.resolve_waived_death_of(e1, Tick(3300));
+    assert_eq!(
+        deaths.len(),
+        1,
+        "a waived death emits Died alone: {deaths:?}"
+    );
+    let LifeState::Dead { respawn_at } = world.character(e1).life() else {
+        panic!("the victim is marked Dead");
+    };
+    assert!(
+        respawn_at.0 > 3300,
+        "the 3 s eject clock is set forward on LifeState, not the roster"
+    );
+    assert_eq!(world.character(e1).zen().get(), zen1, "no zen dock");
+    assert_eq!(world.character(e1).experience(), exp1, "no exp dock");
+    world.report_mini_death(s, RosterSlot(1));
+    assert_eq!(
+        or_abort(world.mini_session(s).member(RosterSlot(1)).ok_or("slot 1")).status,
+        RosterStatus::Dead
+    );
+
+    // At the LifeState deadline the host composes the existing respawn — reviving
+    // and relocating the member off the event map — then reports the exit.
+    let respawned = world.respawn_player(e1);
+    assert!(
+        respawned.is_some(),
+        "the dead member is revived by the composed respawn"
+    );
+    assert_ne!(
+        world.character(e1).placement().map,
+        MapNumber(9),
+        "the ejected member is relocated off the event map"
+    );
+    world.report_mini_leave(s, RosterSlot(1));
+
+    // The game ends with only the alive member as a finisher; the ejected member
+    // gets no grant and keeps exactly its post-entry ledger.
+    let end_events = advance_to_end(&mut world, s);
+    assert!(end_events.contains(&MiniGameEvent::GameEnded {
+        finishers: vec![RosterSlot(0)],
+    }));
+    let outcome = world.pay_out_mini_rewards(s, Tick(15_000));
+    assert!(
+        outcome
+            .awards
+            .iter()
+            .all(|award| award.slot != RosterSlot(1)),
+        "the ejected member is no finisher"
+    );
+    assert_eq!(world.character(e1).zen().get(), zen1);
+    assert_eq!(world.character(e1).experience(), exp1);
+}
+
+#[test]
+fn a_death_in_the_final_beat_finishes_dead_flagged_before_the_eject() {
+    // DEATH-3: a member dying in the final beat, with the game ending before the
+    // 3 s eject, is a Dead-classified FINISHER — eligible only for Dead-gated
+    // rewards (ruling A).
+    let atlas = paper_host::real_atlas();
+    let rewards = vec![
+        reward_entry(
+            None,
+            vec![SuccessFlag::Dead],
+            RewardKind::Money { amount: Zen(300) },
+        ),
+        reward_entry(
+            None,
+            vec![SuccessFlag::Alive],
+            RewardKind::Experience { amount: Exp(6000) },
+        ),
+    ];
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, Vec::new(), rewards);
+    let mut world = World::with_mini_games(17, MapNumber(9), vec![definition]);
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e1 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    for entrant in [e0, e1] {
+        assert!(matches!(
+            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            EnterOutcome::Entered { .. }
+        ));
+    }
+    advance_to_playing(&mut world, s);
+    let zen1 = world.character(e1).zen().get();
+
+    // Dying in the final beat; the host does NOT compose the eject (the game ends
+    // first), so the member is still present at end, classified Dead.
+    let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
+        panic!("expected Playing, got {:?}", world.mini_session(s).phase);
+    };
+    world.resolve_waived_death_of(e1, Tick(ends_at.0.saturating_sub(10)));
+    world.report_mini_death(s, RosterSlot(1));
+    let end_events = advance_to_end(&mut world, s);
+    assert!(end_events.contains(&MiniGameEvent::GameEnded {
+        finishers: vec![RosterSlot(0), RosterSlot(1)],
+    }));
+
+    // The dead-but-present finisher takes ONLY the Dead-gated reward; the alive
+    // one ONLY the Alive-gated reward — the Dead money credited through persist.
+    let outcome = world.pay_out_mini_rewards(s, Tick(15_000));
+    let dead_award = or_abort(
+        outcome
+            .awards
+            .iter()
+            .find(|award| award.slot == RosterSlot(1))
+            .ok_or("dead finisher award"),
+    );
+    assert_eq!(
+        dead_award.grants,
+        vec![GrantDecision::Money { amount: Zen(300) }]
+    );
+    let alive_award = or_abort(
+        outcome
+            .awards
+            .iter()
+            .find(|award| award.slot == RosterSlot(0))
+            .ok_or("alive finisher award"),
+    );
+    assert_eq!(
+        alive_award.grants,
+        vec![GrantDecision::Experience { amount: Exp(6000) }]
+    );
+    assert_eq!(world.character(e1).zen().get(), zen1 + 300);
+}
+
+#[test]
+fn an_emptied_roster_ends_the_event_the_instant_it_clears() {
+    // DEATH-6: the game ends the instant the entered set empties after start —
+    // before the game duration would elapse.
+    let atlas = paper_host::real_atlas();
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, Vec::new(), Vec::new());
+    let mut world = World::with_mini_games(23, MapNumber(9), vec![definition]);
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e1 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    for entrant in [e0, e1] {
+        assert!(matches!(
+            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            EnterOutcome::Entered { .. }
+        ));
+    }
+    advance_to_playing(&mut world, s);
+    let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
+        panic!("expected Playing, got {:?}", world.mini_session(s).phase);
+    };
+
+    // Both leave mid-game (fees forfeit — the abort is the only refund path).
+    world.report_mini_leave(s, RosterSlot(0));
+    world.report_mini_leave(s, RosterSlot(1));
+    assert!(world.mini_session(s).roster.is_empty());
+
+    // The next advance ends the game immediately, with time to spare.
+    let early = Tick(ends_at.0.saturating_sub(1000));
+    let events = world.advance_mini_session(s, early);
+    assert!(events.contains(&MiniGameEvent::GameEnded {
+        finishers: Vec::new()
+    }));
+    let MiniGamePhase::Ended { remaining, .. } = world.mini_session(s).phase else {
+        panic!("expected Ended, got {:?}", world.mini_session(s).phase);
+    };
+    assert!(
+        remaining.0 > 0,
+        "ended early with game time still on the clock"
+    );
+    assert!(world.mini_session(s).monsters.live.is_empty());
+}
+
+#[test]
+fn a_declared_winner_ends_the_event_early_and_takes_the_winner_reward() {
+    // The framework carries the winner marker + finish_event; a server-computed
+    // winner set mid-game ends the game early, and the flag algebra pays the
+    // winner and losers apart.
+    let atlas = paper_host::real_atlas();
+    let rewards = vec![
+        reward_entry(
+            None,
+            vec![SuccessFlag::Winner],
+            RewardKind::Money {
+                amount: Zen(10_000),
+            },
+        ),
+        reward_entry(
+            None,
+            vec![SuccessFlag::Loser],
+            RewardKind::Money { amount: Zen(300) },
+        ),
+    ];
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, Vec::new(), rewards);
+    let mut world = World::with_mini_games(31, MapNumber(9), vec![definition]);
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e1 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    for entrant in [e0, e1] {
+        assert!(matches!(
+            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            EnterOutcome::Entered { .. }
+        ));
+    }
+    advance_to_playing(&mut world, s);
+    let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
+        panic!("expected Playing, got {:?}", world.mini_session(s).phase);
+    };
+
+    // The server-computed winner is marked mid-game; the next advance ends early.
+    world.finish_mini_event(s, RosterSlot(1));
+    assert_eq!(
+        world.mini_session(s).winner,
+        WinnerStanding::Won { by: RosterSlot(1) }
+    );
+    let early = Tick(ends_at.0.saturating_sub(500));
+    let events = world.advance_mini_session(s, early);
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, MiniGameEvent::GameEnded { .. }))
+    );
+
+    let outcome = world.pay_out_mini_rewards(s, early);
+    let winner_award = or_abort(
+        outcome
+            .awards
+            .iter()
+            .find(|award| award.slot == RosterSlot(1))
+            .ok_or("winner award"),
+    );
+    assert_eq!(
+        winner_award.grants,
+        vec![GrantDecision::Money {
+            amount: Zen(10_000)
+        }]
+    );
+    let loser_award = or_abort(
+        outcome
+            .awards
+            .iter()
+            .find(|award| award.slot == RosterSlot(0))
+            .ok_or("loser award"),
+    );
+    assert_eq!(
+        loser_award.grants,
+        vec![GrantDecision::Money { amount: Zen(300) }]
+    );
+    assert_eq!(world.character(e1).zen().get(), 75_000 + 10_000);
+    assert_eq!(world.character(e0).zen().get(), 75_000 + 300);
+}
+
+#[test]
+fn overlapping_waves_and_wave_scoped_respawn_hold_through_the_persist_seam() {
+    // SIM-5 / WAVE gate: overlapping windows run concurrently; a kill inside a
+    // window schedules the monster's OWN respawn_ms; the respawn stops the moment
+    // its wave closes — all persisted, all reading core-computed deadlines.
+    let atlas = paper_host::real_atlas();
+    let monster = respawning_wave_monster(&atlas);
+    let floor = walkable_area(&atlas, MapNumber(9), 8);
+    // Wave 1 over [0, 240 s], wave 2 over [60 s, 270 s] — overlapping between 60
+    // and 240 s, both well inside the 5-minute game, both RespawningWhileOpen.
+    let waves = vec![
+        spawn_wave(
+            1,
+            0,
+            240_000,
+            WaveRespawn::RespawningWhileOpen,
+            monster,
+            2,
+            floor,
+        ),
+        spawn_wave(
+            2,
+            60_000,
+            270_000,
+            WaveRespawn::RespawningWhileOpen,
+            monster,
+            2,
+            floor,
+        ),
+    ];
+    let definition = devil_square_definition(&atlas, sim_level(), 2, 3, waves, Vec::new());
+    let mut world = World::with_mini_games(41, MapNumber(9), vec![definition]);
+    let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let e1 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
+    let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
+    for entrant in [e0, e1] {
+        assert!(matches!(
+            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            EnterOutcome::Entered { .. }
+        ));
+    }
+
+    // Wave 1 spawns at game start.
+    advance_to_playing(&mut world, s);
+    assert_eq!(world.mini_session(s).monsters.live.len(), 2);
+
+    // Advance to wave 2's absolute start (read off its Pending track): both waves
+    // now populate the live-set at once.
+    let WaveState::Pending { starts_at, .. } = wave_state(&world, s, WaveNumber(2)) else {
+        panic!("wave 2 is pending before its window");
+    };
+    world.advance_mini_session(s, starts_at);
+    assert_eq!(
+        world.mini_session(s).monsters.live.len(),
+        4,
+        "both windows are live simultaneously"
+    );
+    assert!(matches!(
+        wave_state(&world, s, WaveNumber(1)),
+        WaveState::Running { .. }
+    ));
+    assert!(matches!(
+        wave_state(&world, s, WaveNumber(2)),
+        WaveState::Running { .. }
+    ));
+
+    // A wave-1 kill inside its window schedules the monster's own respawn_ms;
+    // advancing to the core-computed due tick re-places it (ids never recycle).
+    let WaveState::Running { ends_at: wave1_end } = wave_state(&world, s, WaveNumber(1)) else {
+        panic!("wave 1 is running");
+    };
+    let slain = first_live_of_wave(&world, s, WaveNumber(1));
+    world.report_mini_kill(s, slain, RosterSlot(0), Score(1), starts_at);
+    assert_eq!(world.mini_session(s).monsters.live.len(), 3);
+    let due = or_abort(
+        world
+            .mini_session(s)
+            .waves
+            .pending_respawns
+            .first()
+            .ok_or("a scheduled respawn"),
+    )
+    .due;
+    assert!(
+        due.0 < wave1_end.0,
+        "the respawn falls due before wave 1 closes"
+    );
+    let events = world.advance_mini_session(s, due);
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, MiniGameEvent::MonsterSpawned { .. })),
+        "the respawn fires inside the open window"
+    );
+    assert_eq!(world.mini_session(s).monsters.live.len(), 4);
+    assert!(world.mini_session(s).waves.pending_respawns.is_empty());
+
+    // A wave-1 kill one tick before its window closes: the respawn is due AFTER
+    // the window, so it is dropped when the wave closes — no respawn fires.
+    let slain = first_live_of_wave(&world, s, WaveNumber(1));
+    world.report_mini_kill(
+        s,
+        slain,
+        RosterSlot(0),
+        Score(1),
+        Tick(wave1_end.0.saturating_sub(1)),
+    );
+    let due = or_abort(
+        world
+            .mini_session(s)
+            .waves
+            .pending_respawns
+            .first()
+            .ok_or("a scheduled respawn"),
+    )
+    .due;
+    assert!(
+        due.0 > wave1_end.0,
+        "the respawn falls due after wave 1 closes"
+    );
+    let events = world.advance_mini_session(s, due);
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, MiniGameEvent::MonsterSpawned { .. })),
+        "no respawn fires after the window has closed"
+    );
+    assert!(
+        world.mini_session(s).waves.pending_respawns.is_empty(),
+        "the pending respawn was dropped at the window's close"
+    );
+    assert!(matches!(
+        wave_state(&world, s, WaveNumber(1)),
+        WaveState::Closed
+    ));
 }
