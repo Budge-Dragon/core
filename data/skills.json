@@ -110,7 +110,11 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "flame"
+        "geometry": {
+          "kind": "aim_circle",
+          "radius_x2": 2
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 50,
@@ -185,7 +189,12 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "twister"
+        "geometry": {
+          "kind": "beam",
+          "length_x2": 8,
+          "half_width_x2": 3
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 60,
@@ -211,7 +220,11 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "evil_spirit"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 12
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 90,
@@ -238,7 +251,11 @@
       "range": 0,
       "shape": {
         "kind": "area",
-        "pattern": "hellfire"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 4
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 160,
@@ -289,7 +306,12 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "aqua_beam"
+        "geometry": {
+          "kind": "beam",
+          "length_x2": 16,
+          "half_width_x2": 3
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 140,
@@ -315,7 +337,11 @@
       "range": 3,
       "shape": {
         "kind": "area",
-        "pattern": "cometfall"
+        "geometry": {
+          "kind": "aim_circle",
+          "radius_x2": 2
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 150,
@@ -342,7 +368,11 @@
       "range": 0,
       "shape": {
         "kind": "area",
-        "pattern": "inferno"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 8
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 200,
@@ -570,7 +600,15 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "triple_shot"
+        "geometry": {
+          "kind": "cone",
+          "length_x2": 14,
+          "half_angle": {
+            "num": 196,
+            "den": 277
+          }
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 5,
@@ -819,7 +857,11 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "ice_storm"
+        "geometry": {
+          "kind": "aim_circle",
+          "radius_x2": 3
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 100,
@@ -845,7 +887,11 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "nova"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 12
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 15,
@@ -871,7 +917,11 @@
       "range": 2,
       "shape": {
         "kind": "area",
-        "pattern": "twisting_slash"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 4
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 10,
@@ -897,7 +947,11 @@
       "range": 3,
       "shape": {
         "kind": "area",
-        "pattern": "rageful_blow"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 6
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 25,
@@ -923,7 +977,11 @@
       "range": 2,
       "shape": {
         "kind": "area",
-        "pattern": "death_stab"
+        "geometry": {
+          "kind": "aim_circle",
+          "radius_x2": 2
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 15,
@@ -1073,7 +1131,12 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "penetration"
+        "geometry": {
+          "kind": "beam",
+          "length_x2": 16,
+          "half_width_x2": 2
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 7,
@@ -1100,7 +1163,12 @@
       "range": 2,
       "shape": {
         "kind": "area",
-        "pattern": "fire_slash"
+        "geometry": {
+          "kind": "beam",
+          "length_x2": 4,
+          "half_width_x2": 4
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 15,
@@ -1126,7 +1194,15 @@
       "range": 5,
       "shape": {
         "kind": "area",
-        "pattern": "power_slash"
+        "geometry": {
+          "kind": "cone",
+          "length_x2": 12,
+          "half_angle": {
+            "num": 1,
+            "den": 2
+          }
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 15,
@@ -1177,7 +1253,11 @@
       "range": 6,
       "shape": {
         "kind": "area",
-        "pattern": "fire_burst"
+        "geometry": {
+          "kind": "aim_circle",
+          "radius_x2": 2
+        },
+        "displacement": "none"
       },
       "cost": {
         "mana": 25,
@@ -1203,7 +1283,11 @@
       "range": 10,
       "shape": {
         "kind": "area",
-        "pattern": "earthshake"
+        "geometry": {
+          "kind": "caster_circle",
+          "radius_x2": 10
+        },
+        "displacement": "directional_push"
       },
       "cost": {
         "mana": 0,

@@ -18,7 +18,7 @@ use mu_core::components::element::PerElement;
 use mu_core::components::movement::{Mobility, Movement, SlowRatio};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
-use mu_core::components::spatial::{Facing, Fixed, UNITS_PER_TILE};
+use mu_core::components::spatial::{Facing, StepMagnitude, UNITS_PER_TILE};
 use mu_core::components::stats::Stats;
 use mu_core::components::tile::{TileCoord, WalkGrid};
 use mu_core::components::units::{MapNumber, Resistance, Tick, TickDuration};
@@ -330,7 +330,7 @@ fn iced_halves_a_step_and_frozen_blocks_it() {
 
     // The half-speed ratio applied to a one-tile base carries into the movement
     // service as a half-tile step.
-    let iced_speed = Fixed::from_raw(UNITS_PER_TILE / 2);
+    let iced_speed = StepMagnitude::tile_fraction(1, std::num::NonZeroU32::new(2).unwrap());
     let grid = WalkGrid::from_words([u64::MAX; 1024]);
     let start = Placement {
         position: TileCoord::new(10, 10).to_world(),

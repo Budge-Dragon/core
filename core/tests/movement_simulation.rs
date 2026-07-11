@@ -37,7 +37,7 @@ use mu_core::data::monster_definitions::MobBehavior;
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
-use mu_core::services::movement::{change_flight, resolve_arrival, resolve_step};
+use mu_core::services::movement::{change_flight, resolve_arrival, resolve_drift, resolve_step};
 
 /// Whole-run length for the ambient simulation (Group A).
 const N: u64 = 200;
@@ -457,6 +457,80 @@ fn i6_prime_chase_no_regression_on_real_terrain() {
         );
     }
     assert!(chased, "I6' the mob must actually chase");
+}
+
+// --- Group B addendum: the ≤1-tile ordinary-step invariant (W-AREA, E6). -----
+
+#[test]
+fn ai_seek_and_drift_steps_are_unchanged_under_the_step_magnitude_bound() {
+    // The speed parameter's TYPE changed (`Fixed` → `StepMagnitude`); the step
+    // values did not: `StepMagnitude::ONE_TILE` carries the same one-tile
+    // magnitude the old constant did, so a seek step lands exactly one tile
+    // toward its target and a drift exactly one tile along its facing.
+    let grid = all_walkable();
+    let start = TileCoord::new(10, 10).to_world();
+    let placement = Placement {
+        position: start,
+        facing: Facing::POS_X,
+        movement: Movement::Grounded,
+        map: MapNumber(0),
+    };
+
+    let target = TileCoord::new(13, 10).to_world();
+    match resolve_step(placement, target, ONE_TILE, &grid) {
+        StepOutcome::Resolved { placement: stepped } => {
+            assert_eq!(stepped.position, TileCoord::new(11, 10).to_world());
+        }
+        StepOutcome::Blocked => panic!("an open-ground seek step resolves"),
+    }
+
+    match resolve_drift(placement, Facing::POS_X, ONE_TILE, &grid) {
+        StepOutcome::Resolved { placement: drifted } => {
+            assert_eq!(drifted.position, TileCoord::new(11, 10).to_world());
+        }
+        StepOutcome::Blocked => panic!("an open-ground drift resolves"),
+    }
+}
+
+#[test]
+fn no_ordinary_step_caller_can_request_more_than_one_tile() {
+    // The absence-of-API fact, expressed behaviourally: `resolve_step` and
+    // `resolve_drift` accept only a `StepMagnitude`, whose two constructors —
+    // `ONE_TILE` and the den-capped `tile_fraction` — bound every ordinary step
+    // to at most one whole tile by construction. The deleted 8-tile DASH_SPEED
+    // is unrepresentable; even a dash-shaped 8/1 request collapses to the
+    // one-tile cap, so a walker can never tunnel a blocked middle tile.
+    let dash_like =
+        mu_core::components::spatial::StepMagnitude::tile_fraction(8, core::num::NonZeroU32::MIN);
+    assert_eq!(
+        dash_like.get(),
+        ONE_TILE.get(),
+        "an 8-tiles-per-step request caps at one tile"
+    );
+
+    // (10,10) -> (12,10) walkable with (11,10) blocked: the capped step lands
+    // on the wall tile and is refused — no magnitude reaches the far side.
+    let mut words = [0u64; 1024];
+    for x in [10u8, 12] {
+        let bit = (10usize << 8) | usize::from(x);
+        words[bit >> 6] |= 1u64 << (bit & 63);
+    }
+    let grid = WalkGrid::from_words(words);
+    let start = Placement {
+        position: TileCoord::new(10, 10).to_world(),
+        facing: Facing::POS_X,
+        movement: Movement::Grounded,
+        map: MapNumber(0),
+    };
+    let far = TileCoord::new(12, 10).to_world();
+    assert_eq!(
+        resolve_step(start, far, dash_like, &grid),
+        StepOutcome::Blocked
+    );
+    assert_eq!(
+        resolve_step(start, far, ONE_TILE, &grid),
+        StepOutcome::Blocked
+    );
 }
 
 // --- Group C: flight + warp + step integration on real maps.

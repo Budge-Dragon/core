@@ -274,3 +274,230 @@ fn a_fixed_item_roll_serializes_identically_across_targets() {
         r#"{"item":{"group":0,"number":3},"level":9,"roll":{"kind":"excellent","options":{"set":"weapon","options":["health_after_kill","damage_per_level","excellent_damage_chance"]}},"normal_option":{"option":"physical_damage","level":3},"luck":"lucky","skill":"with_skill","durability":{"current":49,"max":49},"augment":{"kind":"none"}}"#
     );
 }
+
+// -- W-AREA: geometry, push, and jiggle replay across targets. -----------------
+
+use mu_core::components::active_effect::ActiveEffects;
+use mu_core::components::combat_profile::CombatTarget;
+use mu_core::components::movement::Movement;
+use mu_core::components::placement::Placement;
+use mu_core::components::spatial::{Facing, Fixed, TileDelta, TileOffset, WorldVec};
+use mu_core::components::tile::{TileCoord, WalkGrid};
+use mu_core::components::units::MapNumber;
+use mu_core::data::skills::Skill;
+use mu_core::entities::character::Character;
+use mu_core::services::chance::draw_jiggle_offset;
+use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
+
+#[test]
+fn draw_jiggle_offset_sequence_is_identical_across_targets() {
+    // The ±1 jiggle draw (dx then dy, two `uniform_below(3)` words per call)
+    // under SEED: the nine-outcome offsets below are the cross-target contract.
+    let mut rng = SplitMix64::new(SEED);
+    let seq: Vec<TileOffset> = (0..12).map(|_| draw_jiggle_offset(&mut rng)).collect();
+    let offset = |dx: TileDelta, dy: TileDelta| TileOffset::new(dx, dy);
+    assert_eq!(
+        seq,
+        vec![
+            offset(TileDelta::Neg, TileDelta::Zero),
+            offset(TileDelta::Zero, TileDelta::Neg),
+            offset(TileDelta::Neg, TileDelta::Zero),
+            offset(TileDelta::Neg, TileDelta::Neg),
+            offset(TileDelta::Zero, TileDelta::Neg),
+            offset(TileDelta::Neg, TileDelta::Zero),
+            offset(TileDelta::Neg, TileDelta::Zero),
+            offset(TileDelta::Pos, TileDelta::Pos),
+            offset(TileDelta::Pos, TileDelta::Neg),
+            offset(TileDelta::Neg, TileDelta::Pos),
+            offset(TileDelta::Neg, TileDelta::Zero),
+            offset(TileDelta::Pos, TileDelta::Zero),
+        ]
+    );
+}
+
+#[test]
+fn the_octant_quantizer_is_identical_across_targets() {
+    // The 8-way away-vector quantizer is pure i128 arithmetic over the pinned
+    // 408/985 convergent of tan 22.5° — no RNG, no float — so its sector
+    // decisions (including the boundary-exact-to-diagonal tie rule) must agree
+    // bit-for-bit on every target. The vectors are the design doc's worked
+    // boundaries.
+    let vec = |x: i64, y: i64| WorldVec::new(Fixed::from_raw(x), Fixed::from_raw(y));
+    let offset = |dx: TileDelta, dy: TileDelta| TileOffset::new(dx, dy);
+    // Just inside the East sector.
+    assert_eq!(
+        vec(985, 407).octant(),
+        Some(offset(TileDelta::Pos, TileDelta::Zero))
+    );
+    // Exactly on the 22.5° boundary: the pinned tie rule resolves diagonal.
+    assert_eq!(
+        vec(985, 408).octant(),
+        Some(offset(TileDelta::Pos, TileDelta::Pos))
+    );
+    // Straight north; a clear diagonal; the mirrored west flank; the zero vector.
+    assert_eq!(
+        vec(0, 65_536).octant(),
+        Some(offset(TileDelta::Zero, TileDelta::Pos))
+    );
+    assert_eq!(
+        vec(131_072, 65_536).octant(),
+        Some(offset(TileDelta::Pos, TileDelta::Pos))
+    );
+    assert_eq!(
+        vec(-985, -407).octant(),
+        Some(offset(TileDelta::Neg, TileDelta::Zero))
+    );
+    assert_eq!(WorldVec::ZERO.octant(), None);
+}
+
+/// A hand-pinned level-50 Dark Knight caster at tile (10, 10) facing +X, built
+/// through the wire (the only door an external test has) so the fixture needs
+/// no filesystem.
+fn fixed_caster() -> Character {
+    or_abort(serde_json::from_value(serde_json::json!({
+        "class": "dark_knight",
+        "level": 50,
+        "experience": 0,
+        "stats": {"kind": "standard", "strength": 200, "agility": 100, "vitality": 100, "energy": 30},
+        "unspent_points": 0,
+        "zen": 0,
+        "placement": {
+            "position": {"x": 10 * 65_536 + 32_768, "y": 10 * 65_536 + 32_768},
+            "facing": {"x": 1, "y": 0},
+            "movement": "grounded",
+            "map": 0
+        },
+        "vitals": {
+            "health": {"current": 500, "max": 500},
+            "mana": {"current": 400, "max": 400},
+            "ability": {"current": 400, "max": 400}
+        }
+    })))
+}
+
+/// A hand-pinned deep-health target seated at `tile`, wearing the fixed
+/// defender profile.
+fn fixed_target(tile: (u8, u8)) -> CombatTarget {
+    CombatTarget::new(
+        fixed_profile(20, (1, 2), 0, (0, 0), 0),
+        Pool::full(100_000),
+        Placement {
+            position: TileCoord::new(tile.0, tile.1).to_world(),
+            facing: Facing::POS_X,
+            movement: Movement::Grounded,
+            map: MapNumber(0),
+        },
+        ActiveEffects::EMPTY,
+    )
+}
+
+/// The damaging reference of a hand-built skill; a non-damaging shape aborts.
+fn fixed_damaging(skill: &Skill) -> DamagingSkillRef<'_> {
+    match route(skill) {
+        SkillRouting::Damaging(reference) => reference,
+        SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
+            or_abort(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
+        }
+    }
+}
+
+/// An Earthshake-shaped area skill (caster circle r=5, directional push, the
+/// inert lightning tag), hand-built through the wire.
+fn fixed_earthshake() -> Skill {
+    or_abort(serde_json::from_value(serde_json::json!({
+        "number": 62,
+        "source_version": "075",
+        "attack_damage": 150,
+        "damage_type": "physical",
+        "element": "lightning",
+        "range": 10,
+        "shape": {
+            "kind": "area",
+            "geometry": {"kind": "caster_circle", "radius_x2": 10},
+            "displacement": "directional_push"
+        },
+        "cost": {"mana": 0, "ability": 50},
+        "learn": {"level": 0, "energy": 0, "command": 0},
+        "classes": []
+    })))
+}
+
+/// A lunge-shaped weapon skill, hand-built through the wire.
+fn fixed_lunge() -> Skill {
+    or_abort(serde_json::from_value(serde_json::json!({
+        "number": 19,
+        "source_version": "075",
+        "attack_damage": 0,
+        "damage_type": "physical",
+        "range": 3,
+        "shape": {"kind": "lunge"},
+        "cost": {"mana": 9, "ability": 0},
+        "learn": {"level": 0, "energy": 0, "command": 0},
+        "classes": []
+    })))
+}
+
+fn open_ground() -> WalkGrid {
+    WalkGrid::from_words([u64::MAX; 1024])
+}
+
+#[test]
+fn a_fixed_earthshake_cast_serializes_identically_across_targets() {
+    // The authored caster-circle geometry read, the strike, and the
+    // away-vector push (target two tiles east -> thrown to (15,10), zero
+    // displacement words) under SEED must reproduce this exact outcome on
+    // native and wasm alike.
+    let caster = fixed_caster();
+    let profile = fixed_profile(50, (33, 50), 0, (10_000, 0), 0);
+    let skill = fixed_earthshake();
+    let targets = [fixed_target((12, 10))];
+    let aim = TileCoord::new(10, 10).to_world();
+    let mut rng = SplitMix64::new(SEED);
+    let (vitals, outcome) = cast(
+        &caster,
+        &profile,
+        fixed_damaging(&skill).locate(aim),
+        &targets,
+        &open_ground(),
+        &mut rng,
+    );
+    assert_eq!(vitals.ability.current(), 350, "the quake's 50 AG is spent");
+    // Draw-by-draw under SEED: the strike lands normal for 489 (the [33,50]
+    // span augmented by D=150 to [183,275], ×2030/1000); the inert lightning
+    // tag rolls no element word; the push draws nothing and throws the (12,10)
+    // target due east to (15,10).
+    assert_eq!(
+        or_abort(serde_json::to_string(&outcome)),
+        r#"{"kind":"cast","caster_placement":{"position":{"x":688128,"y":688128},"facing":{"x":1,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":489,"quality":"normal","modifiers":[]},"health":{"current":99511,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":1015808,"y":688128},"facing":{"x":65536,"y":0},"movement":"grounded","map":0}}]}"#
+    );
+}
+
+#[test]
+fn a_fixed_lunge_cast_serializes_identically_across_targets() {
+    // The lunge's caster teleport (no draw) and its MovesTarget jiggle (two
+    // words) under SEED must reproduce this exact outcome — placement and
+    // displacement alike — on native and wasm.
+    let caster = fixed_caster();
+    let profile = fixed_profile(50, (33, 50), 0, (10_000, 0), 0);
+    let skill = fixed_lunge();
+    let targets = [fixed_target((12, 10))];
+    let aim = TileCoord::new(12, 10).to_world();
+    let mut rng = SplitMix64::new(SEED);
+    let (vitals, outcome) = cast(
+        &caster,
+        &profile,
+        fixed_damaging(&skill).locate(aim),
+        &targets,
+        &open_ground(),
+        &mut rng,
+    );
+    assert_eq!(vitals.mana.current(), 391, "the lunge's 9 mana is spent");
+    // Draw-by-draw under SEED: the strike lands normal for 89 (the bare
+    // [33,50] span ×2030/1000); the caster teleports onto the target's (12,10)
+    // cell facing east; the victim's two jiggle words land the (−1,−1)
+    // diagonal, one tile toward the origin corner at (11,9).
+    assert_eq!(
+        or_abort(serde_json::to_string(&outcome)),
+        r#"{"kind":"cast","caster_placement":{"position":{"x":819200,"y":688128},"facing":{"x":131072,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":89,"quality":"normal","modifiers":[]},"health":{"current":99911,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":753664,"y":622592},"facing":{"x":-65536,"y":-65536},"movement":"grounded","map":0}}]}"#
+    );
+}

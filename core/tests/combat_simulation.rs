@@ -421,8 +421,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
         let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &character_profile(&caster).0,
-            bolt,
-            aim,
+            bolt.locate(aim),
             &targets,
             &grid,
             &mut rng,
@@ -739,14 +738,19 @@ fn a_passive_victim_yields_no_reward_and_draws_no_randomness() {
 // --- Skill guards over the shipped data. ---
 
 #[test]
-fn a_landed_lightning_strike_reports_a_knockback() {
-    // Drives the real cast service over the shipped data: a landed lightning
-    // strike must be able to report a displacement. A mutation dropping the
-    // knockback composition would leave it forever None.
+fn a_landed_lightning_strike_jiggles_its_target_within_one_tile_per_axis() {
+    // Drives the real cast service over the shipped data: a landed, applied
+    // lightning strike jiggles its target — every reported displacement stays
+    // within ±1 tile on EACH axis (dx, dy each in {−1, 0, +1}; diagonals and
+    // the stay outcome included), a missed strike never displaces, and at least
+    // one seed lands a real move. The W-AREA G3 contract: a mutation reviving
+    // the old always-moves cardinal shove (or dropping the jiggle composition)
+    // reddens this.
     let atlas = real_atlas();
     let (_, combat, _) = low_level_monster(&atlas, 20);
     let grid = atlas.walk_grid(MapNumber(0)).unwrap().clone();
     let caster = dark_knight(50, 200, TileCoord::new(135, 125));
+    let start = TileCoord::new(136, 125).to_world();
     let target = CombatTarget::new(
         monster_profile(&combat, &zero_resistances(), combat.level),
         Pool::full(combat.hp),
@@ -756,34 +760,48 @@ fn a_landed_lightning_strike_reports_a_knockback() {
     let bolt_def = lightning_bolt();
     let bolt = as_damaging(&bolt_def).unwrap();
     let targets = [target];
-    let aim = TileCoord::new(136, 125).to_world();
+    let tile = mu_core::components::spatial::UNITS_PER_TILE;
 
-    let mut saw_displacement = false;
+    let mut saw_move = false;
     for seed in 0u64..64 {
         let mut rng = TestRng::new(seed);
-        if let SkillOutcome::Cast { hits, .. } = cast(
+        let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &character_profile(&caster).0,
-            bolt,
-            aim,
+            bolt.locate(start),
             &targets,
             &grid,
             &mut rng,
         )
         .1
-        {
-            if let Some(TargetHit::Landed {
-                displacement: Some(_),
+        else {
+            panic!("a funded bolt over a covered target resolves");
+        };
+        match hits.first().copied() {
+            Some(TargetHit::Landed {
+                displacement: Some(moved),
                 ..
-            }) = hits.first()
-            {
-                saw_displacement = true;
-                break;
+            }) => {
+                let dx = moved.position.x().raw() - start.x().raw();
+                let dy = moved.position.y().raw() - start.y().raw();
+                assert!(dx.abs() <= tile, "seed {seed}: dx within one tile");
+                assert!(dy.abs() <= tile, "seed {seed}: dy within one tile");
+                assert_ne!(moved.position, start, "a reported jiggle is a net move");
+                saw_move = true;
             }
+            // The elemental jiggle is landed-only: a miss never displaces.
+            Some(TargetHit::Missed { displacement, .. }) => assert_eq!(displacement, None),
+            Some(
+                TargetHit::Landed {
+                    displacement: None, ..
+                }
+                | TargetHit::Killed { .. },
+            )
+            | None => {}
         }
     }
     assert!(
-        saw_displacement,
-        "a landed lightning strike reports a knockback"
+        saw_move,
+        "a seed in 0..64 lands an applied jiggle that moves the target"
     );
 }

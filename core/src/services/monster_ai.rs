@@ -12,9 +12,9 @@
 
 use rand_core::RngCore;
 
-use crate::components::movement::{Mobility, SlowRatio};
+use crate::components::movement::Mobility;
 use crate::components::placement::Placement;
-use crate::components::spatial::{Facing, Fixed, Radius, UNITS_PER_TILE, WorldPos};
+use crate::components::spatial::{Facing, Radius, StepMagnitude, WorldPos};
 use crate::components::tile::WalkGrid;
 use crate::components::units::{Tick, TickDuration, Ticks};
 use crate::data::monster_definitions::MobBehavior;
@@ -23,7 +23,6 @@ use crate::events::monster_ai::MonsterIntent;
 use crate::events::movement::StepOutcome;
 use crate::services::chance::draw_cardinal;
 use crate::services::movement::{resolve_drift, resolve_step};
-use crate::services::ratio::scale_ratio;
 
 /// A monster's per-action step distance: one whole tile. Authentic: classic MU
 /// is tile-grid, so a mob advances exactly one tile per move action — one tile
@@ -31,7 +30,7 @@ use crate::services::ratio::scale_ratio;
 /// the `move_delay_ms` cadence (the classic Monster.txt move-interval, sourced
 /// per monster); `move_range` is the territory radius. Classic carries no
 /// separate per-step-distance column, so there is nothing further to source.
-const MOB_STEP_SPEED: Fixed = Fixed::from_raw(UNITS_PER_TILE);
+const MOB_STEP_SPEED: StepMagnitude = StepMagnitude::ONE_TILE;
 
 /// The leash radius a roaming mob tethers within: its view range. With leash
 /// equal to view, a mob chasing a target it can see may overstep the leash by
@@ -64,22 +63,16 @@ fn rescheduled(mob: &MonsterInstance, placement: Placement, delay: Ticks) -> Mon
 
 /// The per-step speed a mobility confers, or `None` when the mob is
 /// immobilized (no leash/chase/wander step is taken). `Free` moves at the base
-/// mob step speed; `Slowed` scales that same base by the effect's slow ratio —
-/// so [`MOB_STEP_SPEED`] is decided in this one module and nowhere else.
-fn step_speed(mobility: Mobility) -> Option<Fixed> {
+/// mob step speed; `Slowed` scales the whole tile down by the effect's slow
+/// ratio through [`StepMagnitude::tile_fraction`] — a slow can only shrink the
+/// step, so the ≤1-tile bound holds by construction and [`MOB_STEP_SPEED`] is
+/// decided in this one module and nowhere else.
+fn step_speed(mobility: Mobility) -> Option<StepMagnitude> {
     match mobility {
         Mobility::Free => Some(MOB_STEP_SPEED),
-        Mobility::Slowed { ratio } => Some(slowed_step(ratio)),
+        Mobility::Slowed { ratio } => Some(StepMagnitude::tile_fraction(ratio.num(), ratio.den())),
         Mobility::Immobilized => None,
     }
-}
-
-/// The base mob step speed scaled down by a slow ratio, via the shared
-/// integer-ratio primitive (no float). The one-tile base fits `u32` (`2^24`), so
-/// the narrow is a boundary clamp of a spatial magnitude, never a masked lookup.
-fn slowed_step(ratio: SlowRatio) -> Fixed {
-    let base = u32::try_from(MOB_STEP_SPEED.raw()).unwrap_or(u32::MAX);
-    Fixed::from_raw(i64::from(scale_ratio(base, ratio.num(), ratio.den())))
 }
 
 /// Applies a resolved movement step and advances the cadence by `delay`. A
@@ -175,8 +168,9 @@ pub fn decide_monster_action(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::movement::Movement;
+    use crate::components::movement::{Movement, SlowRatio};
     use crate::components::pool::Pool;
+    use crate::components::spatial::UNITS_PER_TILE;
     use crate::components::tile::TileCoord;
     use crate::components::units::{DurationMs, MapNumber};
     use crate::data::common::MonsterNumber;
