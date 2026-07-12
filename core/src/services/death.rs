@@ -16,6 +16,7 @@
 use rand_core::RngCore;
 
 use crate::components::active_effect::ActiveEffects;
+use crate::components::combat_profile::TargetKind;
 use crate::components::life::LifeState;
 use crate::components::pool::Pool;
 use crate::components::units::{
@@ -49,6 +50,22 @@ pub enum DeathPenalty {
     Applied,
     /// Dock nothing (a death inside a mini-game).
     Waived,
+}
+
+/// The penalty a *combat* death applies, decided by the attacker's kind: a
+/// player kill waives the victim's experience and zen penalty (authentic — the
+/// killer is not a monster), a monster kill applies the classic penalty. The
+/// rule lives in core so a host cannot forge it: the deciding fact is the
+/// attacker's core-stamped [`TargetKind`], never a client claim, which makes it
+/// symmetric with the overrate matchup in the combat service. The
+/// mini-game-membership waiver stays a separate host-owned override (session
+/// membership is host state, not a combat fact).
+#[must_use]
+pub fn combat_death_penalty(attacker: TargetKind) -> DeathPenalty {
+    match attacker {
+        TargetKind::Player => DeathPenalty::Waived,
+        TargetKind::Npc => DeathPenalty::Applied,
+    }
 }
 
 /// The monster-kill death step: docks the experience and zen penalty — under
@@ -311,5 +328,19 @@ mod tests {
     #[test]
     fn the_our_pins_hold_their_values() {
         assert_eq!(RESPAWN_DELAY_MS, DurationMs(3_000));
+    }
+
+    #[test]
+    fn combat_death_penalty_waives_for_a_player_killer_applies_for_a_monster() {
+        // The waiver is decided by the attacker's core-stamped kind, so a host
+        // can neither forge "a player kill is free" nor dock a player's victim.
+        assert!(matches!(
+            combat_death_penalty(TargetKind::Player),
+            DeathPenalty::Waived
+        ));
+        assert!(matches!(
+            combat_death_penalty(TargetKind::Npc),
+            DeathPenalty::Applied
+        ));
     }
 }
