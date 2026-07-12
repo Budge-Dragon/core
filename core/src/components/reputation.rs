@@ -146,21 +146,27 @@ mod tests {
             PkStage::Warning < PkStage::FirstStage && PkStage::FirstStage < PkStage::SecondStage
         );
         assert!(!Standing::Clean.is_hunted());
-        assert!(!Standing::Flagged {
-            stage: PkStage::Warning,
-            decays_at: Tick(1)
-        }
-        .is_hunted());
-        assert!(Standing::Flagged {
-            stage: PkStage::FirstStage,
-            decays_at: Tick(1)
-        }
-        .is_hunted());
-        assert!(Standing::Flagged {
-            stage: PkStage::SecondStage,
-            decays_at: Tick(1)
-        }
-        .is_hunted());
+        assert!(
+            !Standing::Flagged {
+                stage: PkStage::Warning,
+                decays_at: Tick(1)
+            }
+            .is_hunted()
+        );
+        assert!(
+            Standing::Flagged {
+                stage: PkStage::FirstStage,
+                decays_at: Tick(1)
+            }
+            .is_hunted()
+        );
+        assert!(
+            Standing::Flagged {
+                stage: PkStage::SecondStage,
+                decays_at: Tick(1)
+            }
+            .is_hunted()
+        );
     }
 
     #[test]
