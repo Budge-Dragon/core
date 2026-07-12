@@ -37,6 +37,10 @@ pub enum SkillOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CastRejection {
+    /// The caster is dead (in the death→respawn window) — a corpse casts
+    /// nothing. Checked before every other precondition, so no resource is
+    /// spent and no displacement lands.
+    CasterNotAlive,
     /// The caster stood on a safe town tile — offensive casting is forbidden
     /// there. Checked first, before any spend or aim gate.
     CasterInSafezone,

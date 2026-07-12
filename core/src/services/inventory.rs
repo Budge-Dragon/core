@@ -17,7 +17,7 @@ use crate::components::class::CharacterClass;
 use crate::components::drop_claim::PickerStanding;
 use crate::components::equipment::{Equipment, EquipmentSlot};
 use crate::components::inventory::{Cell, Footprint, Inventory, PlacementRejection};
-use crate::components::item_instance::{ItemInstance, RolledNormalOption};
+use crate::components::item_instance::{ItemInstance, ItemInstanceError, RolledNormalOption};
 use crate::components::spatial::{Radius, WorldPos};
 use crate::components::stats::Stats;
 use crate::components::units::{CarriedZen, CreditOutcome, Level, MapNumber, Tick};
@@ -261,11 +261,11 @@ pub fn equip(
     atlas: &Atlas,
     wearer: &Wearer,
 ) -> (Equipment, EquipOutcome) {
-    if !slot_accepts(&def.kind, slot) {
+    if let Err(reason) = worn_item_ok(&item, def, slot) {
         return (
             equipment,
             EquipOutcome::Rejected {
-                reason: EquipRejection::IncompatibleSlot,
+                reason: equip_rejection_of(reason),
                 item,
             },
         );
@@ -292,6 +292,17 @@ pub fn equip(
         return (equipment, EquipOutcome::Rejected { reason, item });
     }
     (equipment.with(slot, item), EquipOutcome::Equipped { slot })
+}
+
+/// The live-equip rejection for a shared worn-legality failure: a wrong-slot
+/// item is [`EquipRejection::IncompatibleSlot`] (the reason live equip has always
+/// reported for it), and an item whose excellent set or crafted augment does not
+/// match its definition is [`EquipRejection::MalformedItem`].
+fn equip_rejection_of(error: WornItemError) -> EquipRejection {
+    match error {
+        WornItemError::WrongSlot => EquipRejection::IncompatibleSlot,
+        WornItemError::Invariant(_) => EquipRejection::MalformedItem,
+    }
 }
 
 // W-SRC: the equip eligibility gate mirrors OpenMU's `CompliesRequirements`
@@ -615,16 +626,81 @@ fn hand_pair_conflicts(incoming: HandOccupation, paired: HandOccupation) -> bool
     }
 }
 
-/// Re-proves hand-pair occupancy at the reload boundary — the
-/// instance×definition cross-reference the [`Equipment`] component cannot hold
-/// alone (a slot carries an [`ItemInstance`], whose handedness lives in the
-/// definition). A hand wearing a two-handed weapon requires the other hand
-/// empty; a launcher admits only ammunition beside it.
+/// The one per-item worn-legality proof, shared by live [`equip`] and reload
+/// [`reconcile_equipment`] so the two can never drift: the kind→slot rule
+/// ([`slot_accepts`], INV-1), then the instance×definition cross-references
+/// ([`ItemInstance::reconcile`], INV-5/6) with both reconcile inputs derived from
+/// the definition's own kind facts ([`ItemKind::excellent_category`],
+/// [`ItemKind::augment_slot`]).
 ///
 /// # Errors
-/// Returns [`EquipmentConflict::TwoHandedWithOffhand`] when both hands are
-/// occupied by an illegal pairing.
+/// Returns [`WornItemError::WrongSlot`] when the item's kind cannot go in `slot`,
+/// or [`WornItemError::Invariant`] when its excellent set or crafted augment does
+/// not match what the definition permits.
+pub(crate) fn worn_item_ok(
+    item: &ItemInstance,
+    def: &ItemDefinition,
+    slot: EquipmentSlot,
+) -> Result<(), WornItemError> {
+    if !slot_accepts(&def.kind, slot) {
+        return Err(WornItemError::WrongSlot);
+    }
+    item.reconcile(def.kind.excellent_category(), def.kind.augment_slot())
+        .map_err(WornItemError::Invariant)
+}
+
+/// Why a single item fails the shared worn-legality proof — the two per-item
+/// failure modes [`worn_item_ok`] decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WornItemError {
+    /// The item's kind cannot be worn in the target slot.
+    WrongSlot,
+    /// The item's excellent set or crafted augment does not match its
+    /// definition's capabilities.
+    Invariant(ItemInstanceError),
+}
+
+impl core::fmt::Display for WornItemError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::WrongSlot => write!(f, "the item's kind cannot be worn in that slot"),
+            Self::Invariant(reason) => write!(f, "{reason}"),
+        }
+    }
+}
+
+impl core::error::Error for WornItemError {}
+
+/// Re-proves a reloaded equipment set at the boundary, folding the shared
+/// [`worn_item_ok`] proof over every occupied slot — the same kind→slot and
+/// instance×definition cross-references live equip runs — then the hand-pair
+/// occupancy the [`Equipment`] component cannot hold alone (a slot carries an
+/// [`ItemInstance`], whose handedness lives in the definition). A hand wearing a
+/// two-handed weapon requires the other hand empty; a launcher admits only
+/// ammunition beside it.
+///
+/// # Errors
+/// Returns [`EquipmentConflict::UnknownItem`] when a worn item names no
+/// definition, [`EquipmentConflict::WrongSlot`] or
+/// [`EquipmentConflict::ItemInvariant`] when a worn item fails the shared proof,
+/// or [`EquipmentConflict::TwoHandedWithOffhand`] when both hands are occupied by
+/// an illegal pairing.
 pub fn reconcile_equipment(equipment: &Equipment, atlas: &Atlas) -> Result<(), EquipmentConflict> {
+    for slot in EquipmentSlot::ALL {
+        let Some(item) = equipment.get(slot) else {
+            continue;
+        };
+        let Some(def) = atlas.item(item.item) else {
+            return Err(EquipmentConflict::UnknownItem);
+        };
+        match worn_item_ok(item, def, slot) {
+            Ok(()) => {}
+            Err(WornItemError::WrongSlot) => return Err(EquipmentConflict::WrongSlot),
+            Err(WornItemError::Invariant(reason)) => {
+                return Err(EquipmentConflict::ItemInvariant(reason));
+            }
+        }
+    }
     match (
         equipment.get(EquipmentSlot::LeftHand),
         equipment.get(EquipmentSlot::RightHand),
@@ -643,13 +719,22 @@ pub fn reconcile_equipment(equipment: &Equipment, atlas: &Atlas) -> Result<(), E
     }
 }
 
-/// Why a reloaded equipment set violates hand-pair occupancy.
+/// Why a reloaded equipment set is rejected — a worn item in a slot it cannot
+/// occupy, an item whose options contradict its definition, an unknown item, or
+/// an illegal hand pairing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EquipmentConflict {
     /// Both hands are occupied by an illegal pairing: a two-handed weapon
     /// beside anything, a launcher beside a non-ammunition item, or ammunition
     /// beside a non-launcher item.
     TwoHandedWithOffhand,
+    /// A worn item's kind cannot be worn in the slot it occupies.
+    WrongSlot,
+    /// A worn item's excellent set or crafted augment does not match its
+    /// definition's capabilities.
+    ItemInvariant(ItemInstanceError),
+    /// A worn item names an item identity the atlas has no definition for.
+    UnknownItem,
 }
 
 impl core::fmt::Display for EquipmentConflict {
@@ -659,11 +744,74 @@ impl core::fmt::Display for EquipmentConflict {
                 f,
                 "a two-handed weapon is worn while the other hand is occupied"
             ),
+            Self::WrongSlot => write!(f, "a worn item's kind cannot occupy its slot"),
+            Self::ItemInvariant(reason) => write!(f, "{reason}"),
+            Self::UnknownItem => write!(f, "a worn item has no definition"),
         }
     }
 }
 
 impl core::error::Error for EquipmentConflict {}
+
+/// Re-proves every placed item's footprint against its real definition
+/// dimensions at the reload boundary — the [`reconcile_equipment`] sibling for
+/// the storage grid. The [`Inventory`] component proves geometry (in bounds,
+/// non-overlap) but trusts each stored footprint; a tampered row could shrink an
+/// oversized item to pack more than the grid allows, so the service re-derives
+/// each footprint from the definition (`width`×`height`) and rejects any that
+/// differs. The component stays data-free; the atlas cross-reference is the
+/// service's.
+///
+/// # Errors
+/// Returns [`InventoryConflict::UnknownItem`] when a placed item names no
+/// definition, or [`InventoryConflict::FootprintMismatch`] when a stored
+/// footprint differs from its definition's dimensions.
+pub fn reconcile_inventory(inventory: &Inventory, atlas: &Atlas) -> Result<(), InventoryConflict> {
+    for placed in inventory.placed() {
+        let Some(def) = atlas.item(placed.item.item) else {
+            return Err(InventoryConflict::UnknownItem { at: placed.anchor });
+        };
+        match Footprint::new(def.width, def.height) {
+            Ok(expected) if expected == placed.footprint => {}
+            Ok(_) | Err(_) => {
+                return Err(InventoryConflict::FootprintMismatch { at: placed.anchor });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Why a reloaded inventory is rejected — a placed item names no definition, or
+/// its stored footprint contradicts its definition's dimensions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InventoryConflict {
+    /// A placed item names an item identity the atlas has no definition for.
+    UnknownItem {
+        /// The anchor cell of the offending placed item.
+        at: Cell,
+    },
+    /// A placed item's stored footprint differs from its definition's
+    /// `width`×`height`.
+    FootprintMismatch {
+        /// The anchor cell of the offending placed item.
+        at: Cell,
+    },
+}
+
+impl core::fmt::Display for InventoryConflict {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::UnknownItem { at } => {
+                write!(f, "a placed item at {at:?} has no definition")
+            }
+            Self::FootprintMismatch { at } => {
+                write!(f, "a placed item at {at:?} has a tampered footprint")
+            }
+        }
+    }
+}
+
+impl core::error::Error for InventoryConflict {}
 
 #[cfg(test)]
 mod tests {

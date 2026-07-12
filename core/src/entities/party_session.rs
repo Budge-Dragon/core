@@ -29,11 +29,159 @@ pub struct PartyMember {
 /// drop below it returns a terminal outcome, never a sub-threshold session — and
 /// `leadership` is stored because the stickiness rule makes it path-dependent
 /// (a purely-derived "earliest Active" would let a reconnecting ex-leader steal).
+///
+/// Private fields: construction (serde or otherwise) proves the roster/leadership
+/// cross-field invariants via [`TryFrom<RawPartySession>`], the [`Character`] and
+/// [`Inventory`] precedent — a forged persisted row cannot name itself leader,
+/// so a held [`PartySession`] is always internally consistent.
+///
+/// [`Character`]: crate::entities::character::Character
+/// [`Inventory`]: crate::components::inventory::Inventory
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "RawPartySession", into = "RawPartySession")]
 pub struct PartySession {
     members: Vec<PartyMember>,
     leadership: Leadership,
 }
+
+/// Wire mirror of [`PartySession`]. The roster/leadership invariants re-prove on
+/// the way in, since a persisted party loaded from a host is untrusted: a forged
+/// `Led { by }` naming the forger's own seat would otherwise make them the
+/// authoritative leader (the kick/invite gate is `leadership() == Led { by:
+/// actor }`), a privilege escalation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RawPartySession {
+    members: Vec<PartyMember>,
+    leadership: Leadership,
+}
+
+impl TryFrom<RawPartySession> for PartySession {
+    type Error = PartySessionError;
+
+    fn try_from(raw: RawPartySession) -> Result<Self, Self::Error> {
+        let RawPartySession {
+            members,
+            leadership,
+        } = raw;
+        if members.len() < PartySession::MIN_MEMBERS {
+            return Err(PartySessionError::TooFewMembers {
+                found: members.len(),
+            });
+        }
+        let mut previous: Option<MemberSlot> = None;
+        for member in &members {
+            if member.slot.0 >= MemberSlot::CAP {
+                return Err(PartySessionError::SlotOutOfRange { slot: member.slot });
+            }
+            if let Some(prev) = previous {
+                if member.slot <= prev {
+                    return Err(PartySessionError::SlotsNotAscending);
+                }
+            }
+            previous = Some(member.slot);
+        }
+        match leadership {
+            Leadership::Led { by } => {
+                let leads = members.iter().any(|member| {
+                    member.slot == by && matches!(member.membership, Membership::Active)
+                });
+                if !leads {
+                    return Err(PartySessionError::LeaderNotActiveMember { slot: by });
+                }
+            }
+            Leadership::Vacant => {
+                let any_active = members
+                    .iter()
+                    .any(|member| matches!(member.membership, Membership::Active));
+                if any_active {
+                    return Err(PartySessionError::VacantWithActiveMember);
+                }
+            }
+        }
+        Ok(Self {
+            members,
+            leadership,
+        })
+    }
+}
+
+impl From<PartySession> for RawPartySession {
+    fn from(session: PartySession) -> Self {
+        Self {
+            members: session.members,
+            leadership: session.leadership,
+        }
+    }
+}
+
+/// Rejection of a party record that contradicts a roster or leadership
+/// invariant, at construction or the data-load boundary — the [`CharacterError`]
+/// sibling for the party aggregate.
+///
+/// [`CharacterError`]: crate::entities::character::CharacterError
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartySessionError {
+    /// The roster held fewer than [`PartySession::MIN_MEMBERS`] members — a live
+    /// party never persists below the disband threshold.
+    TooFewMembers {
+        /// The number of members found.
+        found: usize,
+    },
+    /// A member's slot is outside the `0..CAP` seat range.
+    SlotOutOfRange {
+        /// The offending slot.
+        slot: MemberSlot,
+    },
+    /// The roster is not strictly ascending by slot — an out-of-order or
+    /// duplicate seat.
+    SlotsNotAscending,
+    /// `Led { by }` names a slot that is absent or not `Active` — the
+    /// privilege-escalation shape a forged row would use.
+    LeaderNotActiveMember {
+        /// The slot the leadership named.
+        slot: MemberSlot,
+    },
+    /// `Vacant` leadership while a member is `Active` — vacancy is the real
+    /// all-`Held` state; an `Active` member must lead.
+    VacantWithActiveMember,
+}
+
+impl core::fmt::Display for PartySessionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooFewMembers { found } => {
+                write!(
+                    f,
+                    "a party needs at least {} members, found {found}",
+                    PartySession::MIN_MEMBERS
+                )
+            }
+            Self::SlotOutOfRange { slot } => {
+                write!(
+                    f,
+                    "member slot {} is outside 0..{}",
+                    slot.0,
+                    MemberSlot::CAP
+                )
+            }
+            Self::SlotsNotAscending => {
+                write!(f, "the roster is not strictly ascending by slot")
+            }
+            Self::LeaderNotActiveMember { slot } => {
+                write!(
+                    f,
+                    "leadership names slot {}, which is absent or not active",
+                    slot.0
+                )
+            }
+            Self::VacantWithActiveMember => {
+                write!(f, "leadership is vacant while a member is active")
+            }
+        }
+    }
+}
+
+impl core::error::Error for PartySessionError {}
 
 impl PartySession {
     /// Disband when the roster would hold fewer than this (classic §C.6).
@@ -249,6 +397,115 @@ mod tests {
                 r#""leadership":{"kind":"led","by":0}}"#,
             )
         );
+        let json = serde_json::to_string(&party).unwrap();
+        assert_eq!(serde_json::from_str::<PartySession>(&json).unwrap(), party);
+    }
+
+    #[test]
+    fn the_wire_gate_rejects_a_forged_leader_naming_a_held_or_absent_slot() {
+        // Led { by } must name an Active member — the kick/invite gate is
+        // `leadership() == Led { by: actor }`, so a forged leader is a
+        // privilege escalation.
+        let held_leader = RawPartySession {
+            members: vec![held(0, 9), active(1)],
+            leadership: Leadership::Led { by: MemberSlot(0) },
+        };
+        assert_eq!(
+            PartySession::try_from(held_leader),
+            Err(PartySessionError::LeaderNotActiveMember {
+                slot: MemberSlot(0)
+            })
+        );
+        let absent_leader = RawPartySession {
+            members: vec![active(0), active(1)],
+            leadership: Leadership::Led { by: MemberSlot(4) },
+        };
+        assert_eq!(
+            PartySession::try_from(absent_leader),
+            Err(PartySessionError::LeaderNotActiveMember {
+                slot: MemberSlot(4)
+            })
+        );
+        // The same forged bytes are rejected on the real deserialize path.
+        let forged = concat!(
+            r#"{"members":[{"slot":0,"membership":{"kind":"active"}},"#,
+            r#"{"slot":1,"membership":{"kind":"active"}}],"#,
+            r#""leadership":{"kind":"led","by":4}}"#,
+        );
+        assert!(serde_json::from_str::<PartySession>(forged).is_err());
+    }
+
+    #[test]
+    fn the_wire_gate_rejects_a_non_ascending_duplicate_or_out_of_range_roster() {
+        let descending = RawPartySession {
+            members: vec![active(1), active(0)],
+            leadership: Leadership::Led { by: MemberSlot(1) },
+        };
+        assert_eq!(
+            PartySession::try_from(descending),
+            Err(PartySessionError::SlotsNotAscending)
+        );
+        let duplicate = RawPartySession {
+            members: vec![active(0), active(0)],
+            leadership: Leadership::Led { by: MemberSlot(0) },
+        };
+        assert_eq!(
+            PartySession::try_from(duplicate),
+            Err(PartySessionError::SlotsNotAscending)
+        );
+        let out_of_range = RawPartySession {
+            members: vec![active(0), active(MemberSlot::CAP)],
+            leadership: Leadership::Led { by: MemberSlot(0) },
+        };
+        assert_eq!(
+            PartySession::try_from(out_of_range),
+            Err(PartySessionError::SlotOutOfRange {
+                slot: MemberSlot(MemberSlot::CAP)
+            })
+        );
+    }
+
+    #[test]
+    fn the_wire_gate_rejects_a_sub_threshold_or_empty_roster() {
+        let solo = RawPartySession {
+            members: vec![active(0)],
+            leadership: Leadership::Led { by: MemberSlot(0) },
+        };
+        assert_eq!(
+            PartySession::try_from(solo),
+            Err(PartySessionError::TooFewMembers { found: 1 })
+        );
+        let empty = RawPartySession {
+            members: Vec::new(),
+            leadership: Leadership::Vacant,
+        };
+        assert_eq!(
+            PartySession::try_from(empty),
+            Err(PartySessionError::TooFewMembers { found: 0 })
+        );
+    }
+
+    #[test]
+    fn the_wire_gate_rejects_vacant_leadership_while_a_member_is_active() {
+        let active_but_vacant = RawPartySession {
+            members: vec![active(0), held(1, 9)],
+            leadership: Leadership::Vacant,
+        };
+        assert_eq!(
+            PartySession::try_from(active_but_vacant),
+            Err(PartySessionError::VacantWithActiveMember)
+        );
+        // The legitimate all-held vacancy is accepted.
+        let all_held = RawPartySession {
+            members: vec![held(0, 9), held(1, 9)],
+            leadership: Leadership::Vacant,
+        };
+        assert!(PartySession::try_from(all_held).is_ok());
+    }
+
+    #[test]
+    fn a_valid_forming_pair_round_trips_through_the_gate() {
+        let party = PartySession::forming().with_member(held(2, 1300));
         let json = serde_json::to_string(&party).unwrap();
         assert_eq!(serde_json::from_str::<PartySession>(&json).unwrap(), party);
     }
