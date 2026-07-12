@@ -290,8 +290,7 @@ fn strike_tail(
     // least max(1, level/10). The ratio is matchup-derived: a
     // player-versus-player strike suppresses the crush (1/1 identity), so this
     // is post-draw integer math only — no RNG draw is added or reordered.
-    let (overrate_num, overrate_den) =
-        Matchup::of(attacker.kind(), target.kind()).overrate_ratio();
+    let (overrate_num, overrate_den) = Matchup::of(attacker.kind(), target.kind()).overrate_ratio();
     let after_overrate = if target.defense_rate() > attacker.attack_rate() {
         scale_ratio(after_greater, overrate_num, nonzero(overrate_den))
     } else {
@@ -628,11 +627,16 @@ mod tests {
                 &StrikeBasis::PlainSwing,
                 &mut TestRng::new(seed),
             );
-            if let (AttackOutcome::Landed { hit: pvm_hit }, AttackOutcome::Landed { hit: pvp_hit }) =
-                (pvm, pvp)
+            if let (
+                AttackOutcome::Landed { hit: pvm_hit },
+                AttackOutcome::Landed { hit: pvp_hit },
+            ) = (pvm, pvp)
             {
                 let (dm, dp) = (pvm_hit.damage.0, pvp_hit.damage.0);
-                assert!(dp > dm, "seed {seed}: pvp {dp} must exceed crushed pvm {dm}");
+                assert!(
+                    dp > dm,
+                    "seed {seed}: pvp {dp} must exceed crushed pvm {dm}"
+                );
                 assert_eq!(dm, scale_ratio(dp, OVERRATE_NUM, nonzero(OVERRATE_DEN)));
                 landed += 1;
             }

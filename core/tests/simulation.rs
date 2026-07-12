@@ -83,14 +83,15 @@ use mu_core::services::trade::LockResult;
 use mu_core::services::wear::WearEvent;
 
 use paper_host::{
-    Combatant, World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
-    dark_wizard, devil_square_definition, devil_square_key, devil_square_ticket,
-    devil_square_ticket_ref, direct_hit_skill, earthshake_skill, fighting_monster_from,
-    first_passive_monster, flame_skill, footprint_of, heal_skill, hellfire_skill, is_equippable,
-    item_at_level, item_instance, lightning_direct_skill, low_level_monster, lunge_skill,
-    magic_gladiator, monster_instance, none_type_skill, nova_skill, or_abort, persist, pos,
-    pressing_monster, respawning_wave_monster, reward_drop_group, reward_entry, spawn_wave, tile,
-    walkable_area, walkable_run, wearer_of, wire, wizardry_direct_skill, zen,
+    Combatant, World, aggressive_monster, armored_monster_from, cell, dark_knight,
+    dark_knight_in_band, dark_wizard, devil_square_definition, devil_square_key,
+    devil_square_ticket, devil_square_ticket_ref, direct_hit_skill, earthshake_skill,
+    fighting_monster_from, first_passive_monster, flame_skill, footprint_of, heal_skill,
+    hellfire_skill, is_equippable, item_at_level, item_instance, lightning_direct_skill,
+    low_level_monster, lunge_skill, magic_gladiator, monster_instance, none_type_skill, nova_skill,
+    or_abort, persist, pos, pressing_monster, respawning_wave_monster, reward_drop_group,
+    reward_entry, spawn_wave, tile, walkable_area, walkable_run, wearer_of, wire,
+    wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -4883,13 +4884,19 @@ fn sim_gate_two_players_fight_outside_safezone_one_kills_the_other_penalty_free(
             Designation::Forced { target_index: 0 },
         );
         if let SkillOutcome::Cast { hits, .. } = &outcome {
-            if hits.iter().any(|hit| matches!(hit, TargetHit::Killed { .. })) {
+            if hits
+                .iter()
+                .any(|hit| matches!(hit, TargetHit::Killed { .. }))
+            {
                 killed = true;
                 break;
             }
         }
     }
-    assert!(killed, "the force-attacked defender is beaten to a killing blow");
+    assert!(
+        killed,
+        "the force-attacked defender is beaten to a killing blow"
+    );
     assert_eq!(world.character(victim).vitals().health.current(), 0);
 
     // The death step under the CORE-computed player-kill penalty: waived, so no
@@ -4914,7 +4921,9 @@ fn sim_gate_two_players_fight_outside_safezone_one_kills_the_other_penalty_free(
     );
 
     // Respawn seats the victim alive inside the town safezone, still penalty-free.
-    let respawned = world.respawn_player(victim).expect("a dead player respawns");
+    let respawned = world
+        .respawn_player(victim)
+        .expect("a dead player respawns");
     assert_eq!(world.character(victim).life(), LifeState::Alive);
     let landing = world.character(victim).placement();
     assert_eq!(respawned.map, landing.map);
@@ -4974,7 +4983,15 @@ fn sim_gate_nova_around_an_enemy_player_kills_monsters_but_not_the_player() {
             Combatant::Monster(mon_a),
             Combatant::Monster(mon_b),
         ];
-        (world, caster, player, mon_a, mon_b, batch, field[0].to_world())
+        (
+            world,
+            caster,
+            player,
+            mon_a,
+            mon_b,
+            batch,
+            field[0].to_world(),
+        )
     };
 
     // Incidental: only the two monsters are struck; the enemy player is spared.
@@ -5003,7 +5020,13 @@ fn sim_gate_nova_around_an_enemy_player_kills_monsters_but_not_the_player() {
 
     // Byte-stable: the same seed replays the same cast bit-for-bit.
     let (mut twin, twin_caster, _tp, _ta, _tb, twin_batch, twin_aim) = nova_scene(52);
-    let twin_outcome = twin.cast_at(twin_caster, nova, twin_aim, &twin_batch, Designation::Incidental);
+    let twin_outcome = twin.cast_at(
+        twin_caster,
+        nova,
+        twin_aim,
+        &twin_batch,
+        Designation::Incidental,
+    );
     assert_eq!(
         wire(&twin_outcome),
         wire(&outcome),

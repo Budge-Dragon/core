@@ -178,7 +178,11 @@ fn a_player_kill_costs_the_victim_nothing_and_rewards_the_killer_nothing() {
         victim_exp_before,
         "the player kill cost no experience"
     );
-    assert_eq!(alive.zen(), victim_zen_before, "the player kill cost no zen");
+    assert_eq!(
+        alive.zen(),
+        victim_zen_before,
+        "the player kill cost no zen"
+    );
 
     let landing = alive.placement();
     let grid = or_abort(

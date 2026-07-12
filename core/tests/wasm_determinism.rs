@@ -826,7 +826,11 @@ fn an_all_npc_area_cast_strikes_the_npc_and_replays_byte_for_byte() {
     let outcome = run(SEED);
     match &outcome {
         SkillOutcome::Cast { hits, .. } => {
-            assert_eq!(hits.len(), 1, "the lone NPC is struck by the incidental sweep");
+            assert_eq!(
+                hits.len(),
+                1,
+                "the lone NPC is struck by the incidental sweep"
+            );
         }
         SkillOutcome::Rejected { .. } => {
             or_abort(Err::<(), _>("the funded field cast resolves"));
@@ -876,9 +880,10 @@ fn a_pvp_strike_draws_the_same_sequence_as_a_pvm_strike_and_only_the_overrate_di
             player_stream.next_u64(),
             "seed {seed}: the two matchups draw an identical sequence"
         );
-        if let (Some(against_monster), Some(against_player)) =
-            (landed_damage(&versus_monster), landed_damage(&versus_player))
-        {
+        if let (Some(against_monster), Some(against_player)) = (
+            landed_damage(&versus_monster),
+            landed_damage(&versus_player),
+        ) {
             assert!(
                 against_player > against_monster,
                 "seed {seed}: the player strike keeps full damage {against_player}; the monster strike is overrate-crushed to {against_monster}"
