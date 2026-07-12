@@ -957,8 +957,9 @@ fn wear_event_every_kind_tag_is_pinned() {
 }
 
 /// The shipped pre-W-EQUIP `CombatProfile` wire form — no gear-magnitude
-/// fields — as a persisted host row would carry it.
-const GEARLESS_PROFILE_JSON: &str = r#"{"level":50,"physical":{"min":33,"max":50},"wizardry":null,"defense":20,"attack_rate":480,"defense_rate":40,"resistances":{"ice":0,"poison":0,"lightning":0,"fire":0,"earth":0,"wind":0,"water":0},"critical_chance":0,"excellent_chance":0,"defense_ignore_chance":0,"double_damage_chance":0,"incoming_damage_reduction":0,"flat_damage_add":0}"#;
+/// fields — as a persisted host row would carry it. Carries the required `kind`
+/// (W-PVP; no serde default — a combatant is always exactly one kind).
+const GEARLESS_PROFILE_JSON: &str = r#"{"kind":"npc","level":50,"physical":{"min":33,"max":50},"wizardry":null,"defense":20,"attack_rate":480,"defense_rate":40,"resistances":{"ice":0,"poison":0,"lightning":0,"fire":0,"earth":0,"wind":0,"water":0},"critical_chance":0,"excellent_chance":0,"defense_ignore_chance":0,"double_damage_chance":0,"incoming_damage_reduction":0,"flat_damage_add":0}"#;
 
 #[test]
 fn combat_profile_wire_carries_the_gear_magnitudes_and_parses_shipped_forms() {

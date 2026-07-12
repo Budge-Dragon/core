@@ -30,7 +30,7 @@ use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
 use mu_core::components::collections::OneOrMore;
-use mu_core::components::combat_profile::CombatTarget;
+use mu_core::components::combat_profile::{CombatTarget, TargetKind};
 use mu_core::components::drop_claim::PickerStanding;
 use mu_core::components::element::PerElement;
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
@@ -94,7 +94,7 @@ use mu_core::events::travel::{
 };
 use mu_core::services::combat::StrikeBasis;
 use mu_core::services::consume::use_consumable;
-use mu_core::services::death::{DeathPenalty, resolve_death, respawn};
+use mu_core::services::death::{DeathPenalty, combat_death_penalty, resolve_death, respawn};
 use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
 };
@@ -114,7 +114,7 @@ use mu_core::services::party;
 use mu_core::services::profile::{effective_profile, equipped_profile, monster_profile};
 use mu_core::services::shop::{RepairSite, RepairSubject, repair};
 use mu_core::services::skills::{
-    DamagingSkill, DamagingSkillRef, SkillRouting, cast, cast_heal, route,
+    DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, cast_heal, route,
 };
 use mu_core::services::spawn::{SpawnResult, place_spawn};
 use mu_core::services::trade::{
@@ -216,6 +216,49 @@ struct LiveSnapshot<'a> {
     parties: &'a [PartySession],
     pending_invites: &'a [PartyInvite],
     mini_sessions: &'a [MiniGameSession],
+}
+
+/// Addresses one combatant in a cast's target batch by the live set that owns
+/// it: a seated player (a character index) or a seated monster (a monster
+/// index). The paper host keys characters and monsters in separate positional
+/// live sets, so a mixed player-and-monster batch needs this both to build each
+/// target's combat view and to route each struck target's returned state back to
+/// the set that owns it.
+#[derive(Debug, Clone, Copy)]
+pub enum Combatant {
+    /// The character at this index — a player-kind combat target.
+    Player(usize),
+    /// The monster instance at this index — a monster-kind combat target.
+    Monster(usize),
+}
+
+/// The write-back fields a resolved [`TargetHit`] carries in every variant: its
+/// batch position, the target's returned health and effect store, and any
+/// displacement a killed target is never displaced, so a `Killed` hit carries
+/// `None`. Shared by the monster-only and the mixed player-and-monster
+/// write-back drivers so the two never destructure the outcome differently.
+fn target_hit_fields(hit: &TargetHit) -> (usize, Pool, ActiveEffects, Option<Placement>) {
+    match hit {
+        TargetHit::Killed {
+            target_index,
+            health,
+            active_effects,
+            ..
+        } => (*target_index, *health, *active_effects, None),
+        TargetHit::Missed {
+            target_index,
+            health,
+            active_effects,
+            displacement,
+        }
+        | TargetHit::Landed {
+            target_index,
+            health,
+            active_effects,
+            displacement,
+            ..
+        } => (*target_index, *health, *active_effects, *displacement),
+    }
 }
 
 impl World {
@@ -863,10 +906,19 @@ impl World {
                     .terrain_grid(caster.placement().map)
                     .ok_or("no terrain grid"),
             );
+            // The host parses the client's force-attack modifier: a single-target
+            // skill force-attacks its designated target (the batch's first entry
+            // here); an area skill strikes incidentally.
+            let designation = match damaging.shape() {
+                DamagingSkill::DirectHit | DamagingSkill::Lunge => {
+                    Designation::Forced { target_index: 0 }
+                }
+                DamagingSkill::Area { .. } => Designation::Incidental,
+            };
             cast(
                 caster,
                 &equipped_profile(caster, caster_worn, &self.atlas),
-                damaging.locate(aim),
+                damaging.locate(aim, designation),
                 &targets,
                 grid,
                 &mut self.rng,
@@ -925,27 +977,7 @@ impl World {
     /// sets the returned health and effects, applies any knockback displacement,
     /// and persists the updated instance through the seam.
     fn write_back_target_hit(&mut self, target_indices: &[usize], hit: &TargetHit) {
-        let (batch_index, health, active_effects, displacement) = match hit {
-            TargetHit::Killed {
-                target_index,
-                health,
-                active_effects,
-                ..
-            } => (*target_index, *health, *active_effects, None),
-            TargetHit::Missed {
-                target_index,
-                health,
-                active_effects,
-                displacement,
-            }
-            | TargetHit::Landed {
-                target_index,
-                health,
-                active_effects,
-                displacement,
-                ..
-            } => (*target_index, *health, *active_effects, *displacement),
-        };
+        let (batch_index, health, active_effects, displacement) = target_hit_fields(hit);
         let monster_index = *or_abort(
             target_indices
                 .get(batch_index)
@@ -968,6 +1000,158 @@ impl World {
                 .ok_or("no monster slot"),
         );
         *slot = persisted;
+    }
+
+    /// Casts the damaging `skill` from the caster at `caster_index`, aimed at
+    /// `aim`, over a mixed `batch` of seated players and monsters, carrying the
+    /// client's force-attack `designation` (the CTRL-click the host parses; a
+    /// single-target strike names its target, an area strike says whether a player
+    /// was deliberately targeted). This is the player-target twin of
+    /// [`Self::cast_damaging`]: it builds one [`CombatTarget`] per batch entry from
+    /// the set that owns it — a player's gear-inclusive profile (stamped `Player`)
+    /// or a monster's base combat profile (stamped `Npc`) — resolves [`cast`] over
+    /// the caster's map grid and the world's stream, persists the caster's spent
+    /// vitals and any lunge placement, then writes each struck target's returned
+    /// health, effects, and displacement back to its own live set through the
+    /// persist seam. The caster's weapon wears once per landed hit, exactly as the
+    /// monster-target cast does. A rejection spends nothing and touches no target.
+    pub fn cast_at(
+        &mut self,
+        caster_index: usize,
+        skill: SkillNumber,
+        aim: WorldPos,
+        batch: &[Combatant],
+        designation: Designation,
+    ) -> SkillOutcome {
+        let (spent_vitals, outcome) = {
+            let skill_def = or_abort(self.atlas.skill(skill).ok_or("unknown skill"));
+            let damaging = match route(skill_def) {
+                SkillRouting::Damaging(reference) => reference,
+                SkillRouting::Heal(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => {
+                    return or_abort(Err::<SkillOutcome, _>("skill is not a damaging skill"));
+                }
+            };
+            let mut targets = Vec::with_capacity(batch.len());
+            for &combatant in batch {
+                targets.push(self.combat_target_of(combatant));
+            }
+            let caster = or_abort(self.characters.get(caster_index).ok_or("no caster"));
+            let caster_worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set"));
+            let grid = or_abort(
+                self.atlas
+                    .terrain_grid(caster.placement().map)
+                    .ok_or("no terrain grid"),
+            );
+            cast(
+                caster,
+                &equipped_profile(caster, caster_worn, &self.atlas),
+                damaging.locate(aim, designation),
+                &targets,
+                grid,
+                &mut self.rng,
+            )
+        };
+        let vitals_value = or_abort(serde_json::to_value(spent_vitals));
+        self.persist_character_with(caster_index, "vitals", vitals_value);
+        if let SkillOutcome::Cast {
+            caster_placement,
+            hits,
+        } = &outcome
+        {
+            let placement_value = or_abort(serde_json::to_value(caster_placement));
+            self.persist_character_with(caster_index, "placement", placement_value);
+            for hit in hits {
+                self.write_back_combatant_hit(batch, hit);
+            }
+            self.wear_caster_weapon(caster_index, hits);
+        }
+        outcome
+    }
+
+    /// The [`CombatTarget`] view of one seated combatant, exactly as the offensive
+    /// combat path consumes it: a player's gear-inclusive profile from
+    /// [`equipped_profile`] (stamped `Player`) or a monster's base
+    /// [`monster_profile`] (stamped `Npc`), each paired with its live health,
+    /// placement, and effect store. The profile carries gear but not effects — the
+    /// [`cast`] service folds the target's own effects onto it internally, so this
+    /// mirrors how the monster batch is built.
+    fn combat_target_of(&self, combatant: Combatant) -> CombatTarget {
+        match combatant {
+            Combatant::Player(index) => {
+                let player = or_abort(self.characters.get(index).ok_or("no player target"));
+                let worn = or_abort(self.equipment.get(index).ok_or("no target worn set"));
+                CombatTarget::new(
+                    equipped_profile(player, worn, &self.atlas),
+                    player.vitals().health,
+                    player.placement(),
+                    player.active_effects(),
+                )
+            }
+            Combatant::Monster(index) => {
+                let mob = *or_abort(self.monsters.get(index).ok_or("no monster target"));
+                let def = or_abort(self.atlas.monster(mob.number).ok_or("unknown monster def"));
+                let profile = match &def.role {
+                    MonsterRole::Monster {
+                        combat,
+                        resistances,
+                        ..
+                    }
+                    | MonsterRole::Guard {
+                        combat,
+                        resistances,
+                        ..
+                    }
+                    | MonsterRole::Trap {
+                        combat,
+                        resistances,
+                        ..
+                    } => monster_profile(combat, resistances, combat.level),
+                    MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
+                        return or_abort(Err::<CombatTarget, _>(
+                            "cast was handed a non-combat monster",
+                        ));
+                    }
+                };
+                CombatTarget::new(profile, mob.health, mob.placement, mob.active_effects)
+            }
+        }
+    }
+
+    /// Writes one resolved [`TargetHit`] back onto the combatant its batch index
+    /// names — a player's live health, effects, and any displacement through the
+    /// character persist seam, a monster's through the monster set — so a mixed
+    /// player-and-monster cast persists every struck target to the set that owns
+    /// it. The twin of [`Self::write_back_target_hit`] for a batch that may hold
+    /// players.
+    fn write_back_combatant_hit(&mut self, batch: &[Combatant], hit: &TargetHit) {
+        let (batch_index, health, active_effects, displacement) = target_hit_fields(hit);
+        let combatant = *or_abort(
+            batch
+                .get(batch_index)
+                .ok_or("hit target index outside the batch"),
+        );
+        match combatant {
+            Combatant::Player(index) => {
+                self.set_health(index, health);
+                let effects_value = or_abort(serde_json::to_value(active_effects));
+                self.persist_character_with(index, "active_effects", effects_value);
+                if let Some(placement) = displacement {
+                    let placement_value = or_abort(serde_json::to_value(placement));
+                    self.persist_character_with(index, "placement", placement_value);
+                }
+            }
+            Combatant::Monster(index) => {
+                let mut updated = *or_abort(self.monsters.get(index).ok_or("no monster at index"));
+                updated.health = health;
+                updated.active_effects = active_effects;
+                if let Some(placement) = displacement {
+                    updated.placement = placement;
+                }
+                let persisted = persist(updated);
+                let slot = or_abort(self.monsters.get_mut(index).ok_or("no monster slot"));
+                *slot = persisted;
+            }
+        }
     }
 
     /// Applies a kill's `gained` experience to the character at `char_index`
@@ -1076,6 +1260,38 @@ impl World {
             host_tick(),
             &self.atlas,
             DeathPenalty::Applied,
+        );
+        let persisted = persist(dead);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        events
+    }
+
+    /// Runs the combat-death step on the player at `char_index` killed by an
+    /// attacker of `attacker_kind` (the player-kill routing): the penalty is
+    /// CORE-computed by [`combat_death_penalty`] — a player killer waives the
+    /// victim's experience and zen penalty, a monster killer applies it — never a
+    /// host-chosen literal, so a host can neither forge "a player kill is free" nor
+    /// dock a player-killed victim. The returned dead character is persisted; the
+    /// death events are handed back for delivery. The always-`Applied` twin is
+    /// [`Self::resolve_player_death`].
+    pub fn resolve_combat_death(
+        &mut self,
+        char_index: usize,
+        at: Tick,
+        attacker_kind: TargetKind,
+    ) -> Vec<DeathEvent> {
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let (dead, events) = resolve_death(
+            character,
+            at,
+            host_tick(),
+            &self.atlas,
+            combat_death_penalty(attacker_kind),
         );
         let persisted = persist(dead);
         let slot = or_abort(

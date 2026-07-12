@@ -37,3 +37,17 @@ calls core and honours the rejection.
 **SpacetimeDB:** clients can't touch tables — they only call your reducer, which runs
 `mu-core` and decides. Each call gives you the caller identity + server timestamp. It
 does **not** rate-limit for you — duties 1–2 are reducer code you write.
+
+### PvP (W-PVP)
+- Stamp each `CombatProfile.kind` from the entity type — `Player` from a `Character`,
+  `Npc` from a `MonsterInstance` — never from client bytes.
+- Translate the client's force-attack modifier (CTRL-click) + selected entity into a
+  batch index and pass `Designation::Forced { target_index }`; otherwise `Incidental`.
+  Single-target skills (`DirectHit`/`Lunge`) MUST supply `Forced` or the cast rejects
+  `NoTargetsInRegion`. Keeping the target batch stable between click and resolution is
+  a host duty (like rate-limiting).
+- On `TargetHit::Killed` / `AttackOutcome::Killed`, map the index to the entity and route
+  by kind: `Npc` → `resolve_kill` (exp/loot); `Player` → `resolve_death(victim, at, tick,
+  atlas, combat_death_penalty(attacker_kind))` + `respawn` only (both by value). Pass
+  **core's computed** penalty — never a host-originated Waived/Applied literal; the
+  rule (a player kill costs the victim nothing) lives in core. Reputation is W-PK.

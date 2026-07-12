@@ -33,7 +33,9 @@ use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::profile::{character_profile, monster_profile};
-use mu_core::services::skills::{DamagingSkill, DamagingSkillRef, SkillRouting, cast, route};
+use mu_core::services::skills::{
+    DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, route,
+};
 use rng::TestRng;
 
 // --- Fixtures over the real terrain. ------------------------------------------
@@ -447,7 +449,7 @@ fn a_real_cast_from_a_lorencia_safe_tile_is_rejected_before_any_spend() {
     let (vitals, outcome) = cast(
         &town_caster,
         &character_profile(&town_caster).0,
-        as_damaging(skill).locate(safe_tile.to_world()),
+        as_damaging(skill).locate(safe_tile.to_world(), Designation::Incidental),
         &targets,
         grid,
         &mut rng,
@@ -482,7 +484,7 @@ fn a_real_area_cast_excludes_the_safe_tile_stander_from_its_covered_set() {
     let (_, outcome) = cast(
         &field_caster,
         &character_profile(&field_caster).0,
-        as_damaging(skill).locate(caster_tile.to_world()),
+        as_damaging(skill).locate(caster_tile.to_world(), Designation::Incidental),
         &targets,
         grid,
         &mut rng,
@@ -517,7 +519,7 @@ fn a_real_earthshake_push_stops_at_the_town_core_boundary() {
     let (_, outcome) = cast(
         &knight,
         &character_profile(&knight).0,
-        as_damaging(skill).locate(caster_tile.to_world()),
+        as_damaging(skill).locate(caster_tile.to_world(), Designation::Incidental),
         &targets,
         grid,
         &mut rng,
@@ -559,7 +561,7 @@ fn a_real_lightning_jiggle_never_lands_its_target_on_a_safe_tile() {
         let (_, outcome) = cast(
             &wizard,
             &character_profile(&wizard).0,
-            as_damaging(skill).locate(spot.to_world()),
+            as_damaging(skill).locate(spot.to_world(), Designation::Forced { target_index: 0 }),
             &targets,
             grid,
             &mut rng,

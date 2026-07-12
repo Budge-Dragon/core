@@ -8,7 +8,7 @@
 use crate::components::active_effect::ActiveEffects;
 use crate::components::bonus::CombatBonus;
 use crate::components::class::CharacterClass;
-use crate::components::combat_profile::{CombatProfile, VitalMaxima, WeaponMode};
+use crate::components::combat_profile::{CombatProfile, TargetKind, VitalMaxima, WeaponMode};
 use crate::components::element::{Element, PerElement};
 use crate::components::equipment::{Equipment, EquipmentSlot};
 use crate::components::interval::Interval;
@@ -69,6 +69,7 @@ pub fn monster_profile(
     level: Level,
 ) -> CombatProfile {
     CombatProfile {
+        kind: TargetKind::Npc,
         level,
         physical: Interval::spanning(combat.min_phys_damage, combat.max_phys_damage),
         wizardry: None,
@@ -205,6 +206,7 @@ fn fold_worn(
     let mode = weapon_mode_of(class, &pieces);
     let (wing_damage_pct, wing_absorb_pct) = wing_percents(&pieces);
     let profile = CombatProfile {
+        kind: base.kind,
         level: base.level,
         physical: physical_span(
             base.physical,
@@ -1296,6 +1298,7 @@ fn gearless_profile(
     defense_rate: u16,
 ) -> CombatProfile {
     CombatProfile {
+        kind: TargetKind::Player,
         level: Level::clamped(level),
         physical,
         wizardry,

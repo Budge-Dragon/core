@@ -11,7 +11,7 @@ use core::num::NonZeroU32;
 
 use rand_core::RngCore;
 
-use crate::components::combat_profile::{CombatProfile, WeaponMode};
+use crate::components::combat_profile::{CombatProfile, TargetKind, WeaponMode};
 use crate::components::interval::Interval;
 use crate::components::pool::Pool;
 use crate::components::units::{ChancePer10000, Percent};
@@ -29,10 +29,52 @@ const HIT_CHANCE_FLOOR_PER_10000: u32 = 300;
 const OVERRATE_NUM: u32 = 3;
 /// Overrate penalty denominator.
 const OVERRATE_DEN: u32 = 10;
+/// Player-versus-player overrate numerator: the crush is suppressed (authentic
+/// OpenMU `isPvp` gate keeps full damage), so the ratio is the identity 1/1.
+/// CMB-CONST: flip for the server-configurability wave (e.g. 5/10) without
+/// touching logic.
+const OVERRATE_NUM_PVP: u32 = 1;
+/// Player-versus-player overrate denominator (identity 1/1 — see
+/// [`OVERRATE_NUM_PVP`]).
+const OVERRATE_DEN_PVP: u32 = 1;
 /// Divisor of the level-scaled minimum-damage floor (`max(1, level / 10)`).
 const MIN_DAMAGE_FLOOR_DIVISOR: u32 = 10;
 /// Per-mille divisor of the class skill multiplier (`× multiplier / 1000`).
 const SKILL_MULTIPLIER_DENOMINATOR: u32 = 1000;
+
+/// Which overrate ratio a strike uses, derived from the two combatants' kinds:
+/// a player-versus-player strike suppresses the overrate crush (the authentic
+/// `isPvp` gate), every other pairing keeps the regular crush. Derived in core
+/// from the core-stamped kinds, never a claimed matchup.
+enum Matchup {
+    /// Both combatants are players — the overrate crush is suppressed.
+    PlayerVersusPlayer,
+    /// Any pairing involving a non-player — the regular overrate crush applies.
+    Regular,
+}
+
+impl Matchup {
+    /// Derives the matchup from the attacker's and defender's kinds, exhaustive
+    /// over the (kind, kind) product — a new [`TargetKind`] variant breaks the
+    /// build here.
+    fn of(attacker: TargetKind, defender: TargetKind) -> Self {
+        match (attacker, defender) {
+            (TargetKind::Player, TargetKind::Player) => Matchup::PlayerVersusPlayer,
+            (TargetKind::Player | TargetKind::Npc, TargetKind::Npc)
+            | (TargetKind::Npc, TargetKind::Player) => Matchup::Regular,
+        }
+    }
+
+    /// The (numerator, denominator) overrate ratio for this matchup: the regular
+    /// crush for a non-player pairing, the suppressed identity for a
+    /// player-versus-player strike.
+    fn overrate_ratio(self) -> (u32, u32) {
+        match self {
+            Matchup::Regular => (OVERRATE_NUM, OVERRATE_DEN),
+            Matchup::PlayerVersusPlayer => (OVERRATE_NUM_PVP, OVERRATE_DEN_PVP),
+        }
+    }
+}
 
 /// Which basis a strike resolves against: a plain weapon swing, or a skill's
 /// DamageType-selected span. The one input [`resolve_attack`] reads to pick the
@@ -245,9 +287,12 @@ fn strike_tail(
     let after_greater = after_defense.saturating_add(attacker.flat_damage_add());
     // W-SRC: the overrate penalty applies BEFORE the level floor
     // (AttackableExtensions.cs:204-217), so an overrated hit still lands at
-    // least max(1, level/10).
+    // least max(1, level/10). The ratio is matchup-derived: a
+    // player-versus-player strike suppresses the crush (1/1 identity), so this
+    // is post-draw integer math only — no RNG draw is added or reordered.
+    let (overrate_num, overrate_den) = Matchup::of(attacker.kind(), target.kind()).overrate_ratio();
     let after_overrate = if target.defense_rate() > attacker.attack_rate() {
-        scale_ratio(after_greater, OVERRATE_NUM, nonzero(OVERRATE_DEN))
+        scale_ratio(after_greater, overrate_num, nonzero(overrate_den))
     } else {
         after_greater
     };
@@ -313,6 +358,7 @@ fn strike_tail(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::combat_profile::TargetKind;
     use crate::components::element::PerElement;
     use crate::components::interval::Interval;
     use crate::components::units::{Level, Resistance};
@@ -375,6 +421,7 @@ mod tests {
         dr: u16,
     ) -> CombatProfile {
         CombatProfile {
+            kind: TargetKind::Npc,
             level: Level::new(level).unwrap(),
             physical: Interval::new(min_phys, max_phys).unwrap(),
             wizardry: None,
@@ -546,6 +593,58 @@ mod tests {
             }
         }
         assert!(landed > 0, "a 3% hit chance lands in 2000 tries");
+    }
+
+    #[test]
+    fn overrate_crush_applies_pvm_but_is_suppressed_in_pvp_at_identical_stats() {
+        // Defender out-rates the attacker, so the overrate crush is in play. The
+        // player-versus-monster (Regular) strike is crushed to 3/10; the
+        // player-versus-player strike keeps full damage (1/1 identity). Identical
+        // stats + identical seed => an identical RNG draw sequence for both, so a
+        // seed lands or misses alike and only the final overrate factor differs.
+        // A landed hit is sampled across a seed sweep (the out-rated hit chance
+        // floors at 3%).
+        let mut attacker = plain(10, 100, 100, 0, 100, 0);
+        attacker.kind = TargetKind::Player;
+        let mut pvm_target = plain(10, 0, 0, 0, 0, 200);
+        pvm_target.kind = TargetKind::Npc; // player vs monster => Regular
+        let mut pvp_target = plain(10, 0, 0, 0, 0, 200);
+        pvp_target.kind = TargetKind::Player; // player vs player => suppressed
+
+        let mut landed = 0;
+        for seed in 0u64..2000 {
+            let (_, pvm) = resolve_attack(
+                &attacker,
+                &pvm_target,
+                Pool::full(500),
+                &StrikeBasis::PlainSwing,
+                &mut TestRng::new(seed),
+            );
+            let (_, pvp) = resolve_attack(
+                &attacker,
+                &pvp_target,
+                Pool::full(500),
+                &StrikeBasis::PlainSwing,
+                &mut TestRng::new(seed),
+            );
+            if let (
+                AttackOutcome::Landed { hit: pvm_hit },
+                AttackOutcome::Landed { hit: pvp_hit },
+            ) = (pvm, pvp)
+            {
+                let (dm, dp) = (pvm_hit.damage.0, pvp_hit.damage.0);
+                assert!(
+                    dp > dm,
+                    "seed {seed}: pvp {dp} must exceed crushed pvm {dm}"
+                );
+                assert_eq!(dm, scale_ratio(dp, OVERRATE_NUM, nonzero(OVERRATE_DEN)));
+                landed += 1;
+            }
+        }
+        assert!(
+            landed > 0,
+            "a 3% hit chance must land at least once in 2000 tries"
+        );
     }
 
     #[test]

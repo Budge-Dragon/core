@@ -13,6 +13,19 @@ use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::units::{Level, Percent, Resistance};
 
+/// Whether a combatant is a player or a non-player (monster/NPC). Consumed by
+/// combat math (the player-versus-player overrate matchup) and skill targeting
+/// (an incidental area hit lands on non-players only); it is a combat category,
+/// not an identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetKind {
+    /// A player character.
+    Player,
+    /// A non-player combatant: a monster or NPC.
+    Npc,
+}
+
 /// A fighter's resolved combat magnitudes — the view a strike reads. Physical
 /// damage is an inclusive span; wizardry is present only for spellcasters. The
 /// four special-hit chances are gearless zero until an equipment wave feeds
@@ -20,6 +33,9 @@ use crate::components::units::{Level, Percent, Resistance};
 /// [`CombatTarget`] for a defender, the caller's own pool for an attacker).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatProfile {
+    /// Player or non-player. No serde default — a combatant is always exactly
+    /// one kind; fabricating one would corrupt the overrate matchup.
+    pub(crate) kind: TargetKind,
     pub(crate) level: Level,
     pub(crate) physical: Interval<u16>,
     pub(crate) wizardry: Option<Interval<u16>>,
@@ -82,6 +98,13 @@ impl WeaponMode {
 }
 
 impl CombatProfile {
+    /// Whether the fighter is a player or a non-player — the combat category the
+    /// overrate matchup and incidental area-targeting read.
+    #[must_use]
+    pub fn kind(&self) -> TargetKind {
+        self.kind
+    }
+
     /// The fighter's level — sets the min-damage floor.
     #[must_use]
     pub fn level(&self) -> Level {
@@ -301,6 +324,7 @@ mod tests {
 
     fn profile() -> CombatProfile {
         CombatProfile {
+            kind: TargetKind::Npc,
             level: Level::new(30).unwrap(),
             physical: Interval::new(5u16, 10u16).unwrap(),
             wizardry: None,
@@ -377,5 +401,16 @@ mod tests {
         assert_eq!(parsed.wing_damage_pct(), Percent::ZERO);
         assert_eq!(parsed.wing_absorb_pct(), Percent::ZERO);
         assert_eq!(parsed.weapon_mode(), WeaponMode::Single);
+    }
+
+    #[test]
+    fn target_kind_wire_round_trips_and_is_carried_by_the_profile() {
+        for kind in [TargetKind::Player, TargetKind::Npc] {
+            let json = serde_json::to_string(&kind).unwrap();
+            assert_eq!(serde_json::from_str::<TargetKind>(&json).unwrap(), kind);
+        }
+        assert_eq!(profile().kind(), TargetKind::Npc);
+        let json = serde_json::to_string(&profile()).unwrap();
+        assert!(json.contains(r#""kind":"npc""#));
     }
 }
