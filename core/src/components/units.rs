@@ -3,7 +3,7 @@
 //! `clamped` constructors on the compute path).
 
 use core::num::{NonZeroU16, NonZeroU32};
-use core::ops::Add;
+use core::ops::{Add, Sub};
 
 use serde::{Deserialize, Serialize};
 
@@ -262,6 +262,16 @@ impl Add<Ticks> for Tick {
     /// affine `point + duration` operation.
     fn add(self, delay: Ticks) -> Tick {
         Tick(self.0.saturating_add(delay.0))
+    }
+}
+
+impl Sub<Ticks> for Tick {
+    type Output = Tick;
+
+    /// This tick pulled back by a duration, saturating at the timeline's start
+    /// — the affine `point - duration` operation, symmetric with [`Add`].
+    fn sub(self, delay: Ticks) -> Tick {
+        Tick(self.0.saturating_sub(delay.0))
     }
 }
 
