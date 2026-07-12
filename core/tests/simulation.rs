@@ -18,6 +18,7 @@
 mod paper_host;
 
 use mu_core::components::active_effect::ActiveEffects;
+use mu_core::components::combat_profile::TargetKind;
 use mu_core::components::drop_claim::{DropClaim, PickerStanding};
 use mu_core::components::equipment::EquipmentSlot;
 use mu_core::components::inventory::{Cell, Footprint};
@@ -77,11 +78,12 @@ use mu_core::services::minigame::{EnterOutcome, GrantDecision, PkStanding};
 use mu_core::services::party;
 use mu_core::services::price::selling_price;
 use mu_core::services::profile::{character_profile, equipped_profile};
+use mu_core::services::skills::Designation;
 use mu_core::services::trade::LockResult;
 use mu_core::services::wear::WearEvent;
 
 use paper_host::{
-    World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
+    Combatant, World, aggressive_monster, armored_monster_from, cell, dark_knight, dark_knight_in_band,
     dark_wizard, devil_square_definition, devil_square_key, devil_square_ticket,
     devil_square_ticket_ref, direct_hit_skill, earthshake_skill, fighting_monster_from,
     first_passive_monster, flame_skill, footprint_of, heal_skill, hellfire_skill, is_equippable,
@@ -4797,6 +4799,239 @@ fn sim_gate_push_and_jiggle_both_stop_at_the_safezone_line() {
         }
     }
     assert!(saw_move, "some attempt lands a real jiggle move");
+}
+
+// --- W-PVP standing sixth gate: player-versus-player combat over real ---------
+// --- Lorencia. A single-target force-attack kill routes the victim through -----
+// --- the death loop with the core-computed player-kill penalty (waived), and --
+// --- an area sweep spares an incidental enemy player until it is designated. ---
+
+/// The first horizontal run of `length` consecutive open field tiles (walkable
+/// and not safe) on `grid`, discovered from the real terrain — the field a
+/// player-versus-player scene is staged on, never a hard-coded tile.
+fn field_run(grid: &TerrainGrid, length: usize) -> Vec<TileCoord> {
+    for y in 0u8..=u8::MAX {
+        let mut run: Vec<TileCoord> = Vec::new();
+        for x in 0u8..=u8::MAX {
+            if field_tile(grid, x, y) {
+                run.push(TileCoord::new(x, y));
+                if run.len() == length {
+                    return run;
+                }
+            } else {
+                run.clear();
+            }
+        }
+    }
+    or_abort(Err::<Vec<TileCoord>, _>(
+        "Lorencia has a run of open field tiles",
+    ))
+}
+
+/// The batch positions a cast struck, in the order the outcome lists them (a
+/// missed target is still in the struck set); a rejection struck nothing.
+fn struck_indices(outcome: &SkillOutcome) -> Vec<usize> {
+    match outcome {
+        SkillOutcome::Cast { hits, .. } => hits
+            .iter()
+            .map(|hit| match hit {
+                TargetHit::Killed { target_index, .. }
+                | TargetHit::Landed { target_index, .. }
+                | TargetHit::Missed { target_index, .. } => *target_index,
+            })
+            .collect(),
+        SkillOutcome::Rejected { .. } => Vec::new(),
+    }
+}
+
+#[test]
+fn sim_gate_two_players_fight_outside_safezone_one_kills_the_other_penalty_free() {
+    // Two players adjacent on Lorencia field tiles: the attacker force-attacks the
+    // defender with a single-target skill until it is Killed (PvP overrate is
+    // suppressed, so full damage lands). The host routes the Player victim to the
+    // death step with the penalty the CORE rule computes from the killer's kind —
+    // a player kill waives it, so the victim loses no experience and no zen — then
+    // respawns it in the town safezone; the killer receives nothing. Then the same
+    // two, both on a safe tile, cannot touch: the cast is refused CasterInSafezone.
+    let mut world = World::new(51, MapNumber(0));
+    let grid = lorencia_grid(&world);
+    let field = field_run(&grid, 2);
+    let safe = boundary_pair(&grid).1;
+
+    let attacker = world.seat_character(dark_knight(150, 1500, field[0]));
+    let victim = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        60,
+        1_000_000,
+        MapNumber(0),
+        field[1],
+    ));
+    let skill = direct_hit_skill(world.atlas());
+    let aim = field[1].to_world();
+    let victim_exp_before = world.character(victim).experience();
+    let victim_zen_before = world.character(victim).zen();
+
+    // Force-attack the defender (batch index 0) until the single-target strike
+    // kills it.
+    let mut killed = false;
+    for _ in 0..10_000u32 {
+        let outcome = world.cast_at(
+            attacker,
+            skill,
+            aim,
+            &[Combatant::Player(victim)],
+            Designation::Forced { target_index: 0 },
+        );
+        if let SkillOutcome::Cast { hits, .. } = &outcome {
+            if hits.iter().any(|hit| matches!(hit, TargetHit::Killed { .. })) {
+                killed = true;
+                break;
+            }
+        }
+    }
+    assert!(killed, "the force-attacked defender is beaten to a killing blow");
+    assert_eq!(world.character(victim).vitals().health.current(), 0);
+
+    // The death step under the CORE-computed player-kill penalty: waived, so no
+    // experience or zen is docked and the persisted totals are unchanged.
+    let death_events = world.resolve_combat_death(victim, Tick(500), TargetKind::Player);
+    assert!(
+        !death_events.iter().any(|event| matches!(
+            event,
+            DeathEvent::ExperienceDocked { .. } | DeathEvent::ZenDocked { .. }
+        )),
+        "a player kill docks the victim no experience and no zen"
+    );
+    assert_eq!(
+        world.character(victim).experience(),
+        victim_exp_before,
+        "the player-killed victim's persisted experience is unchanged"
+    );
+    assert_eq!(
+        world.character(victim).zen(),
+        victim_zen_before,
+        "the player-killed victim's persisted zen is unchanged"
+    );
+
+    // Respawn seats the victim alive inside the town safezone, still penalty-free.
+    let respawned = world.respawn_player(victim).expect("a dead player respawns");
+    assert_eq!(world.character(victim).life(), LifeState::Alive);
+    let landing = world.character(victim).placement();
+    assert_eq!(respawned.map, landing.map);
+    let town = or_abort(
+        world
+            .atlas()
+            .terrain_grid(landing.map)
+            .ok_or("the respawn map has a terrain grid"),
+    );
+    assert!(
+        town.safe(landing.position),
+        "the victim respawns inside the town safezone"
+    );
+    assert_eq!(
+        world.character(victim).experience(),
+        victim_exp_before,
+        "respawn restores no penalty either"
+    );
+
+    // The truce: with both standers on a safe tile the attacker's cast is refused
+    // before any target is considered — players cannot fight inside the safezone.
+    let safe_attacker = world.seat_character(dark_knight(150, 1500, safe));
+    let safe_victim = world.seat_character(dark_knight(30, 150, safe));
+    assert_eq!(
+        world.cast_at(
+            safe_attacker,
+            skill,
+            safe.to_world(),
+            &[Combatant::Player(safe_victim)],
+            Designation::Forced { target_index: 0 },
+        ),
+        SkillOutcome::Rejected {
+            reason: CastRejection::CasterInSafezone
+        }
+    );
+}
+
+#[test]
+fn sim_gate_nova_around_an_enemy_player_kills_monsters_but_not_the_player() {
+    // A Nova centered on the caster covers a co-located enemy player and two
+    // monsters. An Incidental sweep strikes only the two monsters — the enemy
+    // player's batch index is absent from the struck set and its persisted health
+    // is untouched — while a Forced designation on the player's index strikes it
+    // too. The Incidental sweep replays byte-for-byte under a fixed seed. Batch
+    // order pins the struck-index assertions: player at 0, monsters at 1 and 2.
+    let nova_scene = |seed: u64| {
+        let mut world = World::new(seed, MapNumber(0));
+        let grid = lorencia_grid(&world);
+        let field = field_run(&grid, 4);
+        let caster = world.seat_character(dark_wizard(80, 400, field[0]));
+        let player = world.seat_character(dark_knight(30, 150, field[1]));
+        let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
+        let mon_a = world.seat_monster(monster_instance(number, 1_000_000, field[2]));
+        let mon_b = world.seat_monster(monster_instance(number, 1_000_000, field[3]));
+        let batch = vec![
+            Combatant::Player(player),
+            Combatant::Monster(mon_a),
+            Combatant::Monster(mon_b),
+        ];
+        (world, caster, player, mon_a, mon_b, batch, field[0].to_world())
+    };
+
+    // Incidental: only the two monsters are struck; the enemy player is spared.
+    let (mut world, caster, player, mon_a, mon_b, batch, aim) = nova_scene(52);
+    let nova = nova_skill(world.atlas());
+    let player_before = world.character(player).vitals().health.current();
+    let outcome = world.cast_at(caster, nova, aim, &batch, Designation::Incidental);
+    assert_eq!(
+        struck_indices(&outcome),
+        vec![1, 2],
+        "the incidental sweep strikes only the two monsters (batch 1, 2)"
+    );
+    assert_eq!(
+        world.character(player).vitals().health.current(),
+        player_before,
+        "the enemy player's persisted health is untouched by the incidental sweep"
+    );
+    assert!(
+        world.monster(mon_a).health.current() < 1_000_000,
+        "monster A took persisted nova damage"
+    );
+    assert!(
+        world.monster(mon_b).health.current() < 1_000_000,
+        "monster B took persisted nova damage"
+    );
+
+    // Byte-stable: the same seed replays the same cast bit-for-bit.
+    let (mut twin, twin_caster, _tp, _ta, _tb, twin_batch, twin_aim) = nova_scene(52);
+    let twin_outcome = twin.cast_at(twin_caster, nova, twin_aim, &twin_batch, Designation::Incidental);
+    assert_eq!(
+        wire(&twin_outcome),
+        wire(&outcome),
+        "the incidental nova replays byte-for-byte under a fixed seed"
+    );
+
+    // Forced: designating the player's index strikes the player and both monsters.
+    let (mut forced, forced_caster, forced_player, _fa, _fb, forced_batch, forced_aim) =
+        nova_scene(52);
+    let forced_before = forced.character(forced_player).vitals().health.current();
+    let forced_outcome = forced.cast_at(
+        forced_caster,
+        nova,
+        forced_aim,
+        &forced_batch,
+        Designation::Forced { target_index: 0 },
+    );
+    let mut hits = struck_indices(&forced_outcome);
+    hits.sort_unstable();
+    assert_eq!(
+        hits,
+        vec![0, 1, 2],
+        "a forced designation on the player's index strikes the player and both monsters"
+    );
+    assert!(
+        forced.character(forced_player).vitals().health.current() < forced_before,
+        "the force-attacked enemy player takes persisted nova damage"
+    );
 }
 
 // --- W-MINIGAME standing sixth gate: the shared event framework through the ---

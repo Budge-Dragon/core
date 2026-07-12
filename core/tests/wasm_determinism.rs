@@ -233,13 +233,15 @@ fn always() -> OptionRollPolicy {
 
 // -- A fixed skill strike resolves identically on native and wasm. ------------
 
-use mu_core::components::combat_profile::CombatProfile;
+use mu_core::components::combat_profile::{CombatProfile, TargetKind};
 use mu_core::components::pool::Pool;
 use mu_core::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 
-/// A hand-pinned combat profile, built through the wire (the only door an
-/// external test has) so the fixture needs no filesystem.
-fn fixed_profile(
+/// A hand-pinned combat profile of an explicit combat `kind` (`"player"` or
+/// `"npc"`), built through the wire (the only door an external test has) so the
+/// fixture needs no filesystem.
+fn kinded_profile(
+    kind: &str,
     level: u16,
     span: (u16, u16),
     defense: u16,
@@ -247,7 +249,7 @@ fn fixed_profile(
     chances: u8,
 ) -> CombatProfile {
     or_abort(serde_json::from_value(serde_json::json!({
-        "kind": "npc",
+        "kind": kind,
         "level": level,
         "physical": {"min": span.0, "max": span.1},
         "wizardry": null,
@@ -265,6 +267,18 @@ fn fixed_profile(
         "incoming_damage_reduction": 0,
         "flat_damage_add": 0
     })))
+}
+
+/// A hand-pinned NPC-kind combat profile — the default fixture the pre-existing
+/// draw-sequence goldens strike over.
+fn fixed_profile(
+    level: u16,
+    span: (u16, u16),
+    defense: u16,
+    rates: (u16, u16),
+    chances: u8,
+) -> CombatProfile {
+    kinded_profile("npc", level, span, defense, rates, chances)
 }
 
 #[test]
@@ -753,4 +767,124 @@ fn a_fixed_zen_split_excludes_the_safe_stander_identically_across_targets() {
         r#"[{"slot":0,"wallet":50000},{"slot":2,"wallet":50000}]"#
     );
     assert!(result.to_ground.is_empty());
+}
+
+// --- W-PVP: the target-kind wire tag, the all-NPC area struck set, and the ----
+// --- PvP/PvM draw-sequence identity reproduce byte-identically across targets. -
+
+use mu_core::events::combat::AttackOutcome;
+use mu_core::events::skills::SkillOutcome;
+
+/// The damage a landed or lethal strike dealt, or `None` for a miss.
+fn landed_damage(outcome: &AttackOutcome) -> Option<u32> {
+    match outcome {
+        AttackOutcome::Landed { hit } | AttackOutcome::Killed { hit } => Some(hit.damage.0),
+        AttackOutcome::Missed => None,
+    }
+}
+
+#[test]
+fn target_kind_serializes_to_its_snake_case_tag_across_targets() {
+    // The combat category rides the wire as a bare snake_case string, identical on
+    // native and wasm, and round-trips on every variant.
+    assert_eq!(
+        or_abort(serde_json::to_string(&TargetKind::Player)),
+        r#""player""#
+    );
+    assert_eq!(
+        or_abort(serde_json::to_string(&TargetKind::Npc)),
+        r#""npc""#
+    );
+    for kind in [TargetKind::Player, TargetKind::Npc] {
+        let wire = or_abort(serde_json::to_string(&kind));
+        assert_eq!(or_abort(serde_json::from_str::<TargetKind>(&wire)), kind);
+    }
+}
+
+#[test]
+fn an_all_npc_area_cast_strikes_the_npc_and_replays_byte_for_byte() {
+    // An incidental area sweep over a lone NPC strikes it — an area cast hits every
+    // incidental NPC, so the struck set is unchanged from before the player/npc
+    // split — and replays byte-for-byte under a fixed seed on native and wasm.
+    let caster = fixed_caster();
+    let profile = fixed_profile(50, (33, 50), 0, (10_000, 0), 0);
+    let skill = fixed_earthshake();
+    let targets = [fixed_target((12, 10))];
+    let aim = TileCoord::new(10, 10).to_world();
+    let run = |seed: u64| {
+        let mut rng = SplitMix64::new(seed);
+        cast(
+            &caster,
+            &profile,
+            fixed_damaging(&skill).locate(aim, Designation::Incidental),
+            &targets,
+            &open_ground(),
+            &mut rng,
+        )
+        .1
+    };
+    let outcome = run(SEED);
+    match &outcome {
+        SkillOutcome::Cast { hits, .. } => {
+            assert_eq!(hits.len(), 1, "the lone NPC is struck by the incidental sweep");
+        }
+        SkillOutcome::Rejected { .. } => {
+            or_abort(Err::<(), _>("the funded field cast resolves"));
+        }
+    }
+    assert_eq!(
+        or_abort(serde_json::to_string(&outcome)),
+        or_abort(serde_json::to_string(&run(SEED))),
+        "the incidental all-NPC area cast replays byte-for-byte under a fixed seed"
+    );
+}
+
+#[test]
+fn a_pvp_strike_draws_the_same_sequence_as_a_pvm_strike_and_only_the_overrate_differs() {
+    // Identical attacker/defender stats and identical seed: the player-versus-
+    // player strike and the player-versus-monster strike draw the SAME RNG
+    // sequence — the matchup only re-scales the final damage post-draw. The
+    // defender out-rates the attacker, so the monster strike crushes the overrate
+    // to 3/10 while the player strike keeps full damage; the draw sequence is
+    // byte-identical either way, proved by both streams sitting at the same word
+    // afterward. The out-rated hit floors at 3%, so a landed pair is swept for.
+    let attacker = kinded_profile("player", 10, (100, 100), 0, (100, 0), 0);
+    let monster_defender = kinded_profile("npc", 10, (0, 0), 0, (0, 200), 0);
+    let player_defender = kinded_profile("player", 10, (0, 0), 0, (0, 200), 0);
+    let mut landed = 0u32;
+    for seed in 0u64..256 {
+        let mut monster_stream = SplitMix64::new(seed);
+        let mut player_stream = SplitMix64::new(seed);
+        let (_, versus_monster) = resolve_attack(
+            &attacker,
+            &monster_defender,
+            Pool::full(500),
+            &StrikeBasis::PlainSwing,
+            &mut monster_stream,
+        );
+        let (_, versus_player) = resolve_attack(
+            &attacker,
+            &player_defender,
+            Pool::full(500),
+            &StrikeBasis::PlainSwing,
+            &mut player_stream,
+        );
+        // Same draw sequence at every seed: after each strike both streams sit at
+        // the same next word (equal seed + equal draw count => equal state).
+        assert_eq!(
+            monster_stream.next_u64(),
+            player_stream.next_u64(),
+            "seed {seed}: the two matchups draw an identical sequence"
+        );
+        if let (Some(against_monster), Some(against_player)) =
+            (landed_damage(&versus_monster), landed_damage(&versus_player))
+        {
+            assert!(
+                against_player > against_monster,
+                "seed {seed}: the player strike keeps full damage {against_player}; the monster strike is overrate-crushed to {against_monster}"
+            );
+            landed += 1;
+        }
+    }
+    assert!(landed > 0, "an out-rated hit lands within 256 seeds");
 }
