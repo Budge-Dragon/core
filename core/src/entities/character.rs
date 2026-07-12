@@ -13,6 +13,7 @@ use crate::components::class::CharacterClass;
 use crate::components::discovered_maps::DiscoveredMaps;
 use crate::components::life::LifeState;
 use crate::components::placement::Placement;
+use crate::components::reputation::Reputation;
 use crate::components::stats::Stats;
 use crate::components::units::{CarriedZen, Exp, Level, MapNumber};
 use crate::components::vitals::Vitals;
@@ -32,6 +33,7 @@ pub struct Character {
     vitals: Vitals,
     active_effects: ActiveEffects,
     life: LifeState,
+    reputation: Reputation,
     discovered: DiscoveredMaps,
 }
 
@@ -57,6 +59,11 @@ struct RawCharacter {
     /// (`Alive`), not a fabricated default.
     #[serde(default = "LifeState::alive")]
     life: LifeState,
+    /// A record that predates player-kill reputation, or a freshly created
+    /// character, carries none — the real "no reputation recorded" value
+    /// (clean), not a fabricated default.
+    #[serde(default = "Reputation::clean")]
+    reputation: Reputation,
     /// A record that predates map discovery carries no set at all; the gate
     /// seeds `{placement.map}`, the real "no discoveries recorded yet" value.
     /// `Option` rather than an empty default because a *present* set must
@@ -101,6 +108,7 @@ impl TryFrom<RawCharacter> for Character {
             vitals: raw.vitals,
             active_effects: raw.active_effects,
             life: raw.life,
+            reputation: raw.reputation,
             discovered,
         })
     }
@@ -119,6 +127,7 @@ impl From<Character> for RawCharacter {
             vitals: character.vitals,
             active_effects: character.active_effects,
             life: character.life,
+            reputation: character.reputation,
             discovered: Some(character.discovered),
         }
     }
@@ -185,6 +194,12 @@ impl Character {
         self.life
     }
 
+    /// The character's player-kill reputation — clean or a flagged murderer.
+    #[must_use]
+    pub fn reputation(&self) -> Reputation {
+        self.reputation
+    }
+
     /// The maps the character has discovered by arriving on them. Always
     /// contains the current placement map, by construction.
     #[must_use]
@@ -219,6 +234,13 @@ impl Character {
     /// `Alive` on respawn.
     pub(crate) fn with_life(self, life: LifeState) -> Character {
         Character { life, ..self }
+    }
+
+    /// This character with its player-kill reputation reseated; every other
+    /// field carried unchanged. The reputation transitions flag, decay, and
+    /// clear it through this writeback.
+    pub(crate) fn with_reputation(self, reputation: Reputation) -> Character {
+        Character { reputation, ..self }
     }
 
     /// This character with its carried zen reseated; every other field carried
@@ -291,6 +313,7 @@ mod tests {
     use super::*;
     use crate::components::movement::Movement;
     use crate::components::pool::Pool;
+    use crate::components::reputation::{PkStage, Standing};
     use crate::components::spatial::Facing;
     use crate::components::tile::TileCoord;
     use crate::components::units::MapNumber;
@@ -324,6 +347,7 @@ mod tests {
             vitals: vitals(),
             active_effects: ActiveEffects::EMPTY,
             life: LifeState::Alive,
+            reputation: Reputation::clean(),
             discovered: None,
         }
     }
@@ -520,6 +544,42 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Character>(&serde_json::to_string(&dead).unwrap()).unwrap(),
             dead
+        );
+    }
+
+    #[test]
+    fn a_new_character_is_clean_and_reputation_round_trips() {
+        use crate::components::units::Tick;
+
+        let c = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        assert_eq!(c.reputation(), Reputation::clean());
+        let flagged = c
+            .reputation()
+            .with_standing(Standing::Flagged {
+                stage: PkStage::Warning,
+                decays_at: Tick(7),
+            })
+            .with_recorded_kill();
+        let c = c.with_reputation(flagged);
+        assert_eq!(c.reputation(), flagged);
+        // Wire round-trip through RawCharacter.
+        let json = serde_json::to_string(&c).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Character>(&json)
+                .unwrap()
+                .reputation(),
+            flagged
+        );
+    }
+
+    #[test]
+    fn a_pre_w_pk_wire_form_defaults_to_clean() {
+        let c = Character::try_from(raw(CharacterClass::DarkKnight, standard())).unwrap();
+        let mut v = serde_json::to_value(&c).unwrap();
+        v.as_object_mut().unwrap().remove("reputation");
+        assert_eq!(
+            serde_json::from_value::<Character>(v).unwrap().reputation(),
+            Reputation::clean()
         );
     }
 
