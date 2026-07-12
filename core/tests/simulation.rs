@@ -74,7 +74,7 @@ use mu_core::events::travel::{
 use mu_core::services::effects::ApplicableBuff;
 use mu_core::services::ground::DropOrigin;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
-use mu_core::services::minigame::{EnterOutcome, GrantDecision, PkStanding};
+use mu_core::services::minigame::{EnterOutcome, GrantDecision};
 use mu_core::services::party;
 use mu_core::services::price::selling_price;
 use mu_core::services::profile::{character_profile, equipped_profile};
@@ -5213,7 +5213,7 @@ fn scripted_mini_event(seed: u64) -> (String, Vec<TraceStep>) {
     ];
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     for entrant in entrants {
-        let outcome = world.enter_mini_session(s, entrant, PkStanding::Clear);
+        let outcome = world.enter_mini_session(s, entrant);
         trace.push(TraceStep {
             label: "enter",
             detail: wire(&outcome),
@@ -5314,7 +5314,7 @@ fn a_full_mini_game_event_plays_enter_to_payout_through_the_paper_host() {
     // Each entrant is admitted; the fee is debited and one ticket charge spent,
     // both surviving the persist round-trip.
     for entrant in [e0, e1, e2] {
-        let outcome = world.enter_mini_session(s, entrant, PkStanding::Clear);
+        let outcome = world.enter_mini_session(s, entrant);
         assert!(
             matches!(outcome, EnterOutcome::Entered { .. }),
             "entrant {entrant} admitted: {outcome:?}"
@@ -5448,7 +5448,7 @@ fn a_lone_entrants_fee_is_refunded_and_the_event_disposes_without_starting() {
     let e0 = seat_ticketed_entrant(&mut world, 60, 100_000, 2);
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     assert!(matches!(
-        world.enter_mini_session(s, e0, PkStanding::Clear),
+        world.enter_mini_session(s, e0),
         EnterOutcome::Entered { .. }
     ));
     assert_eq!(world.character(e0).zen().get(), 75_000);
@@ -5506,7 +5506,7 @@ fn a_waived_death_ejected_before_the_end_leaves_the_roster_and_wins_no_grant() {
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     for entrant in [e0, e1] {
         assert!(matches!(
-            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            world.enter_mini_session(s, entrant),
             EnterOutcome::Entered { .. }
         ));
     }
@@ -5593,7 +5593,7 @@ fn a_death_in_the_final_beat_finishes_dead_flagged_before_the_eject() {
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     for entrant in [e0, e1] {
         assert!(matches!(
-            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            world.enter_mini_session(s, entrant),
             EnterOutcome::Entered { .. }
         ));
     }
@@ -5652,7 +5652,7 @@ fn an_emptied_roster_ends_the_event_the_instant_it_clears() {
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     for entrant in [e0, e1] {
         assert!(matches!(
-            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            world.enter_mini_session(s, entrant),
             EnterOutcome::Entered { .. }
         ));
     }
@@ -5709,7 +5709,7 @@ fn a_declared_winner_ends_the_event_early_and_takes_the_winner_reward() {
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     for entrant in [e0, e1] {
         assert!(matches!(
-            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            world.enter_mini_session(s, entrant),
             EnterOutcome::Entered { .. }
         ));
     }
@@ -5798,7 +5798,7 @@ fn overlapping_waves_and_wave_scoped_respawn_hold_through_the_persist_seam() {
     let s = world.open_mini_session(devil_square_key(sim_level()), Tick(0));
     for entrant in [e0, e1] {
         assert!(matches!(
-            world.enter_mini_session(s, entrant, PkStanding::Clear),
+            world.enter_mini_session(s, entrant),
             EnterOutcome::Entered { .. }
         ));
     }

@@ -2321,17 +2321,17 @@ impl World {
     }
 
     /// Drives the entry gate for the character at `char_index` into the session
-    /// at `session_index` with host-supplied `pk` standing: reads the live
-    /// session, entrant, and bag, runs [`minigame::enter_mini_game`] over the
-    /// held atlas and stream, and writes the (possibly spent) session, entrant,
-    /// and bag back *through* the persist seam. On any rejection the framework
-    /// returns them unchanged (reject-before-spend), so the write-back is a
-    /// no-op in value. Returns the outcome.
+    /// at `session_index`: reads the live session, entrant, and bag, runs
+    /// [`minigame::enter_mini_game`] over the held atlas and stream (the entry
+    /// gate reads the entrant's authoritative reputation for the player-killer
+    /// bar), and writes the (possibly spent) session, entrant, and bag back
+    /// *through* the persist seam. On any rejection the framework returns them
+    /// unchanged (reject-before-spend), so the write-back is a no-op in value.
+    /// Returns the outcome.
     pub fn enter_mini_session(
         &mut self,
         session_index: usize,
         char_index: usize,
-        pk: minigame::PkStanding,
     ) -> minigame::EnterOutcome {
         let session = self.mini_session(session_index).clone();
         let entrant = or_abort(self.characters.get(char_index).ok_or("no entrant")).clone();
@@ -2342,7 +2342,7 @@ impl World {
                 .ok_or("no resolved mini-game"),
         );
         let (session, entrant, bag, outcome) =
-            minigame::enter_mini_game(session, &handle, entrant, bag, pk, &mut self.rng);
+            minigame::enter_mini_game(session, &handle, entrant, bag, &mut self.rng);
         self.store_mini_session(session_index, session);
         let slot = or_abort(self.characters.get_mut(char_index).ok_or("no entrant slot"));
         *slot = persist(entrant);
