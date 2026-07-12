@@ -25,6 +25,7 @@ pub mod movement;
 pub mod party;
 pub mod placement;
 pub mod pool;
+pub mod reputation;
 pub mod spatial;
 pub mod stats;
 pub mod tile;

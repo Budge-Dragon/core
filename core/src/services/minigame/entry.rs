@@ -29,17 +29,6 @@ use crate::services::chance::pick_one;
 /// a second draw.
 const ENTRANCE_FACING: Facing = Facing::POS_Y;
 
-/// The host-supplied player-killer standing — a bare fact, never a pre-baked
-/// admit/barred verdict: core reads the standing, core decides the bar.
-/// Transient service input, not persisted state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PkStanding {
-    /// Below the entry bar (a kill warning may still enter).
-    Clear,
-    /// A flagged player-killer at or above the bar.
-    PlayerKiller,
-}
-
 /// What an entry attempt produced, kind-tagged: admission with its seat and
 /// landing, or the first failing check's rejection. On any rejection the
 /// session, entrant, and bag are returned unchanged — nothing spent.
@@ -83,7 +72,6 @@ pub fn enter_mini_game(
     handle: &MiniGameHandle<'_>,
     entrant: Character,
     bag: Inventory,
-    pk: PkStanding,
     rng: &mut impl RngCore,
 ) -> (MiniGameSession, Character, Inventory, EnterOutcome) {
     let def = handle.definition;
@@ -105,7 +93,7 @@ pub fn enter_mini_game(
     if entrant.zen().get() < def.entrance_fee.0 {
         return reject(session, entrant, bag, EnterOutcome::NotEnoughZen);
     }
-    if let PkStanding::PlayerKiller = pk {
+    if entrant.reputation().standing().is_hunted() {
         return reject(session, entrant, bag, EnterOutcome::PlayerKillerBarred);
     }
     let MiniGamePhase::Open { .. } = session.phase else {
@@ -203,6 +191,8 @@ mod tests {
         place_ticket, ticket_instance,
     };
     use super::*;
+    use crate::components::reputation::{PkStage, Reputation, Standing};
+    use crate::components::units::Tick;
     use crate::entities::minigame_session::MiniGamePhase;
 
     fn admit_ready() -> (MiniGameSession, Character, Inventory) {
@@ -219,7 +209,7 @@ mod tests {
         let (session, entrant, bag) = admit_ready();
         let mut rng = TestRng::new(7);
         let (session, admitted, bag, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+            enter_mini_game(session, &handle, entrant, bag, &mut rng);
         let EnterOutcome::Entered { slot, placement } = outcome else {
             panic!("expected admission, got {outcome:?}");
         };
@@ -255,8 +245,7 @@ mod tests {
         let entrant = character(CharacterClass::DarkKnight, 60, 100_000);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(1));
         let mut rng = TestRng::new(7);
-        let (_, admitted, bag, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, admitted, bag, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert!(matches!(outcome, EnterOutcome::Entered { .. }));
         assert!(bag.placed().is_empty());
         assert_eq!(admitted.zen().get(), 75_000);
@@ -271,8 +260,7 @@ mod tests {
             let entrant = character(CharacterClass::DarkKnight, level, 100_000);
             let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
             let mut rng = TestRng::new(7);
-            let (_, _, _, outcome) =
-                enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+            let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
             assert_eq!(matches!(outcome, EnterOutcome::Entered { .. }), admitted);
         }
         for (level, expected) in [
@@ -283,8 +271,7 @@ mod tests {
             let entrant = character(CharacterClass::DarkKnight, level, 100_000);
             let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
             let mut rng = TestRng::new(7);
-            let (_, _, _, outcome) =
-                enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+            let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
             assert_eq!(outcome, expected);
         }
     }
@@ -299,8 +286,7 @@ mod tests {
             let entrant = character(class, 112, 100_000);
             let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
             let mut rng = TestRng::new(7);
-            let (_, _, _, outcome) =
-                enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+            let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
             assert_eq!(outcome, EnterOutcome::LevelTooHigh, "{class:?}");
         }
         // The same level on a standard class is admitted by the normal bracket.
@@ -308,8 +294,7 @@ mod tests {
         let entrant = character(CharacterClass::DarkKnight, 112, 100_000);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert!(matches!(outcome, EnterOutcome::Entered { .. }));
         // And a special-class entrant inside its reduced bracket enters: 12
         // sits below the normal minimum of 15 but inside the special 10..110.
@@ -317,8 +302,7 @@ mod tests {
         let entrant = character(CharacterClass::MagicGladiator, 12, 100_000);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert!(matches!(outcome, EnterOutcome::Entered { .. }));
     }
 
@@ -350,14 +334,8 @@ mod tests {
             let bag = place_ticket(Inventory::empty(8, 8), instance);
             let before = bag.clone();
             let mut rng = TestRng::new(7);
-            let (session_out, entrant_out, bag_out, outcome) = enter_mini_game(
-                session.clone(),
-                &handle,
-                entrant.clone(),
-                bag,
-                PkStanding::Clear,
-                &mut rng,
-            );
+            let (session_out, entrant_out, bag_out, outcome) =
+                enter_mini_game(session.clone(), &handle, entrant.clone(), bag, &mut rng);
             assert_eq!(outcome, EnterOutcome::NoTicket);
             assert_eq!(session_out, session);
             assert_eq!(entrant_out, entrant);
@@ -375,28 +353,46 @@ mod tests {
         let before = bag.clone();
         let mut rng = TestRng::new(7);
         let (_, entrant_out, bag_out, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+            enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert_eq!(outcome, EnterOutcome::NotEnoughZen);
         assert_eq!(entrant_out.zen().get(), 20_000);
         assert_eq!(bag_out, before);
     }
 
     #[test]
-    fn a_player_killer_is_barred_on_the_host_supplied_standing() {
+    fn a_hunted_entrant_is_barred_a_warning_or_clean_one_is_admitted() {
         let holder = fixture();
         let handle = holder.handle();
+
+        // A first-stage flag is hunted: barred, with nothing spent.
+        let (session, entrant, bag) = admit_ready();
+        let hunted =
+            entrant.with_reputation(Reputation::clean().with_standing(Standing::Flagged {
+                stage: PkStage::FirstStage,
+                decays_at: Tick(9),
+            }));
+        let mut rng = TestRng::new(7);
+        let (_, entrant_out, _, outcome) =
+            enter_mini_game(session, &handle, hunted.clone(), bag, &mut rng);
+        assert_eq!(outcome, EnterOutcome::PlayerKillerBarred);
+        assert_eq!(entrant_out, hunted);
+
+        // A warning-stage flag is below the hunted bar: admitted.
+        let (session, entrant, bag) = admit_ready();
+        let warned =
+            entrant.with_reputation(Reputation::clean().with_standing(Standing::Flagged {
+                stage: PkStage::Warning,
+                decays_at: Tick(9),
+            }));
+        let mut rng = TestRng::new(7);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, warned, bag, &mut rng);
+        assert!(matches!(outcome, EnterOutcome::Entered { .. }));
+
+        // A clean entrant is admitted.
         let (session, entrant, bag) = admit_ready();
         let mut rng = TestRng::new(7);
-        let (_, entrant_out, _, outcome) = enter_mini_game(
-            session,
-            &handle,
-            entrant.clone(),
-            bag,
-            PkStanding::PlayerKiller,
-            &mut rng,
-        );
-        assert_eq!(outcome, EnterOutcome::PlayerKillerBarred);
-        assert_eq!(entrant_out, entrant);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
+        assert!(matches!(outcome, EnterOutcome::Entered { .. }));
     }
 
     #[test]
@@ -408,8 +404,7 @@ mod tests {
             starts_at: crate::components::units::Tick(400),
         });
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert_eq!(outcome, EnterOutcome::NotOpen);
     }
 
@@ -433,8 +428,7 @@ mod tests {
         let entrant = character(CharacterClass::DarkKnight, 60, 100_000);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert_eq!(outcome, EnterOutcome::Full);
     }
 
@@ -447,16 +441,14 @@ mod tests {
         let entrant = character(CharacterClass::DarkKnight, 14, 100_000);
         let bag = Inventory::empty(8, 8);
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert_eq!(outcome, EnterOutcome::LevelTooLow);
         // Fails BOTH the ticket and the fee: the ticket wins.
         let session = open_session();
         let entrant = character(CharacterClass::DarkKnight, 60, 0);
         let bag = Inventory::empty(8, 8);
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert_eq!(outcome, EnterOutcome::NoTicket);
     }
 
@@ -469,8 +461,7 @@ mod tests {
         assert_ne!(entrant.active_effects(), ActiveEffects::EMPTY);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
         let mut rng = TestRng::new(7);
-        let (_, admitted, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, admitted, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert!(matches!(outcome, EnterOutcome::Entered { .. }));
         assert_eq!(admitted.active_effects(), ActiveEffects::EMPTY);
     }
@@ -481,8 +472,7 @@ mod tests {
         let handle = holder.handle();
         let (session, entrant, bag) = admit_ready();
         let mut rng = CountingRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert!(matches!(outcome, EnterOutcome::Entered { .. }));
         assert_eq!(rng.draws(), 1);
 
@@ -490,8 +480,7 @@ mod tests {
         let entrant = character(CharacterClass::DarkKnight, 14, 100_000);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
         let mut rng = CountingRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         assert_eq!(outcome, EnterOutcome::LevelTooLow);
         assert_eq!(rng.draws(), 0);
     }
@@ -514,8 +503,7 @@ mod tests {
         let entrant = character(CharacterClass::DarkKnight, 60, 100_000);
         let bag = place_ticket(Inventory::empty(8, 8), ticket_instance(2));
         let mut rng = TestRng::new(7);
-        let (_, _, _, outcome) =
-            enter_mini_game(session, &handle, entrant, bag, PkStanding::Clear, &mut rng);
+        let (_, _, _, outcome) = enter_mini_game(session, &handle, entrant, bag, &mut rng);
         let EnterOutcome::Entered { slot, .. } = outcome else {
             panic!("expected admission, got {outcome:?}");
         };

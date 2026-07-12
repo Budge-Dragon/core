@@ -51,3 +51,33 @@ does **not** rate-limit for you — duties 1–2 are reducer code you write.
   atlas, combat_death_penalty(attacker_kind))` + `respawn` only (both by value). Pass
   **core's computed** penalty — never a host-originated Waived/Applied literal; the
   rule (a player kill costs the victim nothing) lives in core. Reputation is W-PK.
+
+### PvP reputation (W-PK)
+- **Online-time tick.** `now`/`at`/`tick` you feed the reputation services come from a
+  per-character **online-time** tick counter that **pauses while the character is offline
+  and persists across logout**. This is what makes murderer status decay online-only —
+  core is clockless and takes the tick as input; it cannot enforce this, so it is a host
+  duty. A wall-clock feed would (wrongly) decay offline time.
+- **Decay before the bump.** At an action tick, call `decay_reputation(now)` to bring the
+  killer's standing current **before** `player_kill_sanction` + `resolve_player_kill`, so
+  the +1h climb accumulates onto a current deadline. Self-correcting if skipped (a stale
+  deadline peels on the next decay call) — a cleanliness contract, not a correctness bug.
+- **Monster-kill two-step.** On a monster kill: `resolve_kill` (reward) **then**
+  `accelerate_reputation_decay` (the killer's fade) — mirrors the `combat_death_penalty`
+  + `resolve_death` two-step. Both read the one core-stamped monster.
+- **Player-kill routing.** On a `Player` victim: run the victim's
+  `resolve_death(.., combat_death_penalty(TargetKind::Player))` (Waived) **and** the
+  killer's `player_kill_sanction(victim, context)` + `resolve_player_kill`. Pass core's
+  computed sanction — never a client-claimed one.
+- **`PvpContext` is attested from SERVER state, never a client byte.** The non-`Open`
+  variants (`SelfDefense`/`RivalGuild`/`Duel`/`MiniGamePvp`) come from server-side facts
+  — the ~1-min self-defense timer, the guild registry, the duel registry, session
+  membership — exactly like `CombatProfile.kind` is stamped "from the entity type… never
+  from client bytes". Do **not** wire a client-supplied self-defense flag into the
+  sanction. Until W-SELFDEF / W-GUILD / W-DUEL land, supply `Open` (`MiniGamePvp` from
+  session membership is available today).
+- **Crywolf exp-loss exclusion.** OpenMU skips PK monster-death exp-loss on **map 34
+  (Crywolf)** — route it host-side via `DeathPenalty::Waived` (same mechanism as the
+  mini-game waiver), no core change.
+- **Name-color / murderer marker** is a host/view concern — core owns the `Reputation`
+  state; the host maps the stage to a name color.

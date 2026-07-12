@@ -27,6 +27,7 @@ use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::movement::{CombatLock, FlightChange, Mobility, Movement, Wings};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
+use mu_core::components::reputation::Standing;
 use mu_core::components::spatial::{Facing, Radius, UNITS_PER_TILE, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
 use mu_core::components::units::{DurationMs, MapNumber, Tick};
@@ -37,6 +38,7 @@ use mu_core::data::monster_definitions::{MobBehavior, SafezoneDisposition};
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
+use mu_core::services::monster_ai::AiTarget;
 use mu_core::services::movement::{change_flight, resolve_arrival, resolve_drift, resolve_step};
 
 /// Whole-run length for the ambient simulation (Group A).
@@ -247,7 +249,10 @@ fn decide(
     mu_core::services::monster_ai::decide_monster_action(
         inst,
         behavior,
-        target,
+        target.map(|position| AiTarget {
+            position,
+            standing: Standing::Clean,
+        }),
         now,
         tick(),
         grid,

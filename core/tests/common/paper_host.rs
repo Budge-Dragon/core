@@ -45,6 +45,7 @@ use mu_core::components::movement::{CombatLock, FlightChange, Movement, Wings};
 use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
+use mu_core::components::reputation::Standing;
 use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
 use mu_core::components::trade_window::Side;
@@ -86,6 +87,7 @@ use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightOutcome, StepOutcome};
 use mu_core::events::party::{MemberAward, PartyEvent};
 use mu_core::events::progression::GrowthEvent;
+use mu_core::events::reputation::PkEvent;
 use mu_core::events::shop::{BuyOutcome, RepairOutcome, SellOutcome};
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::events::trade::{CancelReason, OfferOutcome, Settlement, ZenOfferOutcome};
@@ -108,10 +110,14 @@ use mu_core::services::inventory::{
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::kill::resolve_kill;
 use mu_core::services::minigame;
-use mu_core::services::monster_ai::decide_monster_action;
+use mu_core::services::monster_ai::{AiTarget, decide_monster_action};
 use mu_core::services::movement::resolve_step;
 use mu_core::services::party;
 use mu_core::services::profile::{effective_profile, equipped_profile, monster_profile};
+use mu_core::services::reputation::{
+    PvpContext, accelerate_reputation_decay, decay_reputation, player_kill_sanction,
+    resolve_player_kill,
+};
 use mu_core::services::shop::{RepairSite, RepairSubject, repair};
 use mu_core::services::skills::{
     DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, cast_heal, route,
@@ -612,6 +618,12 @@ impl World {
         );
         let capability = mobility(&mob.active_effects);
         let tick = host_tick();
+        // Non-PK drives target a clean player; the guard-hunt sim-gate builds
+        // its own `AiTarget` from the murderer's authoritative reputation.
+        let target = target.map(|position| AiTarget {
+            position,
+            standing: Standing::Clean,
+        });
         let (advanced, intent) = decide_monster_action(
             &mob,
             &behavior,
@@ -1301,6 +1313,141 @@ impl World {
         );
         *slot = persisted;
         events
+    }
+
+    /// The killer-side twin of [`Self::resolve_combat_death`]: once a player kill
+    /// has been driven to a killing blow, updates the KILLER's reputation through
+    /// the core sanction path. [`player_kill_sanction`] reads the victim at
+    /// `victim_index`'s AUTHORITATIVE reputation — a clean victim flags the killer
+    /// up the murderer ladder, an already-hunted murderer makes the kill free —
+    /// and [`resolve_player_kill`] applies it, stacking the decay deadline and the
+    /// lifetime tally on a flag, leaving the killer byte-identical on a free kill.
+    /// The killer is persisted; the decided [`PkEvent`] is returned for delivery.
+    /// No forged sanction: the deciding fact is the victim's core reputation, never
+    /// a client claim, so a host can neither self-flag nor forge "my victim was a
+    /// murderer".
+    pub fn resolve_player_kill_of(
+        &mut self,
+        killer_index: usize,
+        victim_index: usize,
+        at: Tick,
+    ) -> PkEvent {
+        let victim = or_abort(self.characters.get(victim_index).ok_or("no victim"));
+        let sanction = player_kill_sanction(victim, PvpContext::Open);
+        let killer = or_abort(self.characters.get(killer_index).ok_or("no killer")).clone();
+        let (flagged, event) = resolve_player_kill(killer, sanction, at, host_tick());
+        let persisted = persist(flagged);
+        let slot = or_abort(
+            self.characters
+                .get_mut(killer_index)
+                .ok_or("no killer slot"),
+        );
+        *slot = persisted;
+        event
+    }
+
+    /// Decays the player-kill reputation of the character at `char_index` to
+    /// online time `now` through the core [`decay_reputation`] service — the sole
+    /// rung-lowering path — persists the faded character, and returns the
+    /// [`PkEvent`] if a rung peeled. The passage-of-time twin of
+    /// [`Self::resolve_player_kill_of`]; the host owns the online-time clock (U1),
+    /// fed here as `now`.
+    pub fn decay_reputation_of(&mut self, char_index: usize, now: Tick) -> Option<PkEvent> {
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let (faded, event) = decay_reputation(character, now, host_tick());
+        let persisted = persist(faded);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        event
+    }
+
+    /// Accelerates the reputation decay of the flagged killer at `char_index` by
+    /// the level of the monster at `victim_index` through the core
+    /// [`accelerate_reputation_decay`] service — the murderer works its flag off by
+    /// hunting, buying one monster-level-second of decay without peeling a rung.
+    /// The victim's level is read from its authoritative definition in the held
+    /// atlas, so the pull cannot be forged. Persists the killer and returns the
+    /// [`PkEvent`] if the deadline moved.
+    pub fn accelerate_decay_of(
+        &mut self,
+        char_index: usize,
+        victim_index: usize,
+    ) -> Option<PkEvent> {
+        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let victim = self.monster(victim_index);
+        let (killer, event) =
+            accelerate_reputation_decay(character, &victim, &self.atlas, host_tick());
+        let persisted = persist(killer);
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persisted;
+        event
+    }
+
+    /// Advances the Patrols guard at `guard_index` against the murderer at
+    /// `murderer_index` (seam 6/7 for the guard hunt): builds the [`AiTarget`]
+    /// wholly from the murderer's LIVE state — its authoritative reputation
+    /// standing and its persisted position, never forged — runs the real
+    /// [`decide_monster_action`] over the guard's behavior and the map grid,
+    /// persists the advanced guard, and returns the chosen intent. A guard hunts
+    /// only a genuinely hunted murderer onto a safe tile, so the decision turns on
+    /// the core reputation verdict, not a client claim. The PK twin of
+    /// [`Self::advance_monster`].
+    pub fn advance_guard_against(
+        &mut self,
+        guard_index: usize,
+        murderer_index: usize,
+        now: Tick,
+    ) -> MonsterIntent {
+        let murderer = self.character(murderer_index);
+        let standing = murderer.reputation().standing();
+        let target = murderer.placement().position;
+        let guard = self.monster(guard_index);
+        let def = or_abort(
+            self.atlas
+                .monster(guard.number)
+                .ok_or("unknown monster number"),
+        );
+        let behavior = match &def.role {
+            MonsterRole::Monster { behavior, .. }
+            | MonsterRole::Guard { behavior, .. }
+            | MonsterRole::Trap { behavior, .. } => *behavior,
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
+                return or_abort(Err::<MonsterIntent, _>(
+                    "advance handed a non-combat monster",
+                ));
+            }
+        };
+        let grid = or_abort(
+            self.atlas
+                .terrain_grid(guard.placement.map)
+                .ok_or("no terrain grid"),
+        );
+        let capability = mobility(&guard.active_effects);
+        let (advanced, intent) = decide_monster_action(
+            &guard,
+            &behavior,
+            Some(AiTarget {
+                position: target,
+                standing,
+            }),
+            now,
+            host_tick(),
+            grid,
+            capability,
+            &mut self.rng,
+        );
+        let persisted = persist(advanced);
+        let slot = or_abort(self.monsters.get_mut(guard_index).ok_or("no monster slot"));
+        *slot = persisted;
+        intent
     }
 
     /// Runs the respawn step on the player at `char_index` once its scheduled
@@ -2314,17 +2461,17 @@ impl World {
     }
 
     /// Drives the entry gate for the character at `char_index` into the session
-    /// at `session_index` with host-supplied `pk` standing: reads the live
-    /// session, entrant, and bag, runs [`minigame::enter_mini_game`] over the
-    /// held atlas and stream, and writes the (possibly spent) session, entrant,
-    /// and bag back *through* the persist seam. On any rejection the framework
-    /// returns them unchanged (reject-before-spend), so the write-back is a
-    /// no-op in value. Returns the outcome.
+    /// at `session_index`: reads the live session, entrant, and bag, runs
+    /// [`minigame::enter_mini_game`] over the held atlas and stream (the entry
+    /// gate reads the entrant's authoritative reputation for the player-killer
+    /// bar), and writes the (possibly spent) session, entrant, and bag back
+    /// *through* the persist seam. On any rejection the framework returns them
+    /// unchanged (reject-before-spend), so the write-back is a no-op in value.
+    /// Returns the outcome.
     pub fn enter_mini_session(
         &mut self,
         session_index: usize,
         char_index: usize,
-        pk: minigame::PkStanding,
     ) -> minigame::EnterOutcome {
         let session = self.mini_session(session_index).clone();
         let entrant = or_abort(self.characters.get(char_index).ok_or("no entrant")).clone();
@@ -2335,7 +2482,7 @@ impl World {
                 .ok_or("no resolved mini-game"),
         );
         let (session, entrant, bag, outcome) =
-            minigame::enter_mini_game(session, &handle, entrant, bag, pk, &mut self.rng);
+            minigame::enter_mini_game(session, &handle, entrant, bag, &mut self.rng);
         self.store_mini_session(session_index, session);
         let slot = or_abort(self.characters.get_mut(char_index).ok_or("no entrant slot"));
         *slot = persist(entrant);
@@ -2874,6 +3021,26 @@ pub fn armored_monster_from(atlas: &Atlas, min_defense: u16) -> (MonsterNumber, 
                 | MonsterRole::SoccerBall => None,
             })
             .ok_or("the dataset has no fighting monster at that defense"),
+    )
+}
+
+/// The number of the first Patrols guard in the roster — the town sentry whose
+/// [`MonsterRole::Guard`] confers the `Patrols` disposition that hunts a flagged
+/// murderer onto a safe tile. Re-found from the dataset on every run, never a
+/// hard-coded number.
+#[must_use]
+pub fn guard_monster(atlas: &Atlas) -> MonsterNumber {
+    or_abort(
+        atlas
+            .monsters()
+            .find_map(|definition| match &definition.role {
+                MonsterRole::Guard { .. } => Some(definition.number),
+                MonsterRole::Monster { .. }
+                | MonsterRole::Trap { .. }
+                | MonsterRole::Npc { .. }
+                | MonsterRole::SoccerBall => None,
+            })
+            .ok_or("the dataset has no guard"),
     )
 }
 

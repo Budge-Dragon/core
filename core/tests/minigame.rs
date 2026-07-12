@@ -46,7 +46,7 @@ use mu_core::events::death::DeathEvent;
 use mu_core::events::minigame::{GrantRecord, MiniGameEvent};
 use mu_core::services::death::{DeathPenalty, resolve_death};
 use mu_core::services::minigame::{
-    EnterOutcome, GrantDecision, ItemDropGrant, MoneyGrant, PkStanding, advance_mini_game,
+    EnterOutcome, GrantDecision, ItemDropGrant, MoneyGrant, advance_mini_game,
     apply_item_drop_grant, apply_money_grant, enter_mini_game, finish_event, report_death,
     report_leave, report_session_kill, resolve_rewards,
 };
@@ -273,7 +273,7 @@ fn admit(
     let bag = bag_with(ticket(2, required_ticket_level()));
     let mut rng = TestRng::new(seed);
     let (session, admitted, _bag, outcome) =
-        enter_mini_game(session, handle, entrant, bag, PkStanding::Clear, &mut rng);
+        enter_mini_game(session, handle, entrant, bag, &mut rng);
     let EnterOutcome::Entered { slot, .. } = outcome else {
         return or_abort(Err(format!("expected admission, got {outcome:?}")));
     };
@@ -331,14 +331,8 @@ fn a_funded_ticketed_in_bracket_entrant_is_admitted_paying_exactly_once() {
     let handle = handle(&atlas);
     let bag = bag_with(ticket(2, required_ticket_level()));
     let mut rng = TestRng::new(7);
-    let (session, admitted, bag, outcome) = enter_mini_game(
-        open_session(),
-        &handle,
-        entrant(),
-        bag,
-        PkStanding::Clear,
-        &mut rng,
-    );
+    let (session, admitted, bag, outcome) =
+        enter_mini_game(open_session(), &handle, entrant(), bag, &mut rng);
     let EnterOutcome::Entered { slot, placement } = outcome else {
         panic!("expected admission, got {outcome:?}");
     };
@@ -365,14 +359,8 @@ fn a_ticket_at_its_last_charge_is_consumed_whole_on_entry() {
     let handle = handle(&atlas);
     let bag = bag_with(ticket(1, required_ticket_level()));
     let mut rng = TestRng::new(7);
-    let (_, admitted, bag, outcome) = enter_mini_game(
-        open_session(),
-        &handle,
-        entrant(),
-        bag,
-        PkStanding::Clear,
-        &mut rng,
-    );
+    let (_, admitted, bag, outcome) =
+        enter_mini_game(open_session(), &handle, entrant(), bag, &mut rng);
     assert!(matches!(outcome, EnterOutcome::Entered { .. }));
     // The whole item is removed at durability zero (the consume-one seam).
     assert!(bag.placed().is_empty());
@@ -391,7 +379,6 @@ fn bracket_edges_are_inclusive_and_one_past_each_edge_rejects() {
             &handle,
             who,
             bag_with(ticket(2, required_ticket_level())),
-            PkStanding::Clear,
             &mut rng,
         );
         assert_eq!(
@@ -408,14 +395,8 @@ fn bracket_edges_are_inclusive_and_one_past_each_edge_rejects() {
         let who = character(CharacterClass::DarkKnight, level, 100_000, &a_buff());
         let bag = bag_with(ticket(2, required_ticket_level()));
         let mut rng = TestRng::new(1);
-        let (session_after, who_after, bag_after, outcome) = enter_mini_game(
-            session.clone(),
-            &handle,
-            who.clone(),
-            bag.clone(),
-            PkStanding::Clear,
-            &mut rng,
-        );
+        let (session_after, who_after, bag_after, outcome) =
+            enter_mini_game(session.clone(), &handle, who.clone(), bag.clone(), &mut rng);
         assert_eq!(outcome, expected, "level {level}");
         // Reject-before-spend: everything comes back unchanged.
         assert_eq!(session_after, session);
@@ -441,7 +422,6 @@ fn special_classes_are_gated_by_the_reduced_bracket() {
             &handle,
             who,
             bag_with(ticket(2, required_ticket_level())),
-            PkStanding::Clear,
             &mut rng,
         );
         if expected_special {
@@ -462,7 +442,6 @@ fn special_classes_are_gated_by_the_reduced_bracket() {
             &handle,
             who,
             bag_with(ticket(2, required_ticket_level())),
-            PkStanding::Clear,
             &mut rng,
         );
         if expected {
@@ -483,14 +462,8 @@ fn a_wrong_level_or_spent_ticket_rejects_with_nothing_spent() {
         let who = entrant();
         let bag = bag_with(instance);
         let mut rng = TestRng::new(1);
-        let (_, who_after, bag_after, outcome) = enter_mini_game(
-            open_session(),
-            &handle,
-            who.clone(),
-            bag.clone(),
-            PkStanding::Clear,
-            &mut rng,
-        );
+        let (_, who_after, bag_after, outcome) =
+            enter_mini_game(open_session(), &handle, who.clone(), bag.clone(), &mut rng);
         assert_eq!(outcome, EnterOutcome::NoTicket);
         assert_eq!(who_after, who);
         assert_eq!(bag_after, bag);
@@ -504,14 +477,8 @@ fn an_unaffordable_fee_is_checked_never_partially_charged() {
     let poor = character(CharacterClass::DarkKnight, 60, 24_999, &a_buff());
     let bag = bag_with(ticket(2, required_ticket_level()));
     let mut rng = TestRng::new(1);
-    let (_, who_after, bag_after, outcome) = enter_mini_game(
-        open_session(),
-        &handle,
-        poor.clone(),
-        bag.clone(),
-        PkStanding::Clear,
-        &mut rng,
-    );
+    let (_, who_after, bag_after, outcome) =
+        enter_mini_game(open_session(), &handle, poor.clone(), bag.clone(), &mut rng);
     assert_eq!(outcome, EnterOutcome::NotEnoughZen);
     assert_eq!(who_after.zen().get(), 24_999);
     assert_eq!(who_after, poor);
@@ -519,32 +486,31 @@ fn an_unaffordable_fee_is_checked_never_partially_charged() {
 }
 
 #[test]
-fn a_player_killer_is_barred_and_a_clear_standing_enters() {
+fn a_hunted_entrant_is_barred_and_a_clean_one_enters() {
     let atlas = atlas_with(vec![definition(2, 3, Vec::new(), Vec::new())]);
     let handle = handle(&atlas);
-    let who = entrant();
     let bag = bag_with(ticket(2, required_ticket_level()));
+    // A first-stage murderer, seeded through the wire gate — the entry bar
+    // reads the entrant's own authoritative reputation, not a host claim.
+    let mut wire = or_abort(serde_json::to_value(entrant()));
+    wire["reputation"] = json!({
+        "standing": {"kind": "flagged", "stage": "first_stage", "decays_at": 9},
+        "kills": 1
+    });
+    let hunted: Character = or_abort(serde_json::from_value(wire));
     let mut rng = TestRng::new(1);
     let (_, who_after, bag_after, outcome) = enter_mini_game(
         open_session(),
         &handle,
-        who.clone(),
+        hunted.clone(),
         bag.clone(),
-        PkStanding::PlayerKiller,
         &mut rng,
     );
     assert_eq!(outcome, EnterOutcome::PlayerKillerBarred);
-    assert_eq!(who_after, who);
+    assert_eq!(who_after, hunted);
     assert_eq!(bag_after, bag);
     let mut rng = TestRng::new(1);
-    let (_, _, _, outcome) = enter_mini_game(
-        open_session(),
-        &handle,
-        who,
-        bag,
-        PkStanding::Clear,
-        &mut rng,
-    );
+    let (_, _, _, outcome) = enter_mini_game(open_session(), &handle, entrant(), bag, &mut rng);
     assert!(matches!(outcome, EnterOutcome::Entered { .. }));
 }
 
@@ -561,7 +527,6 @@ fn entry_past_the_open_window_is_rejected() {
         &handle,
         entrant(),
         bag_with(ticket(2, required_ticket_level())),
-        PkStanding::Clear,
         &mut rng,
     );
     assert_eq!(outcome, EnterOutcome::NotOpen);
@@ -582,7 +547,6 @@ fn capacity_counts_every_entered_member_dead_included() {
         &handle,
         entrant(),
         bag_with(ticket(2, required_ticket_level())),
-        PkStanding::Clear,
         &mut rng,
     );
     assert_eq!(outcome, EnterOutcome::Full);
@@ -600,7 +564,6 @@ fn the_first_failing_check_in_the_fixed_order_reports() {
         &handle,
         too_low,
         Inventory::empty(8, 8),
-        PkStanding::Clear,
         &mut rng,
     );
     assert_eq!(outcome, EnterOutcome::LevelTooLow);
@@ -612,7 +575,6 @@ fn the_first_failing_check_in_the_fixed_order_reports() {
         &handle,
         broke,
         Inventory::empty(8, 8),
-        PkStanding::Clear,
         &mut rng,
     );
     assert_eq!(outcome, EnterOutcome::NoTicket);

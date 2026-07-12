@@ -19,6 +19,7 @@ use crate::components::active_effect::ActiveEffects;
 use crate::components::combat_profile::TargetKind;
 use crate::components::life::LifeState;
 use crate::components::pool::Pool;
+use crate::components::reputation::{PkStage, Reputation, Standing};
 use crate::components::units::{
     CarriedZen, DebitOutcome, DurationMs, Exp, Level, Tick, TickDuration, Zen,
 };
@@ -222,7 +223,8 @@ fn exp_penalty(character: &Character, atlas: &Atlas) -> ExpPenalty {
         (Ok(_) | Err(_), Err(_)) | (Err(_), Ok(_)) => return ExpPenalty::None,
     };
 
-    let nominal = scale_ratio_u64(band, 1, nonzero_u64(PERCENT_DENOMINATOR));
+    let percent = exp_loss_percent(level, character.reputation());
+    let nominal = scale_ratio_u64(band, percent, nonzero_u64(PERCENT_DENOMINATOR));
     let new_exp = floor.max(character.experience().0.saturating_sub(nominal));
     let lost = character.experience().0.saturating_sub(new_exp);
     if lost == 0 {
@@ -231,6 +233,35 @@ fn exp_penalty(character: &Character, atlas: &Atlas) -> ExpPenalty {
     ExpPenalty::Docked {
         new_exp: Exp(new_exp),
         lost: Exp(lost),
+    }
+}
+
+/// The monster-death experience-loss percent, forked by the dying character's
+/// player-kill standing and level band. Clean is the classic one percent; the
+/// flagged bands are a `CMB-CONST` tunable, verbatim from OpenMU's
+/// `PlayerLosesExperienceAfterDeathPlugIn`. A total match over the level ranges
+/// and the three ladder rungs — the `0..=149` band subsumes the sub-ten levels
+/// the caller's early-return already excludes.
+fn exp_loss_percent(level: Level, reputation: Reputation) -> u64 {
+    match reputation.standing() {
+        Standing::Clean => 1,
+        Standing::Flagged { stage, .. } => match level.get() {
+            0..=149 => match stage {
+                PkStage::Warning => 5,
+                PkStage::FirstStage => 6,
+                PkStage::SecondStage => 7,
+            },
+            150..=219 => match stage {
+                PkStage::Warning => 4,
+                PkStage::FirstStage => 5,
+                PkStage::SecondStage => 6,
+            },
+            220.. => match stage {
+                PkStage::Warning => 3,
+                PkStage::FirstStage => 4,
+                PkStage::SecondStage => 5,
+            },
+        },
     }
 }
 
@@ -277,6 +308,15 @@ mod tests {
 
     fn carried(value: u64) -> CarriedZen {
         CarriedZen::new(value).unwrap()
+    }
+
+    /// A clean reputation flagged at `stage` (deadline irrelevant to the
+    /// exp-loss fork, which reads only the stage and the level band).
+    fn flagged_rep(stage: PkStage) -> Reputation {
+        Reputation::clean().with_standing(Standing::Flagged {
+            stage,
+            decays_at: Tick(1),
+        })
     }
 
     #[test]
@@ -342,5 +382,67 @@ mod tests {
             combat_death_penalty(TargetKind::Npc),
             DeathPenalty::Applied
         ));
+    }
+
+    #[test]
+    fn monster_death_exp_loss_scales_by_stage_and_never_de_levels() {
+        // Clean stays the classic one percent — byte-identical to pre-W-PK.
+        let clean = exp_loss_percent(level(100), Reputation::clean());
+        assert_eq!(clean, 1);
+
+        // Every flagged rung is heavier, climbing with the stage, at a sub-150
+        // level (the harshest band).
+        assert_eq!(
+            exp_loss_percent(level(100), flagged_rep(PkStage::Warning)),
+            5
+        );
+        assert_eq!(
+            exp_loss_percent(level(100), flagged_rep(PkStage::FirstStage)),
+            6
+        );
+        assert_eq!(
+            exp_loss_percent(level(100), flagged_rep(PkStage::SecondStage)),
+            7
+        );
+        assert!(clean < exp_loss_percent(level(100), flagged_rep(PkStage::Warning)));
+
+        // The floor never de-levels: seated exactly at the level's experience
+        // floor, even the heaviest rung's dock cannot fall below it — the same
+        // `floor.max(exp - nominal)` clamp `exp_penalty` applies at line 226.
+        let floor = 1_000_000u64;
+        let band = 200_000u64;
+        for stage in [PkStage::Warning, PkStage::FirstStage, PkStage::SecondStage] {
+            let percent = exp_loss_percent(level(100), flagged_rep(stage));
+            let nominal = scale_ratio_u64(band, percent, nonzero_u64(PERCENT_DENOMINATOR));
+            let new_exp = floor.max(floor.saturating_sub(nominal));
+            assert_eq!(new_exp, floor, "stage {stage:?} de-leveled below the floor");
+        }
+    }
+
+    #[test]
+    fn exp_loss_percent_is_total_over_bands_and_stages() {
+        // Every level band × every rung resolves to exactly one whole percent;
+        // clean is always the classic one, in every band.
+        let table = [
+            (10u16, [5u64, 6, 7]),
+            (149, [5, 6, 7]),
+            (150, [4, 5, 6]),
+            (219, [4, 5, 6]),
+            (220, [3, 4, 5]),
+            (400, [3, 4, 5]),
+        ];
+        for (lvl, expected) in table {
+            for (stage, want) in [PkStage::Warning, PkStage::FirstStage, PkStage::SecondStage]
+                .into_iter()
+                .zip(expected)
+            {
+                assert_eq!(
+                    exp_loss_percent(level(lvl), flagged_rep(stage)),
+                    want,
+                    "level {lvl} stage {stage:?}"
+                );
+            }
+            assert_eq!(exp_loss_percent(level(lvl), Reputation::clean()), 1);
+        }
     }
 }

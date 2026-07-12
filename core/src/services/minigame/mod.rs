@@ -17,7 +17,7 @@ mod support;
 mod waves;
 
 pub use death::{report_death, report_leave};
-pub use entry::{EnterOutcome, PkStanding, enter_mini_game};
+pub use entry::{EnterOutcome, enter_mini_game};
 pub use lifecycle::advance_mini_game;
 pub use rewards::{
     FinisherAward, GrantDecision, ItemDropGrant, MoneyGrant, RewardOutcome, apply_item_drop_grant,

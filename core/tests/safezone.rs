@@ -21,6 +21,7 @@ use mu_core::components::element::{Element, PerElement};
 use mu_core::components::movement::{Mobility, Movement};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
+use mu_core::components::reputation::Standing;
 use mu_core::components::spatial::{Facing, UNITS_PER_TILE};
 use mu_core::components::tile::{TERRAIN_LEN, TerrainGrid, TileCoord};
 use mu_core::components::units::{Level, MapNumber, Resistance, Tick, TickDuration};
@@ -31,7 +32,7 @@ use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
-use mu_core::services::monster_ai::decide_monster_action;
+use mu_core::services::monster_ai::{AiTarget, decide_monster_action};
 use mu_core::services::profile::{character_profile, monster_profile};
 use mu_core::services::skills::{
     DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, route,
@@ -603,7 +604,10 @@ fn no_role_targets_a_safezone_stander() {
         let (_, intent) = decide_monster_action(
             &mob,
             &behavior,
-            Some(safe_tile.to_world()),
+            Some(AiTarget {
+                position: safe_tile.to_world(),
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick(),
             grid,
@@ -633,7 +637,10 @@ fn a_basic_mob_on_a_safe_tile_never_attacks_but_a_real_guard_does() {
     let (_, intent) = decide_monster_action(
         &mob,
         &basic_behavior(&atlas),
-        Some(field_tile.to_world()),
+        Some(AiTarget {
+            position: field_tile.to_world(),
+            standing: Standing::Clean,
+        }),
         Tick(0),
         tick(),
         grid,
@@ -651,7 +658,10 @@ fn a_basic_mob_on_a_safe_tile_never_attacks_but_a_real_guard_does() {
     let (_, intent) = decide_monster_action(
         &guard,
         &guard_behavior(&atlas),
-        Some(field_tile.to_world()),
+        Some(AiTarget {
+            position: field_tile.to_world(),
+            standing: Standing::Clean,
+        }),
         Tick(0),
         tick(),
         grid,

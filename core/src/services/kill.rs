@@ -6,9 +6,9 @@
 
 use rand_core::RngCore;
 
-use crate::components::units::{Exp, Level};
+use crate::components::units::Exp;
 use crate::data::atlas::Atlas;
-use crate::data::monster_definitions::MonsterRole;
+use crate::data::monster_definitions::MonsterDefinition;
 use crate::entities::character::Character;
 use crate::entities::monster_instance::MonsterInstance;
 use crate::events::kill::KillResolution;
@@ -29,7 +29,10 @@ pub fn resolve_kill(
     atlas: &Atlas,
     rng: &mut impl RngCore,
 ) -> KillResolution {
-    let Some(victim_level) = victim_combat_level(victim, atlas) else {
+    let Some(victim_level) = atlas
+        .monster(victim.number)
+        .and_then(MonsterDefinition::combat_level)
+    else {
         return KillResolution {
             drops: DropResolution {
                 category: Drop::Nothing,
@@ -45,17 +48,5 @@ pub fn resolve_kill(
         drops,
         experience: ExpAward { gained },
         level_ups,
-    }
-}
-
-/// The victim's combat level, or `None` when the victim's definition carries no
-/// combat block (a passive NPC or the soccer ball) or resolves to nothing — a
-/// genuine "not a fighting monster" absence, folded here rather than unwrapped.
-fn victim_combat_level(victim: &MonsterInstance, atlas: &Atlas) -> Option<Level> {
-    match atlas.monster(victim.number)?.role {
-        MonsterRole::Monster { combat, .. }
-        | MonsterRole::Guard { combat, .. }
-        | MonsterRole::Trap { combat, .. } => Some(combat.level),
-        MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
     }
 }

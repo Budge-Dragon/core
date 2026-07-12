@@ -20,6 +20,23 @@ pub struct MonsterDefinition {
     pub role: MonsterRole,
 }
 
+impl MonsterDefinition {
+    /// The combat level this definition confers — the single role-to-level
+    /// source every service reads, so a passive kind's "no level" absence is
+    /// folded here once rather than re-derived at each call. `None` for the two
+    /// roles that carry no combat block (`Npc`, `SoccerBall`). Total over
+    /// [`MonsterRole`].
+    #[must_use]
+    pub(crate) fn combat_level(&self) -> Option<Level> {
+        match self.role {
+            MonsterRole::Monster { combat, .. }
+            | MonsterRole::Guard { combat, .. }
+            | MonsterRole::Trap { combat, .. } => Some(combat.level),
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
+        }
+    }
+}
+
 /// What a monster-file entity is, kind-tagged. Fighting kinds carry the
 /// Monster.txt combat columns; passive kinds carry none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,6 +119,20 @@ pub enum SafezoneDisposition {
     Excluded,
     /// Guards: patrol across and attack from safe town tiles.
     Patrols,
+}
+
+impl SafezoneDisposition {
+    /// Whether this disposition pursues a flagged murderer standing on a safe
+    /// tile: a patrolling guard hunts a hunted player across town, a suppressed
+    /// mob or trap never does. A total match so a future third disposition is
+    /// forced to decide here rather than silently falling to no-hunt.
+    #[must_use]
+    pub(crate) fn hunts_on_safe_tiles(self) -> bool {
+        match self {
+            SafezoneDisposition::Patrols => true,
+            SafezoneDisposition::Excluded => false,
+        }
+    }
 }
 
 impl MonsterRole {

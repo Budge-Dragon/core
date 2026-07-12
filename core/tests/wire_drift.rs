@@ -1055,7 +1055,7 @@ fn character_wire_is_pinned() {
     assert_eq!(
         serde_json::to_string(&character).unwrap(),
         format!(
-            r#"{{"class":"dark_knight","level":42,"experience":1234,"stats":{{"kind":"standard","strength":60,"agility":40,"vitality":50,"energy":30}},"unspent_points":15,"zen":250000,"placement":{PLACEMENT_JSON},"vitals":{{"health":{{"current":500,"max":500}},"mana":{{"current":200,"max":200}},"ability":{{"current":1,"max":1}}}},"active_effects":[],"life":{{"kind":"alive"}},"discovered":[0]}}"#
+            r#"{{"class":"dark_knight","level":42,"experience":1234,"stats":{{"kind":"standard","strength":60,"agility":40,"vitality":50,"energy":30}},"unspent_points":15,"zen":250000,"placement":{PLACEMENT_JSON},"vitals":{{"health":{{"current":500,"max":500}},"mana":{{"current":200,"max":200}},"ability":{{"current":1,"max":1}}}},"active_effects":[],"life":{{"kind":"alive"}},"reputation":{{"standing":{{"kind":"clean"}},"kills":0}},"discovered":[0]}}"#
         )
     );
 }
