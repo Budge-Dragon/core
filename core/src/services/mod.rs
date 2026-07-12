@@ -25,6 +25,7 @@ pub mod party;
 pub mod price;
 pub mod profile;
 pub mod ratio;
+pub mod reputation;
 pub mod shop;
 pub mod skills;
 pub mod spawn;

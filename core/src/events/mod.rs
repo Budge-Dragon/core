@@ -18,6 +18,7 @@ pub mod monster_ai;
 pub mod movement;
 pub mod party;
 pub mod progression;
+pub mod reputation;
 pub mod shop;
 pub mod skills;
 pub mod spawn;
