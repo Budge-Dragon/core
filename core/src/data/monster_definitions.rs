@@ -20,6 +20,23 @@ pub struct MonsterDefinition {
     pub role: MonsterRole,
 }
 
+impl MonsterDefinition {
+    /// The combat level this definition confers — the single role-to-level
+    /// source every service reads, so a passive kind's "no level" absence is
+    /// folded here once rather than re-derived at each call. `None` for the two
+    /// roles that carry no combat block (`Npc`, `SoccerBall`). Total over
+    /// [`MonsterRole`].
+    #[must_use]
+    pub(crate) fn combat_level(&self) -> Option<Level> {
+        match self.role {
+            MonsterRole::Monster { combat, .. }
+            | MonsterRole::Guard { combat, .. }
+            | MonsterRole::Trap { combat, .. } => Some(combat.level),
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
+        }
+    }
+}
+
 /// What a monster-file entity is, kind-tagged. Fighting kinds carry the
 /// Monster.txt combat columns; passive kinds carry none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

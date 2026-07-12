@@ -10,7 +10,10 @@
 
 use crate::components::reputation::{PkStage, StageDrop, Standing};
 use crate::components::units::{DurationMs, Tick, TickDuration, Ticks};
+use crate::data::atlas::Atlas;
+use crate::data::monster_definitions::MonsterDefinition;
 use crate::entities::character::Character;
+use crate::entities::monster_instance::MonsterInstance;
 use crate::events::reputation::{PkEvent, SanctionReason};
 
 /// One online hour — the flat step every unsanctioned kill adds to the decay
@@ -186,6 +189,45 @@ fn peel(mut stage: PkStage, mut decays_at: Tick, now: Tick, step: Ticks) -> Peel
     }
 }
 
+/// Pulls a flagged killer's decay deadline earlier when they slay a monster —
+/// the murderer works the flag off by hunting, one monster-level-second of
+/// decay bought per kill. Only the deadline moves; the rung never peels here
+/// (that is [`decay_reputation`]'s sole path), so a host runs this after
+/// [`crate::services::kill::resolve_kill`] with no race between the two. A clean
+/// killer, or a level-less victim (a passive NPC or the soccer ball), is a
+/// no-op. The victim's level is read from its **authoritative** definition, so a
+/// client cannot claim a bigger pull. Killer in by value, killer plus at most
+/// one [`PkEvent::DecayAccelerated`] out; no randomness.
+#[must_use]
+pub fn accelerate_reputation_decay(
+    killer: Character,
+    victim: &MonsterInstance,
+    atlas: &Atlas,
+    tick: TickDuration,
+) -> (Character, Option<PkEvent>) {
+    let Standing::Flagged { stage, decays_at } = killer.reputation().standing() else {
+        return (killer, None);
+    };
+    let Some(level) = atlas
+        .monster(victim.number)
+        .and_then(MonsterDefinition::combat_level)
+    else {
+        return (killer, None);
+    };
+    let reduced_by = DurationMs(u32::from(level.get()).saturating_mul(1_000)).in_ticks(tick);
+    let decays_at = decays_at - reduced_by;
+    let reputation = killer
+        .reputation()
+        .with_standing(Standing::Flagged { stage, decays_at });
+    (
+        killer.with_reputation(reputation),
+        Some(PkEvent::DecayAccelerated {
+            decays_at,
+            reduced_by,
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,7 +309,8 @@ mod tests {
     #[test]
     fn a_second_open_kill_climbs_and_accumulates() {
         let killer = flagged(PkStage::Warning, Tick(5000)); // decays_at ahead of `at`
-        let (killer, _) = resolve_player_kill(killer, KillSanction::Unsanctioned, Tick(1000), tick());
+        let (killer, _) =
+            resolve_player_kill(killer, KillSanction::Unsanctioned, Tick(1000), tick());
         assert_eq!(
             killer.reputation().standing(),
             Standing::Flagged {
@@ -304,7 +347,10 @@ mod tests {
             assert!(matches!(s, KillSanction::Sanctioned { reason: r } if r == reason));
             let before = flagged(PkStage::Warning, Tick(9));
             let (after, ev) = resolve_player_kill(before.clone(), s, Tick(1000), tick());
-            assert_eq!(after, before, "a sanctioned kill leaves the killer byte-identical");
+            assert_eq!(
+                after, before,
+                "a sanctioned kill leaves the killer byte-identical"
+            );
             assert!(matches!(ev, PkEvent::Sanctioned { .. }));
         }
     }
@@ -312,7 +358,8 @@ mod tests {
     #[test]
     fn cap_stacks_timer_and_count_but_not_stage() {
         let killer = flagged(PkStage::SecondStage, Tick(5000));
-        let (killer, _) = resolve_player_kill(killer, KillSanction::Unsanctioned, Tick(1000), tick());
+        let (killer, _) =
+            resolve_player_kill(killer, KillSanction::Unsanctioned, Tick(1000), tick());
         assert_eq!(
             killer.reputation().standing(),
             Standing::Flagged {
