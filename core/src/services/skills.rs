@@ -19,7 +19,7 @@ use rand_core::RngCore;
 
 use crate::components::active_effect::ActiveEffects;
 use crate::components::class::CharacterClass;
-use crate::components::combat_profile::{CombatProfile, CombatTarget, WeaponMode};
+use crate::components::combat_profile::{CombatProfile, CombatTarget, TargetKind, WeaponMode};
 use crate::components::element::Element;
 use crate::components::interval::Interval;
 use crate::components::life::LifeState;
@@ -115,6 +115,51 @@ pub enum DamagingSkill {
     },
 }
 
+/// The client's force-attack intent for a located cast. An area cast strikes
+/// incidental NPCs on its own; it strikes a player only when the client
+/// deliberately designated that batch index (the force-attack modifier — a
+/// CTRL-click — is parsed host-side). A single-target strike hits nothing unless
+/// it designates its target. A designated target is struck regardless of kind,
+/// and is still region- and safezone-gated. A transient host intent, not
+/// persisted state — never serialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Designation {
+    /// No force-attack: an area cast strikes only incidental NPCs.
+    Incidental,
+    /// The client force-attacked one batch index; that target is struck
+    /// regardless of kind (still region- and safezone-gated).
+    Forced {
+        /// The designated target's batch position, matching
+        /// [`TargetHit::target_index`].
+        target_index: usize,
+    },
+}
+
+impl Designation {
+    /// Whether this designation names the target at `index`.
+    fn designates(self, index: usize) -> bool {
+        match self {
+            Designation::Incidental => false,
+            Designation::Forced { target_index } => target_index == index,
+        }
+    }
+}
+
+/// Whether a covered, non-safe target is struck by this cast. A single-target
+/// strike hits only its designated target; an area strike hits every incidental
+/// NPC and a player only when designated (the force-attack rule that keeps
+/// incidental players out of an area cast). Exhaustive over [`DamagingSkill`] and
+/// [`TargetKind`].
+fn strikes(shape: DamagingSkill, kind: TargetKind, designated: bool) -> bool {
+    match shape {
+        DamagingSkill::DirectHit | DamagingSkill::Lunge => designated,
+        DamagingSkill::Area { .. } => match kind {
+            TargetKind::Npc => true,
+            TargetKind::Player => designated,
+        },
+    }
+}
+
 /// A skill proven damaging: its definition plus its resolved damaging shape.
 /// Minted only by [`route`], so a held value is always a damaging skill.
 #[derive(Debug, Clone, Copy)]
@@ -174,8 +219,11 @@ impl<'a> DamagingSkillRef<'a> {
     /// — the returned descriptor holds no aim, so the aim can never reach a
     /// caster-anchored cast. The host always has an aim (the click point); this
     /// is the parse-boundary fold that decides whether the skill consults it.
+    /// `designation` carries the client's force-attack intent (host-parsed) so a
+    /// single-target strike knows its target and an area strike knows whether a
+    /// player was deliberately targeted.
     #[must_use]
-    pub fn locate(self, aim: WorldPos) -> LocatedCast<'a> {
+    pub fn locate(self, aim: WorldPos, designation: Designation) -> LocatedCast<'a> {
         let geometry = match self.shape() {
             DamagingSkill::DirectHit | DamagingSkill::Lunge => CastGeometry::AimedDisc {
                 aim,
@@ -186,6 +234,7 @@ impl<'a> DamagingSkillRef<'a> {
         LocatedCast {
             skill: self,
             geometry,
+            designation,
         }
     }
 }
@@ -235,6 +284,15 @@ pub enum CastGeometry {
 pub struct LocatedCast<'a> {
     skill: DamagingSkillRef<'a>,
     geometry: CastGeometry,
+    designation: Designation,
+}
+
+impl LocatedCast<'_> {
+    /// The force-attack designation the host parsed for this cast.
+    #[must_use]
+    pub fn designation(&self) -> Designation {
+        self.designation
+    }
 }
 
 /// The region descriptor an authored area geometry projects for a host aim: only
@@ -460,8 +518,9 @@ fn bounding_rect(corners: [WorldPos; 4]) -> WorldRect {
 
 /// Resolves a skill cast: rejects a safezone-standing caster, an unaffordable
 /// cost, or an out-of-range aim before spending anything, strikes every target
-/// the located region covers except those standing on a safe tile
-/// (single-target skills strike the first covered candidate), applies elemental
+/// the located region covers except those standing on a safe tile (a
+/// single-target skill strikes only its designated target; an area skill strikes
+/// every incidental NPC and a player only when force-attacked), applies elemental
 /// ailments and the per-skill displacement, teleports the caster on a lunge,
 /// then spends the cost. Returns the caster's vitals after the spend (health
 /// unchanged) and the [`SkillOutcome`].
@@ -486,17 +545,26 @@ pub fn cast(
     }
 
     let region = region_of(located.geometry, caster.placement());
-    let mut struck: Vec<(usize, &CombatTarget)> = targets
+    let shape = located.skill.shape();
+    let designation = located.designation();
+    let struck: Vec<(usize, &CombatTarget)> = targets
         .iter()
         .enumerate()
-        .filter(|(_, target)| {
+        .filter(|(index, target)| {
             let position = target.placement().position;
-            region.contains(position) && !grid.safe(position)
+            // The region + safezone gate runs first and uniformly: reach and the
+            // safezone firewall always win over designation (no hit-from-far, no
+            // hit-in-safezone), even for a force-attacked target.
+            if !region.contains(position) || grid.safe(position) {
+                return false;
+            }
+            strikes(
+                shape,
+                target.profile().kind(),
+                designation.designates(*index),
+            )
         })
         .collect();
-    if is_single_target(located.skill.shape()) {
-        struck.truncate(1);
-    }
     if struck.is_empty() {
         return (
             vitals,
@@ -795,13 +863,6 @@ fn augmented_span(base: Interval<u16>, d: u16) -> Interval<u16> {
     let min = base.min().saturating_add(d);
     let max = base.max().saturating_add(d).saturating_add(d / 2);
     Interval::spanning(min, max)
-}
-
-fn is_single_target(shape: DamagingSkill) -> bool {
-    match shape {
-        DamagingSkill::DirectHit | DamagingSkill::Lunge => true,
-        DamagingSkill::Area { .. } => false,
-    }
 }
 
 /// How a struck target is displaced this cast — selected per skill, not inferred
@@ -1388,7 +1449,7 @@ mod tests {
             0,
             0,
         );
-        let located = damaging_ref(&definition).locate(aim);
+        let located = damaging_ref(&definition).locate(aim, Designation::Incidental);
         region_of(located.geometry, caster)
     }
 
@@ -1569,7 +1630,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1594,7 +1655,7 @@ mod tests {
         let (_, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1618,7 +1679,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1654,7 +1715,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Incidental),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1679,7 +1740,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1704,7 +1765,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &corpse,
             &base_profile_of(&corpse),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1721,7 +1782,7 @@ mod tests {
         let (_, alive_outcome) = cast(
             &alive,
             &base_profile_of(&alive),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -1824,7 +1885,7 @@ mod tests {
                 cast(
                     &plain,
                     &base_profile_of(&plain),
-                    damaging.locate(aim),
+                    damaging.locate(aim, Designation::Forced { target_index: 0 }),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -1835,7 +1896,7 @@ mod tests {
                 cast(
                     &buffed,
                     &base_profile_of(&buffed),
-                    damaging.locate(aim),
+                    damaging.locate(aim, Designation::Forced { target_index: 0 }),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -1897,7 +1958,7 @@ mod tests {
                 cast(
                     &caster,
                     &base_profile_of(&caster),
-                    damaging.locate(aim),
+                    damaging.locate(aim, Designation::Forced { target_index: 0 }),
                     targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -1955,7 +2016,7 @@ mod tests {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging.locate(aim),
+                damaging.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &all_walkable(),
                 &mut TestRng::new(seed),
@@ -1993,7 +2054,7 @@ mod tests {
         if let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &base_profile_of(&caster),
-            plain.locate(aim),
+            plain.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &all_walkable(),
             &mut rng,
@@ -2019,7 +2080,7 @@ mod tests {
         if let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &base_profile_of(&caster),
-            icy.locate(aim),
+            icy.locate(aim, Designation::Forced { target_index: 0 }),
             &immune,
             &all_walkable(),
             &mut rng,
@@ -2056,7 +2117,7 @@ mod tests {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                bolt.locate(aim),
+                bolt.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &all_walkable(),
                 &mut rng,
@@ -2146,7 +2207,7 @@ mod tests {
             } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                lunge.locate(aim),
+                lunge.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &all_walkable(),
                 &mut rng,
@@ -2198,7 +2259,7 @@ mod tests {
             } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                lunge.locate(aim),
+                lunge.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &all_walkable(),
                 &mut rng,
@@ -2246,7 +2307,7 @@ mod tests {
             if let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                bolt.locate(aim),
+                bolt.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &grid,
                 &mut rng,
@@ -2310,19 +2371,35 @@ mod tests {
         // Ten tiles out: beyond the cast range 6 — rejected, nothing spent.
         let far = TileCoord::new(20, 10).to_world();
         assert_eq!(
-            cast_rejection(&caster, &damaging.locate(far), &all_walkable()),
+            cast_rejection(
+                &caster,
+                &damaging.locate(far, Designation::Incidental),
+                &all_walkable()
+            ),
             Some(CastRejection::OutOfRange)
         );
         // Four tiles out: within range — no OutOfRange.
         let near = TileCoord::new(14, 10).to_world();
         assert_eq!(
-            cast_rejection(&caster, &damaging.locate(near), &all_walkable()),
+            cast_rejection(
+                &caster,
+                &damaging.locate(near, Designation::Incidental),
+                &all_walkable()
+            ),
             None
         );
         // The gate is pure: same inputs, same answer, no RngCore in reach.
         assert_eq!(
-            cast_rejection(&caster, &damaging.locate(far), &all_walkable()),
-            cast_rejection(&caster, &damaging.locate(far), &all_walkable())
+            cast_rejection(
+                &caster,
+                &damaging.locate(far, Designation::Incidental),
+                &all_walkable()
+            ),
+            cast_rejection(
+                &caster,
+                &damaging.locate(far, Designation::Incidental),
+                &all_walkable()
+            )
         );
     }
 
@@ -2358,7 +2435,11 @@ mod tests {
             let damaging = damaging_ref(&definition);
             let absurd = TileCoord::new(250, 250).to_world();
             assert_eq!(
-                cast_rejection(&caster, &damaging.locate(absurd), &all_walkable()),
+                cast_rejection(
+                    &caster,
+                    &damaging.locate(absurd, Designation::Incidental),
+                    &all_walkable()
+                ),
                 None
             );
         }
@@ -2382,7 +2463,7 @@ mod tests {
             cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging.locate(aim),
+                damaging.locate(aim, Designation::Incidental),
                 &targets,
                 &all_walkable(),
                 &mut rng,
@@ -2607,7 +2688,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &caster,
             &base_profile_of(&caster),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &grid,
             &mut rng,
@@ -2634,7 +2715,7 @@ mod tests {
         assert_eq!(
             cast_rejection(
                 &broke,
-                &damaging.locate(far),
+                &damaging.locate(far, Designation::Forced { target_index: 0 }),
                 &walkable_with_safe(&[(10, 10)])
             ),
             Some(CastRejection::CasterInSafezone)
@@ -2661,7 +2742,7 @@ mod tests {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging.locate(aim),
+                damaging.locate(aim, Designation::Incidental),
                 &targets,
                 &grid,
                 &mut rng,
@@ -2689,7 +2770,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &attacker_safe,
             &base_profile_of(&attacker_safe),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &walkable_with_safe(&[(10, 10)]),
             &mut rng,
@@ -2707,7 +2788,7 @@ mod tests {
         let (vitals, outcome) = cast(
             &attacker_open,
             &base_profile_of(&attacker_open),
-            damaging.locate(aim),
+            damaging.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &walkable_with_safe(&[(11, 10)]),
             &mut rng,
@@ -2784,7 +2865,7 @@ mod tests {
                 let open = cast(
                     &caster,
                     &base_profile_of(&caster),
-                    damaging.locate(aim),
+                    damaging.locate(aim, Designation::Forced { target_index: 0 }),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -2792,7 +2873,7 @@ mod tests {
                 let remote_safe = cast(
                     &caster,
                     &base_profile_of(&caster),
-                    damaging.locate(aim),
+                    damaging.locate(aim, Designation::Forced { target_index: 0 }),
                     &targets,
                     &remote,
                     &mut TestRng::new(seed),
@@ -2819,7 +2900,7 @@ mod tests {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging.locate(aim),
+                damaging.locate(aim, Designation::Incidental),
                 &sturdy,
                 &all_walkable(),
                 &mut rng,
@@ -2853,7 +2934,7 @@ mod tests {
             if let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging.locate(aim),
+                damaging.locate(aim, Designation::Incidental),
                 &frail,
                 &all_walkable(),
                 &mut rng,
@@ -2890,7 +2971,7 @@ mod tests {
             let SkillOutcome::Cast { hits, .. } = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging_ref(&quake).locate(aim),
+                damaging_ref(&quake).locate(aim, Designation::Incidental),
                 &targets,
                 &all_walkable(),
                 &mut quake_rng,
@@ -2906,7 +2987,7 @@ mod tests {
             let _ = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging_ref(&inert_twin).locate(aim),
+                damaging_ref(&inert_twin).locate(aim, Designation::Incidental),
                 &targets,
                 &all_walkable(),
                 &mut twin_rng,
@@ -2940,7 +3021,7 @@ mod tests {
             cast(
                 &caster,
                 &base_profile_of(&caster),
-                lunge.locate(aim),
+                lunge.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &all_walkable(),
                 &mut rng,
@@ -3374,7 +3455,7 @@ mod tests {
             let outcome = cast(
                 &caster,
                 &base_profile_of(&caster),
-                damaging.locate(aim),
+                damaging.locate(aim, Designation::Forced { target_index: 0 }),
                 &targets,
                 &all_walkable(),
                 &mut TestRng::new(seed),
@@ -3409,7 +3490,7 @@ mod tests {
                 cast(
                     &caster,
                     &base_profile_of(&caster),
-                    damaging.locate(aim),
+                    damaging.locate(aim, Designation::Forced { target_index: 0 }),
                     &targets,
                     &all_walkable(),
                     &mut TestRng::new(seed),
@@ -3438,5 +3519,208 @@ mod tests {
             compared += 1;
         }
         assert!(compared > 0, "a seed in 0..32 lands both strikes");
+    }
+
+    // --- W-PVP: force-attack designation and the unified struck-set. --------------
+
+    /// A combat profile carrying the given kind: a monster profile for an NPC,
+    /// a gearless character profile for a player (both stamp their kind at the
+    /// root, per W-PVP Task 1).
+    fn profile_of(kind: TargetKind) -> CombatProfile {
+        match kind {
+            TargetKind::Npc => {
+                let combat = crate::data::monster_definitions::MonsterCombat {
+                    level: crate::components::units::Level::new(20).unwrap(),
+                    hp: 300,
+                    min_phys_damage: 5,
+                    max_phys_damage: 10,
+                    defense: 0,
+                    attack_rate: 10,
+                    defense_rate: 10,
+                };
+                monster_profile(&combat, &resistances(0), combat.level)
+            }
+            TargetKind::Player => character_profile(&caster_of("dark_wizard", 40, 100, (0, 0))).0,
+        }
+    }
+
+    /// A combat target of the given kind seated on `tile`.
+    fn combat_target_of(kind: TargetKind, tile: (u8, u8)) -> CombatTarget {
+        let placement = Placement {
+            position: TileCoord::new(tile.0, tile.1).to_world(),
+            facing: Facing::POS_X,
+            movement: Movement::Grounded,
+            map: MapNumber(0),
+        };
+        CombatTarget::new(
+            profile_of(kind),
+            Pool::full(60),
+            placement,
+            ActiveEffects::EMPTY,
+        )
+    }
+
+    /// The aim every area scene shares — the caster's own tile, so the aim gate
+    /// is a no-op for the caster-anchored Nova disc.
+    fn caster_aim() -> WorldPos {
+        TileCoord::new(10, 10).to_world()
+    }
+
+    /// A caster at (10,10), an all-walkable grid, and one covered target per kind
+    /// seated in a row from (11,10) — every one inside the Nova disc.
+    fn area_scene(kinds: &[TargetKind]) -> (Character, TerrainGrid, Vec<CombatTarget>) {
+        let caster = caster_at((10, 10), 100, 100);
+        let targets = kinds
+            .iter()
+            .enumerate()
+            .map(|(index, &kind)| combat_target_of(kind, (11 + u8::try_from(index).unwrap(), 10)))
+            .collect();
+        (caster, all_walkable(), targets)
+    }
+
+    /// [`area_scene`] with the target at `safe_index` standing on a safe town tile.
+    fn area_scene_with_safe(
+        kinds: &[TargetKind],
+        safe_index: usize,
+    ) -> (Character, TerrainGrid, Vec<CombatTarget>) {
+        let (caster, _grid, targets) = area_scene(kinds);
+        let safe_tile = (11 + u8::try_from(safe_index).unwrap(), 10);
+        (caster, walkable_with_safe(&[safe_tile]), targets)
+    }
+
+    /// A Nova-shaped caster-circle area skill covering the scene cluster.
+    fn nova_skill() -> Skill {
+        area_skill(
+            AreaGeometry::CasterCircle { radius_x2: 12 },
+            AreaDisplacement::None,
+            None,
+            6,
+        )
+    }
+
+    /// A plain single-target direct-hit skill.
+    fn direct_hit_skill() -> Skill {
+        skill(SkillShape::DirectHit, None, None, 3, 0, 0)
+    }
+
+    /// The batch indices a resolved cast struck, in the order the outcome reports
+    /// them; empty for a rejection.
+    fn struck_indices(outcome: &SkillOutcome) -> Vec<usize> {
+        match outcome {
+            SkillOutcome::Cast { hits, .. } => hits.iter().map(hit_index).collect(),
+            SkillOutcome::Rejected { .. } => Vec::new(),
+        }
+    }
+
+    #[test]
+    fn incidental_area_hits_monsters_and_skips_players() {
+        // A Nova over one player + two monsters with no force-attack strikes only
+        // the monsters — the incidental area hit never touches a player.
+        let (caster, grid, targets) =
+            area_scene(&[TargetKind::Player, TargetKind::Npc, TargetKind::Npc]);
+        let nova = nova_skill();
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging_ref(&nova).locate(caster_aim(), Designation::Incidental),
+            &targets,
+            &grid,
+            &mut TestRng::new(1),
+        );
+        assert_eq!(struck_indices(&outcome), vec![1, 2]);
+    }
+
+    #[test]
+    fn force_attacked_player_is_struck_by_area_exactly_once() {
+        // The same scene, now force-attacking the player at index 0: the player is
+        // struck alongside the monsters, and exactly once (no double-hit).
+        let (caster, grid, targets) =
+            area_scene(&[TargetKind::Player, TargetKind::Npc, TargetKind::Npc]);
+        let nova = nova_skill();
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging_ref(&nova).locate(caster_aim(), Designation::Forced { target_index: 0 }),
+            &targets,
+            &grid,
+            &mut TestRng::new(1),
+        );
+        let mut hits = struck_indices(&outcome);
+        hits.sort_unstable();
+        assert_eq!(hits, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn single_target_hits_only_the_designated_index_never_first_covered() {
+        // Two monsters both lie inside the aimed disc; a single-target strike hits
+        // only the designated index 1 — never the first covered candidate (0).
+        let (caster, grid, targets) = area_scene(&[TargetKind::Npc, TargetKind::Npc]);
+        let bolt = direct_hit_skill();
+        let aim = TileCoord::new(12, 10).to_world();
+        let (_, hit) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging_ref(&bolt).locate(aim, Designation::Forced { target_index: 1 }),
+            &targets,
+            &grid,
+            &mut TestRng::new(1),
+        );
+        assert_eq!(struck_indices(&hit), vec![1]);
+
+        // Incidental single-target: no designated target, so nothing is struck.
+        let (_, rejected) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging_ref(&bolt).locate(aim, Designation::Incidental),
+            &targets,
+            &grid,
+            &mut TestRng::new(1),
+        );
+        assert_eq!(
+            rejected,
+            SkillOutcome::Rejected {
+                reason: CastRejection::NoTargetsInRegion
+            }
+        );
+    }
+
+    #[test]
+    fn safezone_and_region_gate_precede_designation() {
+        // A force-attacked player standing on a safe tile is still dropped: the
+        // region + safezone gate runs before designation, so no hit-in-safezone.
+        let (caster, grid, targets) = area_scene_with_safe(&[TargetKind::Player], 0);
+        let nova = nova_skill();
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging_ref(&nova).locate(caster_aim(), Designation::Forced { target_index: 0 }),
+            &targets,
+            &grid,
+            &mut TestRng::new(1),
+        );
+        assert_eq!(
+            outcome,
+            SkillOutcome::Rejected {
+                reason: CastRejection::NoTargetsInRegion
+            }
+        );
+    }
+
+    #[test]
+    fn out_of_bounds_designation_index_is_safe() {
+        // A designation naming a batch index that does not exist designates no one,
+        // but the incidental monsters are still struck — no panic, no index reach.
+        let (caster, grid, targets) =
+            area_scene(&[TargetKind::Npc, TargetKind::Npc, TargetKind::Npc]);
+        let nova = nova_skill();
+        let (_, outcome) = cast(
+            &caster,
+            &base_profile_of(&caster),
+            damaging_ref(&nova).locate(caster_aim(), Designation::Forced { target_index: 999 }),
+            &targets,
+            &grid,
+            &mut TestRng::new(1),
+        );
+        assert_eq!(struck_indices(&outcome), vec![0, 1, 2]);
     }
 }

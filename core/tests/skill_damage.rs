@@ -33,7 +33,9 @@ use mu_core::events::combat::AttackOutcome;
 use mu_core::events::skills::{SkillOutcome, TargetHit};
 use mu_core::services::combat::{ExcellentOrder, StrikeBasis, resolve_attack};
 use mu_core::services::profile::{character_profile, monster_profile};
-use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
+use mu_core::services::skills::{
+    DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, route,
+};
 use rng::TestRng;
 
 // --- Fixtures. ----------------------------------------------------------------
@@ -129,6 +131,16 @@ fn damaging_ref(skill: &Skill) -> DamagingSkillRef<'_> {
     }
 }
 
+/// The force-attack designation a shape needs to strike here: a single-target
+/// skill force-attacks its sole batch-index-0 target; an area skill strikes
+/// incidentally (every covered NPC in these all-NPC scenes).
+fn designation_for(shape: DamagingSkill) -> Designation {
+    match shape {
+        DamagingSkill::DirectHit | DamagingSkill::Lunge => Designation::Forced { target_index: 0 },
+        DamagingSkill::Area { .. } => Designation::Incidental,
+    }
+}
+
 /// Where the one target sits and where the cast aims for a given skill: a
 /// zero-range skill (caster-centred or self-anchored) strikes a target on the
 /// caster's own tile; everything else strikes the tile straight ahead, inside
@@ -143,10 +155,11 @@ fn cast_damage(caster: &Character, skill: &Skill, seed: u64) -> Option<u32> {
     let tile = strike_tiles(skill);
     let targets = [seated_target(tile, 0)];
     let aim = TileCoord::new(tile.0, tile.1).to_world();
+    let damaging = damaging_ref(skill);
     let (_, outcome) = cast(
         caster,
         &character_profile(caster).0,
-        damaging_ref(skill).locate(aim),
+        damaging.locate(aim, designation_for(damaging.shape())),
         &targets,
         &all_walkable(),
         &mut TestRng::new(seed),
@@ -593,10 +606,11 @@ fn counted_cast(hero: &Character, skill: &Skill, seed: u64) -> (u32, bool) {
         inner: TestRng::new(seed),
         words: 0,
     };
+    let damaging = damaging_ref(skill);
     let (_, outcome) = cast(
         hero,
         &character_profile(hero).0,
-        damaging_ref(skill).locate(aim),
+        damaging.locate(aim, designation_for(damaging.shape())),
         &targets,
         &all_walkable(),
         &mut rng,
@@ -668,11 +682,12 @@ fn identical_inputs_and_seeds_replay_byte_identical() {
     let tile = strike_tiles(skill);
     let targets = [seated_target(tile, 0)];
     let aim = TileCoord::new(tile.0, tile.1).to_world();
+    let damaging = damaging_ref(skill);
     let run = || {
         let (vitals, outcome) = cast(
             &wizard,
             &character_profile(&wizard).0,
-            damaging_ref(skill).locate(aim),
+            damaging.locate(aim, designation_for(damaging.shape())),
             &targets,
             &all_walkable(),
             &mut TestRng::new(41),

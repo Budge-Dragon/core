@@ -65,7 +65,7 @@ use mu_core::services::kill::resolve_kill;
 use mu_core::services::loot::resolve_kill_drops;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::profile::{character_profile, monster_profile};
-use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
+use mu_core::services::skills::{DamagingSkillRef, Designation, SkillRouting, cast, route};
 
 // --- Self-contained dataset harness (load failures abort, never unwrap). ---
 
@@ -455,7 +455,7 @@ fn a_shoved_monster_re_chases_its_attacker() {
         let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &character_profile(&caster).0,
-            bolt.locate(aim),
+            bolt.locate(aim, Designation::Forced { target_index: 0 }),
             &targets,
             &grid,
             &mut rng,
@@ -803,7 +803,7 @@ fn a_landed_lightning_strike_jiggles_its_target_within_one_tile_per_axis() {
         let SkillOutcome::Cast { hits, .. } = cast(
             &caster,
             &character_profile(&caster).0,
-            bolt.locate(start),
+            bolt.locate(start, Designation::Forced { target_index: 0 }),
             &targets,
             &grid,
             &mut rng,

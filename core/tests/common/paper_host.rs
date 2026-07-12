@@ -114,7 +114,7 @@ use mu_core::services::party;
 use mu_core::services::profile::{effective_profile, equipped_profile, monster_profile};
 use mu_core::services::shop::{RepairSite, RepairSubject, repair};
 use mu_core::services::skills::{
-    DamagingSkill, DamagingSkillRef, SkillRouting, cast, cast_heal, route,
+    DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, cast_heal, route,
 };
 use mu_core::services::spawn::{SpawnResult, place_spawn};
 use mu_core::services::trade::{
@@ -863,10 +863,19 @@ impl World {
                     .terrain_grid(caster.placement().map)
                     .ok_or("no terrain grid"),
             );
+            // The host parses the client's force-attack modifier: a single-target
+            // skill force-attacks its designated target (the batch's first entry
+            // here); an area skill strikes incidentally.
+            let designation = match damaging.shape() {
+                DamagingSkill::DirectHit | DamagingSkill::Lunge => {
+                    Designation::Forced { target_index: 0 }
+                }
+                DamagingSkill::Area { .. } => Designation::Incidental,
+            };
             cast(
                 caster,
                 &equipped_profile(caster, caster_worn, &self.atlas),
-                damaging.locate(aim),
+                damaging.locate(aim, designation),
                 &targets,
                 grid,
                 &mut self.rng,

@@ -38,7 +38,9 @@ use mu_core::data::skills::{AreaDisplacement, AreaGeometry, Skill, SkillShape};
 use mu_core::entities::character::Character;
 use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use mu_core::services::profile::{character_profile, monster_profile};
-use mu_core::services::skills::{DamagingSkill, DamagingSkillRef, SkillRouting, cast, route};
+use mu_core::services::skills::{
+    DamagingSkill, DamagingSkillRef, Designation, SkillRouting, cast, route,
+};
 use rng::TestRng;
 
 // --- Fixtures. ----------------------------------------------------------------
@@ -166,6 +168,16 @@ fn damaging_ref(skill: &Skill) -> DamagingSkillRef<'_> {
     }
 }
 
+/// The force-attack designation a shape needs to strike here: a single-target
+/// skill force-attacks its sole batch-index-0 target; an area skill strikes
+/// incidentally (every covered NPC in these all-NPC scenes).
+fn designation_for(shape: DamagingSkill) -> Designation {
+    match shape {
+        DamagingSkill::DirectHit | DamagingSkill::Lunge => Designation::Forced { target_index: 0 },
+        DamagingSkill::Area { .. } => Designation::Incidental,
+    }
+}
+
 /// One cast of `skill` through the public port.
 fn cast_once(
     hero: &Character,
@@ -175,10 +187,11 @@ fn cast_once(
     grid: &TerrainGrid,
     seed: u64,
 ) -> (Vitals, SkillOutcome) {
+    let damaging = damaging_ref(skill);
     cast(
         hero,
         &character_profile(hero).0,
-        damaging_ref(skill).locate(aim),
+        damaging.locate(aim, designation_for(damaging.shape())),
         targets,
         grid,
         &mut TestRng::new(seed),
@@ -1284,10 +1297,11 @@ fn counted_cast(
     seed: u64,
 ) -> (u32, SkillOutcome) {
     let mut rng = CountingRng::new(seed);
+    let damaging = damaging_ref(skill);
     let (_, outcome) = cast(
         hero,
         &character_profile(hero).0,
-        damaging_ref(skill).locate(aim),
+        damaging.locate(aim, designation_for(damaging.shape())),
         targets,
         &all_walkable(),
         &mut rng,

@@ -320,7 +320,7 @@ use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::MapNumber;
 use mu_core::data::skills::Skill;
 use mu_core::entities::character::Character;
-use mu_core::services::skills::{DamagingSkillRef, SkillRouting, cast, route};
+use mu_core::services::skills::{DamagingSkillRef, Designation, SkillRouting, cast, route};
 
 /// A hand-pinned level-50 Dark Knight caster at tile (10, 10) facing +X, built
 /// through the wire (the only door an external test has) so the fixture needs
@@ -428,7 +428,7 @@ fn a_fixed_earthshake_cast_serializes_identically_across_targets() {
     let (vitals, outcome) = cast(
         &caster,
         &profile,
-        fixed_damaging(&skill).locate(aim),
+        fixed_damaging(&skill).locate(aim, Designation::Incidental),
         &targets,
         &open_ground(),
         &mut rng,
@@ -461,7 +461,7 @@ fn a_fixed_diagonal_earthshake_cast_serializes_identically_across_targets() {
     let (vitals, outcome) = cast(
         &caster,
         &profile,
-        fixed_damaging(&skill).locate(aim),
+        fixed_damaging(&skill).locate(aim, Designation::Incidental),
         &targets,
         &open_ground(),
         &mut rng,
@@ -487,7 +487,7 @@ fn a_fixed_lunge_cast_serializes_identically_across_targets() {
     let (vitals, outcome) = cast(
         &caster,
         &profile,
-        fixed_damaging(&skill).locate(aim),
+        fixed_damaging(&skill).locate(aim, Designation::Forced { target_index: 0 }),
         &targets,
         &open_ground(),
         &mut rng,
@@ -691,7 +691,7 @@ fn a_fixed_cast_from_a_safe_tile_is_rejected_identically_across_targets() {
     let (vitals, outcome) = cast(
         &caster,
         &profile,
-        fixed_damaging(&skill).locate(aim),
+        fixed_damaging(&skill).locate(aim, Designation::Incidental),
         &targets,
         &grid,
         &mut rng,
