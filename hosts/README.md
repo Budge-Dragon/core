@@ -16,3 +16,24 @@ A host is a thin translation layer around the core:
 
 Hosts own I/O, persistence, networking, the clock, and the RNG seed. No game
 rule is ever implemented in a host, and `mu-core` never depends on a host.
+
+## Anti-cheat duties
+
+Client proposes, server decides. Two layers:
+
+**Core already checks single-action legality — don't redo it.** Distance/range,
+reachability, ≤1-tile step + no wall-tunnelling, target/cost/eligibility, all
+damage/drop/kill. So "buy from far" and "teleport" are already rejected. The host just
+calls core and honours the rejection.
+
+**Host owns rate + identity** (core is clockless, can't see them):
+
+1. Per-tick action budget — one action per tick; advance on the *server's* clock, not
+   on message arrival. (Stops the "Flash" cheat: many legal moves sent too fast.)
+2. Drop out-of-order / too-frequent requests.
+3. Admit only live, authenticated actors (the dead-actor gate).
+4. Bind the intent to the authenticated caller.
+
+**SpacetimeDB:** clients can't touch tables — they only call your reducer, which runs
+`mu-core` and decides. Each call gives you the caller identity + server timestamp. It
+does **not** rate-limit for you — duties 1–2 are reducer code you write.
