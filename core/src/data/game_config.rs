@@ -40,8 +40,6 @@ pub struct GameConfig {
 /// Party and experience-award facts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProgressionConfig {
-    /// Maximum members in one party (authentic classic fact: 5).
-    pub max_party_size: u8,
     /// Uniform per-kill experience jitter. Review-flagged in the record:
     /// OpenMU mechanism and values (0.8-1.2).
     pub exp_jitter_percent: RatePercentRange,
