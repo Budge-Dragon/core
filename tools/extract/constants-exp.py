@@ -4,7 +4,7 @@
 Sources (all numbers verified against reference/openmu):
   Persistence/Initialization/GameConfigurationInitializerBase.cs
       MaximumLevel, ItemDropDuration, MaximumItemOptionLevelDrop,
-      MaximumPartySize, RandomExperience{Min,Max}Multiplier, the four default
+      RandomExperience{Min,Max}Multiplier, the four default
       DropItemGroup chances (money/item/excellent/jewel), zen-cap sentinels,
       the item-option AddChance default.
   GameLogic/DefaultDropGenerator.cs        SkillDropChancePercent.
@@ -259,7 +259,6 @@ def build_game_config(cfg, cfg_text, drop, inv, glob):
         "drops": build_drops_section(cfg_text, drop),
         "option_roll": build_option_roll_section(cfg_text, cfg),
         "progression": {
-            "max_party_size": expect(int(cfg["MaximumPartySize"]), 5, "MaximumPartySize"),
             "exp_jitter_percent": {"min": exp_min, "max": exp_max},
         },
         "zen_caps": {"inventory": zen_cap, "vault": zen_cap},
