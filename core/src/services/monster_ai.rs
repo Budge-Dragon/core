@@ -12,14 +12,17 @@
 //! which consumes a variable but deterministic-per-seed number of words.
 //!
 //! Safezones bound the decision: a target standing on a safe tile is no target
-//! for any role, and the behavior's [`SafezoneDisposition`] gates the rest — an
-//! `Excluded` mob never swings from a safe tile and never steps onto one, while
-//! a `Patrols` guard walks and fights across town freely.
+//! for any role — except a `Patrols` guard, which still hunts a flagged
+//! murderer (a hunted [`Standing`]) who fled onto one. The behavior's
+//! [`SafezoneDisposition`] gates the rest — an `Excluded` mob never swings from
+//! a safe tile and never steps onto one, while a `Patrols` guard walks and
+//! fights across town freely.
 
 use rand_core::RngCore;
 
 use crate::components::movement::Mobility;
 use crate::components::placement::Placement;
+use crate::components::reputation::Standing;
 use crate::components::spatial::{Facing, Radius, StepMagnitude, WorldPos};
 use crate::components::tile::TerrainGrid;
 use crate::components::units::{Tick, TickDuration, Ticks};
@@ -29,6 +32,21 @@ use crate::events::monster_ai::MonsterIntent;
 use crate::events::movement::StepOutcome;
 use crate::services::chance::draw_heading;
 use crate::services::movement::{resolve_drift, resolve_step};
+
+/// A mob's aggro target for one tick: where the target stands, plus the
+/// [`Standing`] that decides whether a guard pursues it onto a safe tile. A
+/// struct rather than an enum — a mob only ever targets a player this era, so
+/// one shape carries both facts. Deliberately not serializable: it is transient
+/// per-tick decision input the host rebuilds from live state each tick, never
+/// stored entity state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AiTarget {
+    /// Where the target stands.
+    pub position: WorldPos,
+    /// The target's player-kill standing, which decides guard pursuit onto safe
+    /// tiles.
+    pub standing: Standing,
+}
 
 /// A monster's per-action step distance: one whole tile. Authentic: classic MU
 /// is tile-grid, so a mob advances exactly one tile per move action — one tile
@@ -139,7 +157,7 @@ fn advance_after_step(
 pub fn decide_monster_action(
     mob: &MonsterInstance,
     behavior: &MobBehavior,
-    target: Option<WorldPos>,
+    target: Option<AiTarget>,
     now: Tick,
     tick: TickDuration,
     grid: &TerrainGrid,
@@ -151,9 +169,16 @@ pub fn decide_monster_action(
     }
 
     let pos = mob.placement.position;
-    // A safezone-stander is no target for any role: never selected, and a
-    // locked target is dropped the tick it steps onto a safe tile.
-    let target = target.filter(|&target| !grid.safe(target));
+    // A safezone-stander is no target for any role — never selected, and a
+    // locked target is dropped the tick it steps onto a safe tile — except a
+    // guard hunting a flagged murderer, which pursues onto safe tiles. Reduced
+    // to the bare position once the safezone gate has decided.
+    let target = target
+        .filter(|t| {
+            !grid.safe(t.position)
+                || (behavior.disposition.hunts_on_safe_tiles() && t.standing.is_hunted())
+        })
+        .map(|t| t.position);
     let move_delay = behavior.move_delay_ms.in_ticks(tick);
     let speed = step_speed(mobility);
 
@@ -221,6 +246,7 @@ mod tests {
     use super::*;
     use crate::components::movement::{Movement, SlowRatio};
     use crate::components::pool::Pool;
+    use crate::components::reputation::PkStage;
     use crate::components::spatial::UNITS_PER_TILE;
     use crate::components::tile::TileCoord;
     use crate::components::units::{DurationMs, MapNumber};
@@ -352,7 +378,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 1, 5),
-            Some(TileCoord::new(11, 10).to_world()),
+            Some(AiTarget {
+                position: TileCoord::new(11, 10).to_world(),
+                standing: Standing::Clean,
+            }),
             Tick(50),
             tick50(),
             &grid,
@@ -375,7 +404,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 1, 3),
-            Some(TileCoord::new(20, 10).to_world()),
+            Some(AiTarget {
+                position: TileCoord::new(20, 10).to_world(),
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -399,7 +431,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 2, 5),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -423,7 +458,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 1, 8),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -493,7 +531,10 @@ mod tests {
         let (_, intent) = decide_monster_action(
             &mob,
             &behavior(1, 2, 5),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -536,7 +577,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 1, 15),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -584,7 +628,10 @@ mod tests {
             let (after, intent) = decide_monster_action(
                 &mob,
                 &behavior,
-                Some(target),
+                Some(AiTarget {
+                    position: target,
+                    standing: Standing::Clean,
+                }),
                 Tick(0),
                 tick50(),
                 &grid,
@@ -608,7 +655,10 @@ mod tests {
         let (_, intent) = decide_monster_action(
             &mob,
             &behavior(1, 1, 8),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -633,7 +683,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 2, 8),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -656,7 +709,10 @@ mod tests {
         let (_, intent) = decide_monster_action(
             &mob,
             &guard_behavior(1, 2, 8),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -677,7 +733,10 @@ mod tests {
         let (after, intent) = decide_monster_action(
             &mob,
             &behavior(1, 1, 8),
-            Some(target),
+            Some(AiTarget {
+                position: target,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick50(),
             &grid,
@@ -758,5 +817,108 @@ mod tests {
         assert!(matches!(intent, MonsterIntent::Wander { .. }));
         assert_ne!(after.placement.position, mob.placement.position);
         assert!(grid.safe(after.placement.position));
+    }
+
+    #[test]
+    fn a_patrols_guard_hunts_a_first_stage_player_on_a_safe_tile() {
+        // The target parks on a safe tile in the guard's reach. A hunted (>=
+        // first-stage) murderer is pursued and struck; a clean or warning-stage
+        // player on the same tile is still no target; and an Excluded mob never
+        // hunts a murderer onto a safe tile.
+        let grid = grid_safe_at(&[(11, 10)]);
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let safe_tile = TileCoord::new(11, 10).to_world();
+        let action_for = |behavior: MobBehavior, standing: Standing| {
+            let mut rng = TestRng::new(1);
+            decide_monster_action(
+                &mob,
+                &behavior,
+                Some(AiTarget {
+                    position: safe_tile,
+                    standing,
+                }),
+                Tick(0),
+                tick50(),
+                &grid,
+                Mobility::Free,
+                &mut rng,
+            )
+            .1
+        };
+        let hunted = Standing::Flagged {
+            stage: PkStage::FirstStage,
+            decays_at: Tick(9),
+        };
+        let warning = Standing::Flagged {
+            stage: PkStage::Warning,
+            decays_at: Tick(9),
+        };
+        assert_eq!(
+            action_for(guard_behavior(0, 2, 5), hunted),
+            MonsterIntent::Attack { target: safe_tile }
+        );
+        assert_eq!(
+            action_for(guard_behavior(0, 2, 5), Standing::Clean),
+            MonsterIntent::Idle
+        );
+        assert_eq!(
+            action_for(guard_behavior(0, 2, 5), warning),
+            MonsterIntent::Idle
+        );
+        assert_eq!(action_for(behavior(0, 2, 5), hunted), MonsterIntent::Idle);
+    }
+
+    #[test]
+    fn off_safe_behavior_is_unchanged_for_any_standing() {
+        // Off a safe tile the standing never enters the decision: attack and
+        // chase geometry resolve byte-identically for clean and every flagged
+        // rung.
+        let grid = all_walkable();
+        let mob = mob_at((10, 10), (10, 10), Tick(0));
+        let decide_with = |position: WorldPos, standing: Standing, behavior: &MobBehavior| {
+            let mut rng = TestRng::new(1);
+            decide_monster_action(
+                &mob,
+                behavior,
+                Some(AiTarget { position, standing }),
+                Tick(0),
+                tick50(),
+                &grid,
+                Mobility::Free,
+                &mut rng,
+            )
+            .1
+        };
+        let standings = [
+            Standing::Clean,
+            Standing::Flagged {
+                stage: PkStage::Warning,
+                decays_at: Tick(9),
+            },
+            Standing::Flagged {
+                stage: PkStage::FirstStage,
+                decays_at: Tick(9),
+            },
+            Standing::Flagged {
+                stage: PkStage::SecondStage,
+                decays_at: Tick(9),
+            },
+        ];
+        let attack_target = TileCoord::new(11, 10).to_world();
+        for standing in standings {
+            assert_eq!(
+                decide_with(attack_target, standing, &behavior(1, 2, 8)),
+                MonsterIntent::Attack {
+                    target: attack_target
+                }
+            );
+        }
+        let chase_target = TileCoord::new(15, 10).to_world();
+        for standing in standings {
+            assert_eq!(
+                decide_with(chase_target, standing, &behavior(1, 1, 8)),
+                decide_with(chase_target, Standing::Clean, &behavior(1, 1, 8))
+            );
+        }
     }
 }

@@ -121,6 +121,20 @@ pub enum SafezoneDisposition {
     Patrols,
 }
 
+impl SafezoneDisposition {
+    /// Whether this disposition pursues a flagged murderer standing on a safe
+    /// tile: a patrolling guard hunts a hunted player across town, a suppressed
+    /// mob or trap never does. A total match so a future third disposition is
+    /// forced to decide here rather than silently falling to no-hunt.
+    #[must_use]
+    pub(crate) fn hunts_on_safe_tiles(self) -> bool {
+        match self {
+            SafezoneDisposition::Patrols => true,
+            SafezoneDisposition::Excluded => false,
+        }
+    }
+}
+
 impl MonsterRole {
     /// The safezone disposition this role confers — the single source the
     /// parse-time reconciliation holds every stored

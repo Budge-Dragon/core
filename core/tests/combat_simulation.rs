@@ -27,6 +27,7 @@ use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::movement::{Mobility, Movement};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
+use mu_core::components::reputation::Standing;
 use mu_core::components::spatial::Facing;
 use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{
@@ -63,7 +64,7 @@ use mu_core::services::combat::{StrikeBasis, resolve_attack};
 use mu_core::services::experience::award_kill_experience;
 use mu_core::services::kill::resolve_kill;
 use mu_core::services::loot::resolve_kill_drops;
-use mu_core::services::monster_ai::decide_monster_action;
+use mu_core::services::monster_ai::{AiTarget, decide_monster_action};
 use mu_core::services::profile::{character_profile, monster_profile};
 use mu_core::services::skills::{DamagingSkillRef, Designation, SkillRouting, cast, route};
 
@@ -483,7 +484,10 @@ fn a_shoved_monster_re_chases_its_attacker() {
         let (_, intent) = decide_monster_action(
             &mob,
             &behavior,
-            Some(caster.placement().position),
+            Some(AiTarget {
+                position: caster.placement().position,
+                standing: Standing::Clean,
+            }),
             Tick(0),
             tick,
             &grid,

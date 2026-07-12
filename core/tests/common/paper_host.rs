@@ -45,6 +45,7 @@ use mu_core::components::movement::{CombatLock, FlightChange, Movement, Wings};
 use mu_core::components::party::{MemberSlot, Vitality};
 use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
+use mu_core::components::reputation::Standing;
 use mu_core::components::spatial::{Facing, StepMagnitude, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileArea, TileCoord};
 use mu_core::components::trade_window::Side;
@@ -108,7 +109,7 @@ use mu_core::services::inventory::{
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::kill::resolve_kill;
 use mu_core::services::minigame;
-use mu_core::services::monster_ai::decide_monster_action;
+use mu_core::services::monster_ai::{AiTarget, decide_monster_action};
 use mu_core::services::movement::resolve_step;
 use mu_core::services::party;
 use mu_core::services::profile::{effective_profile, equipped_profile, monster_profile};
@@ -612,6 +613,12 @@ impl World {
         );
         let capability = mobility(&mob.active_effects);
         let tick = host_tick();
+        // Non-PK drives target a clean player; the guard-hunt sim-gate builds
+        // its own `AiTarget` from the murderer's authoritative reputation.
+        let target = target.map(|position| AiTarget {
+            position,
+            standing: Standing::Clean,
+        });
         let (advanced, intent) = decide_monster_action(
             &mob,
             &behavior,
