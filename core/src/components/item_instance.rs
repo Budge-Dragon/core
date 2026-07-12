@@ -119,9 +119,14 @@ pub enum CraftedAugment {
     },
 }
 
-/// The bare augment-capability discriminator, derived from the item's kind at
-/// the reload boundary — the [`ExcellentCat`] sibling for the augment axis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The augment-capability discriminator of an item — the [`ExcellentCat`]
+/// sibling for the crafted-augment axis. Stored as explicit per-item data on the
+/// wing/pet [`crate::data::item_definitions::ItemDefinition`] (mirroring the
+/// pendant's stored excellent category) and read back at the reload boundary, so
+/// no code heuristic on cape/tier identity decides which augment an item may
+/// carry. Wire form: a bare `snake_case` name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AugmentSlot {
     /// The kind carries no crafted augment.
     None,

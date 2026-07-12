@@ -22,6 +22,7 @@ use crate::components::class::CharacterClass;
 use crate::components::combat_profile::{CombatProfile, CombatTarget, WeaponMode};
 use crate::components::element::Element;
 use crate::components::interval::Interval;
+use crate::components::life::LifeState;
 use crate::components::placement::Placement;
 use crate::components::pool::Pool;
 use crate::components::spatial::{
@@ -540,14 +541,18 @@ pub fn cast(
 }
 
 /// The first failing precondition, or `None` when the cast may proceed. Order:
-/// the caster's locus (a safe town tile forbids any offensive cast, regardless
-/// of cost or aim), then mana, then ability, then the aim gate — nothing is
-/// spent yet.
+/// the caster must be alive (a dead caster casts nothing), then the caster's
+/// locus (a safe town tile forbids any offensive cast, regardless of cost or
+/// aim), then mana, then ability, then the aim gate — nothing is spent yet.
 fn cast_rejection(
     caster: &Character,
     located: &LocatedCast<'_>,
     grid: &TerrainGrid,
 ) -> Option<CastRejection> {
+    match caster.life() {
+        LifeState::Alive => {}
+        LifeState::Dead { .. } => return Some(CastRejection::CasterNotAlive),
+    }
     if grid.safe(caster.placement().position) {
         return Some(CastRejection::CasterInSafezone);
     }
@@ -610,6 +615,17 @@ pub fn cast_buff(
     tick: TickDuration,
 ) -> (Vitals, BuffCastOutcome) {
     let vitals = caster.vitals();
+    match caster.life() {
+        LifeState::Alive => {}
+        LifeState::Dead { .. } => {
+            return (
+                vitals,
+                BuffCastOutcome::Rejected {
+                    reason: CastRejection::CasterNotAlive,
+                },
+            );
+        }
+    }
     if let Some(reason) = affordability(&vitals, buff.cost()) {
         return (vitals, BuffCastOutcome::Rejected { reason });
     }
@@ -647,6 +663,17 @@ pub fn cast_heal(
     receiver_health: Pool,
 ) -> (Vitals, BuffCastOutcome) {
     let vitals = caster.vitals();
+    match caster.life() {
+        LifeState::Alive => {}
+        LifeState::Dead { .. } => {
+            return (
+                vitals,
+                BuffCastOutcome::Rejected {
+                    reason: CastRejection::CasterNotAlive,
+                },
+            );
+        }
+    }
     if let Some(reason) = affordability(&vitals, heal.cost()) {
         return (vitals, BuffCastOutcome::Rejected { reason });
     }
@@ -1196,6 +1223,14 @@ mod tests {
         character_profile(caster).0
     }
 
+    /// The same caster in the death→respawn window — set through the wire so the
+    /// private `life` field lands `Dead`.
+    fn dead(caster: &Character) -> Character {
+        let mut value = serde_json::to_value(caster).unwrap();
+        value["life"] = serde_json::json!({"kind": "dead", "respawn_at": 1000});
+        serde_json::from_value(value).unwrap()
+    }
+
     fn resistances(lightning: u8) -> PerElement<Resistance> {
         PerElement {
             ice: Resistance(0),
@@ -1653,6 +1688,98 @@ mod tests {
         assert_eq!(vitals.ability.current(), 30);
         assert_eq!(vitals.health, caster.vitals().health);
         assert!(matches!(outcome, SkillOutcome::Cast { .. }));
+    }
+
+    #[test]
+    fn a_dead_caster_cannot_cast_a_damaging_skill_and_spends_nothing() {
+        // The alive caster would land this cast (affordable, in range, target
+        // covered); death is the only thing that changes.
+        let alive = caster_at((10, 10), 100, 40);
+        let corpse = dead(&alive);
+        let definition = skill(SkillShape::DirectHit, None, None, 3, 30, 10);
+        let damaging = damaging_ref(&definition);
+        let targets = [target_at((11, 10), 0)];
+        let aim = TileCoord::new(11, 10).to_world();
+        let mut rng = TestRng::new(2);
+        let (vitals, outcome) = cast(
+            &corpse,
+            &base_profile_of(&corpse),
+            damaging.locate(aim),
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
+        assert_eq!(vitals, corpse.vitals(), "a corpse spends nothing");
+        assert_eq!(
+            outcome,
+            SkillOutcome::Rejected {
+                reason: CastRejection::CasterNotAlive
+            }
+        );
+        // The identical alive caster is unaffected — it casts.
+        let mut rng = TestRng::new(2);
+        let (_, alive_outcome) = cast(
+            &alive,
+            &base_profile_of(&alive),
+            damaging.locate(aim),
+            &targets,
+            &all_walkable(),
+            &mut rng,
+        );
+        assert!(matches!(alive_outcome, SkillOutcome::Cast { .. }));
+    }
+
+    #[test]
+    fn a_dead_caster_cannot_cast_a_buff_and_spends_nothing() {
+        use crate::components::active_effect::ActiveEffects;
+        let alive = caster_at((10, 10), 100, 100);
+        let corpse = dead(&alive);
+        let def = skill(
+            SkillShape::BuffSelf {
+                buff: Buff::GreaterDamage,
+            },
+            None,
+            None,
+            0,
+            20,
+            5,
+        );
+        let buff = applicable_buff(&def);
+        let (vitals, outcome) = cast_buff(
+            &corpse,
+            buff,
+            corpse.placement().position,
+            ActiveEffects::EMPTY,
+            Tick(0),
+            tick50(),
+        );
+        assert_eq!(vitals, corpse.vitals(), "a corpse spends nothing");
+        assert_eq!(
+            outcome,
+            BuffCastOutcome::Rejected {
+                reason: CastRejection::CasterNotAlive
+            }
+        );
+    }
+
+    #[test]
+    fn a_dead_caster_cannot_cast_a_heal_and_spends_nothing() {
+        let alive = caster_at((10, 10), 100, 100);
+        let corpse = dead(&alive);
+        let def = skill(SkillShape::Heal, None, None, 6, 20, 0);
+        let heal_ref = heal(&def);
+        let receiver = Pool::new(10, 100).unwrap();
+        let (vitals, outcome) = cast_heal(&corpse, heal_ref, receiver);
+        assert_eq!(vitals, corpse.vitals(), "a corpse spends nothing");
+        assert_eq!(
+            outcome,
+            BuffCastOutcome::Rejected {
+                reason: CastRejection::CasterNotAlive
+            }
+        );
+        // The identical alive caster is unaffected — it heals.
+        let (_, alive_outcome) = cast_heal(&alive, heal(&def), receiver);
+        assert!(matches!(alive_outcome, BuffCastOutcome::Healed { .. }));
     }
 
     /// The damage a single-target cast dealt to its one struck target (landed or

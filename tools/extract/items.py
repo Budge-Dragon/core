@@ -459,9 +459,10 @@ def build_wings():
          classes_from_levels(dk=1, mg=1)),
     ]
     for number, width, height, name, defense, jol, classes in first_wings:
+        # First wings carry no crafted-augment (2nd-wing bonus) axis.
         kind = {"kind": "wings", "tier": "first", "defense": defense,
                 "absorb_percent": 12, "damage_percent": 12,
-                "jol_options": jol, "classes": classes,
+                "jol_options": jol, "augment": "none", "classes": classes,
                 "wear": wear(level=180)}
         records.append(item(
             12, number, name, "075", width=width, height=height, drops=False,
@@ -485,9 +486,10 @@ def build_wings():
          "magic_gladiator (source class value 1)"),
     ]
     for number, width, height, name, defense, jol, classes, note in second_wings:
+        # Second wings carry the crafted wing-bonus augment axis.
         kind = {"kind": "wings", "tier": "second", "defense": defense,
                 "absorb_percent": 25, "damage_percent": 32,
-                "jol_options": jol, "classes": classes,
+                "jol_options": jol, "augment": "wing_bonus", "classes": classes,
                 "wear": wear(level=215)}
         records.append(item(
             12, number, name, "s6",
@@ -505,7 +507,7 @@ def build_wings():
     # axis rolled by services, not option data.
     cape_kind = {"kind": "wings", "tier": "first", "defense": 15,
                  "absorb_percent": 10, "damage_percent": 20,
-                 "jol_options": ["physical_damage"],
+                 "jol_options": ["physical_damage"], "augment": "wing_bonus",
                  "classes": classes_from_levels(dl=1),
                  "wear": wear(level=180)}
     records.append(item(
@@ -532,8 +534,10 @@ def build_wings():
 def build_pets():
     pet_classes = classes_from_levels(dw=1, dk=1, elf=1, mg=1)  # seven classes
 
-    def pet(number, name, version, level, drops, ride, bonuses, skill=None):
-        kind = {"kind": "pet", "ride": ride, "bonuses": bonuses}
+    def pet(number, name, version, level, drops, ride, bonuses, skill=None,
+            augment="none"):
+        kind = {"kind": "pet", "ride": ride, "bonuses": bonuses,
+                "augment": augment}
         add_skill(kind, skill)
         kind["classes"] = pet_classes
         kind["wear"] = wear(level=level)
@@ -553,10 +557,11 @@ def build_pets():
         # (deleted) -> no combat bonuses.
         pet(2, "Horn of Uniria", "075", 25, True, "ground_mount", []),
         # Horn of Dinorant: flying mount; -10% incoming, +15% damage, FireBreath.
+        # Carries the crafted dinorant-option augment axis.
         pet(3, "Horn of Dinorant", "095d", 110, False, "flying_mount",
             [{"kind": "incoming_damage_pct", "percent": 10},
              {"kind": "damage_pct", "percent": 15}],
-            skill=SKILL_NUMBER["FireBreath"]),
+            skill=SKILL_NUMBER["FireBreath"], augment="dinorant"),
     ]
 
 

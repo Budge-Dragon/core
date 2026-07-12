@@ -5715,6 +5715,7 @@
       "jol_options": [
         "health_recovery_pct"
       ],
+      "augment": "none",
       "classes": [
         "fairy_elf",
         "muse_elf"
@@ -5751,6 +5752,7 @@
       "jol_options": [
         "wizardry_damage"
       ],
+      "augment": "none",
       "classes": [
         "dark_wizard",
         "soul_master",
@@ -5788,6 +5790,7 @@
       "jol_options": [
         "physical_damage"
       ],
+      "augment": "none",
       "classes": [
         "dark_knight",
         "blade_knight",
@@ -5827,6 +5830,7 @@
         "health_recovery_pct",
         "physical_damage"
       ],
+      "augment": "wing_bonus",
       "classes": [
         "muse_elf"
       ],
@@ -5864,6 +5868,7 @@
         "health_recovery_pct",
         "wizardry_damage"
       ],
+      "augment": "wing_bonus",
       "classes": [
         "soul_master"
       ],
@@ -5901,6 +5906,7 @@
         "health_recovery_pct",
         "physical_damage"
       ],
+      "augment": "wing_bonus",
       "classes": [
         "blade_knight"
       ],
@@ -5938,6 +5944,7 @@
         "wizardry_damage",
         "physical_damage"
       ],
+      "augment": "wing_bonus",
       "classes": [
         "magic_gladiator"
       ],
@@ -6143,6 +6150,7 @@
           "amount": 50
         }
       ],
+      "augment": "none",
       "classes": [
         "dark_wizard",
         "soul_master",
@@ -6184,6 +6192,7 @@
           "percent": 30
         }
       ],
+      "augment": "none",
       "classes": [
         "dark_wizard",
         "soul_master",
@@ -6220,6 +6229,7 @@
       "kind": "pet",
       "ride": "ground_mount",
       "bonuses": [],
+      "augment": "none",
       "classes": [
         "dark_wizard",
         "soul_master",
@@ -6265,6 +6275,7 @@
           "percent": 15
         }
       ],
+      "augment": "dinorant",
       "skill": 49,
       "classes": [
         "dark_wizard",
@@ -6954,6 +6965,7 @@
       "jol_options": [
         "physical_damage"
       ],
+      "augment": "wing_bonus",
       "classes": [
         "dark_lord"
       ],

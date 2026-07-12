@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::components::bonus::CombatBonus;
 use crate::components::class::ClassSet;
 use crate::components::element::Element;
+use crate::components::item_instance::{AugmentSlot, ExcellentCat};
 use crate::components::item_options::{ExcellentCategory, NormalOption};
 use crate::components::levels::TransformationLevel;
 use crate::components::units::{ItemLevel, Zen};
@@ -288,6 +289,11 @@ pub enum ItemKind {
         damage_percent: u8,
         /// Normal-option kinds this wing can roll (Jewel-of-Life leveled).
         jol_options: Vec<NormalOption>,
+        /// The crafted-augment capability — [`AugmentSlot::WingBonus`] for the
+        /// second wings and the Cape of Lord, [`AugmentSlot::None`] for the
+        /// first wings. Explicit per-item data (the pendant's `excellent`
+        /// grain), so no cape/tier heuristic decides it.
+        augment: AugmentSlot,
         /// Classes able to equip it.
         classes: ClassSet,
         /// Wear requirements.
@@ -300,6 +306,10 @@ pub enum ItemKind {
         /// Fixed bonuses while equipped — resolved `CombatBonus` values
         /// serialized inline.
         bonuses: Vec<CombatBonus>,
+        /// The crafted-augment capability — [`AugmentSlot::Dinorant`] for the
+        /// Horn of Dinorant, [`AugmentSlot::None`] for the other pets. Explicit
+        /// per-item data (the pendant's `excellent` grain).
+        augment: AugmentSlot,
         /// Skill granted while equipped (Dinorant's attack, 49).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         skill: Option<SkillNumber>,
@@ -454,6 +464,77 @@ impl ItemKind {
             | Self::EventTicket { .. }
             | Self::MixMaterial
             | Self::StatFruit => None,
+        }
+    }
+
+    /// The excellent-set category a kind rolls, if any — the single kind-fact
+    /// accessor the drop roll and the worn-item reload proof both read, so the
+    /// two can never disagree on which set an item carries. Total over every
+    /// variant; the pendant's category is its stored per-item fact.
+    #[must_use]
+    pub fn excellent_category(&self) -> Option<ExcellentCat> {
+        match self {
+            Self::Weapon { .. } | Self::Bow { .. } | Self::Crossbow { .. } | Self::Staff { .. } => {
+                Some(ExcellentCat::Weapon)
+            }
+            Self::Shield { .. }
+            | Self::Helm { .. }
+            | Self::BodyArmor { .. }
+            | Self::Pants { .. }
+            | Self::Gloves { .. }
+            | Self::Boots { .. }
+            | Self::Ring { .. } => Some(ExcellentCat::Armor),
+            Self::Pendant { excellent, .. } => Some(match excellent {
+                ExcellentCategory::Armor => ExcellentCat::Armor,
+                ExcellentCategory::Weapon { .. } => ExcellentCat::Weapon,
+            }),
+            Self::Arrows { .. }
+            | Self::Bolts { .. }
+            | Self::Wings { .. }
+            | Self::Pet { .. }
+            | Self::TransformationRing { .. }
+            | Self::Orb { .. }
+            | Self::SkillScroll { .. }
+            | Self::Jewel { .. }
+            | Self::Consumable { .. }
+            | Self::LuckyBox
+            | Self::EventTicket { .. }
+            | Self::MixMaterial
+            | Self::StatFruit => None,
+        }
+    }
+
+    /// The crafted-augment capability of a kind — the worn-item reload proof's
+    /// second cross-reference input, read from the wing/pet's stored `augment`
+    /// data. Total over every variant: a kind that carries no augment answers
+    /// [`AugmentSlot::None`].
+    #[must_use]
+    pub fn augment_slot(&self) -> AugmentSlot {
+        match self {
+            Self::Wings { augment, .. } | Self::Pet { augment, .. } => *augment,
+            Self::Weapon { .. }
+            | Self::Bow { .. }
+            | Self::Crossbow { .. }
+            | Self::Arrows { .. }
+            | Self::Bolts { .. }
+            | Self::Staff { .. }
+            | Self::Shield { .. }
+            | Self::Helm { .. }
+            | Self::BodyArmor { .. }
+            | Self::Pants { .. }
+            | Self::Gloves { .. }
+            | Self::Boots { .. }
+            | Self::Ring { .. }
+            | Self::Pendant { .. }
+            | Self::TransformationRing { .. }
+            | Self::Orb { .. }
+            | Self::SkillScroll { .. }
+            | Self::Jewel { .. }
+            | Self::Consumable { .. }
+            | Self::LuckyBox
+            | Self::EventTicket { .. }
+            | Self::MixMaterial
+            | Self::StatFruit => AugmentSlot::None,
         }
     }
 

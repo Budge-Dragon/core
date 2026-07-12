@@ -1741,7 +1741,7 @@ mod tests {
 
     use crate::components::class::ClassSet;
     use crate::components::item_instance::{
-        CraftedAugment, Durability, RolledNormalOption, SkillRoll,
+        AugmentSlot, CraftedAugment, Durability, RolledNormalOption, SkillRoll,
     };
     use crate::components::item_ref::ItemRef;
     use crate::components::levels::OptionLevel;
@@ -1859,6 +1859,7 @@ mod tests {
                 absorb_percent: 12,
                 damage_percent: 12,
                 jol_options: Vec::new(),
+                augment: AugmentSlot::None,
                 classes: ClassSet::NONE,
                 wear: no_wear(),
             },
@@ -2122,6 +2123,7 @@ mod tests {
                 absorb_percent: 12,
                 damage_percent: 12,
                 jol_options: Vec::new(),
+                augment: AugmentSlot::None,
                 classes: ClassSet::NONE,
                 wear: no_wear(),
             },
@@ -2194,6 +2196,7 @@ mod tests {
                     CombatBonus::MaxAbility { amount: 50 },
                     CombatBonus::AttackSpeed { amount: 5 },
                 ],
+                augment: AugmentSlot::Dinorant,
                 skill: None,
                 classes: ClassSet::NONE,
                 wear: no_wear(),

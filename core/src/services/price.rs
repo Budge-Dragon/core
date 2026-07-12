@@ -492,7 +492,7 @@ mod tests {
     use super::*;
     use crate::components::class::ClassSet;
     use crate::components::item_instance::{
-        Durability, ExcellentArmorSet, ExcellentWeaponSet, RolledNormalOption,
+        AugmentSlot, Durability, ExcellentArmorSet, ExcellentWeaponSet, RolledNormalOption,
     };
     use crate::components::item_options::{
         ExcellentArmorOption, ExcellentWeaponOption, SecondWingBonus,
@@ -562,6 +562,7 @@ mod tests {
             absorb_percent: 12,
             damage_percent: 12,
             jol_options: vec![NormalOption::HealthRecoveryPct],
+            augment: AugmentSlot::None,
             classes: ClassSet::NONE,
             wear: wear(),
         }
@@ -823,6 +824,7 @@ mod tests {
             ItemKind::Pet {
                 ride: PetRide::FlyingMount,
                 bonuses: Vec::new(),
+                augment: AugmentSlot::Dinorant,
                 skill: Some(SkillNumber(49)),
                 classes: ClassSet::NONE,
                 wear: wear(),
@@ -850,6 +852,7 @@ mod tests {
             ItemKind::Pet {
                 ride: PetRide::GroundMount,
                 bonuses: Vec::new(),
+                augment: AugmentSlot::None,
                 skill: None,
                 classes: ClassSet::NONE,
                 wear: wear(),

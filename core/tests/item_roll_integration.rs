@@ -27,9 +27,12 @@ use mu_core::components::equipment::Equipment;
 use mu_core::components::interval::Interval;
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
 use mu_core::components::item_instance::{
-    AugmentSlot, ExcellentCat, ExcellentOptions, ItemInstance, RarityRoll, SkillRoll,
+    AugmentSlot, CraftedAugment, ExcellentArmorSet, ExcellentCat, ExcellentOptions, ItemInstance,
+    ItemInstanceError, RarityRoll, SkillRoll,
 };
-use mu_core::components::item_options::{AncientBonusLevel, ExcellentCategory};
+use mu_core::components::item_options::{
+    AncientBonusLevel, ExcellentArmorOption, ExcellentCategory, SecondWingBonus,
+};
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
 use mu_core::components::movement::Movement;
@@ -61,7 +64,8 @@ use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::inventory::{EquipOutcome, EquipRejection};
 use mu_core::events::loot::Drop;
 use mu_core::services::inventory::{
-    EquipmentConflict, PlaceIntent, Wearer, equip, place_item, reconcile_equipment,
+    EquipmentConflict, InventoryConflict, PlaceIntent, Wearer, equip, place_item,
+    reconcile_equipment, reconcile_inventory,
 };
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::loot::resolve_kill_drops;
@@ -1114,4 +1118,153 @@ fn reconcile_equipment_accepts_legal_and_rejects_two_handed_with_offhand() {
     // A lone two-handed weapon with its paired hand empty reconciles cleanly.
     let lone = Equipment::empty().with(EquipmentSlot::LeftHand, instance_of(two_handed, 14));
     assert_eq!(reconcile_equipment(&lone, &atlas), Ok(()));
+}
+
+#[test]
+fn reconcile_equipment_rejects_a_worn_item_in_a_slot_its_kind_forbids() {
+    let atlas = real_atlas();
+    let helm = find_kind(&atlas, |kind| matches!(kind, ItemKind::Helm { .. }));
+    // A helm forced into the Pet slot: geometry the Equipment component permits,
+    // but the shared kind→slot rule (INV-1) forbids at reload — the check the
+    // hand-pair-only reconcile previously skipped.
+    let forged = Equipment::empty().with(EquipmentSlot::Pet, instance_of(helm, 1));
+    assert_eq!(
+        reconcile_equipment(&forged, &atlas),
+        Err(EquipmentConflict::WrongSlot)
+    );
+}
+
+#[test]
+fn reconcile_equipment_rejects_a_worn_item_whose_options_contradict_its_definition() {
+    let atlas = real_atlas();
+    let weapon = find_kind(&atlas, is_one_handed_weapon);
+    // A weapon forged with an ARMOR excellent set: its definition rolls the
+    // WEAPON category, so ItemInstance::reconcile (INV-5) rejects it. This is the
+    // production caller that check previously lacked — exercised over real /data.
+    let mut forged_instance = instance_of(weapon, 1);
+    forged_instance.roll = RarityRoll::Excellent {
+        options: ExcellentOptions::Armor {
+            options: or_abort(ExcellentArmorSet::from_options([
+                ExcellentArmorOption::MaxHealth,
+            ])),
+        },
+    };
+    let worn = Equipment::empty().with(EquipmentSlot::RightHand, forged_instance);
+    assert_eq!(
+        reconcile_equipment(&worn, &atlas),
+        Err(EquipmentConflict::ItemInvariant(
+            ItemInstanceError::ExcellentSetCategoryMismatch
+        ))
+    );
+}
+
+#[test]
+fn reconcile_equipment_rejects_a_worn_wing_whose_augment_contradicts_its_definition() {
+    let atlas = real_atlas();
+    // A first wing carries augment slot None — its definition permits no crafted
+    // augment. Forging a wing bonus onto it is the crafted-augment forgery the
+    // reload boundary must refuse: worn_item_ok cross-references the instance's
+    // augment against the definition's own augment_slot (INV-6), over real /data.
+    let first_wing = find_kind(&atlas, |kind| {
+        matches!(kind, ItemKind::Wings { .. }) && kind.augment_slot() == AugmentSlot::None
+    });
+    let mut forged = instance_of(first_wing, 1);
+    forged.augment = CraftedAugment::WingBonus {
+        bonus: SecondWingBonus::MaxHealth,
+    };
+    let worn = Equipment::empty().with(EquipmentSlot::Wings, forged);
+    assert_eq!(
+        reconcile_equipment(&worn, &atlas),
+        Err(EquipmentConflict::ItemInvariant(
+            ItemInstanceError::AugmentSlotMismatch
+        ))
+    );
+
+    // The mirror (FIX 1's cross-check): a second wing carries augment slot
+    // WingBonus, so a matching wing bonus — exactly what the chaos-machine mint
+    // now derives from that same slot — reconciles clean. A legitimately crafted
+    // item is never false-rejected at reload.
+    let second_wing = find_kind(&atlas, |kind| {
+        matches!(kind, ItemKind::Wings { .. }) && kind.augment_slot() == AugmentSlot::WingBonus
+    });
+    let mut legit = instance_of(second_wing, 2);
+    legit.augment = CraftedAugment::WingBonus {
+        bonus: SecondWingBonus::MaxHealth,
+    };
+    let worn = Equipment::empty().with(EquipmentSlot::Wings, legit);
+    assert_eq!(reconcile_equipment(&worn, &atlas), Ok(()));
+}
+
+#[test]
+fn live_equip_rejects_a_malformed_item_through_the_shared_proof() {
+    let atlas = real_atlas();
+    let weapon = find_kind(&atlas, is_one_handed_weapon);
+    // The same forged weapon live equip runs the shared `worn_item_ok` proof
+    // over — the reconcile check runs before class/requirement, so a corrupt
+    // instance is refused with `MalformedItem`, not silently worn.
+    let mut forged = instance_of(weapon, 1);
+    forged.roll = RarityRoll::Excellent {
+        options: ExcellentOptions::Armor {
+            options: or_abort(ExcellentArmorSet::from_options([
+                ExcellentArmorOption::MaxHealth,
+            ])),
+        },
+    };
+    let (_, outcome) = equip(
+        Equipment::empty(),
+        forged,
+        weapon,
+        EquipmentSlot::RightHand,
+        &atlas,
+        &maxed(CharacterClass::DarkKnight),
+    );
+    assert!(
+        matches!(
+            outcome,
+            EquipOutcome::Rejected {
+                reason: EquipRejection::MalformedItem,
+                ..
+            }
+        ),
+        "a malformed worn item is refused by the shared live gate"
+    );
+}
+
+#[test]
+fn reconcile_inventory_rejects_a_tampered_footprint_and_passes_a_faithful_one() {
+    let atlas = real_atlas();
+    let weapon = find_kind(&atlas, is_one_handed_weapon);
+    let anchor = Cell { row: 0, col: 0 };
+    let faithful = or_abort(Footprint::new(weapon.width, weapon.height));
+    // A footprint that cannot equal the real dimensions — the shrink-to-pack-more
+    // cheat.
+    let (tampered_w, tampered_h) = if weapon.width != 1 || weapon.height != 1 {
+        (1, 1)
+    } else {
+        (2, 1)
+    };
+    let tampered = or_abort(Footprint::new(tampered_w, tampered_h));
+
+    let (faithful_inv, _) = place_item(
+        Inventory::empty(15, 8),
+        PlaceIntent {
+            anchor,
+            footprint: faithful,
+            item: instance_of(weapon, 1),
+        },
+    );
+    assert_eq!(reconcile_inventory(&faithful_inv, &atlas), Ok(()));
+
+    let (tampered_inv, _) = place_item(
+        Inventory::empty(15, 8),
+        PlaceIntent {
+            anchor,
+            footprint: tampered,
+            item: instance_of(weapon, 2),
+        },
+    );
+    assert_eq!(
+        reconcile_inventory(&tampered_inv, &atlas),
+        Err(InventoryConflict::FootprintMismatch { at: anchor })
+    );
 }

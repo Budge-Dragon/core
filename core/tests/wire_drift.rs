@@ -504,6 +504,7 @@ fn target_hit_every_kind_tag_is_pinned() {
 #[test]
 fn cast_rejection_every_wire_string_is_pinned() {
     for reason in [
+        CastRejection::CasterNotAlive,
         CastRejection::CasterInSafezone,
         CastRejection::InsufficientMana,
         CastRejection::InsufficientAbility,
@@ -512,6 +513,7 @@ fn cast_rejection_every_wire_string_is_pinned() {
     ] {
         let actual = serde_json::to_string(&reason).unwrap();
         let expected = match &reason {
+            CastRejection::CasterNotAlive => r#""caster_not_alive""#,
             CastRejection::CasterInSafezone => r#""caster_in_safezone""#,
             CastRejection::InsufficientMana => r#""insufficient_mana""#,
             CastRejection::InsufficientAbility => r#""insufficient_ability""#,

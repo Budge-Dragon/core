@@ -27,7 +27,7 @@ use rand_core::RngCore;
 
 use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::item_instance::{
-    CraftedAugment, DinorantOptionSet, Durability, ItemInstance, LuckRoll, RarityRoll,
+    AugmentSlot, CraftedAugment, DinorantOptionSet, Durability, ItemInstance, LuckRoll, RarityRoll,
     RolledNormalOption, SkillRoll,
 };
 use crate::components::item_options::{DinorantOption, SecondWingBonus};
@@ -1378,13 +1378,22 @@ fn create_crafted_wing(
         LuckRoll::Plain
     };
     let normal_option = wing_option(def, rng);
-    let augment = if roll_percent(economics.excellent_chance_percent, rng) {
-        let target = draw_index(pool_rest.len().saturating_add(1), rng);
-        CraftedAugment::WingBonus {
-            bonus: row_at(pool_first, pool_rest, target),
+    // The augment is derived from the definition's own augment slot — the same
+    // fact reload re-proves through [`ItemInstance::reconcile`] — so a mint can
+    // never carry an augment its definition forbids. Only a wing-bonus slot rolls
+    // the pool; any other slot mints none.
+    let augment = match def.kind.augment_slot() {
+        AugmentSlot::WingBonus => {
+            if roll_percent(economics.excellent_chance_percent, rng) {
+                let target = draw_index(pool_rest.len().saturating_add(1), rng);
+                CraftedAugment::WingBonus {
+                    bonus: row_at(pool_first, pool_rest, target),
+                }
+            } else {
+                CraftedAugment::None
+            }
         }
-    } else {
-        CraftedAugment::None
+        AugmentSlot::None | AugmentSlot::Dinorant => CraftedAugment::None,
     };
     let mut created = fresh_instance(
         def,
@@ -1440,7 +1449,14 @@ fn create_dinorant(output: &ResolvedOutput, rng: &mut impl RngCore) -> ItemInsta
         None,
         SkillRoll::WithSkill,
     );
-    created.augment = dinorant_augment(rng);
+    // The augment is derived from the definition's own augment slot — the same
+    // fact reload re-proves through [`ItemInstance::reconcile`] — so a mint can
+    // never carry an augment its definition forbids. Only a dinorant slot rolls
+    // the dinorant options; any other slot mints none.
+    created.augment = match def.kind.augment_slot() {
+        AugmentSlot::Dinorant => dinorant_augment(rng),
+        AugmentSlot::None | AugmentSlot::WingBonus => CraftedAugment::None,
+    };
     created
 }
 
@@ -1759,7 +1775,7 @@ fn rescaled_durability(instance: &ItemInstance, def: &ItemDefinition) -> Durabil
 mod tests {
     use super::*;
     use crate::components::class::ClassSet;
-    use crate::components::item_instance::{ExcellentArmorSet, ExcellentOptions};
+    use crate::components::item_instance::{AugmentSlot, ExcellentArmorSet, ExcellentOptions};
     use crate::components::item_options::ExcellentArmorOption;
     use crate::data::common::{Provenance, SourceVersion};
     use crate::data::item_definitions::{
@@ -1921,6 +1937,7 @@ mod tests {
                 absorb_percent: 12,
                 damage_percent: 12,
                 jol_options: vec![crate::components::item_options::NormalOption::HealthRecoveryPct],
+                augment: AugmentSlot::None,
                 classes: ClassSet::NONE,
                 wear: wear(),
             },

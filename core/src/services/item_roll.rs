@@ -16,7 +16,7 @@ use crate::components::item_instance::{
     CraftedAugment, Durability, ExcellentArmorSet, ExcellentCat, ExcellentOptions,
     ExcellentWeaponSet, ItemInstance, LuckRoll, RarityRoll, RolledNormalOption, SkillRoll,
 };
-use crate::components::item_options::{AncientBonusLevel, ExcellentCategory, NormalOption};
+use crate::components::item_options::{AncientBonusLevel, NormalOption};
 use crate::components::item_quality::ItemRarity;
 use crate::components::levels::OptionLevel;
 use crate::components::units::{ItemLevel, Percent};
@@ -103,7 +103,7 @@ pub fn roll_dropped_item(
         ItemRarity::Ancient => RarityRoll::Ancient {
             bonus: draw_ancient_bonus(rng),
         },
-        ItemRarity::Excellent => match excellent_category(kind) {
+        ItemRarity::Excellent => match kind.excellent_category() {
             Some(category) => RarityRoll::Excellent {
                 options: roll_excellent(category, policy, rng),
             },
@@ -231,52 +231,12 @@ fn grants_skill(kind: &ItemKind) -> bool {
     }
 }
 
-/// The excellent set category a kind rolls, if any. Total over [`ItemKind`].
-fn excellent_category(kind: &ItemKind) -> Option<ExcellentCat> {
-    match kind {
-        ItemKind::Weapon { .. }
-        | ItemKind::Bow { .. }
-        | ItemKind::Crossbow { .. }
-        | ItemKind::Staff { .. } => Some(ExcellentCat::Weapon),
-        ItemKind::Shield { .. }
-        | ItemKind::Helm { .. }
-        | ItemKind::BodyArmor { .. }
-        | ItemKind::Pants { .. }
-        | ItemKind::Gloves { .. }
-        | ItemKind::Boots { .. }
-        | ItemKind::Ring { .. } => Some(ExcellentCat::Armor),
-        ItemKind::Pendant { excellent, .. } => Some(excellent_cat_of(*excellent)),
-        ItemKind::Arrows { .. }
-        | ItemKind::Bolts { .. }
-        | ItemKind::Wings { .. }
-        | ItemKind::Pet { .. }
-        | ItemKind::TransformationRing { .. }
-        | ItemKind::Orb { .. }
-        | ItemKind::SkillScroll { .. }
-        | ItemKind::Jewel { .. }
-        | ItemKind::Consumable { .. }
-        | ItemKind::LuckyBox
-        | ItemKind::EventTicket { .. }
-        | ItemKind::MixMaterial
-        | ItemKind::StatFruit => None,
-    }
-}
-
 /// Whether a kind can roll an excellent set at all — the capability predicate
 /// the loot pool gates on so an `Excellent` drop is only ever stamped on a kind
-/// that has an excellent set. Exposes the capability without leaking the private
-/// [`ExcellentCat`] discriminator.
+/// that has an excellent set. Reads the one canonical
+/// [`ItemKind::excellent_category`] kind fact.
 pub(crate) fn is_excellent_capable(kind: &ItemKind) -> bool {
-    excellent_category(kind).is_some()
-}
-
-/// Bridges a definition's stored [`ExcellentCategory`] (which carries the weapon
-/// damage kind) down to the bare [`ExcellentCat`] discriminator.
-fn excellent_cat_of(category: ExcellentCategory) -> ExcellentCat {
-    match category {
-        ExcellentCategory::Armor => ExcellentCat::Armor,
-        ExcellentCategory::Weapon { .. } => ExcellentCat::Weapon,
-    }
+    kind.excellent_category().is_some()
 }
 
 /// How a kind's durability is computed. Total over [`ItemKind`].

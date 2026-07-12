@@ -114,6 +114,9 @@ pub enum UnequipOutcome {
 pub enum EquipRejection {
     /// The item's kind cannot go in that slot.
     IncompatibleSlot,
+    /// The item's excellent set or crafted augment does not match its
+    /// definition's capabilities — a forged or corrupt instance.
+    MalformedItem,
     /// The slot already holds an item.
     SlotOccupied,
     /// Two-handed dual-hand occupancy is broken: a two-handed weapon needs its
@@ -162,6 +165,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&EquipRejection::IncompatibleSlot).unwrap(),
             r#""incompatible_slot""#
+        );
+        assert_eq!(
+            serde_json::to_string(&EquipRejection::MalformedItem).unwrap(),
+            r#""malformed_item""#
         );
         assert_eq!(
             serde_json::to_string(&EquipRejection::TwoHandedConflict).unwrap(),

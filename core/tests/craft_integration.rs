@@ -801,6 +801,89 @@ fn dinorant_options_across_seeds_are_zero_one_or_two_distinct() {
     assert!(bare > 0 && single > 0 && pair > 0, "{bare}/{single}/{pair}");
 }
 
+/// A freshly minted item must reconcile against the very definition it names.
+/// The reload boundary re-proves the crafted augment from the definition's own
+/// `augment_slot` (INV-6) — the same fact the chaos-machine mint now derives the
+/// augment from — so mint and reload read one source and a legitimate craft is
+/// never false-rejected.
+fn assert_reconciles(atlas: &Atlas, created: &ItemInstance) {
+    let def = or_abort(
+        atlas
+            .item(created.item)
+            .ok_or("a crafted item names a shipped definition"),
+    );
+    assert_eq!(
+        created.reconcile(def.kind.excellent_category(), def.kind.augment_slot()),
+        Ok(()),
+        "a freshly crafted {:?} must reconcile against its own definition",
+        created.item
+    );
+}
+
+/// Runs one recipe across a seed sweep, reconciling every successful mint
+/// against its own definition, and returns how many mints carried a present
+/// (non-`None`) crafted augment — the count that proves the WingBonus/Dinorant
+/// reconcile arms are exercised, not only the trivial `None` arm. The builder
+/// rebuilds the recipe each seed because the mix consumes the placed items.
+fn sweep_reconciles(atlas: &Atlas, build: impl Fn(&Atlas) -> Vec<ItemInstance>) -> u32 {
+    let mut present = 0u32;
+    for seed in 0..200 {
+        match run(atlas, build(atlas), carried(BALANCE), seed) {
+            MixOutcome::Success { created, .. } => {
+                if !matches!(created.augment, CraftedAugment::None) {
+                    present += 1;
+                }
+                assert_reconciles(atlas, &created);
+            }
+            MixOutcome::Rejected { .. } | MixOutcome::Failed { .. } => {}
+        }
+    }
+    present
+}
+
+#[test]
+fn every_crafted_wing_and_pet_reconciles_against_its_own_definition() {
+    let atlas = real_atlas();
+    // First wings (augment slot None), second wings + Cape of Lord (WingBonus),
+    // Horn of Dinorant (Dinorant): every augment axis the chaos machine mints.
+    let first = sweep_reconciles(&atlas, |a| {
+        vec![
+            with_option(item(a, CHAOS_STAFF, 7), NormalOption::WizardryDamage),
+            item(a, JEWEL_OF_CHAOS, 0),
+        ]
+    });
+    let second = sweep_reconciles(&atlas, |a| {
+        vec![
+            item(a, FAIRY_WINGS, 0),
+            item(a, LOCHS_FEATHER, 0),
+            item(a, JEWEL_OF_CHAOS, 0),
+        ]
+    });
+    let cape = sweep_reconciles(&atlas, |a| {
+        vec![
+            item(a, HEAVEN_WINGS, 0),
+            item(a, LOCHS_FEATHER, 1),
+            item(a, JEWEL_OF_CHAOS, 0),
+        ]
+    });
+    let dino = sweep_reconciles(&atlas, |a| {
+        vec![
+            item(a, HORN_OF_UNIRIA, 0),
+            item(a, HORN_OF_UNIRIA, 0),
+            item(a, HORN_OF_UNIRIA, 0),
+            item(a, JEWEL_OF_CHAOS, 0),
+        ]
+    });
+    // First wings never mint an augment (their slot is None); each of the other
+    // three mints present augments across the sweep, proving the mint derives
+    // the augment from the same `augment_slot` reload re-proves against.
+    assert_eq!(first, 0, "first wings carry augment slot None");
+    assert!(
+        second > 0 && cape > 0 && dino > 0,
+        "second={second} cape={cape} dino={dino}: each present-augment arm must be exercised"
+    );
+}
+
 #[test]
 fn fruit_mix_rolls_a_weighted_level_and_an_exact_balance_lands_on_zero() {
     let atlas = real_atlas();
