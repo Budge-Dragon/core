@@ -5400,12 +5400,12 @@ fn a_full_mini_game_event_plays_enter_to_payout_through_the_paper_host() {
 
     // The exit window warps every alive finisher to town and disposes.
     let dispose_events = advance_to_dispose(&mut world, s);
-    assert!(
+    assert_eq!(
         dispose_events
             .iter()
             .filter(|event| matches!(event, MiniGameEvent::WarpedOut { .. }))
-            .count()
-            == 3
+            .count(),
+        3
     );
     assert_eq!(dispose_events.last(), Some(&MiniGameEvent::Disposed));
     assert_eq!(world.mini_session(s).phase, MiniGamePhase::Disposed);
