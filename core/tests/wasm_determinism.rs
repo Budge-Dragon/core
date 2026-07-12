@@ -893,3 +893,140 @@ fn a_pvp_strike_draws_the_same_sequence_as_a_pvm_strike_and_only_the_overrate_di
     }
     assert!(landed > 0, "an out-rated hit lands within 256 seeds");
 }
+
+// --- W-PK: the player-kill reputation wire forms are byte-identical across -----
+// --- targets, and every reputation transition draws ZERO RNG (their signatures -
+// --- carry no generator), so a combat kill's stream is unchanged whether or not -
+// --- the killer is flagged and decayed after it. -----------------------------
+
+use mu_core::components::reputation::{PkStage, PlayerKillCount, Reputation, Standing};
+use mu_core::components::units::Ticks;
+use mu_core::events::reputation::{PkEvent, SanctionReason};
+use mu_core::services::reputation::{
+    PvpContext, decay_reputation, player_kill_sanction, resolve_player_kill,
+};
+
+/// The suite tick base: 50 ms per tick — the same cadence the reputation
+/// transitions convert their online-hour step against.
+fn pk_tick() -> TickDuration {
+    or_abort(TickDuration::new(50))
+}
+
+#[test]
+fn pk_stage_serializes_to_its_snake_case_tag_across_targets() {
+    for (stage, wire) in [
+        (PkStage::Warning, r#""warning""#),
+        (PkStage::FirstStage, r#""first_stage""#),
+        (PkStage::SecondStage, r#""second_stage""#),
+    ] {
+        assert_eq!(or_abort(serde_json::to_string(&stage)), wire);
+        assert_eq!(or_abort(serde_json::from_str::<PkStage>(wire)), stage);
+    }
+}
+
+#[test]
+fn standing_and_reputation_wire_forms_are_identical_across_targets() {
+    assert_eq!(
+        or_abort(serde_json::to_string(&Standing::Clean)),
+        r#"{"kind":"clean"}"#
+    );
+    assert_eq!(
+        or_abort(serde_json::to_string(&Standing::Flagged {
+            stage: PkStage::FirstStage,
+            decays_at: Tick(903),
+        })),
+        r#"{"kind":"flagged","stage":"first_stage","decays_at":903}"#
+    );
+
+    // A clean reputation is the flat standing-plus-tally pair.
+    assert_eq!(
+        or_abort(serde_json::to_string(&Reputation::clean())),
+        r#"{"standing":{"kind":"clean"},"kills":0}"#
+    );
+    // A flagged reputation carrying a lifetime tally round-trips byte-for-byte.
+    let flagged =
+        r#"{"standing":{"kind":"flagged","stage":"second_stage","decays_at":903},"kills":2}"#;
+    let reputation = or_abort(serde_json::from_str::<Reputation>(flagged));
+    assert_eq!(or_abort(serde_json::to_string(&reputation)), flagged);
+}
+
+#[test]
+fn pk_event_wire_forms_are_identical_across_targets() {
+    let cases = [
+        (
+            PkEvent::Flagged {
+                stage: PkStage::FirstStage,
+                decays_at: Tick(903),
+                lifetime_kills: PlayerKillCount(2),
+            },
+            r#"{"kind":"flagged","stage":"first_stage","decays_at":903,"lifetime_kills":2}"#,
+        ),
+        (
+            PkEvent::Sanctioned {
+                reason: SanctionReason::VictimWasMurderer,
+            },
+            r#"{"kind":"sanctioned","reason":"victim_was_murderer"}"#,
+        ),
+        (
+            PkEvent::Decayed {
+                standing: Standing::Clean,
+            },
+            r#"{"kind":"decayed","standing":{"kind":"clean"}}"#,
+        ),
+        (
+            PkEvent::DecayAccelerated {
+                decays_at: Tick(903),
+                reduced_by: Ticks(80),
+            },
+            r#"{"kind":"decay_accelerated","decays_at":903,"reduced_by":80}"#,
+        ),
+    ];
+    for (event, wire) in cases {
+        assert_eq!(or_abort(serde_json::to_string(&event)), wire);
+        assert_eq!(or_abort(serde_json::from_str::<PkEvent>(wire)), event);
+    }
+}
+
+#[test]
+fn pk_transitions_draw_no_rng_so_a_kill_stream_is_identical_across_targets() {
+    // A fixed lethal strike over the seed, then the same strike over the same seed
+    // followed by the whole flag + decay path. None of the reputation transitions
+    // takes an RNG (their signatures carry no generator), so both streams sit at
+    // the same next word: a combat kill's RNG sequence is byte-identical whether or
+    // not the killer is flagged and decayed after it — the cross-target contract.
+    let attacker = fixed_profile(50, (100, 100), 0, (10_000, 0), 20);
+    let target = fixed_profile(20, (1, 2), 0, (0, 0), 0);
+
+    let mut bare = SplitMix64::new(SEED);
+    let (_health, bare_outcome) = resolve_attack(
+        &attacker,
+        &target,
+        Pool::full(50),
+        &StrikeBasis::PlainSwing,
+        &mut bare,
+    );
+    assert!(
+        matches!(bare_outcome, AttackOutcome::Killed { .. }),
+        "the fixed strike is a combat kill"
+    );
+
+    let mut with_pk = SplitMix64::new(SEED);
+    let (_health, _outcome) = resolve_attack(
+        &attacker,
+        &target,
+        Pool::full(50),
+        &StrikeBasis::PlainSwing,
+        &mut with_pk,
+    );
+    // The killer-bump: a clean victim flags the killer up the ladder.
+    let victim = fixed_caster();
+    let killer = fixed_caster();
+    let sanction = player_kill_sanction(&victim, PvpContext::Open);
+    let (flagged, _flag_event) = resolve_player_kill(killer, sanction, Tick(1000), pk_tick());
+    // Then the tick-driven decay peels it all the way back to clean.
+    let (_decayed, _decay_event) = decay_reputation(flagged, Tick(10_000_000), pk_tick());
+
+    // Neither transition advanced the generator: the same next word as the bare
+    // strike stream, on native and wasm alike.
+    assert_eq!(bare.next_u64(), with_pk.next_u64());
+}

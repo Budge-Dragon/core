@@ -33,11 +33,12 @@ use mu_core::components::life::LifeState;
 use mu_core::components::movement::{FlightChange, Movement};
 use mu_core::components::party::{Leadership, MemberSlot, Membership, Vitality};
 use mu_core::components::pool::Pool;
+use mu_core::components::reputation::{PkStage, PlayerKillCount, Standing};
 use mu_core::components::spatial::{Radius, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Zen};
-use mu_core::data::common::MonsterNumber;
+use mu_core::data::common::{MonsterNumber, SkillNumber};
 use mu_core::data::effects::Ailment;
 use mu_core::data::gates_warps::WarpIndex;
 use mu_core::data::minigame::{
@@ -64,6 +65,7 @@ use mu_core::events::monster_ai::MonsterIntent;
 use mu_core::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome};
 use mu_core::events::party::PartyEvent;
 use mu_core::events::progression::GrowthEvent;
+use mu_core::events::reputation::{PkEvent, SanctionReason};
 use mu_core::events::shop::{BuyOutcome, RepairOutcome, SellOutcome};
 use mu_core::events::skills::{CastRejection, SkillOutcome, TargetHit};
 use mu_core::events::spawn::SpawnEvent;
@@ -86,12 +88,12 @@ use paper_host::{
     Combatant, World, aggressive_monster, armored_monster_from, cell, dark_knight,
     dark_knight_in_band, dark_wizard, devil_square_definition, devil_square_key,
     devil_square_ticket, devil_square_ticket_ref, direct_hit_skill, earthshake_skill,
-    fighting_monster_from, first_passive_monster, flame_skill, footprint_of, heal_skill,
-    hellfire_skill, is_equippable, item_at_level, item_instance, lightning_direct_skill,
-    low_level_monster, lunge_skill, magic_gladiator, monster_instance, none_type_skill, nova_skill,
-    or_abort, persist, pos, pressing_monster, respawning_wave_monster, reward_drop_group,
-    reward_entry, spawn_wave, tile, walkable_area, walkable_run, wearer_of, wire,
-    wizardry_direct_skill, zen,
+    fighting_monster_from, first_passive_monster, flame_skill, footprint_of, guard_monster,
+    heal_skill, hellfire_skill, is_equippable, item_at_level, item_instance,
+    lightning_direct_skill, low_level_monster, lunge_skill, magic_gladiator, monster_instance,
+    none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, respawning_wave_monster,
+    reward_drop_group, reward_entry, spawn_wave, tile, walkable_area, walkable_run, wearer_of,
+    wire, wizardry_direct_skill, zen,
 };
 
 /// A real 2×2 catalog identity (Dragon Armor) — footprint read from the atlas.
@@ -5054,6 +5056,317 @@ fn sim_gate_nova_around_an_enemy_player_kills_monsters_but_not_the_player() {
     assert!(
         forced.character(forced_player).vitals().health.current() < forced_before,
         "the force-attacked enemy player takes persisted nova damage"
+    );
+}
+
+// --- W-PK standing sixth gate: the open-world player-kill reputation lifecycle -
+// --- over real Lorencia. Two innocents murdered flag a clean knight up the -----
+// --- murderer ladder to the guard-huntable FirstStage; a town guard hunts the --
+// --- murderer that flees into the safezone (its AiTarget built wholly from live -
+// --- authoritative state); a monster kill accelerates the decay; elapsed online -
+// --- time fades it back to Clean; and killing an already-flagged murderer is ----
+// --- free, leaving its killer unflagged. Every reputation transition is core- ---
+// --- computed and drives ZERO RNG. -------------------------------------------
+
+/// Force-attacks the seated player at `victim` from the attacker at `attacker`
+/// with the single-target `skill` aimed at `aim`, until the strike lands a
+/// killing blow. Aborts if `10_000` casts do not kill it — statistically
+/// impossible for a high-strength knight over a same-or-lower-level victim.
+fn force_attack_to_death(
+    world: &mut World,
+    attacker: usize,
+    victim: usize,
+    skill: SkillNumber,
+    aim: WorldPos,
+) {
+    for _ in 0..10_000u32 {
+        let outcome = world.cast_at(
+            attacker,
+            skill,
+            aim,
+            &[Combatant::Player(victim)],
+            Designation::Forced { target_index: 0 },
+        );
+        if let SkillOutcome::Cast { hits, .. } = &outcome {
+            if hits
+                .iter()
+                .any(|hit| matches!(hit, TargetHit::Killed { .. }))
+            {
+                return;
+            }
+        }
+    }
+    or_abort(Err::<(), _>(
+        "the force-attacked player is beaten to a killing blow",
+    ));
+}
+
+/// Drives one open-world player kill end-to-end over the paper host: the killer
+/// beats the victim to a killing blow, the victim is routed through the core
+/// player-kill death (penalty Waived by `combat_death_penalty`), and the killer's
+/// reputation is updated by the core sanction path. Returns the `PkEvent` the flag
+/// path produced — a flag climb on a clean victim, a free `Sanctioned` on an
+/// already-hunted one — composing the W-PVP death driver with the W-PK sanction
+/// driver, both reading core-computed facts.
+fn drive_player_kill(
+    world: &mut World,
+    killer: usize,
+    victim: usize,
+    aim: WorldPos,
+    skill: SkillNumber,
+    at: Tick,
+) -> PkEvent {
+    force_attack_to_death(world, killer, victim, skill, aim);
+    world.resolve_combat_death(victim, at, TargetKind::Player);
+    world.resolve_player_kill_of(killer, victim, at)
+}
+
+#[test]
+fn sim_gate_a_murderer_is_flagged_hunted_by_guards_and_decays_back_to_clean() {
+    // The full open-world PK lifecycle over real Lorencia on one threaded
+    // identity: a clean knight murders two innocents on the open field (flagging
+    // Warning, then the guard-huntable FirstStage), flees one tile east into the
+    // town safezone, a town guard hunts it there (the guard's AiTarget built
+    // wholly from the murderer's LIVE authoritative reputation and position), a
+    // monster kill accelerates the decay, elapsed online time fades it back to
+    // Clean, and the same guard then leaves the now-clean ex-murderer alone.
+    let mut world = World::new(53, MapNumber(0));
+    let grid = lorencia_grid(&world);
+    // A three-tile field lane running into the safe town core: the murders happen
+    // on the field, the flight ends one tile inside the safezone.
+    let lane = push_lane(&grid);
+    let skill = direct_hit_skill(world.atlas());
+
+    // A would-be murderer beside two innocents piled on the neighbouring field
+    // tile (positional identity is the index, not the tile, so both share it).
+    let murderer = world.seat_character(dark_knight(150, 1500, lane[2]));
+    let innocent_a = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        60,
+        1_000_000,
+        MapNumber(0),
+        lane[1],
+    ));
+    let innocent_b = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        60,
+        1_000_000,
+        MapNumber(0),
+        lane[1],
+    ));
+    assert_eq!(
+        world.character(murderer).reputation().standing(),
+        Standing::Clean
+    );
+
+    // First open murder: an unsanctioned kill of a clean victim flags Warning —
+    // not yet hunted, not yet free-to-kill.
+    let first = drive_player_kill(
+        &mut world,
+        murderer,
+        innocent_a,
+        lane[1].to_world(),
+        skill,
+        Tick(1000),
+    );
+    assert!(matches!(
+        first,
+        PkEvent::Flagged {
+            stage: PkStage::Warning,
+            ..
+        }
+    ));
+    assert!(
+        !world
+            .character(murderer)
+            .reputation()
+            .standing()
+            .is_hunted()
+    );
+
+    // Second open murder: climbs to FirstStage — now guard-huntable and itself
+    // free-to-kill, with a lifetime tally of two.
+    let second = drive_player_kill(
+        &mut world,
+        murderer,
+        innocent_b,
+        lane[1].to_world(),
+        skill,
+        Tick(2000),
+    );
+    assert!(matches!(
+        second,
+        PkEvent::Flagged {
+            stage: PkStage::FirstStage,
+            ..
+        }
+    ));
+    assert!(
+        world
+            .character(murderer)
+            .reputation()
+            .standing()
+            .is_hunted()
+    );
+    assert_eq!(
+        world.character(murderer).reputation().kills(),
+        PlayerKillCount(2)
+    );
+
+    // The murderer flees one tile east off the field lane into the town safezone.
+    match world.step(murderer, lane[3].to_world()) {
+        StepOutcome::Resolved { .. } => {}
+        StepOutcome::Blocked => {
+            or_abort(Err::<(), _>("the flight into town must not block"));
+        }
+    }
+    assert!(
+        grid.safe(world.character(murderer).placement().position),
+        "the murderer stands inside the town safezone"
+    );
+
+    // A town guard on the field edge hunts the murderer that fled inside: the
+    // AiTarget is built wholly from the murderer's live authoritative state, so the
+    // guard swings only because core ruled it a hunted murderer on a safe tile.
+    let guard = world.seat_monster(monster_instance(
+        guard_monster(world.atlas()),
+        10_000,
+        lane[2],
+    ));
+    let hunt = world.advance_guard_against(guard, murderer, Tick(3000));
+    assert_eq!(
+        hunt,
+        MonsterIntent::Attack {
+            target: lane[3].to_world()
+        }
+    );
+
+    // The murderer works the flag off by hunting: a monster kill accelerates the
+    // decay (pulls the deadline earlier) without peeling the rung — still hunted.
+    let (number, combat, _resistances) = low_level_monster(world.atlas(), 20);
+    let prey = world.seat_monster(monster_instance(number, combat.hp, lane[1]));
+    let accel = world.accelerate_decay_of(murderer, prey);
+    assert!(matches!(accel, Some(PkEvent::DecayAccelerated { .. })));
+    assert!(
+        world
+            .character(murderer)
+            .reputation()
+            .standing()
+            .is_hunted(),
+        "the accelerator pulls the deadline but never peels a rung"
+    );
+
+    // Elapsed online time decays the murderer all the way back to Clean; the
+    // lifetime tally survives the fade.
+    let faded = world.decay_reputation_of(murderer, Tick(10_000_000));
+    assert!(matches!(
+        faded,
+        Some(PkEvent::Decayed {
+            standing: Standing::Clean
+        })
+    ));
+    assert_eq!(
+        world.character(murderer).reputation().standing(),
+        Standing::Clean
+    );
+    assert_eq!(
+        world.character(murderer).reputation().kills(),
+        PlayerKillCount(2)
+    );
+
+    // The same guard no longer hunts the now-clean ex-murderer standing in town.
+    let calm = world.advance_guard_against(guard, murderer, Tick(4000));
+    assert!(
+        !matches!(calm, MonsterIntent::Attack { .. }),
+        "a clean stander on a safe tile is no target for the guard"
+    );
+}
+
+#[test]
+fn sim_gate_killing_a_murderer_is_free() {
+    // The victim-was-murderer carve-out over real Lorencia: a villain earns the
+    // guard-huntable FirstStage by murdering two innocents, then a clean hunter
+    // runs it down — killing a >=FirstStage victim is FREE (the sanction is
+    // VictimWasMurderer), so the hunter never flags.
+    let mut world = World::new(59, MapNumber(0));
+    let grid = lorencia_grid(&world);
+    let field = field_run(&grid, 2);
+    let skill = direct_hit_skill(world.atlas());
+
+    // A villain beside two innocents piled on the neighbouring field tile.
+    let villain = world.seat_character(dark_knight(150, 1500, field[1]));
+    let innocent_a = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        60,
+        1_000_000,
+        MapNumber(0),
+        field[0],
+    ));
+    let innocent_b = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        60,
+        1_000_000,
+        MapNumber(0),
+        field[0],
+    ));
+
+    // Two open murders earn the villain the guard-huntable FirstStage.
+    drive_player_kill(
+        &mut world,
+        villain,
+        innocent_a,
+        field[0].to_world(),
+        skill,
+        Tick(1000),
+    );
+    let climbed = drive_player_kill(
+        &mut world,
+        villain,
+        innocent_b,
+        field[0].to_world(),
+        skill,
+        Tick(2000),
+    );
+    assert!(matches!(
+        climbed,
+        PkEvent::Flagged {
+            stage: PkStage::FirstStage,
+            ..
+        }
+    ));
+    assert!(world.character(villain).reputation().standing().is_hunted());
+
+    // A clean hunter runs the murderer down. Killing a hunted murderer is free —
+    // player_kill_sanction reads the villain's AUTHORITATIVE reputation and rules
+    // the kill VictimWasMurderer, so the hunter flags nothing.
+    let hunter = world.seat_character(dark_knight(150, 1500, field[0]));
+    assert_eq!(
+        world.character(hunter).reputation().standing(),
+        Standing::Clean
+    );
+    let free = drive_player_kill(
+        &mut world,
+        hunter,
+        villain,
+        field[1].to_world(),
+        skill,
+        Tick(3000),
+    );
+    assert!(matches!(
+        free,
+        PkEvent::Sanctioned {
+            reason: SanctionReason::VictimWasMurderer
+        }
+    ));
+    assert_eq!(
+        world.character(hunter).reputation().standing(),
+        Standing::Clean,
+        "killing a murderer leaves the hunter clean"
+    );
+    assert_eq!(
+        world.character(hunter).reputation().kills(),
+        PlayerKillCount(0),
+        "a free kill records no lifetime tally"
     );
 }
 
