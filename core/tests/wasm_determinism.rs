@@ -247,6 +247,7 @@ fn fixed_profile(
     chances: u8,
 ) -> CombatProfile {
     or_abort(serde_json::from_value(serde_json::json!({
+        "kind": "npc",
         "level": level,
         "physical": {"min": span.0, "max": span.1},
         "wizardry": null,

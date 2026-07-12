@@ -313,6 +313,7 @@ fn strike_tail(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::combat_profile::TargetKind;
     use crate::components::element::PerElement;
     use crate::components::interval::Interval;
     use crate::components::units::{Level, Resistance};
@@ -375,6 +376,7 @@ mod tests {
         dr: u16,
     ) -> CombatProfile {
         CombatProfile {
+            kind: TargetKind::Npc,
             level: Level::new(level).unwrap(),
             physical: Interval::new(min_phys, max_phys).unwrap(),
             wizardry: None,
