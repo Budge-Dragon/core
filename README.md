@@ -38,7 +38,7 @@ A complete, deterministic simulation of the game's server-authoritative rules:
 | **Consumables** | Potions, antidotes, percentage heals, permanent stat gains |
 | **Mini-games** | Instanced tick sessions (Devil Square, Blood Castle, …) with entry gates, wave spawners, ranked rewards |
 
-Everything is exercised: **~1495 tests**, including cross-file dataset contracts
+Everything is exercised: **1500+ tests**, including cross-file dataset contracts
 and a native/wasm determinism proof.
 
 ## The core rule: zero host dependencies
