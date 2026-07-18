@@ -28,7 +28,7 @@ pub enum CharacterClass {
 impl CharacterClass {
     /// The roster in declaration order — a fixed-length array, so a new
     /// variant breaks its length and every match keyed by the roster.
-    const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::DarkWizard,
         Self::SoulMaster,
         Self::DarkKnight,
@@ -122,6 +122,15 @@ impl ClassSet {
         }
     }
 
+    /// This set with `class` admitted — monotone and idempotent: admitting a
+    /// member already present returns an equal set, and no class is ever
+    /// removed.
+    #[must_use]
+    pub(crate) fn with(mut self, class: CharacterClass) -> Self {
+        *self.slot_mut(class) = true;
+        self
+    }
+
     fn slot_mut(&mut self, class: CharacterClass) -> &mut bool {
         match class {
             CharacterClass::DarkWizard => &mut self.dark_wizard,
@@ -213,6 +222,19 @@ mod tests {
         let err = ClassSet::try_from(vec![CharacterClass::FairyElf, CharacterClass::FairyElf])
             .unwrap_err();
         assert_eq!(err, DuplicateClassEntry(CharacterClass::FairyElf));
+    }
+
+    #[test]
+    fn with_admits_a_member_and_is_monotone_and_idempotent() {
+        let set = ClassSet::NONE.with(CharacterClass::MagicGladiator);
+        assert!(set.allows(CharacterClass::MagicGladiator));
+        assert!(!set.allows(CharacterClass::DarkLord));
+        // Re-admitting a member returns an equal set — no churn, no removal.
+        assert_eq!(set.with(CharacterClass::MagicGladiator), set);
+        // Admitting a second keeps the first (monotone).
+        let grown = set.with(CharacterClass::DarkLord);
+        assert!(grown.allows(CharacterClass::MagicGladiator));
+        assert!(grown.allows(CharacterClass::DarkLord));
     }
 
     #[test]

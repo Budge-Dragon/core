@@ -31,4 +31,5 @@ pub mod stats;
 pub mod tile;
 pub mod trade_window;
 pub mod units;
+pub mod unlocked_classes;
 pub mod vitals;

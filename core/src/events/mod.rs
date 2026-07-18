@@ -4,6 +4,7 @@
 //! outcome (damage dealt, item dropped, level gained) is returned as an event
 //! value; the host decides whether to log it, persist it, or broadcast it.
 
+pub mod account;
 pub mod combat;
 pub mod consume;
 pub mod craft;

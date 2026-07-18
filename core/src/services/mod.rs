@@ -5,6 +5,7 @@
 //! current state plus an injected RNG and return updated state along with
 //! [`crate::events`] — they never log, block, or touch the host.
 
+pub mod account;
 pub mod chance;
 pub mod combat;
 pub mod consume;

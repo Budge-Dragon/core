@@ -18,6 +18,7 @@
 mod paper_host;
 
 use mu_core::components::active_effect::ActiveEffects;
+use mu_core::components::class::CharacterClass;
 use mu_core::components::combat_profile::TargetKind;
 use mu_core::components::drop_claim::{DropClaim, PickerStanding};
 use mu_core::components::equipment::EquipmentSlot;
@@ -38,6 +39,7 @@ use mu_core::components::spatial::{Radius, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Zen};
+use mu_core::components::unlocked_classes::UnlockedClasses;
 use mu_core::data::common::{MonsterNumber, SkillNumber};
 use mu_core::data::effects::Ailment;
 use mu_core::data::gates_warps::WarpIndex;
@@ -52,6 +54,7 @@ use mu_core::entities::party_session::{PartyMember, PartySession};
 use mu_core::entities::spawned::Spawned;
 use mu_core::entities::trade_session::TradeSession;
 use mu_core::entities::world_zen::WorldZen;
+use mu_core::events::account::{ClassUnlocked, CreationVerdict};
 use mu_core::events::combat::AttackOutcome;
 use mu_core::events::consume::{ConsumeEvent, PoolKind};
 use mu_core::events::craft::MixOutcome;
@@ -73,6 +76,7 @@ use mu_core::events::trade::{CancelReason, OfferOutcome, ZenOfferOutcome};
 use mu_core::events::travel::{
     EnterGateOutcome, TownPortalOutcome, WarpAvailability, WarpLockReason, WarpTravelOutcome,
 };
+use mu_core::services::account::{creation_verdict, unlock_classes_for_level};
 use mu_core::services::effects::ApplicableBuff;
 use mu_core::services::ground::DropOrigin;
 use mu_core::services::inventory::{PickupOutcome, ZenPickupOutcome};
@@ -6209,4 +6213,144 @@ fn overlapping_waves_and_wave_scoped_respawn_hold_through_the_persist_seam() {
         wave_state(&world, s, WaveNumber(1)),
         WaveState::Closed
     ));
+}
+
+// --- W-ACCOUNT standing sixth gate: level-up → unlock → create, through the ---
+// --- persist seam. A grind to 220 earns Magic Gladiator for the account; the --
+// --- earned-set survives the persist seam; the authoritative gate then flips --
+// --- Magic Gladiator to Creatable while Dark Lord stays Locked at 250. --------
+
+#[test]
+fn sim_gate_a_grind_to_220_lets_the_account_create_a_magic_gladiator() {
+    let mut world = World::new(2024, MapNumber(0));
+
+    // A Dark Knight on the account, seated one level below the Magic Gladiator
+    // gate with a consistent mid-band experience read from the real curve.
+    let player = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        219,
+        0,
+        MapNumber(0),
+        tile(10, 10),
+    ));
+    assert_eq!(world.character(player).level().get(), 219);
+
+    // Award exactly enough to cross to level 220 — the reached level is the
+    // server-decided output of the leveling service, never a client claim.
+    let total_for_220 = or_abort(world.atlas().exp_curve().level(220))
+        .total_to_hold()
+        .0;
+    let gained = Exp(total_for_220 - world.character(player).experience().0);
+    let growth = world.apply_growth(player, gained);
+    let reached = match growth.first() {
+        Some(GrowthEvent::LevelsGained { reached, .. }) => *reached,
+        Some(GrowthEvent::MaxLevelReached) | None => {
+            panic!("the award crosses into level 220")
+        }
+    };
+    assert_eq!(reached.get(), 220);
+
+    // The host composes the account unlock off the LevelsGained level and the
+    // account's (empty) earned-set — one Magic Gladiator unlock is announced.
+    let (earned, unlocks) =
+        unlock_classes_for_level(UnlockedClasses::empty(), reached, world.atlas().classes());
+    assert_eq!(
+        unlocks,
+        vec![ClassUnlocked {
+            class: CharacterClass::MagicGladiator,
+        }]
+    );
+
+    // The earned-set survives the paper-host persist seam byte-for-byte.
+    let before = or_abort(serde_json::to_string(&earned));
+    let reloaded = persist(earned);
+    assert_eq!(before, or_abort(serde_json::to_string(&reloaded)));
+
+    // The authoritative creation gate reads the reloaded earned-set: Magic
+    // Gladiator is now Creatable; Dark Lord stays Locked at its data threshold.
+    assert_eq!(
+        creation_verdict(
+            CharacterClass::MagicGladiator,
+            &reloaded,
+            world.atlas().classes()
+        ),
+        CreationVerdict::Creatable
+    );
+    assert_eq!(
+        creation_verdict(CharacterClass::DarkLord, &reloaded, world.atlas().classes()),
+        CreationVerdict::Locked {
+            required: or_abort(Level::new(250))
+        }
+    );
+}
+
+// A single large award can vault past several unlock thresholds at once: the
+// real leveling service collapses the multi-level jump into one reached level,
+// and the account earns every gated class at or below it in one composed step —
+// here Magic Gladiator (220) and Dark Lord (250) together. This exercises the
+// real `apply_growth` → multi-threshold-unlock composition the single-gate flow
+// above does not, and confirms the creation gate reads only the account's
+// earned-set (never the roster), so the unlock cannot be revoked by any later
+// change to the earning character (the permanent-unlock pin, 2026-07-19).
+#[test]
+fn sim_gate_a_multi_level_award_earns_both_gated_classes_in_one_step() {
+    let mut world = World::new(2024, MapNumber(0));
+
+    // The account's only character: a Dark Knight one level below the first gate.
+    let knight = world.seat_character(dark_knight_in_band(
+        world.atlas(),
+        219,
+        0,
+        MapNumber(0),
+        tile(10, 10),
+    ));
+
+    // One award large enough to vault from 219 past the Dark Lord gate at 250.
+    // `apply_growth` returns a single `LevelsGained` carrying the top level
+    // reached — the server-decided output, never a client claim.
+    let total_for_255 = or_abort(world.atlas().exp_curve().level(255))
+        .total_to_hold()
+        .0;
+    let gained = Exp(total_for_255 - world.character(knight).experience().0);
+    let growth = world.apply_growth(knight, gained);
+    let reached = match growth.first() {
+        Some(GrowthEvent::LevelsGained { reached, .. }) => *reached,
+        Some(GrowthEvent::MaxLevelReached) | None => {
+            panic!("the award crosses past level 250")
+        }
+    };
+    assert_eq!(reached.get(), 255);
+
+    // Both gated classes are earned in this one composed step, announced in
+    // roster order (Magic Gladiator @220 before Dark Lord @250).
+    let (earned, unlocks) =
+        unlock_classes_for_level(UnlockedClasses::empty(), reached, world.atlas().classes());
+    assert_eq!(
+        unlocks,
+        vec![
+            ClassUnlocked {
+                class: CharacterClass::MagicGladiator,
+            },
+            ClassUnlocked {
+                class: CharacterClass::DarkLord,
+            },
+        ]
+    );
+
+    // The earned-set survives the paper-host persist seam, and the gate — a
+    // pure function of the earned-set and class data, never of any character —
+    // opens both classes on reload.
+    let reloaded = persist(earned);
+    assert_eq!(
+        creation_verdict(
+            CharacterClass::MagicGladiator,
+            &reloaded,
+            world.atlas().classes()
+        ),
+        CreationVerdict::Creatable
+    );
+    assert_eq!(
+        creation_verdict(CharacterClass::DarkLord, &reloaded, world.atlas().classes()),
+        CreationVerdict::Creatable
+    );
 }
