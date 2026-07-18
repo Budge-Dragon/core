@@ -26,3 +26,8 @@ pub mod entities;
 pub mod events;
 pub mod rng;
 pub mod services;
+
+/// The RNG injection trait crate, re-exported so a host implements the exact
+/// `rand_core` version the core consumes — the seam is a core-owned path
+/// (`mu_core::rand_core`), never a host's independently-pinned dependency.
+pub use rand_core;
