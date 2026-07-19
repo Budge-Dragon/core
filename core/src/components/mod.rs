@@ -5,6 +5,7 @@
 //! only; behavior lives in [`crate::services`].
 
 pub mod active_effect;
+pub mod appearance;
 pub mod bonus;
 pub mod character_slot;
 pub mod class;

@@ -6,6 +6,7 @@
 //! [`crate::events`] — they never log, block, or touch the host.
 
 pub mod account;
+pub mod appearance;
 pub mod chance;
 pub mod combat;
 pub mod consume;
