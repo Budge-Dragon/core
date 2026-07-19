@@ -81,3 +81,22 @@ does **not** rate-limit for you — duties 1–2 are reducer code you write.
   mini-game waiver), no core change.
 - **Name-color / murderer marker** is a host/view concern — core owns the `Reputation`
   state; the host maps the stage to a name color.
+
+### Account progression (W-ACCOUNT)
+- **`reached` is server-decided, never a client byte.** Call
+  `unlock_classes_for_level(unlocked, reached, classes)` only with the `Level` core
+  returned as `GrowthEvent::LevelsGained { reached }` from `apply_experience` — never a
+  client-claimed level. Core is clockless and roster-less; it cannot verify the
+  provenance, exactly as `CombatProfile.kind` is stamped "from the entity type… never
+  from client bytes". A forged level would unlock a class unearned.
+- **The earned-set is written ONLY through the service.** Persist the `UnlockedClasses`
+  the service returns; reconstitute it at account load through its parse gate; never
+  write it from a client claim. It is the sole authority the creation gate reads. Compose
+  it after every level-up: `apply_experience` → on `LevelsGained { reached }` →
+  `unlock_classes_for_level` → persist the returned set + deliver each `ClassUnlocked`.
+- **Gate every create-character request with core.** Parse the requested class at the
+  boundary (raw class code → `CharacterClass` via `ClassTable::class_by_number`), then
+  call `creation_verdict(class, &unlocked, classes)` and create **only** on `Creatable`.
+  This is the authoritative enforcement OpenMU left client-side — do not trust a client's
+  "I may create this class". The host still owns slot allocation, name validation, and
+  seeding stats/inventory/spawn; core owns only the legality verdict.

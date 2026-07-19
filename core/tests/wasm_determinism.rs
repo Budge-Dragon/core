@@ -1030,3 +1030,59 @@ fn pk_transitions_draw_no_rng_so_a_kill_stream_is_identical_across_targets() {
     // strike stream, on native and wasm alike.
     assert_eq!(bare.next_u64(), with_pk.next_u64());
 }
+
+// --- W-ACCOUNT: the RNG-free class-unlock step reproduces byte-identically -----
+// --- across targets — same inputs yield the same earned-set and the same event -
+// --- order (the service takes no generator; the roster order is deterministic). -
+
+use mu_core::components::class::CharacterClass;
+use mu_core::components::units::Level as AccountLevel;
+use mu_core::components::unlocked_classes::UnlockedClasses;
+use mu_core::data::classes::{ClassRecord, ClassTable};
+use mu_core::data::common::DataFile;
+use mu_core::events::account::ClassUnlocked;
+use mu_core::services::account::unlock_classes_for_level;
+
+/// The real shipped class table, embedded at compile time so the test needs no
+/// runtime filesystem (it runs under wasmtime), reconstituted through the same
+/// parse gate a host loads it by.
+fn embedded_classes() -> ClassTable {
+    let file: DataFile<ClassRecord> = or_abort(serde_json::from_str(include_str!(
+        "../../data/classes.json"
+    )));
+    or_abort(ClassTable::try_from(file.records))
+}
+
+#[test]
+fn unlock_classes_for_level_is_identical_across_targets() {
+    let classes = embedded_classes();
+    let reached = or_abort(AccountLevel::new(251));
+    let run = || unlock_classes_for_level(UnlockedClasses::empty(), reached, &classes);
+    let (set_a, events_a) = run();
+    let (set_b, events_b) = run();
+
+    // Same inputs, no seed: identical earned-set and identical announcement order.
+    assert_eq!(
+        or_abort(serde_json::to_string(&set_a)),
+        or_abort(serde_json::to_string(&set_b))
+    );
+    assert_eq!(events_a, events_b);
+
+    // The fixed 251 crossing pins the exact earned classes and their order,
+    // byte-for-byte on native and wasm alike: Magic Gladiator then Dark Lord.
+    assert_eq!(
+        events_a,
+        vec![
+            ClassUnlocked {
+                class: CharacterClass::MagicGladiator,
+            },
+            ClassUnlocked {
+                class: CharacterClass::DarkLord,
+            },
+        ]
+    );
+    assert_eq!(
+        or_abort(serde_json::to_string(&set_a)),
+        r#"["magic_gladiator","dark_lord"]"#
+    );
+}
