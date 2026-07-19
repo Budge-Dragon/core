@@ -98,5 +98,23 @@ does **not** rate-limit for you — duties 1–2 are reducer code you write.
   boundary (raw class code → `CharacterClass` via `ClassTable::class_by_number`), then
   call `creation_verdict(class, &unlocked, classes)` and create **only** on `Creatable`.
   This is the authoritative enforcement OpenMU left client-side — do not trust a client's
-  "I may create this class". The host still owns slot allocation, name validation, and
-  seeding stats/inventory/spawn; core owns only the legality verdict.
+  "I may create this class".
+
+### Character creation (W-CREATE)
+The create-character flow, in order:
+- **Gate first (both host-enforced against core facts):** creatability — `creation_verdict`
+  must be `Creatable` (above); capacity — the account's current character count must be
+  `< CharacterSlot::CAP` (core owns the number = 5; the host holds the roster and does the
+  count, refusing `AccountFull` when full). Core takes no count.
+- **Validate the name** (charset/length + uniqueness) and **allocate the free slot** — host
+  bookkeeping; core stores neither.
+- **Then call `create_character(class, atlas, rng)`** — core seeds the whole fresh
+  character: level 1, the class's starting stats, full vitals at the class formula, a
+  walkable home-town spawn tile, and the worn starter kit. It returns a `CreatedCharacter
+  { character, equipment }`. (Core now owns seeding — this supersedes the earlier "host
+  seeds stats/spawn" note.)
+- **Persist the two returned values** (`character` reloads through its `RawCharacter` gate;
+  `equipment` through `reconcile_equipment`) and **mint the empty inventory bag** yourself —
+  it is deliberately absent from `CreatedCharacter` (every class starts with the same empty
+  bag; the starter items are all worn). Stamp the create date, store the client key-config
+  blob, and deliver the created-character view. Rate/frequency limiting stays a host duty.

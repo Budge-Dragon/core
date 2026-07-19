@@ -41,7 +41,7 @@ use crate::events::travel::{
     WarpTravelOutcome,
 };
 use crate::services::consume::{ConsumeLookup, item_consume_effect};
-use crate::services::movement::{resolve_arrival, resolve_spawn_gate_landing};
+use crate::services::movement::{resolve_arrival, resolve_town_landing};
 use crate::services::ratio::{nonzero, scale_ratio};
 
 /// The level bar a character of the given class actually faces at a gate
@@ -330,11 +330,7 @@ pub fn use_town_portal(
             return (character, whole, TownPortalOutcome::NoScroll);
         }
     };
-    let (gate, env) = match atlas.town_gate_for_map(character.placement().map) {
-        Some(destination) => destination,
-        None => atlas.fallback_town_gate(),
-    };
-    let placement = resolve_spawn_gate_landing(gate, env, rng);
+    let placement = resolve_town_landing(atlas, character.placement().map, rng);
     (
         character.arrived_at(placement),
         inventory,

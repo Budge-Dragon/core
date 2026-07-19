@@ -29,6 +29,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
+use mu_core::components::class::CharacterClass;
 use mu_core::components::collections::OneOrMore;
 use mu_core::components::combat_profile::{CombatTarget, TargetKind};
 use mu_core::components::drop_claim::PickerStanding;
@@ -96,6 +97,7 @@ use mu_core::events::travel::{
 };
 use mu_core::services::combat::StrikeBasis;
 use mu_core::services::consume::use_consumable;
+use mu_core::services::creation::create_character;
 use mu_core::services::death::{DeathPenalty, combat_death_penalty, resolve_death, respawn};
 use mu_core::services::effects::{
     ApplicableBuff, advance_effects, apply_ailment, apply_buff, mobility,
@@ -397,6 +399,22 @@ impl World {
         self.characters.push(persist(character));
         self.inventories.push(persist(bag()));
         self.equipment.push(persist(Equipment::empty()));
+        index
+    }
+
+    /// Creates a fresh character of `class` through the core [`create_character`]
+    /// service over the world's held atlas and seeded stream (seam: character
+    /// creation), then seats the returned character AND its worn starter kit at
+    /// aligned indices through the persist seam — its empty bag alongside — and
+    /// returns the shared index. The host mints the bag; core mints the worn set,
+    /// so the two live sets stay aligned by identity exactly as
+    /// [`Self::seat_character`] keeps them.
+    pub fn create_and_seat_character(&mut self, class: CharacterClass) -> usize {
+        let created = create_character(class, &self.atlas, &mut self.rng);
+        let index = self.characters.len();
+        self.characters.push(persist(created.character));
+        self.inventories.push(persist(bag()));
+        self.equipment.push(persist(created.equipment));
         index
     }
 

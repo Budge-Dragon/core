@@ -11,35 +11,35 @@
   "review_flagged": [
     {
       "class": "dark_wizard",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
       "class": "soul_master",
-      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on dark_wizard"
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; fruit divisor as on dark_wizard"
     },
     {
       "class": "dark_knight",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
       "class": "blade_knight",
-      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on dark_knight"
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; fruit divisor as on dark_knight"
     },
     {
       "class": "fairy_elf",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
       "class": "muse_elf",
-      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on fairy_elf"
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; fruit divisor as on fairy_elf"
     },
     {
       "class": "magic_gladiator",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~100); warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction)"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~100); warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction)"
     },
     {
       "class": "dark_lord",
-      "review": "1.0-era backport; warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction); fruit divisor encodes OpenMU strategy (cap ~115); starting ability 1 is an OpenMU initializer seed"
+      "review": "1.0-era backport; warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction); fruit divisor encodes OpenMU strategy (cap ~115)"
     }
   ],
   "gaps": [
@@ -49,9 +49,10 @@
   ],
   "notes": [
     "no 'global' pseudo-record: v2 classes.json is a plain 8-record DataFile; shared behaviour is service code, not a data record.",
-    "base stats/vitals/points scraped verbatim from the shared class initializers (CreateStatAttributeDefinition); gating/home-map/warp/fruit verified against source (LevelRequirementByCreation 220/250, HomeMap Lorencia 0 / Noria 3, LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).",
-    "second tiers reuse their base line's creator, so creation values mirror the base tier - honest source fact carried under s6 provenance, not a copy-generation device.",
-    "warp 34% integer reduction re-expressed as the authentic 2/3 fraction (rounding direction re-sourced under W-SRC); starting ability 1, fruit divisor and the level-150 evolution flagged OpenMU defaults on every affected record.",
+    "base stats/points scraped verbatim from the shared class initializers (CreateStatAttributeDefinition); the worn starter kit is the authentic per-class AddInitialItem set (Rings of Warrior omitted by producer pin); gating/home-map/warp/fruit verified against source (LevelRequirementByCreation 220/250, HomeMap Lorencia 0 / Noria 3, LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).",
+    "no starting-vitals literals are carried: the class-formula derived-stat services are the single source of a fresh character's full pools, so the OpenMU initializer-seed vitals (ability 1) would be unconsumed non-play data.",
+    "second tiers reuse their base line's creator, so creation values and starter kit mirror the base tier - honest source fact carried under s6 provenance, not a copy-generation device.",
+    "warp 34% integer reduction re-expressed as the authentic 2/3 fraction (rounding direction re-sourced under W-SRC); fruit divisor and the level-150 evolution flagged OpenMU defaults on every affected record.",
     "unlock levels 220/250 and evolution level 150 are authentic; the v1 doc-comment 'account level' error is corrected - it is the level of another character on the account."
   ]
 }

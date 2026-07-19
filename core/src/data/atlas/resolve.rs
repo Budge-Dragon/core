@@ -7,10 +7,15 @@
 use core::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::components::class::CharacterClass;
 use crate::components::collections::{EmptyCollection, OneOrMore};
+use crate::components::item_instance::{
+    CraftedAugment, Durability, ItemInstance, LuckRoll, RarityRoll, SkillRoll,
+};
 use crate::components::spatial::WorldPos;
 use crate::components::tile::{TerrainGrid, TileFacing};
 use crate::data::chaos_mixes::{ChaosMix, ChaosRecipe, UpgradeTarget};
+use crate::data::classes::{ClassRecord, ClassTable};
 use crate::data::common::{GateNumber, ItemRef, MapNumber, MonsterNumber, SkillNumber};
 use crate::data::gates_warps::{EnterGate, GateWarpRecord, SpawnGate, TargetGate, Warp};
 use crate::data::item_definitions::{ItemDefinition, ItemKind};
@@ -24,7 +29,8 @@ use crate::data::terrain::MapTerrain;
 use super::AtlasError;
 use super::views::{
     Landing, ResolvedEnterGate, ResolvedOutput, ResolvedRecipe, ResolvedShelfEntry, ResolvedShop,
-    ResolvedSpawn, ResolvedSpawnGate,
+    ResolvedSpawn, ResolvedSpawnGate, ResolvedStartingKit, ResolvedStartingKitEntry,
+    StartingKitTable,
 };
 
 /// The gate records partitioned by kind, with per-file identity sets proven
@@ -435,6 +441,64 @@ fn claim_footprint(
         }
     }
     Ok(())
+}
+
+/// Resolves every class's worn starter kit against the item catalog, RETAINING
+/// the join as a plain starter [`ItemInstance`] per entry (the [`resolve_spawns`]
+/// precedent). A kit reference naming no item is an
+/// [`AtlasError::StartingKitItemMissing`] — the class-creation twin of the
+/// respawn `respawn_map`→gate check — so the resolved table is total and the
+/// creation assembler seats a worn set with no `Option`. Keyed off the total
+/// [`ClassTable`], so every one of the eight roster classes carries a kit.
+pub(super) fn resolve_starting_kits(
+    classes: &ClassTable,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<StartingKitTable, AtlasError> {
+    Ok(StartingKitTable {
+        dark_wizard: resolve_kit(classes.record(CharacterClass::DarkWizard), items)?,
+        soul_master: resolve_kit(classes.record(CharacterClass::SoulMaster), items)?,
+        dark_knight: resolve_kit(classes.record(CharacterClass::DarkKnight), items)?,
+        blade_knight: resolve_kit(classes.record(CharacterClass::BladeKnight), items)?,
+        fairy_elf: resolve_kit(classes.record(CharacterClass::FairyElf), items)?,
+        muse_elf: resolve_kit(classes.record(CharacterClass::MuseElf), items)?,
+        magic_gladiator: resolve_kit(classes.record(CharacterClass::MagicGladiator), items)?,
+        dark_lord: resolve_kit(classes.record(CharacterClass::DarkLord), items)?,
+    })
+}
+
+/// Resolves one class record's starter kit: joins each entry's item reference to
+/// its definition and builds a plain starter instance from it. A missing
+/// reference is the error, tagged with the class and the dangling identity.
+fn resolve_kit(
+    record: &ClassRecord,
+    items: &BTreeMap<ItemRef, ItemDefinition>,
+) -> Result<ResolvedStartingKit, AtlasError> {
+    let mut entries = Vec::new();
+    for entry in record.starting_kit.iter() {
+        let def = items
+            .get(&entry.item)
+            .ok_or(AtlasError::StartingKitItemMissing {
+                class: record.class,
+                item: entry.item,
+            })?;
+        entries.push(ResolvedStartingKitEntry {
+            slot: entry.slot,
+            item_instance: ItemInstance {
+                item: entry.item,
+                level: entry.item_level,
+                roll: RarityRoll::Normal,
+                normal_option: None,
+                luck: LuckRoll::Plain,
+                skill: SkillRoll::NoSkill,
+                // The definition's `Dur` column is the full base gauge (the
+                // round count for ammunition), so a starter item is at full
+                // durability of its own definition.
+                durability: Durability::full(def.durability),
+                augment: CraftedAugment::None,
+            },
+        });
+    }
+    Ok(ResolvedStartingKit::new(entries))
 }
 
 /// The stock gate a definition's kind admits — the kind axis of the

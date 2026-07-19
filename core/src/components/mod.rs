@@ -6,6 +6,7 @@
 
 pub mod active_effect;
 pub mod bonus;
+pub mod character_slot;
 pub mod class;
 pub mod collections;
 pub mod combat_profile;

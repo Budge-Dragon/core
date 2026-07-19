@@ -18,7 +18,6 @@ use rand_core::RngCore;
 use crate::components::active_effect::ActiveEffects;
 use crate::components::combat_profile::TargetKind;
 use crate::components::life::LifeState;
-use crate::components::pool::Pool;
 use crate::components::reputation::{PkStage, Reputation, Standing};
 use crate::components::units::{
     CarriedZen, DebitOutcome, DurationMs, Exp, Level, Tick, TickDuration, Zen,
@@ -27,7 +26,7 @@ use crate::components::vitals::Vitals;
 use crate::data::atlas::Atlas;
 use crate::entities::character::Character;
 use crate::events::death::{DeathEvent, Respawned};
-use crate::services::movement::resolve_spawn_gate_landing;
+use crate::services::movement::resolve_town_landing;
 use crate::services::profile::character_profile;
 use crate::services::ratio::{nonzero_u64, scale_ratio_u64};
 
@@ -149,18 +148,10 @@ pub fn respawn(
     match character.life() {
         LifeState::Alive => (character, None),
         LifeState::Dead { .. } => {
-            let (gate, env) = match atlas.town_gate_for_map(character.placement().map) {
-                Some(destination) => destination,
-                None => atlas.fallback_town_gate(),
-            };
-            let placement = resolve_spawn_gate_landing(gate, env, rng);
+            let placement = resolve_town_landing(atlas, character.placement().map, rng);
 
             let (_profile, maxima) = character_profile(&character);
-            let refilled = Vitals {
-                health: Pool::full(maxima.max_health),
-                mana: Pool::full(maxima.max_mana),
-                ability: Pool::full(maxima.max_ability),
-            };
+            let refilled = Vitals::full(maxima);
 
             let revived = character
                 .arrived_at(placement)

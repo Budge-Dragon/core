@@ -6354,3 +6354,67 @@ fn sim_gate_a_multi_level_award_earns_both_gated_classes_in_one_step() {
         CreationVerdict::Creatable
     );
 }
+
+// --- W-CREATE standing sixth gate: create → seat → enter world, through the ---
+// --- persist seam. The world calls the core `create_character` over its held --
+// --- Atlas and seeded stream and seats the returned character AND its worn ----
+// --- starter kit at aligned indices; the seated Dark Knight enters world ------
+// --- Alive at level 1 on Lorencia wielding its Small Axe, every seated value --
+// --- a byte-for-byte survivor of the boundary. -------------------------------
+
+#[test]
+fn sim_gate_a_created_dark_knight_enters_world_on_lorencia_wielding_its_small_axe() {
+    // The Small Axe (Axes group 1, number 0) — the Dark Knight's authentic
+    // starter weapon, seated in the left hand by construction.
+    const SMALL_AXE: ItemRef = ItemRef {
+        group: 1,
+        number: 0,
+    };
+
+    let mut world = World::new(7, MapNumber(0));
+
+    // The world builds the fresh character through the core creation seam over
+    // its own Atlas and stream, then seats the returned character, its empty
+    // bag, and its worn starter kit at one aligned index through the persist
+    // seam — exactly the create → seat host flow.
+    let knight = world.create_and_seat_character(CharacterClass::DarkKnight);
+
+    // The seated character enters world already playable: alive, level 1, and
+    // standing on its Lorencia home map.
+    let seated = world.character(knight);
+    assert_eq!(seated.life(), LifeState::Alive, "enters alive");
+    assert_eq!(seated.level(), Level::MIN, "enters at level 1");
+    assert_eq!(
+        seated.placement().map,
+        MapNumber(0),
+        "enters world on Lorencia"
+    );
+
+    // The seated worn set holds the Small Axe in the left hand at full
+    // durability — a fresh Dark Knight spawns already wielding its starter.
+    let axe = or_abort(
+        world
+            .equipment(knight)
+            .get(EquipmentSlot::LeftHand)
+            .ok_or("the created knight wields its small axe in the left hand"),
+    );
+    assert_eq!(axe.item, SMALL_AXE, "wields the Small Axe");
+    assert_eq!(
+        axe.durability.current(),
+        axe.durability.max(),
+        "the starter axe is at full durability"
+    );
+
+    // Every seated value is a byte-for-byte survivor of the persist boundary:
+    // re-persisting the seated character and worn set is a canonical fixpoint.
+    assert_eq!(
+        wire(world.character(knight)),
+        wire(&persist(world.character(knight).clone())),
+        "the seated character is a persist fixpoint"
+    );
+    assert_eq!(
+        wire(world.equipment(knight)),
+        wire(&persist(world.equipment(knight).clone())),
+        "the seated worn kit is a persist fixpoint"
+    );
+}

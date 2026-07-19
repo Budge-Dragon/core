@@ -13,6 +13,7 @@ mod views;
 use core::num::NonZeroU16;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::components::class::CharacterClass;
 use crate::components::collections::{EmptyCollection, OneOrMore};
 use crate::components::spatial::WorldPos;
 use crate::components::tile::{TerrainGrid, TileArea};
@@ -42,8 +43,8 @@ use crate::data::terrain::MapTerrain;
 
 pub use crate::data::drop_pool::DropPool;
 pub use views::{
-    EnterGateView, Landing, MapHandle, ResolvedOutput, ResolvedRecipe, ShelfEntryView, ShopView,
-    SpawnEntry, SpawnGateView, WarpView,
+    EnterGateView, Landing, MapHandle, ResolvedOutput, ResolvedRecipe, ResolvedStartingKit,
+    ResolvedStartingKitEntry, ShelfEntryView, ShopView, SpawnEntry, SpawnGateView, WarpView,
 };
 
 use check::{
@@ -54,9 +55,9 @@ use check::{
 use resolve::{
     GatePartition, index_items, index_maps, index_monsters, index_skills, index_terrain,
     resolve_chaos_recipes, resolve_enter_gates, resolve_shops, resolve_spawn_gates, resolve_spawns,
-    resolve_warps, take_single,
+    resolve_starting_kits, resolve_warps, take_single,
 };
-use views::{ResolvedEnterGate, ResolvedShop, ResolvedSpawn, ResolvedSpawnGate};
+use views::{ResolvedEnterGate, ResolvedShop, ResolvedSpawn, ResolvedSpawnGate, StartingKitTable};
 
 /// Respawn fallback map (Lorencia); the Atlas proves it carries a spawn gate.
 const FALLBACK_MAP: MapNumber = MapNumber(0);
@@ -120,6 +121,7 @@ pub struct Atlas {
     monsters: BTreeMap<MonsterNumber, MonsterDefinition>,
     skills: BTreeMap<SkillNumber, Skill>,
     classes: ClassTable,
+    starting_kits: StartingKitTable,
     exp_curve: ExpCurve,
     ancient_roster: AncientRoster,
     drop_config: DropConfig,
@@ -173,6 +175,7 @@ impl Atlas {
         check_classes(&data.classes.records, &map_numbers)?;
 
         let classes = ClassTable::try_from(data.classes.records).map_err(AtlasError::ClassTable)?;
+        let starting_kits = resolve_starting_kits(&classes, &items)?;
         let exp_table = take_single(data.exp_tables.records)
             .map_err(|found| AtlasError::ExpTableNotSingle { found })?;
         let exp_curve = ExpCurve::parse(exp_table).map_err(AtlasError::ExpCurve)?;
@@ -227,6 +230,7 @@ impl Atlas {
             monsters,
             skills,
             classes,
+            starting_kits,
             exp_curve,
             ancient_roster,
             drop_config,
@@ -419,6 +423,16 @@ impl Atlas {
     #[must_use]
     pub fn classes(&self) -> &ClassTable {
         &self.classes
+    }
+
+    /// The resolved worn starter kit for a class — a total accessor over the
+    /// closed roster, its every item reference joined to a plain starter
+    /// [`ItemInstance`] at parse. Empty for Dark Wizard (it wears nothing). The
+    /// character-creation service folds this into the fresh character's worn set
+    /// with no `Option`.
+    #[must_use]
+    pub fn starting_kit(&self, class: CharacterClass) -> &ResolvedStartingKit {
+        self.starting_kits.for_class(class)
     }
 
     /// The experience curve — level cap and per-level thresholds, proven at
@@ -853,6 +867,13 @@ pub enum AtlasError {
         /// The anchor of the over-cap entry.
         slot: ShelfSlot,
     },
+    /// A class's starter kit names an item with no definition.
+    StartingKitItemMissing {
+        /// The class whose kit carries the dangling reference.
+        class: CharacterClass,
+        /// The unresolved item identity.
+        item: ItemRef,
+    },
     /// The class records do not form a complete, unique roster.
     ClassTable(ClassTableError),
     /// The experience curve is malformed.
@@ -998,6 +1019,9 @@ impl core::fmt::Display for AtlasError {
                     "shop {npc:?} shelf entry at {slot:?} stacks past its cap"
                 )
             }
+            Self::StartingKitItemMissing { class, item } => {
+                write!(f, "class {class:?} starter kit names unknown item {item:?}")
+            }
             Self::ClassTable(err) => write!(f, "class table: {err}"),
             Self::ExpCurve(err) => write!(f, "experience curve: {err}"),
             Self::AncientRoster(err) => write!(f, "ancient roster: {err}"),
@@ -1077,7 +1101,8 @@ impl core::error::Error for AtlasError {
             | Self::DuplicateMiniGameKey { .. }
             | Self::MiniGameEntranceWithoutWalkableLanding { .. }
             | Self::MiniGameEntranceWithoutTownGate { .. }
-            | Self::MiniGameWaveMonsterNotFighting { .. } => None,
+            | Self::MiniGameWaveMonsterNotFighting { .. }
+            | Self::StartingKitItemMissing { .. } => None,
         }
     }
 }

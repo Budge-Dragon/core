@@ -49,8 +49,23 @@ struct Attributes {
 /// maxima are ignored — the class formula is authoritative on the compute path.
 #[must_use]
 pub fn character_profile(character: &Character) -> (CombatProfile, VitalMaxima) {
-    let attributes = attributes_of(character.level(), character.stats());
-    match character.class() {
+    profile_of(character.class(), character.level(), &character.stats())
+}
+
+/// Derives the combat profile and class-formula vital capacities from the raw
+/// `(class, level, stats)` triple, with no [`Character`] in hand — the seam
+/// character creation reads to compute a brand-new character's full vital maxima
+/// before any vitals exist to fabricate. [`character_profile`] is the thin
+/// read-through for a live character; both share this one class-formula dispatch,
+/// so a fresh character and a respawned one derive maxima from a single source.
+#[must_use]
+pub(crate) fn profile_of(
+    class: CharacterClass,
+    level: Level,
+    stats: &Stats,
+) -> (CombatProfile, VitalMaxima) {
+    let attributes = attributes_of(level, *stats);
+    match class {
         CharacterClass::DarkWizard | CharacterClass::SoulMaster => wizard_profile(&attributes),
         CharacterClass::DarkKnight | CharacterClass::BladeKnight => knight_profile(&attributes),
         CharacterClass::FairyElf | CharacterClass::MuseElf => elf_profile(&attributes),
