@@ -54,6 +54,24 @@ const WINGS_OF_SATAN: ItemRef = ItemRef {
     group: 12,
     number: 2,
 };
+/// Short Sword (0/1) — the Season 6 flags qualify every roster class including
+/// Magic Gladiator and Dark Lord; wear strength 60 at drop level 3.
+const STARTER_SHORT_SWORD: ItemRef = ItemRef {
+    group: 0,
+    number: 1,
+};
+/// Small Shield (6/0) — Season 6 `CreateShield(0, …, 1, 1, 1, 1, 1, 0, 0)`
+/// qualifies DW/DK/Elf/MG/DL; wear strength 70 at drop level 3.
+const STARTER_SMALL_SHIELD: ItemRef = ItemRef {
+    group: 6,
+    number: 0,
+};
+/// Skull Staff (5/0) — a group-5 staff stays wizard/MG-side; the Season 6 flags
+/// mark it darkWizard + magicGladiator, never darkLord.
+const SKULL_STAFF: ItemRef = ItemRef {
+    group: 5,
+    number: 0,
+};
 
 /// A fresh Normal instance of real item `id` at plus-`level`.
 fn item_at(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
@@ -303,4 +321,64 @@ fn a_real_level_gated_wing_compares_the_character_level_raw() {
         EquipmentSlot::Wings,
         &exact,
     ));
+}
+
+#[test]
+fn dark_lord_and_magic_gladiator_equip_their_authentic_starter_and_armor() {
+    // Regression guard for the class-provenance fix: qualification columns are
+    // sourced from the Season 6 item files, so Magic Gladiator and (especially)
+    // Dark Lord are no longer under-qualified. A level-1 Dark Lord and Magic
+    // Gladiator equip their authentic starter Short Sword and Small Shield and a
+    // representative Bronze Armor through the live gate — none is a ClassMismatch.
+    // Bars at Normal +0: Short Sword str (3·3·60)/100 + 20 = 25, Small Shield str
+    // (3·3·70)/100 + 20 = 26, Bronze Armor str (3·18·80)/100 + 20 = 63 / agi
+    // (3·18·20)/100 + 20 = 30 — a str-63/agi-30 wearer clears all three.
+    let atlas = real_atlas();
+    for class in [CharacterClass::DarkLord, CharacterClass::MagicGladiator] {
+        let who = wearer(class, 1, 63, 30);
+        assert_equipped(&try_equip(
+            &atlas,
+            item_at(&atlas, STARTER_SHORT_SWORD, 0),
+            EquipmentSlot::RightHand,
+            &who,
+        ));
+        assert_equipped(&try_equip(
+            &atlas,
+            item_at(&atlas, STARTER_SMALL_SHIELD, 0),
+            EquipmentSlot::LeftHand,
+            &who,
+        ));
+        assert_equipped(&try_equip(
+            &atlas,
+            item_at(&atlas, BRONZE_ARMOR, 0),
+            EquipmentSlot::Armor,
+            &who,
+        ));
+    }
+}
+
+#[test]
+fn a_real_staff_stays_wizard_side_and_refuses_a_dark_lord() {
+    // The fix is authentic per item, never a blanket Dark Lord grant: a group-5
+    // staff carries no darkLord flag in the Season 6 data. A Dark Wizard wields
+    // the Skull Staff (str bar (3·6·40)/100 + 20 = 27); a fully-statted Dark Lord
+    // is refused with ClassMismatch — the class gate rejects before any wear bar.
+    let atlas = real_atlas();
+    let wizard = wearer(CharacterClass::DarkWizard, 10, 60, 60);
+    assert_equipped(&try_equip(
+        &atlas,
+        item_at(&atlas, SKULL_STAFF, 0),
+        EquipmentSlot::RightHand,
+        &wizard,
+    ));
+    let dark_lord = wearer(CharacterClass::DarkLord, 400, 300, 300);
+    assert_rejected(
+        &try_equip(
+            &atlas,
+            item_at(&atlas, SKULL_STAFF, 0),
+            EquipmentSlot::RightHand,
+            &dark_lord,
+        ),
+        EquipRejection::ClassMismatch,
+    );
 }

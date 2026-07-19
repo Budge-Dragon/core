@@ -20,17 +20,13 @@
         "vitality": 15,
         "energy": 30
       },
-      "starting_vitals": {
-        "health": 60,
-        "mana": 60,
-        "ability": 1
-      },
+      "starting_kit": [],
       "fruit_points_divisor": 400,
       "warp_requirement": {
         "kind": "full"
       },
       "source_version": "075",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
       "class": "soul_master",
@@ -50,17 +46,13 @@
         "vitality": 15,
         "energy": 30
       },
-      "starting_vitals": {
-        "health": 60,
-        "mana": 60,
-        "ability": 1
-      },
+      "starting_kit": [],
       "fruit_points_divisor": 400,
       "warp_requirement": {
         "kind": "full"
       },
       "source_version": "s6",
-      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on dark_wizard"
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; fruit divisor as on dark_wizard"
     },
     {
       "class": "dark_knight",
@@ -82,17 +74,22 @@
         "vitality": 25,
         "energy": 10
       },
-      "starting_vitals": {
-        "health": 110,
-        "mana": 20,
-        "ability": 1
-      },
+      "starting_kit": [
+        {
+          "item": {
+            "group": 1,
+            "number": 0
+          },
+          "item_level": 0,
+          "slot": "left_hand"
+        }
+      ],
       "fruit_points_divisor": 400,
       "warp_requirement": {
         "kind": "full"
       },
       "source_version": "075",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
       "class": "blade_knight",
@@ -112,17 +109,22 @@
         "vitality": 25,
         "energy": 10
       },
-      "starting_vitals": {
-        "health": 110,
-        "mana": 20,
-        "ability": 1
-      },
+      "starting_kit": [
+        {
+          "item": {
+            "group": 1,
+            "number": 0
+          },
+          "item_level": 0,
+          "slot": "left_hand"
+        }
+      ],
       "fruit_points_divisor": 400,
       "warp_requirement": {
         "kind": "full"
       },
       "source_version": "s6",
-      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on dark_knight"
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; fruit divisor as on dark_knight"
     },
     {
       "class": "fairy_elf",
@@ -144,17 +146,30 @@
         "vitality": 20,
         "energy": 15
       },
-      "starting_vitals": {
-        "health": 80,
-        "mana": 30,
-        "ability": 1
-      },
+      "starting_kit": [
+        {
+          "item": {
+            "group": 4,
+            "number": 15
+          },
+          "item_level": 0,
+          "slot": "left_hand"
+        },
+        {
+          "item": {
+            "group": 4,
+            "number": 0
+          },
+          "item_level": 0,
+          "slot": "right_hand"
+        }
+      ],
       "fruit_points_divisor": 400,
       "warp_requirement": {
         "kind": "full"
       },
       "source_version": "075",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level curve pending); the level-150 evolution is 1.0-era content backported from the s6 dataset"
     },
     {
       "class": "muse_elf",
@@ -174,17 +189,30 @@
         "vitality": 20,
         "energy": 15
       },
-      "starting_vitals": {
-        "health": 80,
-        "mana": 30,
-        "ability": 1
-      },
+      "starting_kit": [
+        {
+          "item": {
+            "group": 4,
+            "number": 15
+          },
+          "item_level": 0,
+          "slot": "left_hand"
+        },
+        {
+          "item": {
+            "group": 4,
+            "number": 0
+          },
+          "item_level": 0,
+          "slot": "right_hand"
+        }
+      ],
       "fruit_points_divisor": 400,
       "warp_requirement": {
         "kind": "full"
       },
       "source_version": "s6",
-      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; starting ability 1 is an OpenMU initializer seed; fruit divisor as on fairy_elf"
+      "review": "1.0-era backport: second tiers are absent from the 075/095d datasets; creation values mirror the base tier; fruit divisor as on fairy_elf"
     },
     {
       "class": "magic_gladiator",
@@ -205,11 +233,24 @@
         "vitality": 26,
         "energy": 26
       },
-      "starting_vitals": {
-        "health": 110,
-        "mana": 60,
-        "ability": 1
-      },
+      "starting_kit": [
+        {
+          "item": {
+            "group": 0,
+            "number": 1
+          },
+          "item_level": 0,
+          "slot": "left_hand"
+        },
+        {
+          "item": {
+            "group": 6,
+            "number": 0
+          },
+          "item_level": 0,
+          "slot": "right_hand"
+        }
+      ],
       "fruit_points_divisor": 700,
       "warp_requirement": {
         "kind": "fraction",
@@ -217,7 +258,7 @@
         "denominator": 3
       },
       "source_version": "095d",
-      "review": "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~100); warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction)"
+      "review": "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~100); warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction)"
     },
     {
       "class": "dark_lord",
@@ -239,11 +280,24 @@
         "energy": 15,
         "command": 25
       },
-      "starting_vitals": {
-        "health": 90,
-        "mana": 40,
-        "ability": 1
-      },
+      "starting_kit": [
+        {
+          "item": {
+            "group": 0,
+            "number": 1
+          },
+          "item_level": 0,
+          "slot": "left_hand"
+        },
+        {
+          "item": {
+            "group": 6,
+            "number": 0
+          },
+          "item_level": 0,
+          "slot": "right_hand"
+        }
+      ],
       "fruit_points_divisor": 500,
       "warp_requirement": {
         "kind": "fraction",
@@ -251,7 +305,7 @@
         "denominator": 3
       },
       "source_version": "s6",
-      "review": "1.0-era backport; warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction); fruit divisor encodes OpenMU strategy (cap ~115); starting ability 1 is an OpenMU initializer seed"
+      "review": "1.0-era backport; warp: authentic rule is 2/3 of the gate requirement, rounding direction pending classic verification (OpenMU encodes a 34% integer reduction); fruit divisor encodes OpenMU strategy (cap ~115)"
     }
   ]
 }

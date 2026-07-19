@@ -134,6 +134,86 @@ ALL_CLASSES = list(CLASS_ORDER)  # jewelry / transformation ring: every class
 
 
 # ---------------------------------------------------------------------------
+# authentic per-item class qualification (Season 6 flags)
+# ---------------------------------------------------------------------------
+
+# The 095d/075 datasets that supply every equippable's numeric stats predate
+# Magic Gladiator and (entirely) Dark Lord, so their CreateXxx overloads carry
+# no MG/DL qualification columns. VersionSeasonSix is the first dataset whose
+# item files carry the full per-class qualification tail for every equippable —
+# darkWizard, darkKnight, elf, magicGladiator, darkLord, summoner, rageFighter
+# (summoner/rageFighter are outside our roster). Class usability is therefore
+# sourced from S6 by {group, number} identity, while stats stay 095d/075.
+
+def _s6_class_flags():
+    """{(group, number): (dw, dk, elf, mg, dl)} from the S6 weapon/armor files.
+
+    Every S6 CreateXxx call uses the long overload whose last seven ints are the
+    per-class qualification levels; only the five roster classes are kept. The
+    int guard drops the commented-out `CreateArmor($1, $2, ...)` doc template the
+    call scraper also matches."""
+    idx = {}
+
+    def put(group, number, dw, dk, elf, mg, dl):
+        key, flags = (group, number), (dw, dk, elf, mg, dl)
+        if all(isinstance(x, int) for x in key + flags):
+            idx[key] = flags
+
+    wtext = read(SRC + "/VersionSeasonSix/Items/Weapons.cs")
+    for a in calls(wtext, "CreateWeapon"):  # 26-arg overload (arrows/bolts too)
+        if len(a) == 26:
+            put(a[0], a[1], a[19], a[20], a[21], a[22], a[23])
+
+    atext = read(SRC + "/VersionSeasonSix/Items/Armors.cs")
+    for a in calls(atext, "CreateShield"):  # 23-arg long overload
+        if len(a) == 23:
+            put(6, a[0], a[16], a[17], a[18], a[19], a[20])
+    for a in calls(atext, "CreateArmor"):   # 21-arg long overload; group=slot+5
+        if len(a) == 21 and isinstance(a[1], int):
+            put(a[1] + 5, a[0], a[14], a[15], a[16], a[17], a[18])
+    for a in calls(atext, "CreateGloves"):  # 15-arg long overload
+        if len(a) == 15:
+            put(10, a[0], a[9], a[10], a[11], a[12], a[13])
+    for a in calls(atext, "CreateBoots"):   # 19-arg long overload
+        if len(a) == 19:
+            put(11, a[0], a[12], a[13], a[14], a[15], a[16])
+    return idx
+
+
+S6_CLASS_FLAGS = _s6_class_flags()
+
+# Fail loud if S6 parsing ever drifts to nothing: an empty index would silently
+# route every equippable back to the retired 095d heuristic (the exact bug this
+# sourcing fixed) without any other self-check firing.
+assert S6_CLASS_FLAGS, (
+    "S6 class-flag index is empty — VersionSeasonSix CreateXxx parsing drifted "
+    "(arg-count/signature); every equippable would fall back to the retired "
+    "095d heuristic")
+
+# Every ItemKind whose class qualification is S6-sourced. The build_all guard
+# proves each emitted record of one of these kinds resolved against
+# S6_CLASS_FLAGS — a miss is a silent 095d-heuristic fallback.
+EQUIPPABLE_KINDS = frozenset((
+    "weapon", "bow", "crossbow", "staff", "arrows", "bolts",
+    "shield", "helm", "body_armor", "pants", "gloves", "boots"))
+
+
+def equip_classes(group, number, fallback):
+    """Authentic class qualification for an equippable {group, number}.
+
+    Prefers the Season 6 per-item flags (the only dataset carrying Magic
+    Gladiator / Dark Lord columns), threaded through `classes_from_levels`.
+    `fallback` is the caller's 095d/075-era list, used only for an equippable
+    with no S6 definition (none exist in the shipped catalog, but the branch
+    keeps a 095d-only item's qualification intact rather than dropping it)."""
+    flags = S6_CLASS_FLAGS.get((int(group), int(number)))
+    if flags is None:
+        return fallback
+    dw, dk, elf, mg, dl = flags
+    return classes_from_levels(dw=dw, dk=dk, elf=elf, mg=mg, dl=dl)
+
+
+# ---------------------------------------------------------------------------
 # record + shared-shape builders
 # ---------------------------------------------------------------------------
 
@@ -226,9 +306,9 @@ def build_weapons():
          agi_req, ene_req, vit_req, wizard, knight, elf) = a[:22]
         mg = a[22] if len(a) > 22 else 0
         version = "075" if (group, number) in in_075 else "095d"
-        classes = classes_from_levels(
+        classes = equip_classes(group, number, classes_from_levels(
             dw=wizard, dk=knight, elf=elf,
-            mg=1 if (wizard == 1 or knight == 1 or mg == 1) else 0)
+            mg=1 if (wizard == 1 or knight == 1 or mg == 1) else 0))
         worn = wear(level=lvl_req, strength=str_req, agility=agi_req,
                     vitality=vit_req, energy=ene_req)
 
@@ -265,7 +345,9 @@ def build_weapons():
         version = "075" if (group, number) in in_075 else "095d"
         kind_tag = "arrows" if number == 15 else "bolts"
         kind = {"kind": kind_tag,
-                "classes": classes_from_levels(dw=wizard, dk=knight, elf=elf)}
+                "classes": equip_classes(
+                    group, number,
+                    classes_from_levels(dw=wizard, dk=knight, elf=elf))}
         rows = ammo_base_rows[kind_tag]
         records.append(item(
             group, number, name, version, width=width, height=height,
@@ -304,7 +386,8 @@ def build_armors():
         kind = {"kind": "shield", "defense": defense,
                 "defense_rate": defense_rate}
         add_skill(kind, skill_no)
-        kind["classes"] = classes_from_levels(dw=dw, dk=dk, elf=elf)
+        kind["classes"] = equip_classes(
+            6, number, classes_from_levels(dw=dw, dk=dk, elf=elf))
         kind["wear"] = wear(strength=str_req, agility=agi_req)
         records.append(item(
             6, number, name, "075", width=width, height=height, drops=True,
@@ -318,7 +401,9 @@ def build_armors():
         # short CreateArmor overload: MG auto-qualifies on non-helm DW/DK gear
         mg = 1 if group != 7 and (dw == 1 or dk == 1) else 0
         kind = {"kind": ARMOR_KIND[group], "defense": defense,
-                "classes": classes_from_levels(dw=dw, dk=dk, elf=elf, mg=mg),
+                "classes": equip_classes(
+                    group, number,
+                    classes_from_levels(dw=dw, dk=dk, elf=elf, mg=mg)),
                 "wear": wear(strength=str_req, agility=agi_req)}
         records.append(item(
             group, number, name, "075", width=width, height=height, drops=True,
@@ -330,8 +415,11 @@ def build_armors():
          str_req, agi_req, dw, dk, elf) = a
         kind = {"kind": "gloves", "defense": defense,
                 "attack_speed": attack_speed,
-                "classes": classes_from_levels(
-                    dw=dw, dk=dk, elf=elf, mg=1 if (dw == 1 or dk == 1) else 0),
+                "classes": equip_classes(
+                    10, number,
+                    classes_from_levels(
+                        dw=dw, dk=dk, elf=elf,
+                        mg=1 if (dw == 1 or dk == 1) else 0)),
                 "wear": wear(strength=str_req, agility=agi_req)}
         records.append(item(
             10, number, name, "075", width=2, height=2, drops=True,
@@ -342,8 +430,11 @@ def build_armors():
         (number, slot, width, height, name, drop_level, defense, walk_speed,
          durability, str_req, agi_req, dw, dk, elf) = a
         kind = {"kind": "boots", "defense": defense,
-                "classes": classes_from_levels(
-                    dw=dw, dk=dk, elf=elf, mg=1 if (dw == 1 or dk == 1) else 0),
+                "classes": equip_classes(
+                    11, number,
+                    classes_from_levels(
+                        dw=dw, dk=dk, elf=elf,
+                        mg=1 if (dw == 1 or dk == 1) else 0)),
                 "wear": wear(strength=str_req, agility=agi_req)}
         records.append(item(
             11, number, name, "075", width=2, height=2, drops=True,
@@ -894,6 +985,15 @@ def build_all():
 
     ids = [(r["id"]["group"], r["id"]["number"]) for r in records]
     assert len(ids) == len(set(ids)), "duplicate item identity"
+
+    fell_back = [r for r in records if r["kind"] in EQUIPPABLE_KINDS
+                 and (r["id"]["group"], r["id"]["number"]) not in S6_CLASS_FLAGS]
+    assert not fell_back, (
+        "equippable(s) with no Season 6 class-flag entry — silently fell back to "
+        "the retired 095d heuristic: "
+        + ", ".join("%s (%d/%d)" % (r["name"], r["id"]["group"], r["id"]["number"])
+                    for r in fell_back))
+
     records.sort(key=lambda r: (r["id"]["group"], r["id"]["number"]))
     return records
 
@@ -941,14 +1041,15 @@ def main():
             "Box of Luck higher kinds (+1 Star of the Sacred Birth ... +11 Box of Kundun+4) are named in a 095d source comment but ship no drop data pre-S6; not backported",
             "2nd-wings chaos mix (and its use of Loch's Feather 13/14) -> chaos_mixes.json extractor",
             "Cape of Lord (13/30) is backported (the cape_of_lord chaos mix creates it); its jol_options carry physical_damage, the S6 Cape of Lord Options definition's only Option-type entry (s6-sourced, review-flagged); the rest of that S6 option data (the 4-value wing-bonus pool = 2nd-wing bonuses + Command) is the crafted-augment axis rolled by the craft service, not option data -- see the 2nd-wing option gap in options_sets coverage",
-            "dark lord scepters not backported in this wave; DL items are Cape of Lord 13/30 (chaos-mix result) and the Adamantine armor pieces (ancient-set dependency), otherwise dark_lord appears only in all-classes qualification lists",
+            "dark lord scepters (group-2 numbers 8+) are not in the 095d/075 stats source and so not in the catalog; the Dark Lord weapons that ARE present are the group-0/1/2 swords/axes/maces the S6 flags mark darkLord=1 (e.g. Mace/Morning Star/Flail). DL/MG usability on every equippable is now sourced from the authentic S6 per-item class columns (see the class-sourcing note); Cape of Lord 13/30 and the Adamantine armor pieces remain the backported DL-specific gear",
             "summoner class is not in the baseline: the Red Wing pieces (7-11/40, ancient-set dependency) ship with empty classes lists -> unequippable; see their review flags",
             "Wings of Despair (12/42, summoner) and all 3rd wings/capes: post-S3 or excluded classes, skipped",
         ],
         "notes": [
             "v2 shape: each record is an ItemDefinition -- shared authentic columns + a kind-tagged ItemKind flattened inline. No stat slugs, no PowerUp/Aggregate vocabulary, no bonus-table indirection, no possible_options/possible_set_groups slug lists, no box_drops, no equip-flag pseudo-stats, no slot field: all became Rust rules/services",
             "item_level_bonus_tables.json is DROPPED (the +level curves are services const tables keyed by the EnhanceLevel enum)",
-            "merged baseline: record content mirrors the 095d dataset (MG qualification, ammo kinds); source_version = oldest dataset shipping the record (075 armor/weapon data lines verified identical between versions)",
+            "merged baseline: numeric record content mirrors the 095d dataset (stats, requirements, durability, ammo kinds); source_version = oldest dataset shipping the record (075 armor/weapon data lines verified identical between versions)",
+            "class qualification is sourced authentically from the Season 6 item files: the 095d/075 CreateXxx overloads carry no Dark Lord column (the class postdates them) and only a partial Magic Gladiator one, so equippable class usability is re-sourced by {group, number} identity from VersionSeasonSix/Items/{Weapons,Armors}.cs, whose long overloads carry the full darkWizard/darkKnight/elf/magicGladiator/darkLord/summoner/rageFighter tail (summoner/rageFighter are outside our roster, dropped). All 161 equippable weapons+armors resolve against S6 (zero fell back to the 095d-era heuristic). The change is purely additive — no item lost a class; 45 items gained dark_lord and/or magic_gladiator (16 weapons gained dark_lord, all 15 shields gained magic_gladiator with 11 also gaining dark_lord, and the Bronze/Leather/Scale helm/armor/pants/gloves/boots pieces gained dark_lord). Staves (group 5) stay wizard/MG-side — S6 marks none of them darkLord",
             "class expansion (ClassSet wire = snake_case class list): value 1 -> base + evolved stage (evolution backport), value 2 -> evolved only per approved decision; OpenMU's DetermineClass helper would also admit the base class for value 2 -- divergence flagged on the s6 wing records",
             "'all classes' items (jewelry, transformation ring) expanded to all 8 baseline slugs including dark_lord; 095d dataset itself only had dw/dk/elf/mg",
             "kind is data (set by extraction), never derived from group: group 12 = wings(0-6)+orbs(7-11)+jewel(15); group 13 = pets+jewelry+wings(cape)+tickets+materials+fruit; group 14 = potions+jewels+box+tickets; group 15 = scrolls",

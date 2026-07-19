@@ -10,6 +10,7 @@ pub mod chance;
 pub mod combat;
 pub mod consume;
 pub mod craft;
+pub mod creation;
 pub mod death;
 pub mod effects;
 pub mod experience;

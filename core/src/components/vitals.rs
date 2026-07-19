@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::combat_profile::VitalMaxima;
 use crate::components::pool::Pool;
 
 /// The three character resource pools: health, mana, and ability. No
@@ -18,6 +19,19 @@ pub struct Vitals {
     pub mana: Pool,
     /// Ability (AG) points.
     pub ability: Pool,
+}
+
+impl Vitals {
+    /// A fully-refilled bundle: each pool seeded at its class-formula maximum.
+    /// The seed-at-max path a freshly-created character and a respawn share.
+    #[must_use]
+    pub(crate) fn full(maxima: VitalMaxima) -> Self {
+        Self {
+            health: Pool::full(maxima.max_health),
+            mana: Pool::full(maxima.max_mana),
+            ability: Pool::full(maxima.max_ability),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -8,7 +8,10 @@
 use core::num::NonZeroU8;
 use std::collections::BTreeMap;
 
+use crate::components::class::CharacterClass;
 use crate::components::collections::OneOrMore;
+use crate::components::equipment::EquipmentSlot;
+use crate::components::item_instance::ItemInstance;
 use crate::components::levels::EnhanceLevel;
 use crate::components::spatial::{Facing, WorldPos, WorldRect};
 use crate::components::tile::{TerrainGrid, TileFacing};
@@ -87,6 +90,75 @@ pub struct SpawnGateView<'a> {
     pub landing: &'a OneOrMore<WorldPos>,
     /// The authored arrival facing, if the gate carries one.
     pub facing: Option<Facing>,
+}
+
+/// A class's worn starter gear resolved and retained at parse — the
+/// [`ResolvedSpawn`] retain-at-parse precedent applied to character creation.
+/// Every entry pairs a worn slot with a plain starter [`ItemInstance`] already
+/// built from the joined definition, so the creation assembler seats the worn
+/// set with no `Option` and no re-roll. An empty kit (Dark Wizard wears nothing)
+/// is a real value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedStartingKit {
+    pub(super) entries: Vec<ResolvedStartingKitEntry>,
+}
+
+impl ResolvedStartingKit {
+    /// Builds the resolved kit from its retained entries — the parse-time
+    /// constructor the Atlas resolve pass mints; no public fabricator exists.
+    pub(super) fn new(entries: Vec<ResolvedStartingKitEntry>) -> Self {
+        Self { entries }
+    }
+
+    /// The kit's entries, in authored order.
+    pub fn iter(&self) -> impl Iterator<Item = &ResolvedStartingKitEntry> {
+        self.entries.iter()
+    }
+}
+
+/// One resolved starter-kit entry: the worn slot and the plain starter instance
+/// (Normal roll, no option/luck/skill/augment, item level 0, full base
+/// durability), built once against the joined definition at parse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedStartingKitEntry {
+    /// The worn slot the instance seats into.
+    pub slot: EquipmentSlot,
+    /// The plain starter item, ready to seat into `slot`.
+    pub item_instance: ItemInstance,
+}
+
+/// The per-class resolved starter kits — a total lookup keyed by the closed
+/// [`CharacterClass`] roster, mirroring the [`super::ClassTable`] named-field
+/// pattern so [`for_class`](Self::for_class) is an exhaustive match with no
+/// `Option`. Every class carries a kit (empty for Dark Wizard), proven at parse
+/// by resolving one per record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct StartingKitTable {
+    pub(super) dark_wizard: ResolvedStartingKit,
+    pub(super) soul_master: ResolvedStartingKit,
+    pub(super) dark_knight: ResolvedStartingKit,
+    pub(super) blade_knight: ResolvedStartingKit,
+    pub(super) fairy_elf: ResolvedStartingKit,
+    pub(super) muse_elf: ResolvedStartingKit,
+    pub(super) magic_gladiator: ResolvedStartingKit,
+    pub(super) dark_lord: ResolvedStartingKit,
+}
+
+impl StartingKitTable {
+    /// The resolved starter kit for a class — a total match over the roster,
+    /// never an `Option`.
+    pub(super) fn for_class(&self, class: CharacterClass) -> &ResolvedStartingKit {
+        match class {
+            CharacterClass::DarkWizard => &self.dark_wizard,
+            CharacterClass::SoulMaster => &self.soul_master,
+            CharacterClass::DarkKnight => &self.dark_knight,
+            CharacterClass::BladeKnight => &self.blade_knight,
+            CharacterClass::FairyElf => &self.fairy_elf,
+            CharacterClass::MuseElf => &self.muse_elf,
+            CharacterClass::MagicGladiator => &self.magic_gladiator,
+            CharacterClass::DarkLord => &self.dark_lord,
+        }
+    }
 }
 
 /// A warp entry with its landing resolved.

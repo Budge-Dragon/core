@@ -17,6 +17,7 @@ use crate::components::reputation::Reputation;
 use crate::components::stats::Stats;
 use crate::components::units::{CarriedZen, Exp, Level, MapNumber};
 use crate::components::vitals::Vitals;
+use crate::data::classes::ClassRecord;
 
 /// A live player character. Private fields: construction (serde or otherwise)
 /// proves the class-to-stats pairing, so a held `Character` is always valid.
@@ -207,6 +208,33 @@ impl Character {
         &self.discovered
     }
 
+    /// A brand-new level-1 character of a class, standing at `placement` with
+    /// `vitals`. Infallible by construction: `class` and `stats` are both derived
+    /// from the ONE parse-proven [`ClassRecord`] — `class` from its identity,
+    /// `stats` from `starting_stats.into()` — so the class-to-command pairing the
+    /// [`TryFrom<RawCharacter>`] gate proves is already guaranteed here, and a
+    /// mismatch is structurally impossible without a fallible re-check. Every
+    /// progression scalar is seeded to its empty value through an infallible
+    /// constant, and the discovered set is exactly the placement's own map, so the
+    /// current-map invariant holds by construction too. Draws no randomness — the
+    /// caller resolves the placement (its one landing pick) before calling.
+    pub(crate) fn fresh(record: &ClassRecord, placement: Placement, vitals: Vitals) -> Character {
+        Character {
+            class: record.class,
+            level: Level::MIN,
+            experience: Exp::ZERO,
+            stats: record.starting_stats.into(),
+            unspent_points: 0,
+            zen: CarriedZen::ZERO,
+            placement,
+            vitals,
+            active_effects: ActiveEffects::EMPTY,
+            life: LifeState::Alive,
+            reputation: Reputation::clean(),
+            discovered: DiscoveredMaps::single(placement.map),
+        }
+    }
+
     /// This character with its leveling scalars advanced; every other field —
     /// class, stats, zen, placement, vitals, active effects — carried unchanged.
     pub(crate) fn with_progress(
@@ -359,6 +387,76 @@ mod tests {
             vitality: 50,
             energy: 30,
         }
+    }
+
+    /// A `ClassRecord` deserialized through its real parse gate — the only way
+    /// to obtain one (the `starting_kit` inner list is module-private), so the
+    /// fresh-constructor tests exercise the same proven pairing creation reads.
+    fn class_record(value: serde_json::Value) -> ClassRecord {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn fresh_seeds_zero_progression_alive_clean_and_home_discovered() {
+        let record = class_record(serde_json::json!({
+            "class": "dark_knight", "number": 4,
+            "creation": {"kind": "always"}, "evolution": {"kind": "terminal"},
+            "home_map": 0, "points_per_level": 5,
+            "starting_stats": {"kind": "standard", "strength": 28, "agility": 20, "vitality": 25, "energy": 10},
+            "starting_kit": [],
+            "fruit_points_divisor": 400, "warp_requirement": {"kind": "full"},
+            "source_version": "075"
+        }));
+        let fresh = Character::fresh(&record, placement(), vitals());
+
+        assert_eq!(fresh.class(), CharacterClass::DarkKnight);
+        assert_eq!(fresh.level(), Level::MIN);
+        assert_eq!(fresh.experience(), Exp::ZERO);
+        assert_eq!(fresh.unspent_points(), 0);
+        assert_eq!(fresh.zen(), CarriedZen::ZERO);
+        assert_eq!(fresh.active_effects(), ActiveEffects::EMPTY);
+        assert_eq!(fresh.life(), LifeState::Alive);
+        assert_eq!(fresh.reputation(), Reputation::clean());
+        assert_eq!(*fresh.discovered(), DiscoveredMaps::single(MapNumber(0)));
+        assert_eq!(
+            fresh.stats(),
+            Stats::Standard {
+                strength: 28,
+                agility: 20,
+                vitality: 25,
+                energy: 10,
+            }
+        );
+        // The class↔stats pairing re-proves on a persist round-trip.
+        assert_eq!(
+            serde_json::from_str::<Character>(&serde_json::to_string(&fresh).unwrap()).unwrap(),
+            fresh
+        );
+    }
+
+    #[test]
+    fn fresh_dark_lord_carries_with_command_stats_derived_from_the_record() {
+        let record = class_record(serde_json::json!({
+            "class": "dark_lord", "number": 16,
+            "creation": {"kind": "unlocked_at", "level": 250}, "evolution": {"kind": "terminal"},
+            "home_map": 0, "points_per_level": 7,
+            "starting_stats": {"kind": "with_command", "strength": 26, "agility": 20, "vitality": 20, "energy": 15, "command": 25},
+            "starting_kit": [],
+            "fruit_points_divisor": 500, "warp_requirement": {"kind": "fraction", "numerator": 2, "denominator": 3},
+            "source_version": "s6"
+        }));
+        let fresh = Character::fresh(&record, placement(), vitals());
+        assert_eq!(fresh.class(), CharacterClass::DarkLord);
+        assert_eq!(
+            fresh.stats(),
+            Stats::WithCommand {
+                strength: 26,
+                agility: 20,
+                vitality: 20,
+                energy: 15,
+                command: 25,
+            }
+        );
     }
 
     fn with_command() -> Stats {

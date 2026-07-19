@@ -11,8 +11,9 @@
 //! Determinism: only the two landing primitives draw randomness —
 //! [`resolve_arrival`] exactly one word (the landing-tile pick) when the area
 //! has a walkable tile and none otherwise, [`resolve_spawn_gate_landing`]
-//! always exactly one — routed through [`crate::services::chance`]. The other
-//! functions draw nothing.
+//! always exactly one — routed through [`crate::services::chance`].
+//! [`resolve_town_landing`] composes [`resolve_spawn_gate_landing`] for that one
+//! draw; the other functions draw nothing.
 
 use rand_core::RngCore;
 
@@ -21,7 +22,8 @@ use crate::components::movement::{CombatLock, FlightChange, Movement, Wings};
 use crate::components::placement::Placement;
 use crate::components::spatial::{Displacement, Facing, Fixed, StepMagnitude, WorldPos, WorldVec};
 use crate::components::tile::TerrainGrid;
-use crate::data::atlas::{Landing, SpawnGateView};
+use crate::components::units::MapNumber;
+use crate::data::atlas::{Atlas, Landing, SpawnGateView};
 use crate::data::map_definitions::MapEnvironment;
 use crate::events::movement::{FlightDenialReason, FlightOutcome, StepOutcome, WarpOutcome};
 use crate::services::chance::pick_one;
@@ -285,6 +287,25 @@ pub fn resolve_spawn_gate_landing(
         movement,
         map: gate.map,
     }
+}
+
+/// Seats a traveler in the town that owns `map`: its own town gate when it has
+/// one, else the Lorencia fallback gate, then one uniform pick over that gate's
+/// parse-proven walkable set via [`resolve_spawn_gate_landing`] — exactly one
+/// RNG draw, facing/movement/map decided by that primitive. The town-arrival
+/// composition character creation, the death respawn, and the Town Portal
+/// Scroll share.
+#[must_use]
+pub(crate) fn resolve_town_landing(
+    atlas: &Atlas,
+    map: MapNumber,
+    rng: &mut impl RngCore,
+) -> Placement {
+    let (gate, env) = match atlas.town_gate_for_map(map) {
+        Some(destination) => destination,
+        None => atlas.fallback_town_gate(),
+    };
+    resolve_spawn_gate_landing(gate, env, rng)
 }
 
 #[cfg(test)]

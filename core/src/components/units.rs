@@ -30,6 +30,11 @@ impl CarriedZen {
     /// nowhere in it. The constant is ours.
     pub const CAP: u64 = 2_000_000_000;
 
+    /// An empty balance — a freshly created character carries no zen. A real
+    /// domain value, not a fabricated default; the infallible seed the fallible
+    /// [`Self::new`] would otherwise need a banned suppressor to produce.
+    pub const ZERO: Self = Self(0);
+
     /// Builds a balance; values above the carry cap are rejected. No
     /// `clamped` twin (unlike [`Level`]/[`Percent`]): a saturating money
     /// constructor silently destroys zen. Fallible construction only.
@@ -127,6 +132,12 @@ pub struct Exp(
     /// Experience points.
     pub u64,
 );
+
+impl Exp {
+    /// No experience — a freshly created character starts at zero. A real
+    /// domain value, not a fabricated default.
+    pub const ZERO: Self = Self(0);
+}
 
 /// Map number as the client knows it — a single byte pre-S3. Lives here, the
 /// lowest vocabulary layer, because a component ([`crate::components::placement::Placement`])
@@ -782,6 +793,17 @@ mod tests {
                 value: 2_000_000_001
             })
         );
+    }
+
+    #[test]
+    fn carried_zen_zero_is_the_empty_balance_no_suppressor() {
+        assert_eq!(CarriedZen::ZERO.get(), 0);
+        assert_eq!(CarriedZen::ZERO, CarriedZen::new(0).unwrap());
+    }
+
+    #[test]
+    fn exp_zero_is_the_empty_amount() {
+        assert_eq!(Exp::ZERO, Exp(0));
     }
 
     #[test]

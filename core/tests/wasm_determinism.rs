@@ -1086,3 +1086,83 @@ fn unlock_classes_for_level_is_identical_across_targets() {
         r#"["magic_gladiator","dark_lord"]"#
     );
 }
+
+// --- W-CREATE: character creation reproduces byte-identically across targets. --
+// The one randomness `create_character` draws is the home-town landing pick (the
+// shared `resolve_spawn_gate_landing` / `uniform_below` seam); everything else is
+// deterministic dataset lookup. Over the full embedded dataset a fixed seed lands
+// a fresh Dark Knight on a fixed Lorencia tile with its worn Small Axe — the
+// whole serialized bundle is the cross-target contract, reproduced bit-for-bit on
+// native and wasm.
+
+use mu_core::data::atlas::{Atlas, StaticData};
+use mu_core::data::terrain::{MapTerrain, TerrainBytes};
+use mu_core::services::creation::create_character;
+use serde::de::DeserializeOwned;
+
+/// The whole real dataset, embedded at compile time (the wasm leg has no
+/// filesystem), reconstituted through the same [`Atlas::parse`] gate a host
+/// loads it by — the only way to exercise the full `create_character` path under
+/// wasmtime. Mirrors the native `common::dataset::real_static_data` field list.
+fn embedded_atlas() -> Atlas {
+    fn file<T: DeserializeOwned>(text: &str) -> mu_core::data::common::DataFile<T> {
+        or_abort(serde_json::from_str(text))
+    }
+    fn terrain(map: u8, bytes: &[u8]) -> MapTerrain {
+        MapTerrain {
+            map: MapNumber(map),
+            bytes: or_abort(TerrainBytes::new(bytes.to_vec())),
+        }
+    }
+    let data = StaticData {
+        maps: file(include_str!("../../data/map_definitions.json")),
+        gates_warps: file(include_str!("../../data/gates_warps.json")),
+        monsters: file(include_str!("../../data/monster_definitions.json")),
+        spawns: file(include_str!("../../data/spawns.json")),
+        skills: file(include_str!("../../data/skills.json")),
+        items: file(include_str!("../../data/item_definitions.json")),
+        box_drops: file(include_str!("../../data/box_drops.json")),
+        special_drops: file(include_str!("../../data/special_drops.json")),
+        ancient_sets: file(include_str!("../../data/ancient_sets.json")),
+        chaos_mixes: file(include_str!("../../data/chaos_mixes.json")),
+        shops: file(include_str!("../../data/npc_shops.json")),
+        classes: file(include_str!("../../data/classes.json")),
+        exp_tables: file(include_str!("../../data/exp_tables.json")),
+        game_config: file(include_str!("../../data/game_config.json")),
+        // Schema-only this era: no minigame.json ships, the empty record list.
+        mini_games: mu_core::data::common::DataFile {
+            records: Vec::new(),
+        },
+        terrain: vec![
+            terrain(0, include_bytes!("../../data/terrain/0.bin")),
+            terrain(1, include_bytes!("../../data/terrain/1.bin")),
+            terrain(2, include_bytes!("../../data/terrain/2.bin")),
+            terrain(3, include_bytes!("../../data/terrain/3.bin")),
+            terrain(4, include_bytes!("../../data/terrain/4.bin")),
+            terrain(5, include_bytes!("../../data/terrain/5.bin")),
+            terrain(6, include_bytes!("../../data/terrain/6.bin")),
+            terrain(7, include_bytes!("../../data/terrain/7.bin")),
+            terrain(8, include_bytes!("../../data/terrain/8.bin")),
+            terrain(9, include_bytes!("../../data/terrain/9.bin")),
+            terrain(10, include_bytes!("../../data/terrain/10.bin")),
+        ],
+    };
+    or_abort(Atlas::parse(data))
+}
+
+#[test]
+fn a_created_dark_knight_serializes_identically_across_targets() {
+    // A fresh Dark Knight over the fixed seed: the landing pick draws one word
+    // from the shared spawn-gate seam and lands it on a fixed Lorencia tile; the
+    // stats, full class-formula vitals, and worn Small Axe are deterministic
+    // lookups. The whole `CreatedCharacter` bundle serializes to this exact
+    // string — the cross-target contract, reproduced bit-for-bit on native and
+    // wasm alike.
+    let atlas = embedded_atlas();
+    let mut rng = SplitMix64::new(SEED);
+    let created = create_character(CharacterClass::DarkKnight, &atlas, &mut rng);
+    assert_eq!(
+        or_abort(serde_json::to_string(&created)),
+        r#"{"character":{"class":"dark_knight","level":1,"experience":0,"stats":{"kind":"standard","strength":28,"agility":20,"vitality":25,"energy":10},"unspent_points":0,"zen":0,"placement":{"position":{"x":9142272,"y":7831552},"facing":{"x":0,"y":1},"movement":"grounded","map":0},"vitals":{"health":{"current":112,"max":112},"mana":{"current":20,"max":20},"ability":{"current":25,"max":25}},"active_effects":[],"life":{"kind":"alive"},"reputation":{"standing":{"kind":"clean"},"kills":0},"discovered":[0]},"equipment":{"left_hand":{"item":{"group":1,"number":0},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":18,"max":18},"augment":{"kind":"none"}}}}"#
+    );
+}

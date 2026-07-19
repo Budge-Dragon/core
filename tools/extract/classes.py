@@ -6,14 +6,19 @@ shared attribute-graph relationships/const values became Rust services, and
 per-class derived-stat formulas live in services/ too. This extractor keeps
 only the extracted per-class *values*.
 
-The C#-scraped numbers (base stats, starting vitals, points-per-level) are
-pulled straight from the shared class initializers — identical code runs for
-075/095d. Second tiers (soul_master/blade_knight/muse_elf) reuse their base
-line's creator, so their creation values mirror the base tier; they are 1.0-era
-backports present only in the s6 dataset (review-flagged). dark_lord is likewise
-an s6-era backport. Gating/home-map/warp/fruit values are verified verbatim
-against source (LevelRequirementByCreation 220/250, HomeMap Lorencia 0 / Noria 3,
-LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).
+The C#-scraped numbers (base stats, points-per-level) are pulled straight from
+the shared class initializers — identical code runs for 075/095d. The worn
+starter kit is the authentic per-class AddInitialItem set (OpenMU slot 0 =
+left_hand, slot 1 = right_hand; Rings of Warrior omitted by producer pin). No
+starting-vitals literals are carried: the class-formula derived-stat services
+are the single source of a fresh character's full pools, so the OpenMU
+initializer-seed vitals (which set ability to 1) would be unconsumed non-play
+data. Second tiers (soul_master/blade_knight/muse_elf) reuse their base line's
+creator, so their creation values and starter kit mirror the base tier; they are
+1.0-era backports present only in the s6 dataset (review-flagged). dark_lord is
+likewise an s6-era backport. Gating/home-map/warp/fruit values are verified
+verbatim against source (LevelRequirementByCreation 220/250, HomeMap Lorencia 0 /
+Noria 3, LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).
 """
 
 import json
@@ -34,12 +39,33 @@ STARTING_STAT_FIELDS = {
     "BaseEnergy": "energy",
 }
 COMMAND_TOKEN = "BaseLeadership"
-VITAL_FIELDS = {
-    "CurrentHealth": "health",
-    "CurrentMana": "mana",
-    "CurrentAbility": "ability",
-}
 POINTS_TOKEN = "PointsPerLevelUp"
+
+# Authentic per-class worn starter kit (OpenMU AddInitialItem plugins), keyed by
+# the base creator so second tiers mirror the base line exactly as their stats
+# do. OpenMU inventory slot 0 -> left_hand, slot 1 -> right_hand; every starter
+# item is seated at plus-level 0. Rings of Warrior are omitted (producer pin: an
+# OpenMU convenience, not classic MU).
+def _kit_entry(group, number, slot):
+    return {"item": common.item_ref(group, number), "item_level": 0, "slot": slot}
+
+
+STARTER_KITS = {
+    "CreateDarkWizard": [],  # buys a wand — wears nothing
+    "CreateDarkKnight": [_kit_entry(1, 0, "left_hand")],  # Small Axe
+    "CreateFairyElf": [
+        _kit_entry(4, 15, "left_hand"),  # Arrows
+        _kit_entry(4, 0, "right_hand"),  # Short Bow
+    ],
+    "CreateMagicGladiator": [
+        _kit_entry(0, 1, "left_hand"),  # Short Sword
+        _kit_entry(6, 0, "right_hand"),  # Small Shield
+    ],
+    "CreateDarkLord": [
+        _kit_entry(0, 1, "left_hand"),  # Short Sword
+        _kit_entry(6, 0, "right_hand"),  # Small Shield
+    ],
+}
 
 STAT_DEF_RE = re.compile(
     r"CreateStatAttributeDefinition\(Stats\.(\w+),\s*([^,]+?),\s*(?:true|false)\)")
@@ -100,35 +126,29 @@ def starting_stats(defs, ctx):
     return {"kind": "standard", **fields}
 
 
-def starting_vitals(defs, ctx):
-    return {v: pick(defs, k, ctx) for k, v in VITAL_FIELDS.items()}
-
-
 # Review strings. The 075 base tiers, s6 backports (SM/BK/ME/DL) and the 095d
-# hybrid each carry the OpenMU-default flags they own: starting ability 1
-# (initializer seed), the fruit divisor (OpenMU FruitCalculationStrategy), the
-# level-150 evolution (1.0-era content) and the 2/3 warp fraction (OpenMU's
-# ceil(100/3)=34 percent encoding). dark_wizard / soul_master / dark_lord match
-# the design section verbatim; the rest follow the same pattern per line.
+# hybrid each carry the OpenMU-default flags they own: the fruit divisor (OpenMU
+# FruitCalculationStrategy), the level-150 evolution (1.0-era content) and the
+# 2/3 warp fraction (OpenMU's ceil(100/3)=34 percent encoding). dark_wizard /
+# soul_master / dark_lord match the design section verbatim; the rest follow the
+# same pattern per line. (The OpenMU starting-ability-1 initializer seed is no
+# longer recorded: no starting-vitals literals are carried, so there is no
+# ability field to flag.)
 BASE_REVIEW = (
-    "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes "
-    "OpenMU's FruitCalculationStrategy (cap ~127 community-verified, per-level "
-    "curve pending); the level-150 evolution is 1.0-era content backported from "
-    "the s6 dataset")
+    "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~127 "
+    "community-verified, per-level curve pending); the level-150 evolution is "
+    "1.0-era content backported from the s6 dataset")
 SECOND_REVIEW = (
     "1.0-era backport: second tiers are absent from the 075/095d datasets; "
-    "creation values mirror the base tier; starting ability 1 is an OpenMU "
-    "initializer seed; fruit divisor as on {base}")
+    "creation values mirror the base tier; fruit divisor as on {base}")
 MG_REVIEW = (
-    "starting ability 1 is an OpenMU initializer seed; fruit divisor encodes "
-    "OpenMU's FruitCalculationStrategy (cap ~100); warp: authentic rule is 2/3 "
-    "of the gate requirement, rounding direction pending classic verification "
-    "(OpenMU encodes a 34% integer reduction)")
+    "fruit divisor encodes OpenMU's FruitCalculationStrategy (cap ~100); warp: "
+    "authentic rule is 2/3 of the gate requirement, rounding direction pending "
+    "classic verification (OpenMU encodes a 34% integer reduction)")
 DL_REVIEW = (
     "1.0-era backport; warp: authentic rule is 2/3 of the gate requirement, "
     "rounding direction pending classic verification (OpenMU encodes a 34% "
-    "integer reduction); fruit divisor encodes OpenMU strategy (cap ~115); "
-    "starting ability 1 is an OpenMU initializer seed")
+    "integer reduction); fruit divisor encodes OpenMU strategy (cap ~115)")
 
 ALWAYS = {"kind": "always"}
 EVOLUTION_ONLY = {"kind": "evolution_only"}
@@ -184,7 +204,7 @@ def main():
             "home_map": home_map,
             "points_per_level": pick(defs, POINTS_TOKEN, cls),
             "starting_stats": starting_stats(defs, cls),
-            "starting_vitals": starting_vitals(defs, cls),
+            "starting_kit": STARTER_KITS[creator],
             "fruit_points_divisor": fruit_divisor,
             "warp_requirement": warp,
             "source_version": source_version,
@@ -201,8 +221,11 @@ def main():
         assert (ss["kind"] == "with_command") == (r["class"] == "dark_lord"), r["class"]
         if ss["kind"] == "with_command":
             assert ss["energy"] >= 15, r["class"]  # command-class floor
-        v = r["starting_vitals"]
-        assert set(v) == {"health", "mana", "ability"}, r["class"]
+        for entry in r["starting_kit"]:
+            assert set(entry) == {"item", "item_level", "slot"}, r["class"]
+            assert set(entry["item"]) == {"group", "number"}, r["class"]
+            assert entry["item_level"] == 0, r["class"]  # classic kits are plus-0
+            assert entry["slot"] in ("left_hand", "right_hand"), r["class"]
         assert isinstance(r["home_map"], int) and 0 <= r["home_map"] <= 255
         assert r["fruit_points_divisor"] > 0
 
@@ -234,15 +257,20 @@ def main():
         "notes": [
             "no 'global' pseudo-record: v2 classes.json is a plain 8-record DataFile; shared "
             "behaviour is service code, not a data record.",
-            "base stats/vitals/points scraped verbatim from the shared class initializers "
-            "(CreateStatAttributeDefinition); gating/home-map/warp/fruit verified against source "
-            "(LevelRequirementByCreation 220/250, HomeMap Lorencia 0 / Noria 3, "
-            "LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).",
-            "second tiers reuse their base line's creator, so creation values mirror the base "
-            "tier - honest source fact carried under s6 provenance, not a copy-generation device.",
+            "base stats/points scraped verbatim from the shared class initializers "
+            "(CreateStatAttributeDefinition); the worn starter kit is the authentic per-class "
+            "AddInitialItem set (Rings of Warrior omitted by producer pin); gating/home-map/warp/"
+            "fruit verified against source (LevelRequirementByCreation 220/250, HomeMap Lorencia 0 "
+            "/ Noria 3, LevelWarpRequirementReductionPercent = ceil(100/3) = 34 -> 2/3 fraction).",
+            "no starting-vitals literals are carried: the class-formula derived-stat services are "
+            "the single source of a fresh character's full pools, so the OpenMU initializer-seed "
+            "vitals (ability 1) would be unconsumed non-play data.",
+            "second tiers reuse their base line's creator, so creation values and starter kit "
+            "mirror the base tier - honest source fact carried under s6 provenance, not a "
+            "copy-generation device.",
             "warp 34% integer reduction re-expressed as the authentic 2/3 fraction (rounding "
-            "direction re-sourced under W-SRC); starting ability 1, fruit divisor and the "
-            "level-150 evolution flagged OpenMU defaults on every affected record.",
+            "direction re-sourced under W-SRC); fruit divisor and the level-150 evolution flagged "
+            "OpenMU defaults on every affected record.",
             "unlock levels 220/250 and evolution level 150 are authentic; the v1 doc-comment "
             "'account level' error is corrected - it is the level of another character on the account.",
         ],
