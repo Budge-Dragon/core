@@ -3,7 +3,7 @@
     {
       "source_version": "075",
       "tick_duration_ms": 50,
-      "move_step_units": 65536,
+      "move_step_units": 32768,
       "item_drop_duration_ms": 60000,
       "drops": {
         "money_roll_per_10000": 5000,
