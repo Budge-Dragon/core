@@ -309,6 +309,56 @@ impl TickDuration {
     }
 }
 
+/// Distance a character advances per simulation tick, in tile sub-units.
+///
+/// The single source of truth for movement speed: the authoritative host steps
+/// by it, and a predicting client asks for the same value rather than keeping a
+/// copy. A speed that lived in two places is exactly how a client once predicted
+/// at a quarter of the server's pace.
+///
+/// Bounded to one whole tile because a step may not skip a tile: walkability is
+/// checked at the destination, which is only sound while the destination is
+/// Chebyshev-adjacent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct MoveStep(u32);
+
+impl MoveStep {
+    /// Builds a per-tick step; zero and anything past a whole tile are rejected.
+    ///
+    /// # Errors
+    /// Returns [`UnitError::MoveStepOutOfRange`] outside `1..=UNITS_PER_TILE`.
+    pub fn new(sub_units: u32) -> Result<Self, UnitError> {
+        let tile = u32::try_from(crate::components::spatial::UNITS_PER_TILE)
+            .map_err(|_| UnitError::MoveStepOutOfRange { value: sub_units })?;
+        if sub_units == 0 || sub_units > tile {
+            return Err(UnitError::MoveStepOutOfRange { value: sub_units });
+        }
+
+        Ok(Self(sub_units))
+    }
+
+    /// Sub-units advanced per tick.
+    #[must_use]
+    pub fn sub_units(self) -> u32 {
+        self.0
+    }
+}
+
+impl TryFrom<u32> for MoveStep {
+    type Error = UnitError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<MoveStep> for u32 {
+    fn from(step: MoveStep) -> Self {
+        step.0
+    }
+}
+
 impl TryFrom<u32> for TickDuration {
     type Error = UnitError;
 
@@ -570,6 +620,11 @@ pub enum UnitError {
     LevelZero,
     /// Tick duration of zero milliseconds.
     ZeroTickDuration,
+    /// Move step of zero sub-units, or above one whole tile.
+    MoveStepOutOfRange {
+        /// The rejected sub-unit count.
+        value: u32,
+    },
     /// Carried zen above the carry cap.
     ZenAboveCap {
         /// The rejected value.
@@ -587,6 +642,9 @@ impl core::fmt::Display for UnitError {
             Self::ItemLevelAbove15 { value } => write!(f, "item level {value} exceeds 15"),
             Self::LevelZero => write!(f, "level must be at least 1"),
             Self::ZeroTickDuration => write!(f, "tick duration must be nonzero"),
+            Self::MoveStepOutOfRange { value } => {
+                write!(f, "move step {value} must be within 1..=65536 sub-units")
+            }
             Self::ZenAboveCap { value } => {
                 write!(f, "carried zen {value} exceeds 2000000000")
             }
