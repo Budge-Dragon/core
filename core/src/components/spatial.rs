@@ -13,6 +13,8 @@ use core::ops::{Add, Div, Mul, Sub};
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::units::MoveStep;
+
 /// Fractional bits per classic tile: the `Q48.16` split in `i64`.
 pub const TILE_SHIFT: u32 = 16;
 /// Sub-units per classic tile (`2^TILE_SHIFT`).
@@ -570,6 +572,17 @@ impl StepMagnitude {
     #[must_use]
     pub const fn get(self) -> Fixed {
         self.0
+    }
+}
+
+impl From<MoveStep> for StepMagnitude {
+    /// The declared per-tick speed as a step magnitude. Total because
+    /// [`MoveStep`]'s `1..=UNITS_PER_TILE` bound is a subset of this type's
+    /// `<= ONE_TILE` bound: the ≤1-tile no-tunnelling invariant is carried
+    /// across the two types by construction, so no host re-derives the bridge
+    /// with a fallible path of its own.
+    fn from(step: MoveStep) -> Self {
+        Self(Fixed::from_raw(i64::from(step.sub_units())))
     }
 }
 
@@ -1293,6 +1306,21 @@ mod tests {
                 .get()
                 .raw(),
             0
+        );
+    }
+
+    #[test]
+    fn move_step_widens_into_a_step_magnitude() {
+        let tile = u32::try_from(UNITS_PER_TILE).unwrap();
+        assert_eq!(
+            StepMagnitude::from(MoveStep::new(tile).unwrap()),
+            StepMagnitude::ONE_TILE
+        );
+        assert_eq!(
+            StepMagnitude::from(MoveStep::new(9_000).unwrap())
+                .get()
+                .raw(),
+            9_000
         );
     }
 

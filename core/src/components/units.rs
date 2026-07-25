@@ -329,9 +329,9 @@ impl MoveStep {
     /// # Errors
     /// Returns [`UnitError::MoveStepOutOfRange`] outside `1..=UNITS_PER_TILE`.
     pub fn new(sub_units: u32) -> Result<Self, UnitError> {
-        let tile = u32::try_from(crate::components::spatial::UNITS_PER_TILE)
-            .map_err(|_| UnitError::MoveStepOutOfRange { value: sub_units })?;
-        if sub_units == 0 || sub_units > tile {
+        // Compared in `i64`, the tile constant's own width: the widening is
+        // lossless, so the bound needs no fallible narrowing of the constant.
+        if sub_units == 0 || i64::from(sub_units) > crate::components::spatial::UNITS_PER_TILE {
             return Err(UnitError::MoveStepOutOfRange { value: sub_units });
         }
 
@@ -768,6 +768,30 @@ mod tests {
     fn tick_duration_rejects_zero() {
         assert!(TickDuration::new(0).is_err());
         assert_eq!(TickDuration::new(50).unwrap().millis().get(), 50);
+    }
+
+    #[test]
+    fn move_step_spans_one_sub_unit_to_one_whole_tile() {
+        let tile = u32::try_from(crate::components::spatial::UNITS_PER_TILE).unwrap();
+        assert_eq!(
+            MoveStep::new(0),
+            Err(UnitError::MoveStepOutOfRange { value: 0 })
+        );
+        assert_eq!(MoveStep::new(1).unwrap().sub_units(), 1);
+        assert_eq!(MoveStep::new(tile).unwrap().sub_units(), tile);
+        assert_eq!(
+            MoveStep::new(tile + 1),
+            Err(UnitError::MoveStepOutOfRange { value: tile + 1 })
+        );
+    }
+
+    #[test]
+    fn move_step_wire_is_a_bare_integer_reproven_on_parse() {
+        let step = MoveStep::new(16_384).unwrap();
+        assert_eq!(serde_json::to_string(&step).unwrap(), "16384");
+        assert_eq!(serde_json::from_str::<MoveStep>("16384").unwrap(), step);
+        assert!(serde_json::from_str::<MoveStep>("0").is_err());
+        assert!(serde_json::from_str::<MoveStep>("65537").is_err());
     }
 
     #[test]
