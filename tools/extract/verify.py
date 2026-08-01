@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
-"""Prove `data/` is what the extractors produce — the anti-drift gate.
-
-`data/*.json` is generated. Nothing stopped anyone editing it by hand, and twice
-that is exactly what happened: `move_step_units` was typed straight into
-`game_config.json` and never taught to its extractor, and `tick_duration_ms` was
-edited from 100 to 50 the same way. Both would have been silently reverted by the
-next extractor run, and the only thing saying otherwise was prose in a directory
-this repo does not publish.
-
-This runs every extractor into a scratch tree and diffs that tree against the
-committed one. A hand-edit, a generator its value was never taught to, and a
-non-reproducible emission (an absolute path, an unstable ordering) all surface
-the same way: a diff, and a non-zero exit.
+"""Prove `data/` is what the extractors produce.
 
     python3 tools/extract/verify.py
 
-Needs `reference/openmu` — the gitignored full clone the extractors read. Exits
-distinctly when it is absent, because "cannot check" is not "checked and clean".
+Runs every extractor into a scratch tree and diffs. A hand-edit, a value its
+generator was never taught, and a non-reproducible emission all surface the same
+way: a diff and a non-zero exit.
+
+Exit 0 clean, 1 drift, 2 `reference/openmu` absent — "cannot check" is not
+"checked and clean".
 """
 
 import filecmp
@@ -30,8 +22,7 @@ from common import OPENMU_ROOT, REPO_ROOT
 EXTRACT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 
-# Every extractor. No extractor reads another's output, so the order is
-# arbitrary; each writes only files it owns.
+# Order is arbitrary — no extractor reads another's output.
 EXTRACTORS = [
     "items.py",
     "monsters.py",
@@ -79,11 +70,10 @@ def relative_files(root):
 
 
 def drifted(committed, produced):
-    """The three ways the committed tree can fail to be what the extractors write.
+    """Changed, committed-but-unwritten, produced-but-uncommitted.
 
-    Comparing the two SETS, not just the content of their intersection: a
-    committed file nothing re-emits is drift too — it is the shape a hand-authored
-    file takes — and it is invisible to a content-only check.
+    Set comparison, not just content: a committed file nothing re-emits is the
+    shape a hand-authored file takes, and a content-only check cannot see it.
     """
     here, there = relative_files(committed), relative_files(produced)
     return (
@@ -106,9 +96,8 @@ def main():
         return EXIT_CANNOT_CHECK
 
     with tempfile.TemporaryDirectory(prefix="mu-core-verify-") as scratch:
-        # Deliberately EMPTY. Seeding it with the committed tree would give every
-        # committed file a twin whether or not an extractor rewrote it, so a
-        # hand-authored file would compare equal to its own copy and pass.
+        # Deliberately empty: seeding it would let a hand-authored file compare
+        # equal to its own copy and pass.
         if not run_extractors(scratch):
             return EXIT_CANNOT_CHECK
 

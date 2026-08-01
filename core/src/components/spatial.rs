@@ -549,11 +549,8 @@ impl DistanceSq {
     }
 }
 
-/// The declared distance a character advances per simulation tick, in tile
-/// sub-units. Bounded to one whole tile because walkability is checked at the
-/// destination alone, which is only sound while the destination stays
-/// Chebyshev-adjacent to the source; widening into [`StepMagnitude`] carries
-/// that bound onto the movement path.
+/// The declared per-tick step, in tile sub-units. Bounded to one tile: a longer
+/// step could skip the tile [`StepMagnitude`] proves it cannot cross.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "u32", into = "u32")]
 pub struct MoveStep(u32);
@@ -564,8 +561,7 @@ impl MoveStep {
     /// # Errors
     /// Returns [`SpatialError::MoveStepOutOfRange`] outside `1..=UNITS_PER_TILE`.
     pub fn new(sub_units: u32) -> Result<Self, SpatialError> {
-        // Compared in `i64`, the tile constant's own width: the widening is
-        // lossless, so the bound needs no fallible narrowing of the constant.
+        // Widened to the constant's own `i64` — narrowing it would be fallible.
         if sub_units == 0 || i64::from(sub_units) > UNITS_PER_TILE {
             return Err(SpatialError::MoveStepOutOfRange { value: sub_units });
         }
@@ -631,10 +627,7 @@ impl StepMagnitude {
 }
 
 impl From<MoveStep> for StepMagnitude {
-    /// The declared per-tick speed as a step magnitude. Total because
-    /// [`MoveStep`]'s `1..=UNITS_PER_TILE` bound is a subset of this type's
-    /// `<= ONE_TILE` bound: the ≤1-tile no-tunnelling invariant is carried
-    /// across the two types by construction.
+    /// Total: `1..=UNITS_PER_TILE` is a subset of `<= ONE_TILE`.
     fn from(step: MoveStep) -> Self {
         Self(Fixed::from_raw(i64::from(step.sub_units())))
     }

@@ -836,18 +836,9 @@ fn assert_landing_resolves(landing: &Landing, grid: &TerrainGrid, env: MapEnviro
     }
 }
 
-/// A player outruns every mob authored with a move cadence — the governing
-/// movement rule, encoded as a relationship rather than a number. Both rates
-/// come from the real files: the walk rate is `game_config.json`'s
-/// `move_step_units` per `tick_duration_ms`, and each mob's rate is one whole
-/// tile per its own `move_delay_ms` in `monster_definitions.json`. No speed
-/// literal is pinned here, so a retune inside the rule passes and a retune that
-/// lets a mob catch a player fails.
-///
-/// Scoped to *authored* movers rather than the whole roster because the three
-/// `move_delay_ms: 0` records are authored stationary yet one of them still
-/// reaches a movement branch — the open `TRAP-CHASE` defect. Widening this test
-/// to the whole roster is that defect's discharge site.
+/// A player outruns every mob authored with a move cadence. Both rates come from
+/// the real files, so a retune inside the rule passes and one that breaks it
+/// fails. Widening this to the whole roster discharges `TRAP-CHASE`.
 #[test]
 fn the_shipped_walk_rate_outpaces_every_mob_with_a_move_cadence() {
     let config = load!(GameConfig, "game_config", 1);
@@ -855,8 +846,7 @@ fn the_shipped_walk_rate_outpaces_every_mob_with_a_move_cadence() {
     let walk_sub_units = i64::from(u32::from(record.move_step_units));
     let tick_ms = i64::from(record.tick_duration_ms.millis().get());
 
-    // A mob advances exactly one whole tile per move action, so its rate is
-    // one tile per `move_delay_ms`.
+    // A mob advances one whole tile per move action.
     let tile_sub_units = ONE_TILE.get().raw();
 
     let atlas = Atlas::parse(static_data!()).unwrap();
@@ -868,17 +858,13 @@ fn the_shipped_walk_rate_outpaces_every_mob_with_a_move_cadence() {
             | MonsterRole::Trap { behavior, .. } => Some(behavior.move_delay_ms.0),
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
         })
-        // A zero delay is an authored "never moves", not "moves infinitely
-        // fast". It is excluded because such a record declares no rate to
-        // compare against — NOT because it is proven motionless: a zero delay
-        // reaches `Ticks(0)`, so the mob is eligible every tick, and one of the
-        // three does step (the open `TRAP-CHASE` defect).
+        // Zero declares no rate to compare. Not proven motionless — it reaches
+        // `Ticks(0)` and one such record does step (`TRAP-CHASE`).
         .filter(|&delay_ms| delay_ms > 0)
         .min()
         .unwrap();
 
-    // Cross-multiplied instead of divided so truncation can never decide the
-    // verdict: walk sub-units per ms against one tile per `move_delay_ms`.
+    // Cross-multiplied, never divided: truncation must not decide the verdict.
     assert!(
         walk_sub_units * i64::from(fastest_mob_delay_ms) > tile_sub_units * tick_ms,
         "a walk of {walk_sub_units} sub-units per {tick_ms} ms must outpace \
