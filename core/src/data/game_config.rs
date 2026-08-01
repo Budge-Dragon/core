@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub use crate::components::equipment::EquipmentSlot;
 
 use crate::components::interval::Interval;
+use crate::components::spatial::MoveStep;
 use crate::components::units::{DurationMs, TickDuration, Zen};
 
 use super::common::Provenance;
@@ -21,6 +22,9 @@ pub struct GameConfig {
     pub provenance: Provenance,
     /// Real-time length of one simulation tick (ours). Guarded nonzero.
     pub tick_duration_ms: TickDuration,
+    /// Distance a character advances per tick, in tile sub-units (ours).
+    /// Guarded to one whole tile.
+    pub move_step_units: MoveStep,
     /// Ground-item despawn timing (authentic 60 s).
     pub item_drop_duration_ms: DurationMs,
     /// Per-kill drop rolls and jewel roster. Shape owned by the drops domain;

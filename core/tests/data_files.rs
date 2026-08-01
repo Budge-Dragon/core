@@ -836,6 +836,42 @@ fn assert_landing_resolves(landing: &Landing, grid: &TerrainGrid, env: MapEnviro
     }
 }
 
+/// A player outruns every mob authored with a move cadence. Both rates come from
+/// the real files, so a retune inside the rule passes and one that breaks it
+/// fails. Widening this to the whole roster discharges `TRAP-CHASE`.
+#[test]
+fn the_shipped_walk_rate_outpaces_every_mob_with_a_move_cadence() {
+    let config = load!(GameConfig, "game_config", 1);
+    let record = config.records.into_iter().next().unwrap();
+    let walk_sub_units = i64::from(u32::from(record.move_step_units));
+    let tick_ms = i64::from(record.tick_duration_ms.millis().get());
+
+    // A mob advances one whole tile per move action.
+    let tile_sub_units = ONE_TILE.get().raw();
+
+    let atlas = Atlas::parse(static_data!()).unwrap();
+    let fastest_mob_delay_ms = atlas
+        .monsters()
+        .filter_map(|definition| match &definition.role {
+            MonsterRole::Monster { behavior, .. }
+            | MonsterRole::Guard { behavior, .. }
+            | MonsterRole::Trap { behavior, .. } => Some(behavior.move_delay_ms.0),
+            MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
+        })
+        // Zero declares no rate to compare. Not proven motionless — it reaches
+        // `Ticks(0)` and one such record does step (`TRAP-CHASE`).
+        .filter(|&delay_ms| delay_ms > 0)
+        .min()
+        .unwrap();
+
+    // Cross-multiplied, never divided: truncation must not decide the verdict.
+    assert!(
+        walk_sub_units * i64::from(fastest_mob_delay_ms) > tile_sub_units * tick_ms,
+        "a walk of {walk_sub_units} sub-units per {tick_ms} ms must outpace \
+         one tile ({tile_sub_units} sub-units) per {fastest_mob_delay_ms} ms"
+    );
+}
+
 #[test]
 fn grounded_steps_respect_real_terrain_walls() {
     let atlas = Atlas::parse(static_data!()).unwrap();

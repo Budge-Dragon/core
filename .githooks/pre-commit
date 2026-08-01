@@ -9,4 +9,20 @@
 # pre-flight, not the sole gate.
 set -e
 
-exec cargo xtask scan
+cargo xtask scan
+
+# data/ is generated; a hand-edit there is silently reverted by the next
+# extractor run. Cannot live in CI — the extractors read the gitignored
+# reference/openmu. Gated on the paths because it costs about a minute.
+if git diff --cached --name-only | grep -qE '^(data/|tools/extract/)'; then
+    set +e
+    python3 tools/extract/verify.py
+    status=$?
+    set -e
+    # 2 is "cannot check" — say so rather than imply a clean run.
+    if [ "$status" -eq 2 ]; then
+        echo "pre-commit: data-drift gate skipped (see message above)"
+    elif [ "$status" -ne 0 ]; then
+        exit "$status"
+    fi
+fi

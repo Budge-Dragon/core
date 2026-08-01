@@ -9,7 +9,11 @@ import os
 import re
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DATA_DIR = os.path.join(REPO_ROOT, "data")
+
+# Names the directory CONTAINING `data/` — overridable so `verify.py` can write
+# to a scratch tree and still emit byte-identical output.
+DATA_ROOT = os.environ.get("MU_CORE_DATA_ROOT", REPO_ROOT)
+DATA_DIR = os.path.join(DATA_ROOT, "data")
 COVERAGE_DIR = os.path.join(DATA_DIR, "_coverage")
 
 # OpenMU source root — the durable, gitignored full clone the consult protocol
@@ -28,6 +32,15 @@ def slugify(name):
     s = _CAMEL_BOUNDARY.sub("_", name)
     s = _NON_ALNUM.sub("_", s.lower())
     return s.strip("_")
+
+
+def repo_relative(path):
+    """A write path as the relative name a coverage ledger records.
+
+    `data/_coverage/` is published; an absolute path there would name one
+    machine's checkout.
+    """
+    return os.path.relpath(path, DATA_ROOT)
 
 
 def write_datafile(path, records):
