@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 pub use crate::components::equipment::EquipmentSlot;
 
 use crate::components::interval::Interval;
-use crate::components::units::{DurationMs, MoveStep, TickDuration, Zen};
+use crate::components::spatial::MoveStep;
+use crate::components::units::{DurationMs, TickDuration, Zen};
 
 use super::common::Provenance;
 use super::drop_config::DropConfig;
@@ -21,10 +22,8 @@ pub struct GameConfig {
     pub provenance: Provenance,
     /// Real-time length of one simulation tick (ours). Guarded nonzero.
     pub tick_duration_ms: TickDuration,
-    /// Distance a character advances per tick, in tile sub-units. The single
-    /// source of truth for movement speed — the authoritative host steps by it
-    /// and validates against it, and a predicting client asks for the same
-    /// value instead of keeping its own copy.
+    /// Distance a character advances per tick, in tile sub-units (ours).
+    /// Guarded to one whole tile.
     pub move_step_units: MoveStep,
     /// Ground-item despawn timing (authentic 60 s).
     pub item_drop_duration_ms: DurationMs,

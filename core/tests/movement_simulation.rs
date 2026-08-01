@@ -501,9 +501,10 @@ fn ai_seek_and_drift_steps_are_unchanged_under_the_step_magnitude_bound() {
 #[test]
 fn no_ordinary_step_caller_can_request_more_than_one_tile() {
     // The absence-of-API fact, expressed behaviourally: `resolve_step` and
-    // `resolve_drift` accept only a `StepMagnitude`, whose two constructors —
-    // `ONE_TILE` and the den-capped `tile_fraction` — bound every ordinary step
-    // to at most one whole tile by construction. The deleted 8-tile DASH_SPEED
+    // `resolve_drift` accept only a `StepMagnitude`, whose three constructors —
+    // `ONE_TILE`, the den-capped `tile_fraction`, and `From<MoveStep>` (bounded
+    // `1..=UNITS_PER_TILE`) — bound every ordinary step to at most one whole
+    // tile by construction. The deleted 8-tile DASH_SPEED
     // is unrepresentable; even a dash-shaped 8/1 request collapses to the
     // one-tile cap, so a walker can never tunnel a blocked middle tile.
     let dash_like =

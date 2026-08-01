@@ -13,8 +13,6 @@ use core::ops::{Add, Div, Mul, Sub};
 
 use serde::{Deserialize, Serialize};
 
-use crate::components::units::MoveStep;
-
 /// Fractional bits per classic tile: the `Q48.16` split in `i64`.
 pub const TILE_SHIFT: u32 = 16;
 /// Sub-units per classic tile (`2^TILE_SHIFT`).
@@ -67,6 +65,11 @@ pub enum SpatialError {
         /// The offending value.
         value: u64,
     },
+    /// Move step of zero sub-units, or above one whole tile.
+    MoveStepOutOfRange {
+        /// The rejected sub-unit count.
+        value: u32,
+    },
     /// A cone's squared-cosine ratio was invalid (`num > den` or
     /// `den > CONE_DEN_MAX`).
     ConeRatioInvalid {
@@ -93,6 +96,12 @@ impl core::fmt::Display for SpatialError {
             } => write!(f, "rect inverted: ({min_x},{min_y})..({max_x},{max_y})"),
             Self::ZeroFacing => write!(f, "facing has no direction (zero vector)"),
             Self::RadiusOutOfBounds { value } => write!(f, "radius out of bounds: {value}"),
+            Self::MoveStepOutOfRange { value } => {
+                write!(
+                    f,
+                    "move step {value} must be within 1..={UNITS_PER_TILE} sub-units"
+                )
+            }
             Self::ConeRatioInvalid { num, den } => {
                 write!(f, "cone ratio invalid: {num}/{den}")
             }
@@ -540,6 +549,51 @@ impl DistanceSq {
     }
 }
 
+/// The declared distance a character advances per simulation tick, in tile
+/// sub-units. Bounded to one whole tile because walkability is checked at the
+/// destination alone, which is only sound while the destination stays
+/// Chebyshev-adjacent to the source; widening into [`StepMagnitude`] carries
+/// that bound onto the movement path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct MoveStep(u32);
+
+impl MoveStep {
+    /// Builds a per-tick step; zero and anything past a whole tile are rejected.
+    ///
+    /// # Errors
+    /// Returns [`SpatialError::MoveStepOutOfRange`] outside `1..=UNITS_PER_TILE`.
+    pub fn new(sub_units: u32) -> Result<Self, SpatialError> {
+        // Compared in `i64`, the tile constant's own width: the widening is
+        // lossless, so the bound needs no fallible narrowing of the constant.
+        if sub_units == 0 || i64::from(sub_units) > UNITS_PER_TILE {
+            return Err(SpatialError::MoveStepOutOfRange { value: sub_units });
+        }
+
+        Ok(Self(sub_units))
+    }
+
+    /// Sub-units advanced per tick.
+    #[must_use]
+    pub fn sub_units(self) -> u32 {
+        self.0
+    }
+}
+
+impl TryFrom<u32> for MoveStep {
+    type Error = SpatialError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<MoveStep> for u32 {
+    fn from(step: MoveStep) -> Self {
+        step.0
+    }
+}
+
 /// An ordinary-step magnitude, bounded to at most one whole tile by
 /// construction. `resolve_step`/`resolve_drift` consume it, so an ordinary step
 /// can never span more than a tile — which makes their destination-only
@@ -548,8 +602,9 @@ impl DistanceSq {
 /// Chebyshev-adjacent (within ±1 in each axis) to the source — a diagonal
 /// neighbour included (Euclidean √2, *not* excluded by a ≤1-tile *magnitude*
 /// bound). With no tile between source and a Chebyshev-1 destination, a step can
-/// never cross a blocked cell it did not land on. Only two magnitudes are
-/// constructible — a whole tile and a fraction of one — and both are `<= ONE_TILE`.
+/// never cross a blocked cell it did not land on. Only three magnitudes are
+/// constructible — a whole tile, a fraction of one, and a declared [`MoveStep`]
+/// (itself bounded to `1..=UNITS_PER_TILE`) — and all are `<= ONE_TILE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepMagnitude(Fixed);
 
@@ -579,8 +634,7 @@ impl From<MoveStep> for StepMagnitude {
     /// The declared per-tick speed as a step magnitude. Total because
     /// [`MoveStep`]'s `1..=UNITS_PER_TILE` bound is a subset of this type's
     /// `<= ONE_TILE` bound: the ≤1-tile no-tunnelling invariant is carried
-    /// across the two types by construction, so no host re-derives the bridge
-    /// with a fallible path of its own.
+    /// across the two types by construction.
     fn from(step: MoveStep) -> Self {
         Self(Fixed::from_raw(i64::from(step.sub_units())))
     }
@@ -1307,6 +1361,30 @@ mod tests {
                 .raw(),
             0
         );
+    }
+
+    #[test]
+    fn move_step_spans_one_sub_unit_to_one_whole_tile() {
+        let tile = u32::try_from(UNITS_PER_TILE).unwrap();
+        assert_eq!(
+            MoveStep::new(0),
+            Err(SpatialError::MoveStepOutOfRange { value: 0 })
+        );
+        assert_eq!(MoveStep::new(1).unwrap().sub_units(), 1);
+        assert_eq!(MoveStep::new(tile).unwrap().sub_units(), tile);
+        assert_eq!(
+            MoveStep::new(tile + 1),
+            Err(SpatialError::MoveStepOutOfRange { value: tile + 1 })
+        );
+    }
+
+    #[test]
+    fn move_step_wire_is_a_bare_integer_reproven_on_parse() {
+        let step = MoveStep::new(16_384).unwrap();
+        assert_eq!(serde_json::to_string(&step).unwrap(), "16384");
+        assert_eq!(serde_json::from_str::<MoveStep>("16384").unwrap(), step);
+        assert!(serde_json::from_str::<MoveStep>("0").is_err());
+        assert!(serde_json::from_str::<MoveStep>("65537").is_err());
     }
 
     #[test]

@@ -97,6 +97,7 @@ cargo test
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo xtask scan          # review-enforced bans with no clippy lint
+python3 tools/extract/verify.py   # data/ still reproduces from tools/extract/
 
 # Portability gate — the pure core compiles for every deployment target.
 # One-time: rustup target add wasm32-unknown-unknown wasm32-unknown-emscripten \

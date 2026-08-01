@@ -9,7 +9,13 @@ import os
 import re
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DATA_DIR = os.path.join(REPO_ROOT, "data")
+
+# Where the extractors WRITE. Overridable so `verify.py` can re-run every
+# extractor into a scratch tree and diff it against the committed one; the
+# override names the directory CONTAINING `data/`, so every emitted path keeps
+# the same shape and the output stays byte-identical wherever it is written.
+DATA_ROOT = os.environ.get("MU_CORE_DATA_ROOT", REPO_ROOT)
+DATA_DIR = os.path.join(DATA_ROOT, "data")
 COVERAGE_DIR = os.path.join(DATA_DIR, "_coverage")
 
 # OpenMU source root — the durable, gitignored full clone the consult protocol
@@ -28,6 +34,17 @@ def slugify(name):
     s = _CAMEL_BOUNDARY.sub("_", name)
     s = _NON_ALNUM.sub("_", s.lower())
     return s.strip("_")
+
+
+def repo_relative(path):
+    """An absolute write path as the repo-relative name a coverage ledger records.
+
+    `data/_coverage/` is published, so an absolute path baked into it would name
+    one machine's checkout and make the extractor's output differ per developer.
+    Relative to `DATA_ROOT` rather than `REPO_ROOT` so a scratch-tree run emits
+    the same name as a real one.
+    """
+    return os.path.relpath(path, DATA_ROOT)
 
 
 def write_datafile(path, records):

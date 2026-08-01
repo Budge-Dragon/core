@@ -18,15 +18,21 @@ constants_exp / drops / options design sections):
       (index = level-1, levels 1..=max_level; the v1 `formula` string field and
        the two padding cells are gone).
   game_config.json -> GameConfig: one FULL record. Two owned top-level
-      durations (tick_duration_ms ours, item_drop_duration_ms authentic) plus
-      typed per-domain sub-structs: `drops` (DropConfig, drops-owned shape),
-      `option_roll` (OptionRollPolicy, options-owned shape), progression,
-      zen_caps, inventory. The nested `drops` / `option_roll` sections carry
-      ONLY a `review` string (no source_version).
+      durations (tick_duration_ms ours, item_drop_duration_ms authentic), the
+      owned movement grain (move_step_units, the sub-units a mover advances in
+      one tick), plus typed per-domain sub-structs: `drops` (DropConfig,
+      drops-owned shape), `option_roll` (OptionRollPolicy, options-owned
+      shape), progression, zen_caps, inventory. The nested `drops` /
+      `option_roll` sections carry ONLY a `review` string (no source_version).
 
 Approved non-OpenMU values (decisions, carried in `notes`/`review`, not silently
 relabeled authentic):
-  tick_duration_ms = 100          ours (decision 4); OpenMU has no tick base.
+  tick_duration_ms = 50           ours (decision 4); OpenMU has no tick base.
+  move_step_units = 9_830         ours; classic movement is tile-grid, so no
+                                  classic source states a per-tick step
+                                  DISTANCE. The classic base walk RATE does
+                                  transfer, and sets it: 3.0 tiles/s at the
+                                  50 ms tick.
   zen_caps = 2_000_000_000        classic cap (decision 7); OpenMU int.MaxValue.
 
 OpenMU-invented values survive verbatim but every one carries a `review` string
@@ -52,7 +58,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import coverage, item_ref, write_datafile, OPENMU_ROOT
+from common import coverage, item_ref, repo_relative, write_datafile, OPENMU_ROOT
 
 OPENMU = OPENMU_ROOT + "/src"
 
@@ -254,7 +260,8 @@ def build_game_config(cfg, cfg_text, drop, inv, glob):
 
     return {
         "source_version": "075",
-        "tick_duration_ms": 100,  # ours (decision 4), not an OpenMU value
+        "tick_duration_ms": 50,  # ours (decision 4), not an OpenMU value
+        "move_step_units": 9_830,  # ours, set from the classic base walk rate
         "item_drop_duration_ms": item_drop_ms,
         "drops": build_drops_section(cfg_text, drop),
         "option_roll": build_option_roll_section(cfg_text, cfg),
@@ -343,7 +350,15 @@ def main():
         "exp table trimmed 402 -> 400 entries (index = level-1, levels 1..=400); "
         "OpenMU's two padding cells (index-0 and the +1 read guard) have no v2 reader",
         "v1 spec sample total_exp_by_level level 3 = 396 was a typo; authentic value 440 (formula-correct)",
-        "tick_duration_ms 100 is a mu-core decision (4), not an OpenMU value",
+        "tick_duration_ms 50 is a mu-core decision (4), not an OpenMU value",
+        "move_step_units 9830 is a mu-core decision, not an OpenMU value; "
+        "classic movement is tile-grid, where speed is the cadence between "
+        "one-tile move actions rather than a step distance, so no classic "
+        "column maps onto a per-tick distance — the quantity is ours. Its "
+        "value is set from the classic base walk RATE, which does transfer: "
+        "OpenMU's walk speed 12 steps a tile every 4000/12 ms = 3.0 tiles/s, "
+        "which at the 50 ms tick is 9830 sub-units; a typical monster moves "
+        "one tile per 400 ms = 2.5 tiles/s, the classic 1.2x chase margin",
         "zen_caps 2000000000 override decision 7; OpenMU source has int.MaxValue",
         "nested drops/option_roll sections carry review only, no source_version "
         "(provenance is the enclosing record's source_version)",
@@ -356,7 +371,7 @@ def main():
         "craft service; one number, one home",
     ]
     cov = {
-        "files": [exp_path, cfg_path],
+        "files": [repo_relative(exp_path), repo_relative(cfg_path)],
         "records": exp_count + cfg_count,
         "by_source_version": {"075": exp_count + cfg_count},
         "review_count": exp_count + cfg_count,  # both records carry a review

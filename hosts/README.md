@@ -118,3 +118,26 @@ The create-character flow, in order:
   it is deliberately absent from `CreatedCharacter` (every class starts with the same empty
   bag; the starter items are all worn). Stamp the create date, store the client key-config
   blob, and deliver the created-character view. Rate/frequency limiting stays a host duty.
+
+## Movement speed
+
+The per-tick step distance is **core data, not a host constant.**
+
+- **Read it from the dataset.** `move_step_units` lives in `data/game_config.json`, typed
+  as `MoveStep` (`core/src/components/spatial.rs`) and bounded `1..=UNITS_PER_TILE` by its
+  parse. Read it from there and keep **no second copy** — two copies is how a predicting
+  client and the authoritative server end up disagreeing about how fast a character moves.
+- **Widen it through the provided conversion.** `impl From<MoveStep> for StepMagnitude` is
+  total; pass its result to `resolve_step`. Do not write your own conversion, and do not
+  manufacture a fallback speed when the value can't be read — refuse loudly instead.
+- **Rebuild every reader together.** Hosts embed the data file at build time, so a value
+  change that reaches one host and not the other is a client-server speed divergence — a
+  visible rubber-band, silent until someone plays. Rebuild and redeploy every consumer in
+  the same pass.
+- **Core does not read this field.** No core service consumes `move_step_units`;
+  `resolve_step` takes the magnitude as a parameter and the host supplies it. That is
+  deliberate hexagonal shape — don't expect core to apply the speed for you.
+- **The bound is structural, not a preference.** A step larger than one whole tile would
+  let a mover cross a blocked tile without ever standing on it, defeating the
+  destination-only walkability check. A character that must move faster than one tile per
+  tick needs sub-stepping, never a larger step.

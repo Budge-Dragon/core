@@ -1,7 +1,7 @@
 {
   "files": [
-    "/Users/golan/Documents/repos/mu-core/data/exp_tables.json",
-    "/Users/golan/Documents/repos/mu-core/data/game_config.json"
+    "data/exp_tables.json",
+    "data/game_config.json"
   ],
   "records": 2,
   "by_source_version": {
@@ -35,7 +35,8 @@
   "notes": [
     "exp table trimmed 402 -> 400 entries (index = level-1, levels 1..=400); OpenMU's two padding cells (index-0 and the +1 read guard) have no v2 reader",
     "v1 spec sample total_exp_by_level level 3 = 396 was a typo; authentic value 440 (formula-correct)",
-    "tick_duration_ms 100 is a mu-core decision (4), not an OpenMU value",
+    "tick_duration_ms 50 is a mu-core decision (4), not an OpenMU value",
+    "move_step_units 9830 is a mu-core decision, not an OpenMU value; classic movement is tile-grid, where speed is the cadence between one-tile move actions rather than a step distance, so no classic column maps onto a per-tick distance — the quantity is ours. Its value is set from the classic base walk RATE, which does transfer: OpenMU's walk speed 12 steps a tile every 4000/12 ms = 3.0 tiles/s, which at the 50 ms tick is 9830 sub-units; a typical monster moves one tile per 400 ms = 2.5 tiles/s, the classic 1.2x chase margin",
     "zen_caps 2000000000 override decision 7; OpenMU source has int.MaxValue",
     "nested drops/option_roll sections carry review only, no source_version (provenance is the enclosing record's source_version)",
     "option_roll shape is options-owned, drops shape is drops-owned; this extractor owns the game_config.json envelope/record around them",
