@@ -261,7 +261,7 @@ def build_game_config(cfg, cfg_text, drop, inv, glob):
     return {
         "source_version": "075",
         "tick_duration_ms": 50,  # ours (decision 4), not an OpenMU value
-        "move_step_units": 9_830,  # ours, set from the classic base walk rate
+        "move_step_units": 22_938,  # ours, set from the classic base walk rate
         "item_drop_duration_ms": item_drop_ms,
         "drops": build_drops_section(cfg_text, drop),
         "option_roll": build_option_roll_section(cfg_text, cfg),
