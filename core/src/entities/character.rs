@@ -287,12 +287,15 @@ impl Character {
     }
 
     /// This character arrived at `placement`: the placement is reseated AND
-    /// the destination map joins the discovered set in one move, so "arrive
-    /// without discovering" is unrepresentable. The shared writeback every
-    /// map-crossing funnels through — warp, enter-gate traversal, respawn,
-    /// town portal. Idempotent on the set for a same-map arrival; every other
-    /// field carried unchanged.
-    pub(crate) fn arrived_at(self, placement: Placement) -> Character {
+    /// `placement.map` joins the discovered set in one move, so "arrive
+    /// somewhere without discovering it" is unrepresentable. Idempotent on the
+    /// set for a same-map arrival; every other field carried unchanged.
+    ///
+    /// Takes a placement a service has already resolved, and seats it as given
+    /// — legality is settled before the arrival, never re-decided here, so
+    /// there is nothing to reject and nothing to roll.
+    #[must_use]
+    pub fn arrived_at(self, placement: Placement) -> Character {
         Character {
             placement,
             discovered: self.discovered.inserted(placement.map),
