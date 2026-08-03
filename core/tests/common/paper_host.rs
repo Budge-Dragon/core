@@ -961,8 +961,7 @@ impl World {
             hits,
         } = &outcome
         {
-            let placement_value = or_abort(serde_json::to_value(caster_placement));
-            self.persist_character_with(caster_index, "placement", placement_value);
+            self.arrive(caster_index, *caster_placement);
             for hit in hits {
                 self.write_back_target_hit(target_indices, hit);
             }
@@ -1088,8 +1087,7 @@ impl World {
             hits,
         } = &outcome
         {
-            let placement_value = or_abort(serde_json::to_value(caster_placement));
-            self.persist_character_with(caster_index, "placement", placement_value);
+            self.arrive(caster_index, *caster_placement);
             for hit in hits {
                 self.write_back_combatant_hit(batch, hit);
             }
@@ -1166,8 +1164,7 @@ impl World {
                 let effects_value = or_abort(serde_json::to_value(active_effects));
                 self.persist_character_with(index, "active_effects", effects_value);
                 if let Some(placement) = displacement {
-                    let placement_value = or_abort(serde_json::to_value(placement));
-                    self.persist_character_with(index, "placement", placement_value);
+                    self.arrive(index, placement);
                 }
             }
             Combatant::Monster(index) => {
@@ -1192,13 +1189,7 @@ impl World {
     pub fn apply_growth(&mut self, char_index: usize, gained: Exp) -> Vec<GrowthEvent> {
         let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (grown, events) = apply_experience(character, gained, &self.atlas);
-        let persisted = persist(grown);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, grown);
         events
     }
 
@@ -1291,13 +1282,7 @@ impl World {
             &self.atlas,
             DeathPenalty::Applied,
         );
-        let persisted = persist(dead);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, dead);
         events
     }
 
@@ -1323,13 +1308,7 @@ impl World {
             &self.atlas,
             combat_death_penalty(attacker_kind),
         );
-        let persisted = persist(dead);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, dead);
         events
     }
 
@@ -1354,13 +1333,7 @@ impl World {
         let sanction = player_kill_sanction(victim, PvpContext::Open);
         let killer = or_abort(self.characters.get(killer_index).ok_or("no killer")).clone();
         let (flagged, event) = resolve_player_kill(killer, sanction, at, host_tick());
-        let persisted = persist(flagged);
-        let slot = or_abort(
-            self.characters
-                .get_mut(killer_index)
-                .ok_or("no killer slot"),
-        );
-        *slot = persisted;
+        self.store_character(killer_index, flagged);
         event
     }
 
@@ -1373,13 +1346,7 @@ impl World {
     pub fn decay_reputation_of(&mut self, char_index: usize, now: Tick) -> Option<PkEvent> {
         let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (faded, event) = decay_reputation(character, now, host_tick());
-        let persisted = persist(faded);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, faded);
         event
     }
 
@@ -1399,13 +1366,7 @@ impl World {
         let victim = self.monster(victim_index);
         let (killer, event) =
             accelerate_reputation_decay(character, &victim, &self.atlas, host_tick());
-        let persisted = persist(killer);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, killer);
         event
     }
 
@@ -1479,13 +1440,7 @@ impl World {
     pub fn respawn_player(&mut self, char_index: usize) -> Option<Respawned> {
         let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
         let (revived, respawned) = respawn(character, &self.atlas, &mut self.rng);
-        let persisted = persist(revived);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, revived);
         respawned
     }
 
@@ -1616,10 +1571,10 @@ impl World {
     /// Steps the character at `char_index` one tile toward `target` (seam 4):
     /// reads its placement, runs [`resolve_step`] over the map's terrain grid from
     /// the held atlas at a one-tile speed, and on `Resolved` writes the new
-    /// placement back *through* the persist seam by serde-editing the character's
-    /// `placement` field. A `Blocked` step leaves the character put. Returns the
-    /// step outcome. Grounded steps are grid-checked, so a scenario walks along a
-    /// walkable run ([`walkable_run`]).
+    /// placement back *through* the persist seam with [`Self::arrive`]. A
+    /// `Blocked` step leaves the character put. Returns the step outcome.
+    /// Grounded steps are grid-checked, so a scenario walks along a walkable run
+    /// ([`walkable_run`]).
     pub fn step(&mut self, char_index: usize, target: WorldPos) -> StepOutcome {
         let placement = self.character(char_index).placement();
         let grid = or_abort(
@@ -1629,8 +1584,7 @@ impl World {
         );
         let outcome = resolve_step(placement, target, ONE_TILE, grid);
         if let StepOutcome::Resolved { placement } = &outcome {
-            let value = or_abort(serde_json::to_value(placement));
-            self.persist_character_with(char_index, "placement", value);
+            self.arrive(char_index, *placement);
         }
         outcome
     }
@@ -1669,8 +1623,7 @@ impl World {
         );
         let mut moved = placement;
         moved.movement = movement;
-        let value = or_abort(serde_json::to_value(moved));
-        self.persist_character_with(char_index, "placement", value);
+        self.arrive(char_index, moved);
         outcomes
     }
 
@@ -1722,13 +1675,7 @@ impl World {
         let inventory = self.inventory(char_index).clone();
         let (new_character, new_inventory, events) =
             use_consumable(character, inventory, cell, &self.atlas);
-        let persisted = persist(new_character);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, new_character);
         self.store_inventory(char_index, new_inventory);
         events
     }
@@ -1745,13 +1692,7 @@ impl World {
         let wings = self.wings(char_index);
         let entry = or_abort(self.atlas.warp_by_index(index).ok_or("unknown warp index"));
         let (moved, outcome) = resolve_warp(character, entry, &self.atlas, wings, &mut self.rng);
-        let persisted = persist(moved);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, moved);
         outcome
     }
 
@@ -1784,13 +1725,7 @@ impl World {
         );
         let (moved, outcome) =
             traverse_enter_gate(character, gate, &self.atlas, wings, &mut self.rng);
-        let persisted = persist(moved);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, moved);
         outcome
     }
 
@@ -1804,13 +1739,7 @@ impl World {
         let inventory = self.inventory(char_index).clone();
         let (moved, new_inventory, outcome) =
             use_town_portal(character, inventory, cell, &self.atlas, &mut self.rng);
-        let persisted = persist(moved);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, moved);
         self.store_inventory(char_index, new_inventory);
         outcome
     }
@@ -1823,8 +1752,7 @@ impl World {
     pub fn place_at(&mut self, char_index: usize, at: TileCoord) {
         let mut placement = self.character(char_index).placement();
         placement.position = at.to_world();
-        let value = or_abort(serde_json::to_value(placement));
-        self.persist_character_with(char_index, "placement", value);
+        self.arrive(char_index, placement);
     }
 
     /// Sells the item covering `cell` from the bag of the character at
@@ -2084,10 +2012,33 @@ impl World {
         *slot = persist(session);
     }
 
+    /// Persists `character` into the character slot at `char_index` — the twin
+    /// of [`Self::store_inventory`] and [`Self::store_session`], and the one door
+    /// every whole-character write goes through. Written once because no test can
+    /// catch a dropped round-trip: the value is identical either way, only the
+    /// reload re-proof disappears.
+    fn store_character(&mut self, char_index: usize, character: Character) {
+        let slot = or_abort(
+            self.characters
+                .get_mut(char_index)
+                .ok_or("no character slot"),
+        );
+        *slot = persist(character);
+    }
+
+    /// Writes `placement` onto the character at `char_index` through the core
+    /// [`Character::arrived_at`] port and persists the result. The port couples
+    /// the reseat with the discovery insert, so no drive here can move a
+    /// character without discovering where it went.
+    fn arrive(&mut self, char_index: usize, placement: Placement) {
+        let moved = self.character(char_index).clone().arrived_at(placement);
+        self.store_character(char_index, moved);
+    }
+
     /// Replaces one top-level wire field of the character at `char_index` with
-    /// `value` and re-loads it — the serde-only mutation path (`Character` has no
-    /// setters), which re-proves every invariant on the way in. The one seam a
-    /// wallet balance or a stepped placement rides back through.
+    /// `value` and re-loads it, re-proving every invariant on the way in. The
+    /// seam for the fields with no typed writeback — zen, vitals, effects. A
+    /// placement rides [`Self::arrive`] instead.
     fn persist_character_with(&mut self, char_index: usize, field: &str, value: serde_json::Value) {
         let character = or_abort(self.characters.get(char_index).ok_or("no character"));
         let mut wire = or_abort(serde_json::to_value(character));
@@ -2096,13 +2047,7 @@ impl World {
             object.insert(field.to_owned(), value);
         }
         let updated: Character = or_abort(serde_json::from_value(wire));
-        let persisted = persist(updated);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, updated);
     }
 
     // --- Party lifecycle and the two shares. -------------------------------------
@@ -2502,8 +2447,7 @@ impl World {
         let (session, entrant, bag, outcome) =
             minigame::enter_mini_game(session, &handle, entrant, bag, &mut self.rng);
         self.store_mini_session(session_index, session);
-        let slot = or_abort(self.characters.get_mut(char_index).ok_or("no entrant slot"));
-        *slot = persist(entrant);
+        self.store_character(char_index, entrant);
         let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
         *slot = persist(bag);
         outcome
@@ -2593,13 +2537,7 @@ impl World {
             &self.atlas,
             DeathPenalty::Waived,
         );
-        let persisted = persist(dead);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no character slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, dead);
         events
     }
 
@@ -2642,13 +2580,7 @@ impl World {
             minigame::MoneyGrant::Credited { character }
             | minigame::MoneyGrant::OverCap { character } => character,
         };
-        let persisted = persist(refunded);
-        let slot = or_abort(
-            self.characters
-                .get_mut(char_index)
-                .ok_or("no refundee slot"),
-        );
-        *slot = persisted;
+        self.store_character(char_index, refunded);
     }
 
     /// Applies one grant decision to the character at `char_index` through its
@@ -2661,13 +2593,7 @@ impl World {
                 let character =
                     or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
                 let (grown, _events) = apply_experience(character, *amount, &self.atlas);
-                let persisted = persist(grown);
-                let slot = or_abort(
-                    self.characters
-                        .get_mut(char_index)
-                        .ok_or("no finisher slot"),
-                );
-                *slot = persisted;
+                self.store_character(char_index, grown);
             }
             minigame::GrantDecision::Money { amount } => {
                 let character =
@@ -2676,13 +2602,7 @@ impl World {
                     minigame::MoneyGrant::Credited { character }
                     | minigame::MoneyGrant::OverCap { character } => character,
                 };
-                let persisted = persist(credited);
-                let slot = or_abort(
-                    self.characters
-                        .get_mut(char_index)
-                        .ok_or("no finisher slot"),
-                );
-                *slot = persisted;
+                self.store_character(char_index, credited);
             }
             minigame::GrantDecision::ItemDrop { group } => {
                 let character =

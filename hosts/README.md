@@ -119,6 +119,64 @@ The create-character flow, in order:
   bag; the starter items are all worn). Stamp the create date, store the client key-config
   blob, and deliver the created-character view. Rate/frequency limiting stays a host duty.
 
+### Saving where a character stood (FND-06)
+- **One typed writeback: `Character::arrived_at(placement)`.** It seats the placement
+  **and** records `placement.map` as discovered in the same move, so "moved there
+  without discovering it" cannot be written; a same-map arrival leaves the discovered
+  set untouched. There is deliberately **no placement-only setter** — one would hand
+  the coupling back to you, which is a game rule living in a persistence layer. Do not
+  reach for `serde_json` to edit a stored `placement` field either: that is the same
+  rule re-implemented one layer down, and a cross-map edit forces you to hand-write the
+  discovered array too or the record fails to load.
+- **Only ever pass a `Placement` a core service computed** — `resolve_step`,
+  `resolve_warp`, `traverse_enter_gate`, `use_town_portal`, `respawn`, a skill
+  outcome's `caster_placement` or target displacement, `MiniGameEvent::WarpedOut { to }`.
+  Never a client-claimed position. Core cannot tell the difference — a `Placement`
+  carries no proof of who made it, exactly as `CombatProfile.kind` carries no proof —
+  so this is a host duty of the same kind.
+- **One assembly is legal, and only one:** a service that decides a single
+  *component* of a placement rather than a whole one — today `change_flight`, which
+  returns a bare `Movement` — is saved by struct-updating that **core-returned value**
+  onto the character's **own current, core-produced** placement. Both halves must be
+  core's. That is not "building a placement field by field" from client input, which
+  stays banned outright: every field still originates in core, and the character never
+  moves. Do not widen a service's return type to a whole `Placement` to avoid this —
+  `change_flight` is shared with monsters, and making it `Character`-shaped would leak
+  character-ness into a service that has none.
+- **A forged placement is permanent, not a one-off teleport.** The discovered set is
+  grow-only: nothing in core ever removes a map. Warp legality reads it — an
+  undiscovered destination is refused with `NotDiscovered`, and `warp_menu` shows it
+  locked. So writing one placement on a map the character never legitimately reached
+  unlocks that map as a warp destination **for the life of that character**, and no
+  later write takes it back.
+- **Relocate first, then write.** Never persist a character standing somewhere it
+  cannot resume: dead inside the respawn delay, inside a mini-game instance, inside a
+  duel arena. Move it out through the core path that owns that exit (`respawn` for a
+  death; the session's `WarpedOut` landing for an alive mini-game member) and persist
+  the character that path produced. **Core does not refuse the bad write** — `respawn`
+  itself calls `arrived_at` while the character is still `Dead` — so "dead and placed"
+  is a legal in-flight state, not something core can reject on your behalf.
+- **You own the write cadence; core has no clock.** Core never decides when the row is
+  written: it takes ticks as input and returns state. Whatever cadence you pick, every
+  step since the last write is lost if the process dies, and the character resumes at
+  the last written spot. Grow-only discovery makes that rollback harmless to the
+  discovered set — a map already recorded is never un-recorded.
+- **On a session takeover, the outgoing side must finish writing before the incoming
+  side reads.** Stop and flush the old session, *then* load the character. Reverse that
+  order and both sessions write the same row: the new session loads a stale position
+  and the old session's flush lands on top of it — a lost update that silently
+  teleports the player back, or overwrites a whole session's progress. Core has no
+  session, no connection and no concurrency; the hazard is entirely at your persistence
+  boundary.
+- **A row you wrote yourself is still untrusted when it comes back.** Load it through
+  the serde gate (`Character`'s `TryFrom<RawCharacter>`), which re-proves the
+  class-to-stats pairing and that the discovered set holds the stored placement map.
+  Add **no second check of your own** — two validators drift, and that drift is its own
+  bug. Know what the gate does **not** cover: it never asks whether the stored tile is
+  still walkable or whether the map still exists. A stored placement that has become
+  illegal since it was written is a known open gap, not something the gate quietly
+  handles.
+
 ## Movement speed
 
 The per-tick step distance is **core data, not a host constant.**

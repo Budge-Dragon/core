@@ -11,8 +11,9 @@
 //!
 //! Identity assertions are re-serialised-string equality
 //! (`serde_json::to_string(a) == serde_json::to_string(b)`), never value `==`:
-//! `Character` and several live types derive no `PartialEq`, and serialisation
-//! is canonical here (no float, no `HashMap`, stable field order).
+//! several live types derive no `PartialEq`, the canonical wire string is this
+//! suite's identity idiom for a whole value, and serialisation is canonical here
+//! (no float, no `HashMap`, stable field order).
 
 #[path = "common/paper_host.rs"]
 mod paper_host;
@@ -33,9 +34,10 @@ use mu_core::components::levels::OptionLevel;
 use mu_core::components::life::LifeState;
 use mu_core::components::movement::{FlightChange, Movement};
 use mu_core::components::party::{Leadership, MemberSlot, Membership, Vitality};
+use mu_core::components::placement::Placement;
 use mu_core::components::pool::Pool;
 use mu_core::components::reputation::{PkStage, PlayerKillCount, Standing};
-use mu_core::components::spatial::{Radius, WorldPos};
+use mu_core::components::spatial::{Facing, Radius, WorldPos};
 use mu_core::components::tile::{TerrainGrid, TileCoord, TileFacing};
 use mu_core::components::trade_window::Side;
 use mu_core::components::units::{CarriedZen, Exp, ItemLevel, Level, MapNumber, Tick, Zen};
@@ -6417,4 +6419,175 @@ fn sim_gate_a_created_dark_knight_enters_world_on_lorencia_wielding_its_small_ax
         wire(&persist(world.equipment(knight).clone())),
         "the seated worn kit is a persist fixpoint"
     );
+}
+
+// --- FND-06 · C1. The placement writeback as a public port. Integration tier --
+// --- on purpose: only an external consumer can observe the visibility. --------
+
+#[test]
+fn a_walked_placement_survives_the_persist_seam() {
+    let mut world = World::new(21, MapNumber(0));
+    let run = walkable_run(world.atlas(), MapNumber(0), 6);
+    let start = or_abort(run.first().copied().ok_or("the run has a first tile"));
+    let seated = dark_knight(30, 150, start);
+
+    // Never touched by the walk below — the walk moves the seated copy.
+    let durable = persist(seated.clone());
+    let durable_wire = wire(&durable);
+    let spawn_facing = durable.placement().facing;
+
+    let knight = world.seat_character(seated);
+
+    for tile in run.iter().skip(1) {
+        assert!(
+            matches!(
+                world.step(knight, tile.to_world()),
+                StepOutcome::Resolved { .. }
+            ),
+            "every tile of a walkable run is steppable"
+        );
+    }
+    // The run is horizontal, so walking it only would end on the spawn facing.
+    // Turning back west is what makes a dropped facing observable.
+    let back = or_abort(
+        run.get(run.len() - 2)
+            .copied()
+            .ok_or("the run has a last-but-one tile"),
+    );
+    assert!(
+        matches!(
+            world.step(knight, back.to_world()),
+            StepOutcome::Resolved { .. }
+        ),
+        "the step back west resolves"
+    );
+
+    let walked = world.character(knight).placement();
+    assert_ne!(
+        walked.facing, spawn_facing,
+        "the walk turned the character, so facing is a live part of this proof"
+    );
+
+    let saved = persist(durable.clone().arrived_at(walked));
+
+    assert_eq!(
+        saved.placement(),
+        walked,
+        "the reloaded placement is the walked one, whole"
+    );
+    assert_ne!(
+        saved.placement().facing,
+        spawn_facing,
+        "the walked facing survived the save, not the spawn facing"
+    );
+
+    assert_eq!(
+        without_placement(&durable_wire),
+        without_placement(&wire(&saved)),
+        "the writeback moved the character and changed nothing else"
+    );
+}
+
+#[test]
+fn a_placement_on_a_new_map_is_discovered_by_the_writeback() {
+    // The persist step is a structural proof: a reseat without the discovery
+    // insert lands on a map the set does not hold, which the load gate refuses.
+    let mut world = World::new(22, MapNumber(0));
+    let home = walkable_run(world.atlas(), MapNumber(0), 1);
+    let hero = world.seat_character(dark_knight(
+        30,
+        150,
+        or_abort(home.first().copied().ok_or("Lorencia has a walkable tile")),
+    ));
+
+    assert!(
+        world.character(hero).discovered().contains(MapNumber(0)),
+        "the seated knight knows only Lorencia"
+    );
+    assert!(
+        !world.character(hero).discovered().contains(MapNumber(2)),
+        "Devias is undiscovered before the arrival"
+    );
+
+    // A real walkable tile on Devias, found from the shipped terrain.
+    let devias = walkable_run(world.atlas(), MapNumber(2), 1);
+    let landing = Placement {
+        position: or_abort(devias.first().copied().ok_or("Devias has a walkable tile")).to_world(),
+        map: MapNumber(2),
+        ..world.character(hero).placement()
+    };
+
+    let arrived = persist(world.character(hero).clone().arrived_at(landing));
+
+    assert_eq!(
+        arrived.placement().map,
+        MapNumber(2),
+        "the character now stands on Devias"
+    );
+    assert!(
+        arrived.discovered().contains(MapNumber(2)),
+        "arriving on Devias discovered it"
+    );
+    assert!(
+        arrived.discovered().contains(MapNumber(0)),
+        "discovery is grow-only — Lorencia is not forgotten"
+    );
+}
+
+#[test]
+fn the_writeback_reseats_the_whole_placement_across_maps_and_modes() {
+    // The only scenario that varies `movement`, so the only one that catches a
+    // reseat which drops it. The landing is hand-built to vary every field at
+    // once — a host must never build one this way, only pass what core returned.
+    let mut world = World::new(23, MapNumber(0));
+    let home = walkable_run(world.atlas(), MapNumber(0), 1);
+    let hero = world.seat_character(dark_knight(
+        30,
+        150,
+        or_abort(home.first().copied().ok_or("Lorencia has a walkable tile")),
+    ));
+
+    let before = world.character(hero).placement();
+    assert_eq!(before.movement, Movement::Grounded, "seated on the ground");
+
+    // Icarus is the sky map, so Flying is its authentic traversal mode.
+    let icarus = walkable_run(world.atlas(), MapNumber(10), 1);
+    let landing = Placement {
+        position: or_abort(icarus.first().copied().ok_or("Icarus has a walkable tile")).to_world(),
+        facing: Facing::POS_Y,
+        movement: Movement::Flying,
+        map: MapNumber(10),
+    };
+    assert_ne!(landing.position, before.position);
+    assert_ne!(landing.facing, before.facing);
+    assert_ne!(landing.movement, before.movement);
+    assert_ne!(landing.map, before.map);
+
+    let arrived = persist(world.character(hero).clone().arrived_at(landing));
+
+    assert_eq!(
+        arrived.placement(),
+        landing,
+        "every placement field is the arrival's — position, facing, movement, map"
+    );
+    assert_eq!(
+        arrived.discovered().iter().collect::<Vec<_>>(),
+        vec![MapNumber(0), MapNumber(10)],
+        "the set grew to exactly Lorencia plus Icarus"
+    );
+}
+
+/// A character's canonical wire form minus its `placement` key, so "every other
+/// field is unchanged" stays one assertion as fields are added. Read-only — it
+/// never rebuilds a domain value from edited wire.
+fn without_placement(character_wire: &str) -> String {
+    let mut value: serde_json::Value =
+        or_abort(serde_json::from_str(character_wire).map_err(|_| "character wire is json"));
+    let object = or_abort(
+        value
+            .as_object_mut()
+            .ok_or("a serialized character is a json object"),
+    );
+    object.remove("placement");
+    or_abort(serde_json::to_string(object).map_err(|_| "the scrubbed object re-serializes"))
 }
