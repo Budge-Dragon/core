@@ -8,11 +8,6 @@
 //! that would break it. The poison teeth-check pins the ★caster-scaled★ model —
 //! a poison that read the target's HP instead of the caster's energy is caught.
 
-use std::io::Write;
-use std::path::PathBuf;
-
-use serde::de::DeserializeOwned;
-
 use mu_core::components::active_effect::{ActiveEffect, ActiveEffects};
 use mu_core::components::element::PerElement;
 use mu_core::components::movement::{Mobility, Movement, SlowRatio};
@@ -22,24 +17,9 @@ use mu_core::components::spatial::{Facing, StepMagnitude, UNITS_PER_TILE};
 use mu_core::components::stats::Stats;
 use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{MapNumber, Resistance, Tick, TickDuration};
-use mu_core::data::ancient_sets::AncientSet;
-use mu_core::data::atlas::{Atlas, StaticData};
-use mu_core::data::box_drops::BoxDrop;
-use mu_core::data::chaos_mixes::ChaosMix;
-use mu_core::data::classes::ClassRecord;
-use mu_core::data::common::DataFile;
+use mu_core::data::atlas::Atlas;
 use mu_core::data::effects::Ailment;
-use mu_core::data::exp_tables::ExpTable;
-use mu_core::data::game_config::GameConfig;
-use mu_core::data::gates_warps::GateWarpRecord;
-use mu_core::data::item_definitions::ItemDefinition;
-use mu_core::data::map_definitions::MapDefinition;
-use mu_core::data::monster_definitions::{MonsterCombat, MonsterDefinition, MonsterRole};
-use mu_core::data::npc_shops::MerchantShop;
-use mu_core::data::skills::Skill;
-use mu_core::data::spawns::Spawn;
-use mu_core::data::special_drops::SpecialDropRecord;
-use mu_core::data::terrain::{MapTerrain, TerrainBytes};
+use mu_core::data::monster_definitions::{MonsterCombat, MonsterRole};
 use mu_core::entities::character::Character;
 use mu_core::events::effect::{BuffCastOutcome, EffectEvent};
 use mu_core::events::movement::StepOutcome;
@@ -50,78 +30,14 @@ use mu_core::services::movement::resolve_step;
 use mu_core::services::profile::{character_profile, effective_profile};
 use mu_core::services::skills::{HealRef, SkillRouting, cast_heal, route};
 
-// --- Self-contained dataset harness (load failures abort, never unwrap). ---
+#[path = "common/dataset.rs"]
+mod dataset;
 
-/// Resolves a `Result` the real checked-in dataset makes infallible; an `Err`
-/// here is a broken checkout, not a test condition, so it aborts (no banned
-/// suppressor outside a `#[test]` body).
-fn or_abort<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(error) => {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "effect_simulation harness: load failure: {error}");
-            std::process::abort()
-        }
-    }
-}
-
-fn data_path(name: &str) -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("..");
-    path.push("data");
-    path.push(format!("{name}.json"));
-    path
-}
-
-fn load<T: DeserializeOwned>(name: &str) -> DataFile<T> {
-    let text = or_abort(std::fs::read_to_string(data_path(name)));
-    or_abort(serde_json::from_str(&text))
-}
-
-fn load_terrain() -> Vec<MapTerrain> {
-    (0u8..=10)
-        .map(|map| {
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.push("..");
-            path.push("data");
-            path.push("terrain");
-            path.push(format!("{map}.bin"));
-            MapTerrain {
-                map: MapNumber(map),
-                bytes: or_abort(TerrainBytes::new(or_abort(std::fs::read(&path)))),
-            }
-        })
-        .collect()
-}
-
-fn real_atlas() -> Atlas {
-    let data = StaticData {
-        maps: load::<MapDefinition>("map_definitions"),
-        gates_warps: load::<GateWarpRecord>("gates_warps"),
-        monsters: load::<MonsterDefinition>("monster_definitions"),
-        spawns: load::<Spawn>("spawns"),
-        skills: load::<Skill>("skills"),
-        items: load::<ItemDefinition>("item_definitions"),
-        box_drops: load::<BoxDrop>("box_drops"),
-        special_drops: load::<SpecialDropRecord>("special_drops"),
-        ancient_sets: load::<AncientSet>("ancient_sets"),
-        chaos_mixes: load::<ChaosMix>("chaos_mixes"),
-        shops: load::<MerchantShop>("npc_shops"),
-        classes: load::<ClassRecord>("classes"),
-        exp_tables: load::<ExpTable>("exp_tables"),
-        game_config: load::<GameConfig>("game_config"),
-        mini_games: DataFile {
-            records: Vec::new(),
-        },
-        terrain: load_terrain(),
-    };
-    or_abort(Atlas::parse(data))
-}
+use dataset::{or_fail, real_atlas};
 
 /// The shared simulation tick length: 50 ms.
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// The cadence in ticks at the shared 50 ms tick length: 3000 ms / 50 = 60.
@@ -144,7 +60,7 @@ fn wizard(energy: u16) -> Character {
             "ability": {"current": 400, "max": 400}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// The energy stat of a character (the wizardry stat direct spells scale off).
@@ -176,7 +92,7 @@ fn first_monster(atlas: &Atlas) -> (MonsterCombat, PerElement<Resistance>) {
             } => Some((*combat, *resistances)),
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => None,
         });
-    or_abort(found.ok_or("the dataset ships fighting monsters"))
+    or_fail(found.ok_or("the dataset ships fighting monsters"))
 }
 
 /// The first heal skill the real dataset ships, routed to a [`HealRef`].
@@ -185,7 +101,7 @@ fn heal_skill(atlas: &Atlas) -> HealRef<'_> {
         SkillRouting::Heal(reference) => Some(reference),
         SkillRouting::Damaging(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => None,
     });
-    or_abort(found.ok_or("the dataset ships a heal skill"))
+    or_fail(found.ok_or("the dataset ships a heal skill"))
 }
 
 /// The resolved per-tick poison damage a caster inflicts, read off the applied
@@ -209,7 +125,7 @@ fn poison_per_tick(caster: &Character) -> u32 {
         | ActiveEffect::Frozen { .. }
         | ActiveEffect::DefenseReduction { .. } => None,
     };
-    or_abort(per_tick.ok_or("poison ailment must apply poison"))
+    or_fail(per_tick.ok_or("poison ailment must apply poison"))
 }
 
 #[test]

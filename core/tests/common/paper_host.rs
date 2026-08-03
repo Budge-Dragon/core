@@ -133,7 +133,7 @@ use mu_core::services::travel::{resolve_warp, traverse_enter_gate, use_town_port
 use mu_core::services::wear::{WearEvent, resolve_strike_with_wear, wear_from_strike};
 
 use dataset::real_static_data;
-pub use dataset::{or_abort, real_atlas};
+pub use dataset::{or_fail, real_atlas};
 use rng::TestRng;
 
 /// The one owned world value: the held static [`Atlas`], one seeded stream, the
@@ -187,26 +187,26 @@ pub struct World {
 /// The persist seam — the database write/read boundary abstracted. Serialises a
 /// live value and reads it straight back, re-proving every invariant on load.
 /// Infallible over the harness's own values (they are built from valid data),
-/// so the two `Result`s resolve through [`or_abort`] rather than a banned
+/// so the two `Result`s resolve through [`or_fail`] rather than a banned
 /// suppressor.
 #[must_use]
 pub fn persist<T: Serialize + DeserializeOwned>(value: T) -> T {
-    let wire = or_abort(serde_json::to_string(&value));
+    let wire = or_fail(serde_json::to_string(&value));
     // The seam consumes the pre-persist value: the host no longer holds it,
     // only the copy read back from the boundary survives.
     drop(value);
-    or_abort(serde_json::from_str(&wire))
+    or_fail(serde_json::from_str(&wire))
 }
 
 /// The canonical wire string of a value — one half of the persist seam, for the
 /// replay trace to record a step's outcome by its serialized form (the harness's
 /// re-serialized-string identity idiom). Infallible over harness values, so the
-/// `Result` resolves through [`or_abort`] rather than a banned suppressor — which
+/// `Result` resolves through [`or_fail`] rather than a banned suppressor — which
 /// is why a scenario's composed-run driver can collect the trace without a test's
 /// `unwrap`.
 #[must_use]
 pub fn wire<T: Serialize>(value: &T) -> String {
-    or_abort(serde_json::to_string(value))
+    or_fail(serde_json::to_string(value))
 }
 
 /// The live sets alone, serialised for a snapshot: the atlas, the stream, and
@@ -293,7 +293,7 @@ impl World {
     ) -> Self {
         let mut data = real_static_data();
         data.mini_games.records = definitions;
-        Self::from_atlas(or_abort(Atlas::parse(data)), seed, map)
+        Self::from_atlas(or_fail(Atlas::parse(data)), seed, map)
     }
 
     /// The shared constructor: a fresh world on `map` over an already-parsed
@@ -333,31 +333,31 @@ impl World {
     /// The character at `index`.
     #[must_use]
     pub fn character(&self, index: usize) -> &Character {
-        or_abort(self.characters.get(index).ok_or("no character at index"))
+        or_fail(self.characters.get(index).ok_or("no character at index"))
     }
 
     /// The bag of the character at `index`.
     #[must_use]
     pub fn inventory(&self, index: usize) -> &Inventory {
-        or_abort(self.inventories.get(index).ok_or("no inventory at index"))
+        or_fail(self.inventories.get(index).ok_or("no inventory at index"))
     }
 
     /// The worn set of the character at `index`.
     #[must_use]
     pub fn equipment(&self, index: usize) -> &Equipment {
-        or_abort(self.equipment.get(index).ok_or("no equipment at index"))
+        or_fail(self.equipment.get(index).ok_or("no equipment at index"))
     }
 
     /// The monster instance at `index`.
     #[must_use]
     pub fn monster(&self, index: usize) -> MonsterInstance {
-        *or_abort(self.monsters.get(index).ok_or("no monster at index"))
+        *or_fail(self.monsters.get(index).ok_or("no monster at index"))
     }
 
     /// The ground item at `index`.
     #[must_use]
     pub fn ground_item(&self, index: usize) -> &WorldItem {
-        or_abort(
+        or_fail(
             self.ground_items
                 .get(index)
                 .ok_or("no ground item at index"),
@@ -374,7 +374,7 @@ impl World {
     /// The ground zen pile at `index`.
     #[must_use]
     pub fn ground_zen(&self, index: usize) -> &WorldZen {
-        or_abort(self.ground_zen.get(index).ok_or("no ground zen at index"))
+        or_fail(self.ground_zen.get(index).ok_or("no ground zen at index"))
     }
 
     /// How many money piles lie on the ground — proves a reaped pile left the
@@ -387,7 +387,7 @@ impl World {
     /// The trade session at `index`.
     #[must_use]
     pub fn session(&self, index: usize) -> &TradeSession {
-        or_abort(self.sessions.get(index).ok_or("no session at index"))
+        or_fail(self.sessions.get(index).ok_or("no session at index"))
     }
 
     /// Seats a character through the persist seam and returns its index. Its
@@ -522,16 +522,16 @@ impl World {
     /// events are routed to the delivery log. A gearless, effect-free exchange
     /// is byte-identical to the bare strike (empty fold + empty pools).
     pub fn strike(&mut self, attacker_index: usize, target_index: usize) -> AttackOutcome {
-        let attacker = or_abort(self.characters.get(attacker_index).ok_or("no attacker"));
+        let attacker = or_fail(self.characters.get(attacker_index).ok_or("no attacker"));
         let attacker_worn =
-            or_abort(self.equipment.get(attacker_index).ok_or("no worn set")).clone();
+            or_fail(self.equipment.get(attacker_index).ok_or("no worn set")).clone();
         let attacker_view = effective_profile(
             equipped_profile(attacker, &attacker_worn, &self.atlas),
             &attacker.active_effects(),
         );
 
-        let monster = *or_abort(self.monsters.get(target_index).ok_or("no target"));
-        let def = or_abort(
+        let monster = *or_fail(self.monsters.get(target_index).ok_or("no target"));
+        let def = or_fail(
             self.atlas
                 .monster(monster.number)
                 .ok_or("unknown monster def"),
@@ -553,7 +553,7 @@ impl World {
                 ..
             } => monster_profile(combat, resistances, combat.level),
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
-                return or_abort(Err::<AttackOutcome, _>(
+                return or_fail(Err::<AttackOutcome, _>(
                     "strike was handed a non-combat monster",
                 ));
             }
@@ -572,7 +572,7 @@ impl World {
         );
 
         let persisted_worn = persist(wear.attacker_worn);
-        let worn_slot = or_abort(self.equipment.get_mut(attacker_index).ok_or("no worn slot"));
+        let worn_slot = or_fail(self.equipment.get_mut(attacker_index).ok_or("no worn slot"));
         *worn_slot = persisted_worn;
         self.delivered_wear.extend(wear.attacker_events);
         self.delivered_wear.extend(wear.defender_events);
@@ -580,7 +580,7 @@ impl World {
         let mut updated = monster;
         updated.health = new_health;
         let persisted = persist(updated);
-        let slot = or_abort(self.monsters.get_mut(target_index).ok_or("no target slot"));
+        let slot = or_fail(self.monsters.get_mut(target_index).ok_or("no target slot"));
         *slot = persisted;
         outcome
     }
@@ -592,8 +592,8 @@ impl World {
     /// aggregate's positional pairing to its event is the delivery key (V8) — the
     /// harness never invents an id.
     pub fn spawn_from(&mut self, number: MonsterNumber, placement: SpawnPlacement) -> SpawnResult {
-        let def = or_abort(self.atlas.monster(number).ok_or("unknown monster number"));
-        let grid = or_abort(
+        let def = or_fail(self.atlas.monster(number).ok_or("unknown monster number"));
+        let grid = or_fail(
             self.atlas
                 .terrain_grid(self.map)
                 .ok_or("no terrain grid for map"),
@@ -614,7 +614,7 @@ impl World {
         now: Tick,
     ) -> MonsterIntent {
         let mob = self.monster(index);
-        let def = or_abort(
+        let def = or_fail(
             self.atlas
                 .monster(mob.number)
                 .ok_or("unknown monster number"),
@@ -624,12 +624,12 @@ impl World {
             | MonsterRole::Guard { behavior, .. }
             | MonsterRole::Trap { behavior, .. } => *behavior,
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
-                return or_abort(Err::<MonsterIntent, _>(
+                return or_fail(Err::<MonsterIntent, _>(
                     "advance handed a non-combat monster",
                 ));
             }
         };
-        let grid = or_abort(
+        let grid = or_fail(
             self.atlas
                 .terrain_grid(mob.placement.map)
                 .ok_or("no terrain grid"),
@@ -653,7 +653,7 @@ impl World {
             &mut self.rng,
         );
         let persisted = persist(advanced);
-        let slot = or_abort(self.monsters.get_mut(index).ok_or("no monster slot"));
+        let slot = or_fail(self.monsters.get_mut(index).ok_or("no monster slot"));
         *slot = persisted;
         intent
     }
@@ -664,8 +664,8 @@ impl World {
     /// already in hand. The `KillResolution` is an outcome the host delivers, not
     /// live state, so it does not re-enter the world through persist.
     pub fn resolve_kill_of(&mut self, killer_index: usize, victim_index: usize) -> KillResolution {
-        let killer = or_abort(self.characters.get(killer_index).ok_or("no killer"));
-        let victim = *or_abort(self.monsters.get(victim_index).ok_or("no victim"));
+        let killer = or_fail(self.characters.get(killer_index).ok_or("no killer"));
+        let victim = *or_fail(self.monsters.get(victim_index).ok_or("no victim"));
         resolve_kill(killer, &victim, &self.atlas, &mut self.rng)
     }
 
@@ -685,7 +685,7 @@ impl World {
         position: WorldPos,
         stamp: ItemStamp,
     ) -> (usize, ItemInstance) {
-        let def = or_abort(self.atlas.item(item).ok_or("unknown dropped item"));
+        let def = or_fail(self.atlas.item(item).ok_or("unknown dropped item"));
         let rolled = roll_dropped_item(def, level, rarity, self.atlas.option_roll(), &mut self.rng);
         let index = self.seat_ground_item(rolled.clone(), position, stamp);
         (index, rolled)
@@ -702,7 +702,7 @@ impl World {
         footprint: Footprint,
         anchor: Cell,
     ) -> PlaceOutcome {
-        let inventory = or_abort(self.inventories.get(char_index).ok_or("no bag")).clone();
+        let inventory = or_fail(self.inventories.get(char_index).ok_or("no bag")).clone();
         let (new_inventory, outcome) = place_item(
             inventory,
             PlaceIntent {
@@ -712,7 +712,7 @@ impl World {
             },
         );
         let persisted = persist(new_inventory);
-        let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
+        let slot = or_fail(self.inventories.get_mut(char_index).ok_or("no bag slot"));
         *slot = persisted;
         outcome
     }
@@ -736,9 +736,9 @@ impl World {
         now: Tick,
     ) -> PickupOutcome {
         let world_item =
-            or_abort(self.ground_items.get(ground_index).ok_or("no ground item")).clone();
+            or_fail(self.ground_items.get(ground_index).ok_or("no ground item")).clone();
         let footprint = footprint_of(&self.atlas, world_item.instance.item);
-        let inventory = or_abort(self.inventories.get(char_index).ok_or("no bag")).clone();
+        let inventory = or_fail(self.inventories.get(char_index).ok_or("no bag")).clone();
         let placement = self.character(char_index).placement();
         let (new_inventory, outcome) = mu_core::services::inventory::pickup(
             world_item,
@@ -753,7 +753,7 @@ impl World {
         match &outcome {
             PickupOutcome::PickedUp { .. } => {
                 let persisted = persist(new_inventory);
-                let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
+                let slot = or_fail(self.inventories.get_mut(char_index).ok_or("no bag slot"));
                 *slot = persisted;
                 self.ground_items.remove(ground_index);
             }
@@ -773,10 +773,10 @@ impl World {
     /// through the seam, and hands the removed item out in the outcome — the
     /// move a host makes to take a bagged item into hand before equipping it.
     pub fn remove_from_bag(&mut self, char_index: usize, cell: Cell) -> RemoveOutcome {
-        let inventory = or_abort(self.inventories.get(char_index).ok_or("no bag")).clone();
+        let inventory = or_fail(self.inventories.get(char_index).ok_or("no bag")).clone();
         let (new_inventory, outcome) = remove_item(inventory, cell);
         let persisted = persist(new_inventory);
-        let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
+        let slot = or_fail(self.inventories.get_mut(char_index).ok_or("no bag slot"));
         *slot = persisted;
         outcome
     }
@@ -789,12 +789,12 @@ impl World {
     /// set is written back through the persist seam; a non-equippable or
     /// ineligible item is handed back in the returned rejection.
     pub fn equip_first_available(&mut self, char_index: usize, item: ItemInstance) -> EquipOutcome {
-        let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let worn = or_fail(self.equipment.get(char_index).ok_or("no worn set")).clone();
         let wearer = wearer_of(self.character(char_index));
-        let def = or_abort(self.atlas.item(item.item).ok_or("unknown item to equip"));
+        let def = or_fail(self.atlas.item(item.item).ok_or("unknown item to equip"));
         let (new_worn, outcome) = equip_into_first_slot(worn, item, def, &self.atlas, &wearer);
         let persisted = persist(new_worn);
-        let slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
+        let slot = or_fail(self.equipment.get_mut(char_index).ok_or("no worn slot"));
         *slot = persisted;
         outcome
     }
@@ -820,12 +820,12 @@ impl World {
         item: ItemInstance,
         slot: EquipmentSlot,
     ) -> EquipOutcome {
-        let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let worn = or_fail(self.equipment.get(char_index).ok_or("no worn set")).clone();
         let wearer = wearer_of(self.character(char_index));
-        let def = or_abort(self.atlas.item(item.item).ok_or("unknown item to equip"));
+        let def = or_fail(self.atlas.item(item.item).ok_or("unknown item to equip"));
         let (new_worn, outcome) = equip(worn, item, def, slot, &self.atlas, &wearer);
         let persisted = persist(new_worn);
-        let worn_slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
+        let worn_slot = or_fail(self.equipment.get_mut(char_index).ok_or("no worn slot"));
         *worn_slot = persisted;
         outcome
     }
@@ -838,7 +838,7 @@ impl World {
     /// item's own stored max, the wear-ledger zeroing, the 5/2 self-repair
     /// surcharge — lives in core; this is a thin persist-and-deliver driver.
     pub fn self_repair_worn(&mut self, char_index: usize, slot: EquipmentSlot) -> RepairOutcome {
-        let worn = or_abort(self.equipment.get(char_index).ok_or("no worn set")).clone();
+        let worn = or_fail(self.equipment.get(char_index).ok_or("no worn set")).clone();
         let wallet = self.character(char_index).zen();
         let position = self.character(char_index).placement().position;
         let (subject, outcome) = repair(
@@ -854,13 +854,13 @@ impl World {
         let equipment = match subject {
             RepairSubject::Equipped { equipment, .. } => equipment,
             RepairSubject::Stored { .. } => {
-                return or_abort(Err::<RepairOutcome, _>(
+                return or_fail(Err::<RepairOutcome, _>(
                     "the equipped repair subject threads back as equipped",
                 ));
             }
         };
         let persisted = persist(equipment);
-        let worn_slot = or_abort(self.equipment.get_mut(char_index).ok_or("no worn slot"));
+        let worn_slot = or_fail(self.equipment.get_mut(char_index).ok_or("no worn slot"));
         *worn_slot = persisted;
         if let RepairOutcome::Repaired { balance, .. } = outcome {
             self.set_wallet(char_index, balance);
@@ -870,7 +870,7 @@ impl World {
 
     /// Casts the damaging `skill` from the caster at `caster_index`, aimed at
     /// `aim`, over the batch of monsters at `target_indices` (seam 9, V4 twin for
-    /// offence): routes the skill from the held atlas (aborting on a non-damaging
+    /// offence): routes the skill from the held atlas (failing the test on a non-damaging
     /// one), derives the caster's own combat profile and one [`CombatTarget`] per
     /// batch monster from held state, resolves [`cast`] over the map's grid and the
     /// world's stream, persists the caster's spent vitals (K1), then writes each
@@ -889,17 +889,17 @@ impl World {
         target_indices: &[usize],
     ) -> SkillOutcome {
         let (spent_vitals, outcome) = {
-            let skill_def = or_abort(self.atlas.skill(skill).ok_or("unknown skill"));
+            let skill_def = or_fail(self.atlas.skill(skill).ok_or("unknown skill"));
             let damaging = match route(skill_def) {
                 SkillRouting::Damaging(reference) => reference,
                 SkillRouting::Heal(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => {
-                    return or_abort(Err::<SkillOutcome, _>("skill is not a damaging skill"));
+                    return or_fail(Err::<SkillOutcome, _>("skill is not a damaging skill"));
                 }
             };
             let mut targets = Vec::with_capacity(target_indices.len());
             for &index in target_indices {
-                let mob = *or_abort(self.monsters.get(index).ok_or("no target monster"));
-                let def = or_abort(self.atlas.monster(mob.number).ok_or("unknown monster def"));
+                let mob = *or_fail(self.monsters.get(index).ok_or("no target monster"));
+                let def = or_fail(self.atlas.monster(mob.number).ok_or("unknown monster def"));
                 let profile = match &def.role {
                     MonsterRole::Monster {
                         combat,
@@ -917,7 +917,7 @@ impl World {
                         ..
                     } => monster_profile(combat, resistances, combat.level),
                     MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
-                        return or_abort(Err::<SkillOutcome, _>(
+                        return or_fail(Err::<SkillOutcome, _>(
                             "cast was handed a non-combat monster",
                         ));
                     }
@@ -929,9 +929,9 @@ impl World {
                     mob.active_effects,
                 ));
             }
-            let caster = or_abort(self.characters.get(caster_index).ok_or("no caster"));
-            let caster_worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set"));
-            let grid = or_abort(
+            let caster = or_fail(self.characters.get(caster_index).ok_or("no caster"));
+            let caster_worn = or_fail(self.equipment.get(caster_index).ok_or("no worn set"));
+            let grid = or_fail(
                 self.atlas
                     .terrain_grid(caster.placement().map)
                     .ok_or("no terrain grid"),
@@ -954,7 +954,7 @@ impl World {
                 &mut self.rng,
             )
         };
-        let vitals_value = or_abort(serde_json::to_value(spent_vitals));
+        let vitals_value = or_fail(serde_json::to_value(spent_vitals));
         self.persist_character_with(caster_index, "vitals", vitals_value);
         if let SkillOutcome::Cast {
             caster_placement,
@@ -978,7 +978,7 @@ impl World {
     /// wears nothing — the cast path spends no ammunition on it either (no
     /// swing resolution reaches the wear seam without a landed hit).
     fn wear_caster_weapon(&mut self, caster_index: usize, hits: &[TargetHit]) {
-        let mut worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set")).clone();
+        let mut worn = or_fail(self.equipment.get(caster_index).ok_or("no worn set")).clone();
         for hit in hits {
             let landed = match hit {
                 TargetHit::Landed { hit, .. } | TargetHit::Killed { hit, .. } => {
@@ -997,7 +997,7 @@ impl World {
             self.delivered_wear.extend(wear.attacker_events);
         }
         let persisted = persist(worn);
-        let worn_slot = or_abort(self.equipment.get_mut(caster_index).ok_or("no worn slot"));
+        let worn_slot = or_fail(self.equipment.get_mut(caster_index).ok_or("no worn slot"));
         *worn_slot = persisted;
     }
 
@@ -1007,12 +1007,12 @@ impl World {
     /// and persists the updated instance through the seam.
     fn write_back_target_hit(&mut self, target_indices: &[usize], hit: &TargetHit) {
         let (batch_index, health, active_effects, displacement) = target_hit_fields(hit);
-        let monster_index = *or_abort(
+        let monster_index = *or_fail(
             target_indices
                 .get(batch_index)
                 .ok_or("hit target index outside the batch"),
         );
-        let mut updated = *or_abort(
+        let mut updated = *or_fail(
             self.monsters
                 .get(monster_index)
                 .ok_or("no monster at index"),
@@ -1023,7 +1023,7 @@ impl World {
             updated.placement = placement;
         }
         let persisted = persist(updated);
-        let slot = or_abort(
+        let slot = or_fail(
             self.monsters
                 .get_mut(monster_index)
                 .ok_or("no monster slot"),
@@ -1053,20 +1053,20 @@ impl World {
         designation: Designation,
     ) -> SkillOutcome {
         let (spent_vitals, outcome) = {
-            let skill_def = or_abort(self.atlas.skill(skill).ok_or("unknown skill"));
+            let skill_def = or_fail(self.atlas.skill(skill).ok_or("unknown skill"));
             let damaging = match route(skill_def) {
                 SkillRouting::Damaging(reference) => reference,
                 SkillRouting::Heal(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => {
-                    return or_abort(Err::<SkillOutcome, _>("skill is not a damaging skill"));
+                    return or_fail(Err::<SkillOutcome, _>("skill is not a damaging skill"));
                 }
             };
             let mut targets = Vec::with_capacity(batch.len());
             for &combatant in batch {
                 targets.push(self.combat_target_of(combatant));
             }
-            let caster = or_abort(self.characters.get(caster_index).ok_or("no caster"));
-            let caster_worn = or_abort(self.equipment.get(caster_index).ok_or("no worn set"));
-            let grid = or_abort(
+            let caster = or_fail(self.characters.get(caster_index).ok_or("no caster"));
+            let caster_worn = or_fail(self.equipment.get(caster_index).ok_or("no worn set"));
+            let grid = or_fail(
                 self.atlas
                     .terrain_grid(caster.placement().map)
                     .ok_or("no terrain grid"),
@@ -1080,7 +1080,7 @@ impl World {
                 &mut self.rng,
             )
         };
-        let vitals_value = or_abort(serde_json::to_value(spent_vitals));
+        let vitals_value = or_fail(serde_json::to_value(spent_vitals));
         self.persist_character_with(caster_index, "vitals", vitals_value);
         if let SkillOutcome::Cast {
             caster_placement,
@@ -1106,8 +1106,8 @@ impl World {
     fn combat_target_of(&self, combatant: Combatant) -> CombatTarget {
         match combatant {
             Combatant::Player(index) => {
-                let player = or_abort(self.characters.get(index).ok_or("no player target"));
-                let worn = or_abort(self.equipment.get(index).ok_or("no target worn set"));
+                let player = or_fail(self.characters.get(index).ok_or("no player target"));
+                let worn = or_fail(self.equipment.get(index).ok_or("no target worn set"));
                 CombatTarget::new(
                     equipped_profile(player, worn, &self.atlas),
                     player.vitals().health,
@@ -1116,8 +1116,8 @@ impl World {
                 )
             }
             Combatant::Monster(index) => {
-                let mob = *or_abort(self.monsters.get(index).ok_or("no monster target"));
-                let def = or_abort(self.atlas.monster(mob.number).ok_or("unknown monster def"));
+                let mob = *or_fail(self.monsters.get(index).ok_or("no monster target"));
+                let def = or_fail(self.atlas.monster(mob.number).ok_or("unknown monster def"));
                 let profile = match &def.role {
                     MonsterRole::Monster {
                         combat,
@@ -1135,7 +1135,7 @@ impl World {
                         ..
                     } => monster_profile(combat, resistances, combat.level),
                     MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
-                        return or_abort(Err::<CombatTarget, _>(
+                        return or_fail(Err::<CombatTarget, _>(
                             "cast was handed a non-combat monster",
                         ));
                     }
@@ -1153,7 +1153,7 @@ impl World {
     /// players.
     fn write_back_combatant_hit(&mut self, batch: &[Combatant], hit: &TargetHit) {
         let (batch_index, health, active_effects, displacement) = target_hit_fields(hit);
-        let combatant = *or_abort(
+        let combatant = *or_fail(
             batch
                 .get(batch_index)
                 .ok_or("hit target index outside the batch"),
@@ -1161,21 +1161,21 @@ impl World {
         match combatant {
             Combatant::Player(index) => {
                 self.set_health(index, health);
-                let effects_value = or_abort(serde_json::to_value(active_effects));
+                let effects_value = or_fail(serde_json::to_value(active_effects));
                 self.persist_character_with(index, "active_effects", effects_value);
                 if let Some(placement) = displacement {
                     self.arrive(index, placement);
                 }
             }
             Combatant::Monster(index) => {
-                let mut updated = *or_abort(self.monsters.get(index).ok_or("no monster at index"));
+                let mut updated = *or_fail(self.monsters.get(index).ok_or("no monster at index"));
                 updated.health = health;
                 updated.active_effects = active_effects;
                 if let Some(placement) = displacement {
                     updated.placement = placement;
                 }
                 let persisted = persist(updated);
-                let slot = or_abort(self.monsters.get_mut(index).ok_or("no monster slot"));
+                let slot = or_fail(self.monsters.get_mut(index).ok_or("no monster slot"));
                 *slot = persisted;
             }
         }
@@ -1187,7 +1187,7 @@ impl World {
     /// clamp, vitals refill) now lives in core — this is a thin persist-and-deliver
     /// driver.
     pub fn apply_growth(&mut self, char_index: usize, gained: Exp) -> Vec<GrowthEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let (grown, events) = apply_experience(character, gained, &self.atlas);
         self.store_character(char_index, grown);
         events
@@ -1209,16 +1209,16 @@ impl World {
         player_index: usize,
         monster_index: usize,
     ) -> AttackOutcome {
-        let player = or_abort(self.characters.get(player_index).ok_or("no player"));
-        let player_worn = or_abort(self.equipment.get(player_index).ok_or("no worn set")).clone();
+        let player = or_fail(self.characters.get(player_index).ok_or("no player"));
+        let player_worn = or_fail(self.equipment.get(player_index).ok_or("no worn set")).clone();
         let target_view = effective_profile(
             equipped_profile(player, &player_worn, &self.atlas),
             &player.active_effects(),
         );
         let target_health = player.vitals().health;
 
-        let monster = *or_abort(self.monsters.get(monster_index).ok_or("no attacker"));
-        let def = or_abort(self.atlas.monster(monster.number).ok_or("unknown attacker"));
+        let monster = *or_fail(self.monsters.get(monster_index).ok_or("no attacker"));
+        let def = or_fail(self.atlas.monster(monster.number).ok_or("unknown attacker"));
         let attacker_profile = match &def.role {
             MonsterRole::Monster {
                 combat,
@@ -1236,7 +1236,7 @@ impl World {
                 ..
             } => monster_profile(combat, resistances, combat.level),
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
-                return or_abort(Err::<AttackOutcome, _>(
+                return or_fail(Err::<AttackOutcome, _>(
                     "a non-combat monster cannot strike",
                 ));
             }
@@ -1255,7 +1255,7 @@ impl World {
         );
 
         let persisted_worn = persist(wear.defender_worn);
-        let worn_slot = or_abort(self.equipment.get_mut(player_index).ok_or("no worn slot"));
+        let worn_slot = or_fail(self.equipment.get_mut(player_index).ok_or("no worn slot"));
         *worn_slot = persisted_worn;
         self.delivered_wear.extend(wear.attacker_events);
         self.delivered_wear.extend(wear.defender_events);
@@ -1274,7 +1274,7 @@ impl World {
     /// driver, the death twin of [`Self::apply_growth`]. No penalty, gate, refill,
     /// or clear logic is authored host-side.
     pub fn resolve_player_death(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let (dead, events) = resolve_death(
             character,
             at,
@@ -1300,7 +1300,7 @@ impl World {
         at: Tick,
         attacker_kind: TargetKind,
     ) -> Vec<DeathEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let (dead, events) = resolve_death(
             character,
             at,
@@ -1329,9 +1329,9 @@ impl World {
         victim_index: usize,
         at: Tick,
     ) -> PkEvent {
-        let victim = or_abort(self.characters.get(victim_index).ok_or("no victim"));
+        let victim = or_fail(self.characters.get(victim_index).ok_or("no victim"));
         let sanction = player_kill_sanction(victim, PvpContext::Open);
-        let killer = or_abort(self.characters.get(killer_index).ok_or("no killer")).clone();
+        let killer = or_fail(self.characters.get(killer_index).ok_or("no killer")).clone();
         let (flagged, event) = resolve_player_kill(killer, sanction, at, host_tick());
         self.store_character(killer_index, flagged);
         event
@@ -1344,7 +1344,7 @@ impl World {
     /// [`Self::resolve_player_kill_of`]; the host owns the online-time clock (U1),
     /// fed here as `now`.
     pub fn decay_reputation_of(&mut self, char_index: usize, now: Tick) -> Option<PkEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let (faded, event) = decay_reputation(character, now, host_tick());
         self.store_character(char_index, faded);
         event
@@ -1362,7 +1362,7 @@ impl World {
         char_index: usize,
         victim_index: usize,
     ) -> Option<PkEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let victim = self.monster(victim_index);
         let (killer, event) =
             accelerate_reputation_decay(character, &victim, &self.atlas, host_tick());
@@ -1389,7 +1389,7 @@ impl World {
         let standing = murderer.reputation().standing();
         let target = murderer.placement().position;
         let guard = self.monster(guard_index);
-        let def = or_abort(
+        let def = or_fail(
             self.atlas
                 .monster(guard.number)
                 .ok_or("unknown monster number"),
@@ -1399,12 +1399,12 @@ impl World {
             | MonsterRole::Guard { behavior, .. }
             | MonsterRole::Trap { behavior, .. } => *behavior,
             MonsterRole::Npc { .. } | MonsterRole::SoccerBall => {
-                return or_abort(Err::<MonsterIntent, _>(
+                return or_fail(Err::<MonsterIntent, _>(
                     "advance handed a non-combat monster",
                 ));
             }
         };
-        let grid = or_abort(
+        let grid = or_fail(
             self.atlas
                 .terrain_grid(guard.placement.map)
                 .ok_or("no terrain grid"),
@@ -1424,7 +1424,7 @@ impl World {
             &mut self.rng,
         );
         let persisted = persist(advanced);
-        let slot = or_abort(self.monsters.get_mut(guard_index).ok_or("no monster slot"));
+        let slot = or_fail(self.monsters.get_mut(guard_index).ok_or("no monster slot"));
         *slot = persisted;
         intent
     }
@@ -1438,7 +1438,7 @@ impl World {
     /// driver, the revive twin of [`Self::resolve_player_death`]. `None` only when
     /// the character was already alive (the symmetric no-op).
     pub fn respawn_player(&mut self, char_index: usize) -> Option<Respawned> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let (revived, respawned) = respawn(character, &self.atlas, &mut self.rng);
         self.store_character(char_index, revived);
         respawned
@@ -1454,7 +1454,7 @@ impl World {
     pub fn set_health(&mut self, char_index: usize, health: Pool) {
         let mut vitals = self.character(char_index).vitals();
         vitals.health = health;
-        let value = or_abort(serde_json::to_value(vitals));
+        let value = or_fail(serde_json::to_value(vitals));
         self.persist_character_with(char_index, "vitals", value);
     }
 
@@ -1474,7 +1474,7 @@ impl World {
     ) -> ActiveEffect {
         let existing = self.character(char_index).active_effects();
         let (updated, effect) = apply_ailment(ailment, caster_energy, existing, now, host_tick());
-        let value = or_abort(serde_json::to_value(updated));
+        let value = or_fail(serde_json::to_value(updated));
         self.persist_character_with(char_index, "active_effects", value);
         effect
     }
@@ -1493,7 +1493,7 @@ impl World {
     ) -> ActiveEffect {
         let existing = self.character(char_index).active_effects();
         let (updated, effect) = apply_buff(buff, caster_energy, existing, now, host_tick());
-        let value = or_abort(serde_json::to_value(updated));
+        let value = or_fail(serde_json::to_value(updated));
         self.persist_character_with(char_index, "active_effects", value);
         effect
     }
@@ -1510,7 +1510,7 @@ impl World {
         let effects = self.character(char_index).active_effects();
         let health = self.character(char_index).vitals().health;
         let (new_effects, new_health, events) = advance_effects(effects, health, now);
-        let value = or_abort(serde_json::to_value(new_effects));
+        let value = or_fail(serde_json::to_value(new_effects));
         self.persist_character_with(char_index, "active_effects", value);
         self.set_health(char_index, new_health);
         events
@@ -1532,22 +1532,21 @@ impl World {
         skill: SkillNumber,
     ) -> (BuffCastOutcome, Pool) {
         let (spent_vitals, outcome, receiver_health) = {
-            let skill_def = or_abort(self.atlas.skill(skill).ok_or("unknown skill"));
+            let skill_def = or_fail(self.atlas.skill(skill).ok_or("unknown skill"));
             let heal = match route(skill_def) {
                 SkillRouting::Heal(heal) => heal,
                 SkillRouting::Damaging(_) | SkillRouting::Buff(_) | SkillRouting::Deferred => {
-                    return or_abort(Err::<(BuffCastOutcome, Pool), _>("skill is not a heal"));
+                    return or_fail(Err::<(BuffCastOutcome, Pool), _>("skill is not a heal"));
                 }
             };
-            let receiver_health =
-                or_abort(self.characters.get(receiver_index).ok_or("no receiver"))
-                    .vitals()
-                    .health;
-            let caster = or_abort(self.characters.get(caster_index).ok_or("no caster"));
+            let receiver_health = or_fail(self.characters.get(receiver_index).ok_or("no receiver"))
+                .vitals()
+                .health;
+            let caster = or_fail(self.characters.get(caster_index).ok_or("no caster"));
             let (vitals, outcome) = cast_heal(caster, heal, receiver_health);
             (vitals, outcome, receiver_health)
         };
-        let vitals_value = or_abort(serde_json::to_value(spent_vitals));
+        let vitals_value = or_fail(serde_json::to_value(spent_vitals));
         self.persist_character_with(caster_index, "vitals", vitals_value);
         let reconstructed = match outcome {
             BuffCastOutcome::Healed { amount } => receiver_health.restored(amount),
@@ -1564,7 +1563,7 @@ impl World {
     /// and every service that returns a new `CarriedZen` balance (buy, sell, a
     /// mix fee, a zen offer, a pickup) writes it back through here.
     pub fn set_wallet(&mut self, char_index: usize, wallet: CarriedZen) {
-        let value = or_abort(serde_json::to_value(wallet));
+        let value = or_fail(serde_json::to_value(wallet));
         self.persist_character_with(char_index, "zen", value);
     }
 
@@ -1577,7 +1576,7 @@ impl World {
     /// ([`walkable_run`]).
     pub fn step(&mut self, char_index: usize, target: WorldPos) -> StepOutcome {
         let placement = self.character(char_index).placement();
-        let grid = or_abort(
+        let grid = or_fail(
             self.atlas
                 .terrain_grid(placement.map)
                 .ok_or("no terrain grid"),
@@ -1611,7 +1610,7 @@ impl World {
     pub fn change_flight(&mut self, char_index: usize, change: FlightChange) -> Vec<FlightOutcome> {
         let placement = self.character(char_index).placement();
         let wings = self.wings(char_index);
-        let env = or_abort(self.atlas.map_handle(placement.map).ok_or("no map handle"))
+        let env = or_fail(self.atlas.map_handle(placement.map).ok_or("no map handle"))
             .definition()
             .environment;
         let (movement, outcomes) = mu_core::services::movement::change_flight(
@@ -1645,7 +1644,7 @@ impl World {
         let wallet = self.character(char_index).zen();
         let buyer_pos = self.character(char_index).placement().position;
         let inventory = self.inventory(char_index).clone();
-        let shop = or_abort(self.atlas.shop(npc).ok_or("no shop for npc"));
+        let shop = or_fail(self.atlas.shop(npc).ok_or("no shop for npc"));
         let (new_inventory, outcome) =
             mu_core::services::shop::buy(inventory, wallet, shop, slot, buyer_pos, merchant_pos);
         self.store_inventory(char_index, new_inventory);
@@ -1683,14 +1682,14 @@ impl World {
     /// Executes the warp-menu command for the character at `char_index` (the
     /// W-WARP seam): the host-parsed menu `index` resolves to its atlas-proven
     /// `WarpView` (an unknown index is a host parse failure core never sees —
-    /// `or_abort` here), the real [`resolve_warp`] decides, and the returned
+    /// `or_fail` here), the real [`resolve_warp`] decides, and the returned
     /// character — debited wallet, sampled placement, grown discovered set —
     /// is written back *through* the persist seam. No discovery, level,
     /// fraction, or fee rule is authored host-side. Returns the outcome.
     pub fn warp(&mut self, char_index: usize, index: WarpIndex) -> WarpTravelOutcome {
         let character = self.character(char_index).clone();
         let wings = self.wings(char_index);
-        let entry = or_abort(self.atlas.warp_by_index(index).ok_or("unknown warp index"));
+        let entry = or_fail(self.atlas.warp_by_index(index).ok_or("unknown warp index"));
         let (moved, outcome) = resolve_warp(character, entry, &self.atlas, wings, &mut self.rng);
         self.store_character(char_index, moved);
         outcome
@@ -1711,14 +1710,14 @@ impl World {
     /// Walks the character at `char_index` through the enter gate whose
     /// trigger covers its own position (the W-WARP seam): the host's
     /// positional trigger query resolves the gate view — a character standing
-    /// on no trigger is a host dispatch failure, `or_abort` here — and the
+    /// on no trigger is a host dispatch failure, `or_fail` here — and the
     /// real [`traverse_enter_gate`] decides. The returned character (new map,
     /// grown discovered set) is written back *through* the persist seam.
     pub fn traverse_gate(&mut self, char_index: usize) -> EnterGateOutcome {
         let character = self.character(char_index).clone();
         let wings = self.wings(char_index);
         let placement = character.placement();
-        let gate = or_abort(
+        let gate = or_fail(
             self.atlas
                 .enter_gate_at(placement.map, placement.position)
                 .ok_or("no enter gate trigger covers the traveler"),
@@ -1817,7 +1816,7 @@ impl World {
     pub fn pickup_zen(&mut self, char_index: usize, ground_zen_index: usize) -> ZenPickupOutcome {
         let wallet = self.character(char_index).zen();
         let placement = self.character(char_index).placement();
-        let pile = or_abort(
+        let pile = or_fail(
             self.ground_zen
                 .get(ground_zen_index)
                 .ok_or("no ground zen at index"),
@@ -1854,7 +1853,7 @@ impl World {
         let requested = match opened {
             RequestOutcome::Opened { session } => persist(session),
             RequestOutcome::Rejected { .. } => {
-                return or_abort(Err::<usize, _>("trade request was rejected"));
+                return or_fail(Err::<usize, _>("trade request was rejected"));
             }
         };
         let (accepted, _events) = accept(requested, Side::Partner, requester_pos, partner_pos);
@@ -1863,7 +1862,7 @@ impl World {
             AcceptOutcome::WrongSide { .. }
             | AcceptOutcome::OutOfRange { .. }
             | AcceptOutcome::NotRequested { .. } => {
-                return or_abort(Err::<usize, _>("trade accept did not open the session"));
+                return or_fail(Err::<usize, _>("trade accept did not open the session"));
             }
         };
         self.seat_session(open)
@@ -1998,13 +1997,13 @@ impl World {
 
     /// Persists `inventory` into the bag slot of the character at `char_index`.
     fn store_inventory(&mut self, char_index: usize, inventory: Inventory) {
-        let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
+        let slot = or_fail(self.inventories.get_mut(char_index).ok_or("no bag slot"));
         *slot = persist(inventory);
     }
 
     /// Persists `session` into the trade slot at `session_index`.
     fn store_session(&mut self, session_index: usize, session: TradeSession) {
-        let slot = or_abort(
+        let slot = or_fail(
             self.sessions
                 .get_mut(session_index)
                 .ok_or("no session slot"),
@@ -2018,7 +2017,7 @@ impl World {
     /// catch a dropped round-trip: the value is identical either way, only the
     /// reload re-proof disappears.
     fn store_character(&mut self, char_index: usize, character: Character) {
-        let slot = or_abort(
+        let slot = or_fail(
             self.characters
                 .get_mut(char_index)
                 .ok_or("no character slot"),
@@ -2040,13 +2039,13 @@ impl World {
     /// seam for the fields with no typed writeback — zen, vitals, effects. A
     /// placement rides [`Self::arrive`] instead.
     fn persist_character_with(&mut self, char_index: usize, field: &str, value: serde_json::Value) {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character"));
-        let mut wire = or_abort(serde_json::to_value(character));
+        let character = or_fail(self.characters.get(char_index).ok_or("no character"));
+        let mut wire = or_fail(serde_json::to_value(character));
         {
-            let object = or_abort(wire.as_object_mut().ok_or("character is not an object"));
+            let object = or_fail(wire.as_object_mut().ok_or("character is not an object"));
             object.insert(field.to_owned(), value);
         }
-        let updated: Character = or_abort(serde_json::from_value(wire));
+        let updated: Character = or_fail(serde_json::from_value(wire));
         self.store_character(char_index, updated);
     }
 
@@ -2060,7 +2059,7 @@ impl World {
     /// The live party at `index`.
     #[must_use]
     pub fn party(&self, index: usize) -> &PartySession {
-        or_abort(self.parties.get(index).ok_or("no party at index"))
+        or_fail(self.parties.get(index).ok_or("no party at index"))
     }
 
     /// How many live parties the world holds — proves a disband deleted one.
@@ -2072,7 +2071,7 @@ impl World {
     /// The pending invite at `index`.
     #[must_use]
     pub fn pending_invite(&self, index: usize) -> &PartyInvite {
-        or_abort(
+        or_fail(
             self.pending_invites
                 .get(index)
                 .ok_or("no pending invite at index"),
@@ -2266,7 +2265,7 @@ impl World {
         let (outcome, _events) = party::advance_invite(*self.pending_invite(invite_index), now);
         match &outcome {
             party::InviteSweep::Pending { invite } => {
-                let slot = or_abort(
+                let slot = or_fail(
                     self.pending_invites
                         .get_mut(invite_index)
                         .ok_or("no invite slot"),
@@ -2296,9 +2295,9 @@ impl World {
     ) -> Vec<(MemberAward, Vec<GrowthEvent>)> {
         let party = self.party(party_index).clone();
         // The host owns the account↔slot map, so it resolves the killer's fact by
-        // value here (a boundary lookup, `or_abort`-resolved) and hands the rest as
+        // value here (a boundary lookup, `or_fail`-resolved) and hands the rest as
         // `others`; core seeds `Q` with the killer, proving `|Q| >= 1` structurally.
-        let killer_fact = *or_abort(
+        let killer_fact = *or_fail(
             facts
                 .iter()
                 .find(|fact| fact.slot == killer)
@@ -2309,7 +2308,7 @@ impl World {
             .copied()
             .filter(|fact| fact.slot != killer)
             .collect();
-        let grid = or_abort(
+        let grid = or_fail(
             self.atlas
                 .terrain_grid(killer_fact.map)
                 .ok_or("no terrain grid for the killer's map"),
@@ -2346,16 +2345,16 @@ impl World {
     ) -> party::ZenSplitResult {
         let party = self.party(party_index).clone();
         // The host splits the picker's fact + wallet out by value (a boundary
-        // lookup, `or_abort`-resolved) and keeps the rest co-indexed; core seeds
+        // lookup, `or_fail`-resolved) and keeps the rest co-indexed; core seeds
         // `Q` with the picker, so `|Q| >= 1` is structural, never a runtime guard.
-        let index = or_abort(
+        let index = or_fail(
             facts
                 .iter()
                 .position(|fact| fact.slot == picker)
                 .ok_or("picker not among facts"),
         );
-        let picker_fact = *or_abort(facts.get(index).ok_or("picker fact"));
-        let picker_wallet = or_abort(wallets.get(index).ok_or("picker wallet")).wallet;
+        let picker_fact = *or_fail(facts.get(index).ok_or("picker fact"));
+        let picker_wallet = or_fail(wallets.get(index).ok_or("picker wallet")).wallet;
         let others: Vec<party::MemberFact> = facts
             .iter()
             .enumerate()
@@ -2366,7 +2365,7 @@ impl World {
             .enumerate()
             .filter_map(|(i, wallet)| (i != index).then_some(*wallet))
             .collect();
-        let grid = or_abort(
+        let grid = or_fail(
             self.atlas
                 .terrain_grid(picker_fact.map)
                 .ok_or("no terrain grid for the picker's map"),
@@ -2392,7 +2391,7 @@ impl World {
     /// The mini-game session at `index`.
     #[must_use]
     pub fn mini_session(&self, index: usize) -> &MiniGameSession {
-        or_abort(
+        or_fail(
             self.mini_sessions
                 .get(index)
                 .ok_or("no mini-game session at index"),
@@ -2411,7 +2410,7 @@ impl World {
     /// re-derived here. Seats the session through the persist seam and returns
     /// its index.
     pub fn open_mini_session(&mut self, key: MiniGameKey, opened_at: Tick) -> usize {
-        let handle: MiniGameHandle<'_> = or_abort(
+        let handle: MiniGameHandle<'_> = or_fail(
             self.atlas
                 .mini_game(key.kind, key.level)
                 .ok_or("no resolved mini-game for the key"),
@@ -2437,9 +2436,9 @@ impl World {
         char_index: usize,
     ) -> minigame::EnterOutcome {
         let session = self.mini_session(session_index).clone();
-        let entrant = or_abort(self.characters.get(char_index).ok_or("no entrant")).clone();
-        let bag = or_abort(self.inventories.get(char_index).ok_or("no entrant bag")).clone();
-        let handle: MiniGameHandle<'_> = or_abort(
+        let entrant = or_fail(self.characters.get(char_index).ok_or("no entrant")).clone();
+        let bag = or_fail(self.inventories.get(char_index).ok_or("no entrant bag")).clone();
+        let handle: MiniGameHandle<'_> = or_fail(
             self.atlas
                 .mini_game(session.key.kind, session.key.level)
                 .ok_or("no resolved mini-game"),
@@ -2448,7 +2447,7 @@ impl World {
             minigame::enter_mini_game(session, &handle, entrant, bag, &mut self.rng);
         self.store_mini_session(session_index, session);
         self.store_character(char_index, entrant);
-        let slot = or_abort(self.inventories.get_mut(char_index).ok_or("no bag slot"));
+        let slot = or_fail(self.inventories.get_mut(char_index).ok_or("no bag slot"));
         *slot = persist(bag);
         outcome
     }
@@ -2462,7 +2461,7 @@ impl World {
     /// advance again — it never re-derives the phase arithmetic.
     pub fn advance_mini_session(&mut self, session_index: usize, now: Tick) -> Vec<MiniGameEvent> {
         let session = self.mini_session(session_index).clone();
-        let handle: MiniGameHandle<'_> = or_abort(
+        let handle: MiniGameHandle<'_> = or_fail(
             self.atlas
                 .mini_game(session.key.kind, session.key.level)
                 .ok_or("no resolved mini-game"),
@@ -2488,7 +2487,7 @@ impl World {
         now: Tick,
     ) {
         let session = self.mini_session(session_index).clone();
-        let handle: MiniGameHandle<'_> = or_abort(
+        let handle: MiniGameHandle<'_> = or_fail(
             self.atlas
                 .mini_game(session.key.kind, session.key.level)
                 .ok_or("no resolved mini-game"),
@@ -2529,7 +2528,7 @@ impl World {
     /// twin for a death inside an event. Persists the marked-`Dead` character and
     /// returns the death events (a lone `Died`, no docks).
     pub fn resolve_waived_death_of(&mut self, char_index: usize, at: Tick) -> Vec<DeathEvent> {
-        let character = or_abort(self.characters.get(char_index).ok_or("no character")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no character")).clone();
         let (dead, events) = resolve_death(
             character,
             at,
@@ -2555,7 +2554,7 @@ impl World {
         now: Tick,
     ) -> minigame::RewardOutcome {
         let session = self.mini_session(session_index).clone();
-        let handle: MiniGameHandle<'_> = or_abort(
+        let handle: MiniGameHandle<'_> = or_fail(
             self.atlas
                 .mini_game(session.key.kind, session.key.level)
                 .ok_or("no resolved mini-game"),
@@ -2575,7 +2574,7 @@ impl World {
     /// decision (the min-player abort's one refund path, pin 4). Persists the
     /// credited character.
     pub fn refund_fee(&mut self, char_index: usize, amount: Zen) {
-        let character = or_abort(self.characters.get(char_index).ok_or("no refundee")).clone();
+        let character = or_fail(self.characters.get(char_index).ok_or("no refundee")).clone();
         let refunded = match minigame::apply_money_grant(character, amount) {
             minigame::MoneyGrant::Credited { character }
             | minigame::MoneyGrant::OverCap { character } => character,
@@ -2591,13 +2590,13 @@ impl World {
         match grant {
             minigame::GrantDecision::Experience { amount } => {
                 let character =
-                    or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
+                    or_fail(self.characters.get(char_index).ok_or("no finisher")).clone();
                 let (grown, _events) = apply_experience(character, *amount, &self.atlas);
                 self.store_character(char_index, grown);
             }
             minigame::GrantDecision::Money { amount } => {
                 let character =
-                    or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
+                    or_fail(self.characters.get(char_index).ok_or("no finisher")).clone();
                 let credited = match minigame::apply_money_grant(character, *amount) {
                     minigame::MoneyGrant::Credited { character }
                     | minigame::MoneyGrant::OverCap { character } => character,
@@ -2606,7 +2605,7 @@ impl World {
             }
             minigame::GrantDecision::ItemDrop { group } => {
                 let character =
-                    or_abort(self.characters.get(char_index).ok_or("no finisher")).clone();
+                    or_fail(self.characters.get(char_index).ok_or("no finisher")).clone();
                 match minigame::apply_item_drop_grant(
                     &character,
                     group,
@@ -2626,7 +2625,7 @@ impl World {
 
     /// Persists `session` into the mini-game session slot at `session_index`.
     fn store_mini_session(&mut self, session_index: usize, session: MiniGameSession) {
-        let slot = or_abort(
+        let slot = or_fail(
             self.mini_sessions
                 .get_mut(session_index)
                 .ok_or("no mini-game session slot"),
@@ -2636,7 +2635,7 @@ impl World {
 
     /// Persists `party` into the party slot at `party_index`.
     fn store_party(&mut self, party_index: usize, party: PartySession) {
-        let slot = or_abort(self.parties.get_mut(party_index).ok_or("no party slot"));
+        let slot = or_fail(self.parties.get_mut(party_index).ok_or("no party slot"));
         *slot = persist(party);
     }
 
@@ -2644,7 +2643,7 @@ impl World {
     /// excluded — so a replay divergence cannot hide in an unpersisted field.
     #[must_use]
     pub fn snapshot(&self) -> String {
-        or_abort(serde_json::to_string(&LiveSnapshot {
+        or_fail(serde_json::to_string(&LiveSnapshot {
             characters: &self.characters,
             inventories: &self.inventories,
             equipment: &self.equipment,
@@ -2676,14 +2675,14 @@ pub fn pos(x: u8, y: u8) -> WorldPos {
 /// A capped wallet holding `value`.
 #[must_use]
 pub fn zen(value: u64) -> CarriedZen {
-    or_abort(CarriedZen::new(value))
+    or_fail(CarriedZen::new(value))
 }
 
 /// A plausible gearless Dark Knight at the given level, strength, and tile —
 /// built the only way a character can be, by deserialising its wire form.
 #[must_use]
 pub fn dark_knight(level: u16, strength: u16, at: TileCoord) -> Character {
-    let position = or_abort(serde_json::to_value(at.to_world()));
+    let position = or_fail(serde_json::to_value(at.to_world()));
     let json = serde_json::json!({
         "class": "dark_knight",
         "level": level,
@@ -2698,7 +2697,7 @@ pub fn dark_knight(level: u16, strength: u16, at: TileCoord) -> Character {
             "ability": {"current": 400, "max": 400}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// A plausible gearless Dark Wizard at the given level and energy, seated at a
@@ -2707,7 +2706,7 @@ pub fn dark_knight(level: u16, strength: u16, at: TileCoord) -> Character {
 /// its wire form.
 #[must_use]
 pub fn dark_wizard(level: u16, energy: u16, at: TileCoord) -> Character {
-    let position = or_abort(serde_json::to_value(at.to_world()));
+    let position = or_fail(serde_json::to_value(at.to_world()));
     let json = serde_json::json!({
         "class": "dark_wizard",
         "level": level,
@@ -2722,7 +2721,7 @@ pub fn dark_wizard(level: u16, energy: u16, at: TileCoord) -> Character {
             "ability": {"current": 400, "max": 400}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// A plausible gearless Magic Gladiator at the given level and tile — the
@@ -2730,7 +2729,7 @@ pub fn dark_wizard(level: u16, energy: u16, at: TileCoord) -> Character {
 /// only way a character can be, by deserialising its wire form.
 #[must_use]
 pub fn magic_gladiator(level: u16, at: TileCoord) -> Character {
-    let position = or_abort(serde_json::to_value(at.to_world()));
+    let position = or_fail(serde_json::to_value(at.to_world()));
     let json = serde_json::json!({
         "class": "magic_gladiator",
         "level": level,
@@ -2745,7 +2744,7 @@ pub fn magic_gladiator(level: u16, at: TileCoord) -> Character {
             "ability": {"current": 300, "max": 300}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// A gearless Dark Knight seeded mid-band in its own level's experience band and
@@ -2765,11 +2764,11 @@ pub fn dark_knight_in_band(
     at: TileCoord,
 ) -> Character {
     let curve = atlas.exp_curve();
-    let floor = or_abort(curve.level(level)).total_to_hold().0;
-    let next = or_abort(curve.level(level + 1)).total_to_hold().0;
+    let floor = or_fail(curve.level(level)).total_to_hold().0;
+    let next = or_fail(curve.level(level + 1)).total_to_hold().0;
     let experience = floor + (next - floor) / 2;
-    let position = or_abort(serde_json::to_value(at.to_world()));
-    let map = or_abort(serde_json::to_value(map));
+    let position = or_fail(serde_json::to_value(at.to_world()));
+    let map = or_fail(serde_json::to_value(map));
     let json = serde_json::json!({
         "class": "dark_knight",
         "level": level,
@@ -2784,7 +2783,7 @@ pub fn dark_knight_in_band(
             "ability": {"current": 400, "max": 400}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// The first fighting monster at or below `max_level`, with its combat block
@@ -2795,7 +2794,7 @@ pub fn low_level_monster(
     atlas: &Atlas,
     max_level: u16,
 ) -> (MonsterNumber, MonsterCombat, PerElement<Resistance>) {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -2843,14 +2842,14 @@ pub fn monster_instance(number: MonsterNumber, hp: u32, at: TileCoord) -> Monste
 #[must_use]
 pub fn item_at_level(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
     let mut instance = item_instance(atlas, id);
-    instance.level = or_abort(ItemLevel::new(level));
+    instance.level = or_fail(ItemLevel::new(level));
     instance
 }
 
 /// A fresh instance of real item `id` at plus-level zero, full gauge.
 #[must_use]
 pub fn item_instance(atlas: &Atlas, id: ItemRef) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
         level: ItemLevel::ZERO,
@@ -2867,8 +2866,8 @@ pub fn item_instance(atlas: &Atlas, id: ItemRef) -> ItemInstance {
 /// pick the item up off the ground.
 #[must_use]
 pub fn footprint_of(atlas: &Atlas, id: ItemRef) -> Footprint {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
-    or_abort(Footprint::new(def.width, def.height))
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
+    or_fail(Footprint::new(def.width, def.height))
 }
 
 /// An empty main-inventory bag — the classic 8×8 grid the client renders — the
@@ -2894,7 +2893,7 @@ pub fn fighting_monster_from(
     atlas: &Atlas,
     min_level: u16,
 ) -> (MonsterNumber, MonsterCombat, PerElement<Resistance>) {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -2923,7 +2922,7 @@ pub fn fighting_monster_from(
 /// from the roster on every run, never a hard-coded number.
 #[must_use]
 pub fn pressing_monster(atlas: &Atlas) -> MonsterNumber {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -2946,7 +2945,7 @@ pub fn pressing_monster(atlas: &Atlas) -> MonsterNumber {
 /// every run, never a hard-coded number.
 #[must_use]
 pub fn armored_monster_from(atlas: &Atlas, min_defense: u16) -> (MonsterNumber, MonsterCombat) {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -2968,7 +2967,7 @@ pub fn armored_monster_from(atlas: &Atlas, min_defense: u16) -> (MonsterNumber, 
 /// hard-coded number.
 #[must_use]
 pub fn guard_monster(atlas: &Atlas) -> MonsterNumber {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -2987,7 +2986,7 @@ pub fn guard_monster(atlas: &Atlas) -> MonsterNumber {
 /// never a fightable mob.
 #[must_use]
 pub fn first_passive_monster(atlas: &Atlas) -> MonsterNumber {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -3008,7 +3007,7 @@ pub fn first_passive_monster(atlas: &Atlas) -> MonsterNumber {
 /// [`MonsterIntent::Attack`]: mu_core::events::monster_ai::MonsterIntent::Attack
 #[must_use]
 pub fn aggressive_monster(atlas: &Atlas) -> MonsterNumber {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -3029,7 +3028,7 @@ pub fn aggressive_monster(atlas: &Atlas) -> MonsterNumber {
 /// shipped catalog on every run.
 #[must_use]
 pub fn heal_skill(atlas: &Atlas) -> SkillNumber {
-    or_abort(
+    or_fail(
         atlas
             .skills()
             .find_map(|skill| match route(skill) {
@@ -3042,13 +3041,13 @@ pub fn heal_skill(atlas: &Atlas) -> SkillNumber {
 
 /// The number of the first damaging skill matching `predicate` — the shared
 /// scaffold of the pattern-found finders below: walk the catalog, keep the
-/// damaging routes, and abort with `err` when no record matches.
+/// damaging routes, and fail the test with `err` when no record matches.
 fn find_damaging_skill(
     atlas: &Atlas,
     predicate: impl Fn(&Skill, DamagingSkillRef<'_>) -> bool,
     err: &str,
 ) -> SkillNumber {
-    or_abort(
+    or_fail(
         atlas
             .skills()
             .find_map(|skill| match route(skill) {
@@ -3294,7 +3293,7 @@ pub fn wearer_of(character: &Character) -> Wearer {
 /// wearable but not by a knight).
 #[must_use]
 pub fn is_equippable(atlas: &Atlas, id: ItemRef, wearer: &Wearer) -> bool {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     let (_, outcome) = equip_into_first_slot(
         Equipment::empty(),
         item_instance(atlas, id),
@@ -3313,7 +3312,7 @@ const ONE_TILE: StepMagnitude = StepMagnitude::ONE_TILE;
 /// every service that converts millisecond durations to absolute ticks (the AI
 /// reschedule, effect application and advance). One place decides the cadence.
 fn host_tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// The first horizontal run of `length` consecutive walkable tiles on `map`,
@@ -3324,8 +3323,8 @@ fn host_tick() -> TickDuration {
 /// the run is re-found from the shipped terrain on every run.
 #[must_use]
 pub fn walkable_run(atlas: &Atlas, map: MapNumber, length: usize) -> Vec<TileCoord> {
-    let grid = or_abort(atlas.terrain_grid(map).ok_or("no terrain grid for map"));
-    or_abort(first_walkable_run(grid, length).ok_or("no walkable run of that length"))
+    let grid = or_fail(atlas.terrain_grid(map).ok_or("no terrain grid for map"));
+    or_fail(first_walkable_run(grid, length).ok_or("no walkable run of that length"))
 }
 
 /// Scans `grid` row by row for the first run of `length` consecutive walkable
@@ -3357,7 +3356,7 @@ fn first_walkable_run(grid: &TerrainGrid, length: usize) -> Option<Vec<TileCoord
 /// cannot silently drift the fixture.
 #[must_use]
 pub fn devil_square_ticket_ref(atlas: &Atlas) -> ItemRef {
-    or_abort(
+    or_fail(
         atlas
             .items()
             .find(|def| {
@@ -3386,7 +3385,7 @@ pub fn devil_square_ticket(ticket_ref: ItemRef, charges: u8, level: ItemLevel) -
         normal_option: None,
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
-        durability: or_abort(Durability::new(charges, 5)),
+        durability: or_fail(Durability::new(charges, 5)),
         augment: CraftedAugment::None,
     }
 }
@@ -3399,9 +3398,9 @@ pub fn devil_square_ticket(ticket_ref: ItemRef, charges: u8, level: ItemLevel) -
 #[must_use]
 pub fn walkable_area(atlas: &Atlas, map: MapNumber, width: usize) -> TileArea {
     let run = walkable_run(atlas, map, width);
-    let first = *or_abort(run.first().ok_or("empty walkable run"));
-    let last = *or_abort(run.last().ok_or("empty walkable run"));
-    or_abort(TileArea::new(first.x(), first.y(), last.x(), last.y()))
+    let first = *or_fail(run.first().ok_or("empty walkable run"));
+    let last = *or_fail(run.last().ok_or("empty walkable run"));
+    or_fail(TileArea::new(first.x(), first.y(), last.x(), last.y()))
 }
 
 /// A reward-drop group of a single catalog `item` at a fixed plus-`level` — the
@@ -3409,7 +3408,7 @@ pub fn walkable_area(atlas: &Atlas, map: MapNumber, width: usize) -> TileArea {
 #[must_use]
 pub fn reward_drop_group(item: ItemRef, level: ItemLevel) -> RewardDropGroup {
     RewardDropGroup {
-        items: or_abort(OneOrMore::new(vec![item])),
+        items: or_fail(OneOrMore::new(vec![item])),
         item_level: level,
     }
 }
@@ -3420,7 +3419,7 @@ pub fn reward_drop_group(item: ItemRef, level: ItemLevel) -> RewardDropGroup {
 pub fn reward_entry(rank: Option<u16>, flags: Vec<SuccessFlag>, reward: RewardKind) -> RewardEntry {
     RewardEntry {
         rank: rank.map(Rank),
-        flags: or_abort(SuccessFlags::new(flags)),
+        flags: or_fail(SuccessFlags::new(flags)),
         reward,
     }
 }
@@ -3439,12 +3438,12 @@ pub fn spawn_wave(
 ) -> SpawnWave {
     SpawnWave {
         number: WaveNumber(number),
-        window: or_abort(Interval::new(DurationMs(start_ms), DurationMs(end_ms))),
+        window: or_fail(Interval::new(DurationMs(start_ms), DurationMs(end_ms))),
         respawn,
         areas: vec![WaveSpawnArea {
             monster,
             area,
-            quantity: or_abort(NonZeroU16::new(quantity).ok_or("wave quantity is nonzero")),
+            quantity: or_fail(NonZeroU16::new(quantity).ok_or("wave quantity is nonzero")),
         }],
     }
 }
@@ -3478,22 +3477,22 @@ pub fn devil_square_definition(
     MiniGameDefinition {
         kind: MiniGameKind::DevilSquare,
         level,
-        normal_bracket: or_abort(Interval::new(
-            or_abort(Level::new(15)),
-            or_abort(Level::new(130)),
+        normal_bracket: or_fail(Interval::new(
+            or_fail(Level::new(15)),
+            or_fail(Level::new(130)),
         )),
-        special_bracket: or_abort(Interval::new(
-            or_abort(Level::new(10)),
-            or_abort(Level::new(110)),
+        special_bracket: or_fail(Interval::new(
+            or_fail(Level::new(10)),
+            or_fail(Level::new(110)),
         )),
         ticket: TicketRequirement {
             item: devil_square_ticket_ref(atlas),
-            item_level: or_abort(ItemLevel::new(2)),
+            item_level: or_fail(ItemLevel::new(2)),
         },
         entrance_fee: Zen(25_000),
-        players: or_abort(PlayerBounds::new(
-            or_abort(NonZeroU16::new(min_players).ok_or("min players is nonzero")),
-            or_abort(NonZeroU16::new(max_players).ok_or("max players is nonzero")),
+        players: or_fail(PlayerBounds::new(
+            or_fail(NonZeroU16::new(min_players).ok_or("min players is nonzero")),
+            or_fail(NonZeroU16::new(max_players).ok_or("max players is nonzero")),
         )),
         enter_duration: PhaseSpan::floored(DurationMs(120_000)),
         game_duration: PhaseSpan::floored(DurationMs(300_000)),
@@ -3512,7 +3511,7 @@ pub fn devil_square_definition(
 /// (ruling D). Returns its number.
 #[must_use]
 pub fn respawning_wave_monster(atlas: &Atlas) -> MonsterNumber {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|def| match &def.role {

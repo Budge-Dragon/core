@@ -9,7 +9,7 @@
 //! effect clear, determinism, and the full die -> penalty -> respawn -> persist
 //! loop.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body so
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body so
 //! `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -31,12 +31,12 @@ use mu_core::events::death::{DeathEvent, Respawned};
 use mu_core::services::death::{DeathPenalty, resolve_death, respawn};
 use mu_core::services::profile::character_profile;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use rng::TestRng;
 
 /// The suite tick base: 50 ms, so the 3000 ms respawn delay is 60 whole ticks.
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// The respawn delay in whole ticks against [`tick`]: `ceil(3000 / 50)`.
@@ -48,7 +48,7 @@ const RESPAWN_FACING: Facing = Facing::POS_Y;
 
 /// Total experience the curve requires to hold `lvl`, read from the real table.
 fn total(atlas: &Atlas, lvl: u16) -> u64 {
-    or_abort(atlas.exp_curve().level(lvl)).total_to_hold().0
+    or_fail(atlas.exp_curve().level(lvl)).total_to_hold().0
 }
 
 /// A gearless Dark Knight built the only way a character can be — by
@@ -79,11 +79,11 @@ fn dark_knight(
         },
     });
     // Move the seeded pieces in so they are consumed, not borrowed by the macro.
-    let object = or_abort(json.as_object_mut().ok_or("dark_knight json is an object"));
+    let object = or_fail(json.as_object_mut().ok_or("dark_knight json is an object"));
     object.insert("vitals".to_owned(), vitals);
     object.insert("active_effects".to_owned(), effects);
     object.insert("life".to_owned(), life);
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 fn alive() -> Value {
@@ -123,7 +123,7 @@ fn a_poison() -> Value {
 
 /// The world rectangle a gate's tile area projects to.
 fn gate_rect(x1: u8, y1: u8, x2: u8, y2: u8) -> mu_core::components::spatial::WorldRect {
-    or_abort(TileArea::new(x1, y1, x2, y2)).to_world()
+    or_fail(TileArea::new(x1, y1, x2, y2)).to_world()
 }
 
 /// Asserts a respawn landing sits on a walkable tile inside the given gate area.
@@ -133,7 +133,7 @@ fn assert_landed_inside(
     pos: WorldPos,
     rect: mu_core::components::spatial::WorldRect,
 ) {
-    let grid = or_abort(
+    let grid = or_fail(
         atlas
             .terrain_grid(MapNumber(map))
             .ok_or("map has a terrain grid"),
@@ -259,7 +259,7 @@ fn a_death_below_level_ten_is_free_of_experience_and_zen() {
     assert_eq!(dead_hero.experience(), Exp(exp), "experience untouched");
     assert_eq!(
         dead_hero.zen(),
-        or_abort(CarriedZen::new(250_000)),
+        or_fail(CarriedZen::new(250_000)),
         "carried zen untouched"
     );
     assert_eq!(
@@ -299,7 +299,7 @@ fn a_max_level_death_loses_no_experience_but_still_pays_the_zen() {
         cap,
         "no level-401 band exists to lose from"
     );
-    assert_eq!(dead_hero.zen(), or_abort(CarriedZen::new(970_000)));
+    assert_eq!(dead_hero.zen(), or_fail(CarriedZen::new(970_000)));
     assert_eq!(
         events,
         vec![
@@ -308,7 +308,7 @@ fn a_max_level_death_loses_no_experience_but_still_pays_the_zen() {
             },
             DeathEvent::ZenDocked {
                 lost: Zen(30_000),
-                remaining: or_abort(CarriedZen::new(970_000)),
+                remaining: or_fail(CarriedZen::new(970_000)),
             },
         ],
         "max level docks 3% zen, no experience"
@@ -381,7 +381,7 @@ fn the_zen_brackets_dock_one_two_and_three_percent_at_real_levels() {
 
         assert_eq!(
             dead_hero.zen(),
-            or_abort(CarriedZen::new(remaining)),
+            or_fail(CarriedZen::new(remaining)),
             "level {lvl} carried zen"
         );
         assert_eq!(
@@ -392,7 +392,7 @@ fn the_zen_brackets_dock_one_two_and_three_percent_at_real_levels() {
                 },
                 DeathEvent::ZenDocked {
                     lost: Zen(lost),
-                    remaining: or_abort(CarriedZen::new(remaining)),
+                    remaining: or_fail(CarriedZen::new(remaining)),
                 },
             ],
             "level {lvl} docks its bracket zen only"
@@ -419,7 +419,7 @@ fn a_tiny_balance_docks_no_zen_because_the_percentage_floors_to_zero() {
 
     assert_eq!(
         dead_hero.zen(),
-        or_abort(CarriedZen::new(50)),
+        or_fail(CarriedZen::new(50)),
         "1% of 50 floors to 0 — nothing docked"
     );
     assert_eq!(
@@ -509,8 +509,8 @@ fn a_second_resolve_death_on_a_dead_character_is_a_no_op() {
 
     assert!(events.is_empty(), "a re-death emits no event");
     assert_eq!(
-        or_abort(serde_json::to_string(&dead_twice)),
-        or_abort(serde_json::to_string(&dead_once)),
+        or_fail(serde_json::to_string(&dead_twice)),
+        or_fail(serde_json::to_string(&dead_once)),
         "the input is returned byte-identical — no second penalty, no re-mark"
     );
 }
@@ -543,7 +543,7 @@ fn a_waived_death_marks_dead_with_zero_exp_and_zen_dock() {
     assert_eq!(dead_hero.experience(), Exp(exp), "no experience is docked");
     assert_eq!(
         dead_hero.zen(),
-        or_abort(CarriedZen::new(1_000_000)),
+        or_fail(CarriedZen::new(1_000_000)),
         "no zen is docked"
     );
     assert_eq!(
@@ -1034,8 +1034,8 @@ fn respawn_is_deterministic_across_the_redirect_for_the_same_seed() {
         "identical landing on the same seed"
     );
     assert_eq!(
-        or_abort(serde_json::to_string(&revived_a)),
-        or_abort(serde_json::to_string(&revived_b)),
+        or_fail(serde_json::to_string(&revived_a)),
+        or_fail(serde_json::to_string(&revived_b)),
         "byte-identical revived character"
     );
 }
@@ -1073,7 +1073,7 @@ fn the_full_loop_dies_takes_the_penalty_respawns_and_persists() {
         }
     );
     assert_eq!(dead_hero.experience(), Exp(exp - expected_exp_loss));
-    assert_eq!(dead_hero.zen(), or_abort(CarriedZen::new(990_000)));
+    assert_eq!(dead_hero.zen(), or_fail(CarriedZen::new(990_000)));
     assert_eq!(dead_hero.vitals().health.current(), 0, "not healed yet");
     assert!(
         dead_hero.active_effects().poison().is_some(),
@@ -1107,11 +1107,11 @@ fn the_full_loop_dies_takes_the_penalty_respawns_and_persists() {
     assert_eq!(revived.stats(), dead_hero.stats());
     assert_eq!(revived.unspent_points(), dead_hero.unspent_points());
     assert_eq!(revived.experience(), Exp(exp - expected_exp_loss));
-    assert_eq!(revived.zen(), or_abort(CarriedZen::new(990_000)));
+    assert_eq!(revived.zen(), or_fail(CarriedZen::new(990_000)));
 
     // The revived hero round-trips through persist (the class↔stats gate re-proves).
-    let wire = or_abort(serde_json::to_string(&revived));
-    let reloaded: Character = or_abort(serde_json::from_str(&wire));
+    let wire = or_fail(serde_json::to_string(&revived));
+    let reloaded: Character = or_fail(serde_json::from_str(&wire));
     assert_eq!(reloaded, revived);
 }
 
@@ -1124,13 +1124,13 @@ fn every_gated_map_resolves_a_walkable_respawn_gate_over_real_data() {
     // succeeds because only a map's first gate (50) is a respawn point. Map 8
     // (Tarkan) now owns spawn gate 57.
     for map in [0u8, 2, 3, 4, 6, 7, 8, 9] {
-        let gate = or_abort(
+        let gate = or_fail(
             atlas
                 .spawn_gate(MapNumber(map))
                 .ok_or("gated map resolves a respawn gate"),
         );
         assert_eq!(gate.map, MapNumber(map));
-        let grid = or_abort(
+        let grid = or_fail(
             atlas
                 .terrain_grid(MapNumber(map))
                 .ok_or("map has a terrain grid"),

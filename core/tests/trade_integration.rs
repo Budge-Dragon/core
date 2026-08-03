@@ -9,12 +9,12 @@
 //!
 //! The dataset rides in through the shared `common/dataset` harness — the
 //! parsed-[`Atlas`] port [`real_atlas`]; load failures route through
-//! [`or_abort`] so no banned suppressor is needed outside a `#[test]` body.
+//! [`or_fail`] so no banned suppressor is needed outside a `#[test]` body.
 
 #[path = "common/dataset.rs"]
 mod dataset;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
@@ -62,7 +62,7 @@ fn bag() -> Inventory {
 }
 
 fn zen(value: u64) -> CarriedZen {
-    or_abort(CarriedZen::new(value))
+    or_fail(CarriedZen::new(value))
 }
 
 fn cell(row: u8, col: u8) -> Cell {
@@ -82,7 +82,7 @@ fn holdings(inventory: Inventory, wallet: u64) -> Holdings {
 
 /// A fresh instance of a real definition at plus-level zero, full gauge.
 fn item(atlas: &Atlas, id: ItemRef) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or(format!("unknown item {id:?}")));
+    let def = or_fail(atlas.item(id).ok_or(format!("unknown item {id:?}")));
     ItemInstance {
         item: id,
         level: ItemLevel::ZERO,
@@ -97,8 +97,8 @@ fn item(atlas: &Atlas, id: ItemRef) -> ItemInstance {
 
 /// The real definition's cell footprint.
 fn footprint_of(atlas: &Atlas, id: ItemRef) -> Footprint {
-    let def = or_abort(atlas.item(id).ok_or(format!("unknown item {id:?}")));
-    or_abort(Footprint::new(def.width, def.height))
+    let def = or_fail(atlas.item(id).ok_or(format!("unknown item {id:?}")));
+    or_fail(Footprint::new(def.width, def.height))
 }
 
 /// A 15×8 bag packed edge-to-edge with twenty real 2×3 Dragon Armors — no
@@ -111,7 +111,7 @@ fn packed_bag(atlas: &Atlas) -> Inventory {
             inventory =
                 match inventory.place(cell(band * 3, column * 2), fp, item(atlas, DRAGON_ARMOR)) {
                     Ok(next) => next,
-                    Err((_, _, reason)) => or_abort(Err(format!("packing failed: {reason}"))),
+                    Err((_, _, reason)) => or_fail(Err(format!("packing failed: {reason}"))),
                 };
         }
     }
@@ -128,15 +128,15 @@ fn session_with_offer(atlas: &Atlas, side: Side, id: ItemRef) -> TradeSession {
         },
     );
     let RequestOutcome::Opened { session } = outcome else {
-        return or_abort(Err("request must open"));
+        return or_fail(Err("request must open"));
     };
     let (outcome, _) = accept(session, Side::Partner, pos(0, 0), pos(5, 0));
     let AcceptOutcome::Accepted { session } = outcome else {
-        return or_abort(Err("accept must open the windows"));
+        return or_fail(Err("accept must open the windows"));
     };
     let stored = match bag().place(cell(0, 0), footprint_of(atlas, id), item(atlas, id)) {
         Ok(stored) => stored,
-        Err((_, _, reason)) => return or_abort(Err(format!("seed placement failed: {reason}"))),
+        Err((_, _, reason)) => return or_fail(Err(format!("seed placement failed: {reason}"))),
     };
     let (session, _, outcome, _) = offer_item(session, side, stored, cell(0, 0), cell(0, 0));
     assert_eq!(outcome, OfferOutcome::Offered { at: cell(0, 0) });

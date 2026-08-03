@@ -9,12 +9,12 @@
 //!
 //! The dataset rides in through the shared `common/dataset` harness — the
 //! parsed-[`Atlas`] port [`real_atlas`]; load failures route through
-//! [`or_abort`] so no banned suppressor is needed outside a `#[test]` body.
+//! [`or_fail`] so no banned suppressor is needed outside a `#[test]` body.
 
 #[path = "common/dataset.rs"]
 mod dataset;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
@@ -46,7 +46,7 @@ fn bag() -> Inventory {
 }
 
 fn zen(value: u64) -> CarriedZen {
-    or_abort(CarriedZen::new(value))
+    or_fail(CarriedZen::new(value))
 }
 
 fn cell(row: u8, col: u8) -> Cell {
@@ -54,7 +54,7 @@ fn cell(row: u8, col: u8) -> Cell {
 }
 
 fn slot(byte: u8) -> ShelfSlot {
-    or_abort(ShelfSlot::new(byte))
+    or_fail(ShelfSlot::new(byte))
 }
 
 /// The merchant stands at tile (10, 10); 3 tiles is in reach, 4 is out.
@@ -74,24 +74,24 @@ fn out_of_range_pos() -> WorldPos {
 fn worn(group: u8, number: u16, level: u8, current: u8, max: u8) -> ItemInstance {
     ItemInstance {
         item: ItemRef { group, number },
-        level: or_abort(ItemLevel::new(level)),
+        level: or_fail(ItemLevel::new(level)),
         roll: RarityRoll::Normal,
         normal_option: None,
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
-        durability: or_abort(Durability::new(current, max)),
+        durability: or_fail(Durability::new(current, max)),
         augment: CraftedAugment::None,
     }
 }
 
 fn footprint(width: u8, height: u8) -> Footprint {
-    or_abort(Footprint::new(width, height))
+    or_fail(Footprint::new(width, height))
 }
 
 fn shop_of(atlas: &Atlas, npc: u16) -> ShopView<'_> {
     match atlas.shop(MonsterNumber(npc)) {
         Some(shop) => shop,
-        None => or_abort(Err(format!("merchant {npc} has no shop"))),
+        None => or_fail(Err(format!("merchant {npc} has no shop"))),
     }
 }
 

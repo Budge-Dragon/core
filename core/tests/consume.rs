@@ -7,7 +7,7 @@
 //! refusals, and purity — each magnitude computed from the real max and the
 //! authentic formula, never a hard-coded literal.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body
 //! so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -24,7 +24,7 @@ use mu_core::entities::character::Character;
 use mu_core::events::consume::{ConsumeEvent, ConsumeRejection, PoolKind};
 use mu_core::services::consume::use_consumable;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 
 const APPLE: ItemRef = ItemRef {
     group: 14,
@@ -88,7 +88,7 @@ fn expected_recovery(max: u32, level: u16, multiplier: u32) -> u32 {
 /// A gearless Dark Knight at `level` with the given health and mana pools —
 /// built the only way a character can be, by deserialising its wire form.
 fn knight(level: u16, hp_current: u32, hp_max: u32, mp_current: u32, mp_max: u32) -> Character {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "class": "dark_knight",
         "level": level,
         "experience": 0,
@@ -107,7 +107,7 @@ fn knight(level: u16, hp_current: u32, hp_max: u32, mp_current: u32, mp_max: u32
 /// A level-30 Dark Knight below full health, carrying an active poison and a
 /// Greater-Damage buff — the antidote-cure subject.
 fn poisoned_buffed_knight() -> Character {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "class": "dark_knight",
         "level": 30,
         "experience": 0,
@@ -129,7 +129,7 @@ fn poisoned_buffed_knight() -> Character {
 
 /// A dead Dark Knight awaiting respawn, health at zero.
 fn dead_knight() -> Character {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "class": "dark_knight",
         "level": 30,
         "experience": 0,
@@ -149,7 +149,7 @@ fn dead_knight() -> Character {
 /// A real item instance of `id` carrying `pieces` in its gauge (the stack count),
 /// its ceiling the record's own durability column.
 fn stack(atlas: &Atlas, id: ItemRef, pieces: u8) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
         level: ItemLevel::ZERO,
@@ -157,16 +157,16 @@ fn stack(atlas: &Atlas, id: ItemRef, pieces: u8) -> ItemInstance {
         normal_option: None,
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
-        durability: or_abort(Durability::new(pieces, def.durability)),
+        durability: or_fail(Durability::new(pieces, def.durability)),
         augment: CraftedAugment::None,
     }
 }
 
 /// An 8×8 bag holding a `pieces`-strong stack of `id` anchored at [`CELL`].
 fn bag_with(atlas: &Atlas, id: ItemRef, pieces: u8) -> Inventory {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
-    let footprint = or_abort(Footprint::new(def.width, def.height));
-    or_abort(
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
+    let footprint = or_fail(Footprint::new(def.width, def.height));
+    or_fail(
         Inventory::empty(8, 8)
             .place(CELL, footprint, stack(atlas, id, pieces))
             .map_err(|(_, _, reason)| reason),
@@ -586,8 +586,8 @@ fn a_hurt_knight_drinks_a_real_potion_heals_and_the_character_round_trips() {
     assert!(healed.vitals().health.current() > 40, "health rose");
     assert_eq!(pieces_at(&bag), Some(2), "one potion left the stack");
     // The healed character re-parses to itself — the class↔stats gate re-proves.
-    let wire = or_abort(serde_json::to_string(&healed));
-    assert_eq!(or_abort(serde_json::from_str::<Character>(&wire)), healed);
+    let wire = or_fail(serde_json::to_string(&healed));
+    assert_eq!(or_fail(serde_json::from_str::<Character>(&wire)), healed);
 }
 
 // --- Purity / determinism: no RNG, no in-place edit. --------------------------

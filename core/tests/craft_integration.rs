@@ -11,16 +11,8 @@
 //! below 3 (passes every rate ≥ 3) and seed 8's is at least 90 (fails every
 //! rate ≤ 90) — the two universal seeds the branch-pinned scenarios ride.
 //! Rate-100 windows succeed under ANY seed with no roll draw (D1).
-//!
-//! This file carries its own dataset loader (the movement suite's `common`
-//! helpers are unused here); load failures route through `or_abort` so no
-//! banned suppressor is needed outside a `#[test]` body.
-
-use std::io::Write;
-use std::path::PathBuf;
 
 use rand_core::RngCore;
-use serde::de::DeserializeOwned;
 
 use mu_core::components::item_instance::{
     CraftedAugment, Durability, ExcellentArmorSet, ExcellentOptions, ItemInstance, LuckRoll,
@@ -29,94 +21,18 @@ use mu_core::components::item_instance::{
 use mu_core::components::item_options::NormalOption;
 use mu_core::components::item_quality::ItemRarity;
 use mu_core::components::levels::OptionLevel;
-use mu_core::components::units::{CarriedZen, ItemLevel, MapNumber, Zen};
-use mu_core::data::ancient_sets::AncientSet;
-use mu_core::data::atlas::{Atlas, StaticData};
-use mu_core::data::box_drops::BoxDrop;
-use mu_core::data::chaos_mixes::ChaosMix;
-use mu_core::data::classes::ClassRecord;
-use mu_core::data::common::{DataFile, ItemRef};
-use mu_core::data::exp_tables::ExpTable;
-use mu_core::data::game_config::GameConfig;
-use mu_core::data::gates_warps::GateWarpRecord;
-use mu_core::data::item_definitions::ItemDefinition;
-use mu_core::data::map_definitions::MapDefinition;
-use mu_core::data::monster_definitions::MonsterDefinition;
-use mu_core::data::npc_shops::MerchantShop;
-use mu_core::data::skills::Skill;
-use mu_core::data::spawns::Spawn;
-use mu_core::data::special_drops::SpecialDropRecord;
-use mu_core::data::terrain::{MapTerrain, TerrainBytes};
+use mu_core::components::units::{CarriedZen, ItemLevel, Zen};
+use mu_core::data::atlas::Atlas;
+use mu_core::data::common::ItemRef;
 use mu_core::events::craft::{Casualty, MixOutcome, RejectReason};
 use mu_core::services::craft::mix;
 use mu_core::services::item_rules::max_durability;
 use mu_core::services::price::{buying_price, old_buying_price};
 
-// --- Self-contained dataset harness (load failures abort, never unwrap). ---
+#[path = "common/dataset.rs"]
+mod dataset;
 
-fn or_abort<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(error) => {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "craft_integration harness: {error}");
-            std::process::abort()
-        }
-    }
-}
-
-fn data_path(name: &str) -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("..");
-    path.push("data");
-    path.push(format!("{name}.json"));
-    path
-}
-
-fn load<T: DeserializeOwned>(name: &str) -> DataFile<T> {
-    let text = or_abort(std::fs::read_to_string(data_path(name)));
-    or_abort(serde_json::from_str(&text))
-}
-
-fn load_terrain() -> Vec<MapTerrain> {
-    (0u8..=10)
-        .map(|map| {
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.push("..");
-            path.push("data");
-            path.push("terrain");
-            path.push(format!("{map}.bin"));
-            MapTerrain {
-                map: MapNumber(map),
-                bytes: or_abort(TerrainBytes::new(or_abort(std::fs::read(&path)))),
-            }
-        })
-        .collect()
-}
-
-fn real_atlas() -> Atlas {
-    let data = StaticData {
-        maps: load::<MapDefinition>("map_definitions"),
-        gates_warps: load::<GateWarpRecord>("gates_warps"),
-        monsters: load::<MonsterDefinition>("monster_definitions"),
-        spawns: load::<Spawn>("spawns"),
-        skills: load::<Skill>("skills"),
-        items: load::<ItemDefinition>("item_definitions"),
-        box_drops: load::<BoxDrop>("box_drops"),
-        special_drops: load::<SpecialDropRecord>("special_drops"),
-        ancient_sets: load::<AncientSet>("ancient_sets"),
-        chaos_mixes: load::<ChaosMix>("chaos_mixes"),
-        shops: load::<MerchantShop>("npc_shops"),
-        classes: load::<ClassRecord>("classes"),
-        exp_tables: load::<ExpTable>("exp_tables"),
-        game_config: load::<GameConfig>("game_config"),
-        mini_games: DataFile {
-            records: Vec::new(),
-        },
-        terrain: load_terrain(),
-    };
-    or_abort(Atlas::parse(data))
-}
+use dataset::{or_fail, real_atlas};
 
 /// Deterministic `SplitMix64` — the shared replayable stream.
 struct TestRng {
@@ -164,7 +80,7 @@ const BALANCE: u64 = 100_000_000;
 
 /// Builds a carried balance; every literal in the suite is under the cap.
 fn carried(value: u64) -> CarriedZen {
-    or_abort(CarriedZen::new(value))
+    or_fail(CarriedZen::new(value))
 }
 
 // --- Concrete catalog identities (from the shipped `/data`). ---
@@ -290,10 +206,10 @@ const CHAOS_WEAPONS: [ItemRef; 3] = [CHAOS_AXE, CHAOS_BOW, CHAOS_STAFF];
 // --- Instance builders over the real definitions. ---
 
 fn item(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or(format!("unknown item {id:?}")));
+    let def = or_fail(atlas.item(id).ok_or(format!("unknown item {id:?}")));
     ItemInstance {
         item: id,
-        level: or_abort(ItemLevel::new(level)),
+        level: or_fail(ItemLevel::new(level)),
         roll: RarityRoll::Normal,
         normal_option: None,
         luck: LuckRoll::Plain,
@@ -722,7 +638,7 @@ fn dinorant_mix_always_carries_its_skill_and_gates_on_full_horns() {
     }
     // A worn horn fails the attempt before any fee.
     let mut worn = item(&atlas, HORN_OF_UNIRIA, 0);
-    worn.durability = or_abort(Durability::new(200, 255));
+    worn.durability = or_fail(Durability::new(200, 255));
     let placed = vec![
         item(&atlas, HORN_OF_UNIRIA, 0),
         item(&atlas, HORN_OF_UNIRIA, 0),
@@ -807,7 +723,7 @@ fn dinorant_options_across_seeds_are_zero_one_or_two_distinct() {
 /// augment from — so mint and reload read one source and a legitimate craft is
 /// never false-rejected.
 fn assert_reconciles(atlas: &Atlas, created: &ItemInstance) {
-    let def = or_abort(
+    let def = or_fail(
         atlas
             .item(created.item)
             .ok_or("a crafted item names a shipped definition"),

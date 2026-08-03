@@ -97,7 +97,7 @@ use paper_host::{
     fighting_monster_from, first_passive_monster, flame_skill, footprint_of, guard_monster,
     heal_skill, hellfire_skill, is_equippable, item_at_level, item_instance,
     lightning_direct_skill, low_level_monster, lunge_skill, magic_gladiator, monster_instance,
-    none_type_skill, nova_skill, or_abort, persist, pos, pressing_monster, respawning_wave_monster,
+    none_type_skill, nova_skill, or_fail, persist, pos, pressing_monster, respawning_wave_monster,
     reward_drop_group, reward_entry, spawn_wave, tile, walkable_area, walkable_run, wearer_of,
     wire, wizardry_direct_skill, zen,
 };
@@ -856,8 +856,8 @@ fn a_player_death_docks_penalty_then_respawns_in_town_closing_the_loop() {
     // literal, so the dock is proven against real data.
     let expected_exp_loss = {
         let curve = world.atlas().exp_curve();
-        let band = or_abort(curve.level(101)).total_to_hold().0
-            - or_abort(curve.level(100)).total_to_hold().0;
+        let band = or_fail(curve.level(101)).total_to_hold().0
+            - or_fail(curve.level(100)).total_to_hold().0;
         band / 100
     };
     let before_exp = world.character(player).experience();
@@ -944,7 +944,7 @@ fn a_player_death_docks_penalty_then_respawns_in_town_closing_the_loop() {
         },
         "the Respawned mirrors where the player now stands"
     );
-    let grid = or_abort(
+    let grid = or_fail(
         world
             .atlas()
             .terrain_grid(placement.map)
@@ -1357,7 +1357,7 @@ fn crafted_wing_lifts_the_flyer(mut world: World, flyer: usize, wing: ItemInstan
     match world.equip_first_available(flyer, wing) {
         EquipOutcome::Equipped { slot } => assert_eq!(slot, EquipmentSlot::Wings),
         EquipOutcome::Rejected { .. } => {
-            or_abort(Err::<(), &str>("the MG second wing equips on the flyer"));
+            or_fail(Err::<(), &str>("the MG second wing equips on the flyer"));
         }
     }
 
@@ -2245,7 +2245,7 @@ fn a_wizardry_absent_or_none_type_cast_persists_the_scratch_never_a_weapon_hit()
 /// the shipped grid on every run, never a hard-coded tile. Returns the two
 /// walkable flanks.
 fn wall_triple(atlas: &mu_core::data::atlas::Atlas, map: MapNumber) -> (TileCoord, TileCoord) {
-    let grid = or_abort(atlas.terrain_grid(map).ok_or("no terrain grid for map"));
+    let grid = or_fail(atlas.terrain_grid(map).ok_or("no terrain grid for map"));
     for y in 0u8..=u8::MAX {
         for x in 0u8..=u8::MAX - 2 {
             let near = TileCoord::new(x, y);
@@ -2259,7 +2259,7 @@ fn wall_triple(atlas: &mu_core::data::atlas::Atlas, map: MapNumber) -> (TileCoor
             }
         }
     }
-    or_abort(Err::<(TileCoord, TileCoord), _>(
+    or_fail(Err::<(TileCoord, TileCoord), _>(
         "the map has a walkable-blocked-walkable triple",
     ))
 }
@@ -2378,10 +2378,10 @@ fn an_earthshake_scatters_struck_and_missed_mobs_and_a_killed_mob_stays_put() {
     for seed in 0u64..128 {
         let mut world = World::new(seed, MapNumber(0));
         let run = walkable_run(world.atlas(), MapNumber(0), 8);
-        let caster_tile = *or_abort(run.first().ok_or("run start"));
-        let frail_tile = *or_abort(run.get(1).ok_or("run tile 1"));
-        let sturdy_tile = *or_abort(run.get(2).ok_or("run tile 2"));
-        let pushed_to = *or_abort(run.get(5).ok_or("run tile 5"));
+        let caster_tile = *or_fail(run.first().ok_or("run start"));
+        let frail_tile = *or_fail(run.get(1).ok_or("run tile 1"));
+        let sturdy_tile = *or_fail(run.get(2).ok_or("run tile 2"));
+        let pushed_to = *or_fail(run.get(5).ok_or("run tile 5"));
         let knight = world.seat_character(dark_knight(80, 300, caster_tile));
         let quake = earthshake_skill(world.atlas());
         let (number, _combat, _resistances) = low_level_monster(world.atlas(), 20);
@@ -2626,7 +2626,7 @@ fn wear_break_repair_lifecycle(seed: u64) -> Option<()> {
     // A real helm worn through the LIVE gate, ground to its last point.
     let mut helm = item_instance(world.atlas(), HELM);
     let full_max = helm.durability.max();
-    helm.durability = or_abort(Durability::new(1, full_max));
+    helm.durability = or_fail(Durability::new(1, full_max));
     assert!(matches!(
         world.equip_into(hero, helm, EquipmentSlot::Helm),
         EquipOutcome::Equipped { .. }
@@ -2660,7 +2660,7 @@ fn wear_break_repair_lifecycle(seed: u64) -> Option<()> {
                     assert_eq!(slot, EquipmentSlot::Helm);
                     broke = true;
                 }
-                WearEvent::Destroyed { slot } => or_abort(Err::<(), String>(format!(
+                WearEvent::Destroyed { slot } => or_fail(Err::<(), String>(format!(
                     "wear never destroys gear, yet {slot:?} was destroyed"
                 ))),
             }
@@ -2674,7 +2674,7 @@ fn wear_break_repair_lifecycle(seed: u64) -> Option<()> {
     }
 
     // Broken: durability 0, STILL worn, the whole contribution off the fold.
-    let broken_helm = or_abort(
+    let broken_helm = or_fail(
         world
             .equipment(hero)
             .get(EquipmentSlot::Helm)
@@ -2711,11 +2711,11 @@ fn wear_break_repair_lifecycle(seed: u64) -> Option<()> {
         | RepairOutcome::NotRepairableKind
         | RepairOutcome::Empty
         | RepairOutcome::OutOfRange
-        | RepairOutcome::InsufficientZen) => or_abort(Err::<(), String>(format!(
+        | RepairOutcome::InsufficientZen) => or_fail(Err::<(), String>(format!(
             "the funded self-repair lands: {outcome:?}"
         ))),
     }
-    let repaired = or_abort(
+    let repaired = or_fail(
         world
             .equipment(hero)
             .get(EquipmentSlot::Helm)
@@ -2852,7 +2852,7 @@ fn heal_carries_the_player_through_a_fight(seed: u64) -> Option<()> {
     ));
 
     // Start the player wounded so the mob's bite and the heal are both visible.
-    world.set_health(player, or_abort(Pool::new(450, 500)));
+    world.set_health(player, or_fail(Pool::new(450, 500)));
     let mana_before = world.character(player).vitals().mana.current();
 
     let mut bitten = false;
@@ -3025,7 +3025,7 @@ const TOWN_PORTAL: ItemRef = ItemRef {
 
 /// The persisted menu's Lost Tower annotation for the character at `hero`.
 fn lost_tower_status(world: &World, hero: usize) -> WarpAvailability {
-    or_abort(
+    or_fail(
         world
             .warp_menu(hero)
             .into_iter()
@@ -3074,7 +3074,7 @@ fn a_hero_earns_attempts_a_warp_too_poor_then_earns_enough_and_warps() {
             assert_eq!(balance, zen(2_500), "4,500 earned minus the 2,000 fee");
             assert_eq!(world.character(hero).zen(), balance);
             assert_eq!(world.character(hero).placement(), placement);
-            let grid = or_abort(
+            let grid = or_fail(
                 world
                     .atlas()
                     .terrain_grid(placement.map)
@@ -3150,7 +3150,7 @@ fn discovery_locks_the_menu_until_a_walk_in_and_the_menu_warp_returns() {
         WarpTravelOutcome::Arrived { placement, balance } => {
             assert_eq!(balance, zen(13_000), "the 5,000 fee off the wallet");
             assert_eq!(placement.map, MapNumber(4));
-            let grid = or_abort(
+            let grid = or_fail(
                 world
                     .atlas()
                     .terrain_grid(placement.map)
@@ -3246,7 +3246,7 @@ fn a_bought_town_portal_scroll_carries_the_hero_home_with_everything_kept() {
         }
     };
     assert_eq!(world.character(hero).zen(), zen(250));
-    let bought = or_abort(
+    let bought = or_fail(
         world
             .inventory(hero)
             .occupant(scroll_cell)
@@ -3308,7 +3308,7 @@ fn scroll_rejections_consume_nothing() {
     // persisted stack is whole.
     let scroll = item_instance(world.atlas(), TOWN_PORTAL);
     let footprint = footprint_of(world.atlas(), TOWN_PORTAL);
-    let anchor = or_abort(
+    let anchor = or_fail(
         world
             .inventory(hero)
             .first_fit(footprint)
@@ -3393,7 +3393,7 @@ const WINGS_OF_SATAN: ItemRef = ItemRef {
 
 /// The persisted menu's Icarus annotation for the character at `hero`.
 fn icarus_status(world: &World, hero: usize) -> WarpAvailability {
-    or_abort(
+    or_fail(
         world
             .warp_menu(hero)
             .into_iter()
@@ -3422,16 +3422,16 @@ fn a_wingless_hero_is_bounced_at_both_icarus_doors_until_a_wing_is_worn() {
     // discovered set already carries Icarus (and Tarkan): with discovery and
     // level met, the wingless refusal is CannotFly and the persisted wallet
     // and placement are untouched.
-    let mut wire = or_abort(serde_json::to_value(dark_knight_in_band(
+    let mut wire = or_fail(serde_json::to_value(dark_knight_in_band(
         world.atlas(),
         200,
         50_000,
         MapNumber(4),
         tile(17, 250),
     )));
-    let object = or_abort(wire.as_object_mut().ok_or("character is an object"));
+    let object = or_fail(wire.as_object_mut().ok_or("character is an object"));
     object.insert("discovered".to_owned(), serde_json::json!([4, 8, 10]));
-    let veteran = world.seat_character(or_abort(serde_json::from_value(wire)));
+    let veteran = world.seat_character(or_fail(serde_json::from_value(wire)));
     assert_eq!(
         world.warp(veteran, ICARUS_WARP),
         WarpTravelOutcome::CannotFly
@@ -3491,7 +3491,7 @@ fn a_wingless_hero_is_bounced_at_both_icarus_doors_until_a_wing_is_worn() {
             // bounce charged nothing.
             assert_eq!(balance, zen(45_000), "the 5,000 fee off the wallet");
             assert_eq!(world.character(hero).zen(), balance);
-            let grid = or_abort(
+            let grid = or_fail(
                 world
                     .atlas()
                     .terrain_grid(placement.map)
@@ -3671,7 +3671,7 @@ fn loot_and_gear(world: &mut World, hero: usize, pile: u64, mob_pos: WorldPos) -
     let despawns = world.reap_ground(leftover_stamp.despawn);
     assert_eq!(despawns.len(), 1, "one despawn event for the leftover pile");
     assert_eq!(world.ground_zen_count(), 0);
-    let bagged = or_abort(
+    let bagged = or_fail(
         world
             .inventory(hero)
             .occupant(anchor)
@@ -3689,16 +3689,14 @@ fn loot_and_gear(world: &mut World, hero: usize, pile: u64, mob_pos: WorldPos) -
     let in_hand = match world.remove_from_bag(hero, anchor) {
         RemoveOutcome::Removed { item, .. } => item,
         RemoveOutcome::Rejected { .. } => {
-            or_abort(Err::<_, &str>("the anchor held the picked item"))
+            or_fail(Err::<_, &str>("the anchor held the picked item"))
         }
     };
     let slot = match world.equip_first_available(hero, in_hand) {
         EquipOutcome::Equipped { slot } => slot,
-        EquipOutcome::Rejected { .. } => {
-            or_abort(Err::<_, &str>("the dropped armor is equippable"))
-        }
+        EquipOutcome::Rejected { .. } => or_fail(Err::<_, &str>("the dropped armor is equippable")),
     };
-    let worn = or_abort(world.equipment(hero).get(slot).ok_or("the slot is filled")).clone();
+    let worn = or_fail(world.equipment(hero).get(slot).ok_or("the slot is filled")).clone();
     assert_eq!(
         wire(&worn),
         wire(&rolled),
@@ -3738,7 +3736,7 @@ fn geared_bite(world: &mut World, hero: usize, mob_tile: TileCoord) -> Option<()
                     assert_eq!(slot, EquipmentSlot::Armor, "only the plate can wear");
                     true
                 }
-                WearEvent::Destroyed { slot } => or_abort(Err::<bool, String>(format!(
+                WearEvent::Destroyed { slot } => or_fail(Err::<bool, String>(format!(
                     "wear never destroys gear, yet {slot:?} was destroyed"
                 ))),
             });
@@ -3774,13 +3772,13 @@ fn shop_and_craft(
         "the corridor must never block the walk to the merchant"
     );
     let before_buy = world.character(hero).zen();
-    let slot0 = or_abort(ShelfSlot::new(0));
+    let slot0 = or_fail(ShelfSlot::new(0));
     let after_buy = match world.buy(hero, ELF_LALA, slot0, merchant) {
         BuyOutcome::NewItem { balance, .. } | BuyOutcome::Merged { balance, .. } => balance,
         BuyOutcome::OutOfRange
         | BuyOutcome::UnknownShelfSlot
         | BuyOutcome::InventoryFull
-        | BuyOutcome::InsufficientZen => or_abort(Err::<_, &str>(
+        | BuyOutcome::InsufficientZen => or_fail(Err::<_, &str>(
             "in reach with the earned zen, the potion buy lands",
         )),
     };
@@ -3811,7 +3809,7 @@ fn shop_and_craft(
             balance
         }
         SellOutcome::OutOfRange | SellOutcome::NoItemAtCell | SellOutcome::WalletFull => {
-            or_abort(Err::<_, &str>("a merchant in reach buys the cape"))
+            or_fail(Err::<_, &str>("a merchant in reach buys the cape"))
         }
     };
     assert_eq!(world.character(hero).zen(), after_sale);
@@ -3856,7 +3854,7 @@ fn shop_and_craft(
         world.place_in_bag(hero, created.clone(), created_footprint, created_anchor),
         PlaceOutcome::Placed { .. }
     ));
-    let created_bagged = or_abort(
+    let created_bagged = or_fail(
         world
             .inventory(hero)
             .occupant(created_anchor)
@@ -3905,7 +3903,7 @@ fn trade_created_item(
 
     let landed = world.inventory(partner).placed();
     assert_eq!(landed.len(), 1);
-    let crossed = or_abort(
+    let crossed = or_fail(
         landed
             .first()
             .ok_or("the partner's bag holds the traded item"),
@@ -4226,7 +4224,7 @@ fn a_party_kill_fans_exp_to_the_qualifiers_and_dead_or_out_of_range_members_get_
     let before_stray = world.character(stray).experience().0;
 
     let awards =
-        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
+        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_fail(Level::new(30)));
 
     let slots: Vec<u8> = awards.iter().map(|(award, _events)| award.slot.0).collect();
     assert_eq!(
@@ -4267,10 +4265,10 @@ fn a_party_kill_surfaces_growth_events_only_for_the_member_that_crosses_a_level(
     ];
 
     let awards =
-        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
+        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_fail(Level::new(30)));
 
     // The crossing killer surfaces LevelsGained with a positive point grant.
-    let killer_award = or_abort(
+    let killer_award = or_fail(
         awards
             .iter()
             .find(|entry| entry.0.slot == MemberSlot(0))
@@ -4290,7 +4288,7 @@ fn a_party_kill_surfaces_growth_events_only_for_the_member_that_crosses_a_level(
     }
 
     // The non-crossing member surfaces no growth event at all.
-    let member_award = or_abort(
+    let member_award = or_fail(
         awards
             .iter()
             .find(|entry| entry.0.slot == MemberSlot(1))
@@ -4394,7 +4392,7 @@ fn a_full_party_flow_forms_shares_a_kill_and_disbands() {
     let before_a = world.character(a).experience().0;
     let before_b = world.character(b).experience().0;
     let awards =
-        world.distribute_kill_experience(0, &facts, MemberSlot(0), or_abort(Level::new(30)));
+        world.distribute_kill_experience(0, &facts, MemberSlot(0), or_fail(Level::new(30)));
     assert_eq!(awards.len(), 2);
     assert!(world.character(a).experience().0 > before_a);
     assert!(world.character(b).experience().0 > before_b);
@@ -4425,7 +4423,7 @@ fn boundary_pair(grid: &TerrainGrid) -> (TileCoord, TileCoord) {
             }
         }
     }
-    or_abort(Err::<(TileCoord, TileCoord), _>(
+    or_fail(Err::<(TileCoord, TileCoord), _>(
         "Lorencia has a field tile bordering its safe core",
     ))
 }
@@ -4449,7 +4447,7 @@ fn push_lane(grid: &TerrainGrid) -> [TileCoord; 4] {
             }
         }
     }
-    or_abort(Err::<[TileCoord; 4], _>(
+    or_fail(Err::<[TileCoord; 4], _>(
         "Lorencia has a three-tile field lane into its safe core",
     ))
 }
@@ -4457,7 +4455,7 @@ fn push_lane(grid: &TerrainGrid) -> [TileCoord; 4] {
 /// Lorencia's terrain grid, cloned out of the world's held atlas so the world
 /// stays free to be driven mutably.
 fn lorencia_grid(world: &World) -> TerrainGrid {
-    or_abort(
+    or_fail(
         world
             .atlas()
             .terrain_grid(MapNumber(0))
@@ -4500,8 +4498,8 @@ fn sim_gate_walking_into_reach_turns_a_failed_pickup_into_a_success() {
     // and the retry, gated by the walked-to placement, succeeds.
     let mut world = World::new(42, MapNumber(0));
     let run = walkable_run(world.atlas(), MapNumber(0), 12);
-    let start = *or_abort(run.first().ok_or("the run has a start"));
-    let item_tile = *or_abort(run.get(11).ok_or("the run has an eleventh tile"));
+    let start = *or_fail(run.first().ok_or("the run has a start"));
+    let item_tile = *or_fail(run.get(11).ok_or("the run has an eleventh tile"));
 
     let alpha = world.seat_character(dark_knight(30, 150, start));
     let armor = item_instance(world.atlas(), DRAGON_ARMOR);
@@ -4509,7 +4507,7 @@ fn sim_gate_walking_into_reach_turns_a_failed_pickup_into_a_success() {
     let ground = world.seat_ground_item(armor, item_tile.to_world(), stamp);
 
     let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
-    let anchor = or_abort(
+    let anchor = or_fail(
         world
             .inventory(alpha)
             .first_fit(footprint)
@@ -4557,7 +4555,7 @@ fn sim_gate_the_ownership_window_refuses_at_five_seconds_and_frees_at_eleven() {
     let ground = world.seat_ground_item(armor, pos(10, 10), stamp);
 
     let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
-    let anchor = or_abort(
+    let anchor = or_fail(
         world
             .inventory(stranger)
             .first_fit(footprint)
@@ -4632,7 +4630,7 @@ fn sim_gate_a_monster_drop_is_seated_one_second_after_the_kill_and_not_before() 
         stamp,
     );
     let footprint = footprint_of(world.atlas(), DRAGON_ARMOR);
-    let anchor = or_abort(
+    let anchor = or_fail(
         world
             .inventory(killer)
             .first_fit(footprint)
@@ -4726,7 +4724,7 @@ fn sim_gate_a_member_parked_in_town_earns_no_exp_and_no_zen() {
     let killer_exp_before = world.character(killer).experience().0;
     let parked_exp_before = world.character(parked).experience().0;
     let awards =
-        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_abort(Level::new(30)));
+        world.distribute_kill_experience(party, &facts, MemberSlot(0), or_fail(Level::new(30)));
     let slots: Vec<u8> = awards.iter().map(|(award, _events)| award.slot.0).collect();
     assert_eq!(slots, vec![0], "only the field killer earns");
     assert!(world.character(killer).experience().0 > killer_exp_before);
@@ -4832,7 +4830,7 @@ fn field_run(grid: &TerrainGrid, length: usize) -> Vec<TileCoord> {
             }
         }
     }
-    or_abort(Err::<Vec<TileCoord>, _>(
+    or_fail(Err::<Vec<TileCoord>, _>(
         "Lorencia has a run of open field tiles",
     ))
 }
@@ -4935,7 +4933,7 @@ fn sim_gate_two_players_fight_outside_safezone_one_kills_the_other_penalty_free(
     assert_eq!(world.character(victim).life(), LifeState::Alive);
     let landing = world.character(victim).placement();
     assert_eq!(respawned.map, landing.map);
-    let town = or_abort(
+    let town = or_fail(
         world
             .atlas()
             .terrain_grid(landing.map)
@@ -5102,7 +5100,7 @@ fn force_attack_to_death(
             }
         }
     }
-    or_abort(Err::<(), _>(
+    or_fail(Err::<(), _>(
         "the force-attacked player is beaten to a killing blow",
     ));
 }
@@ -5223,7 +5221,7 @@ fn sim_gate_a_murderer_is_flagged_hunted_by_guards_and_decays_back_to_clean() {
     match world.step(murderer, lane[3].to_world()) {
         StepOutcome::Resolved { .. } => {}
         StepOutcome::Blocked => {
-            or_abort(Err::<(), _>("the flight into town must not block"));
+            or_fail(Err::<(), _>("the flight into town must not block"));
         }
     }
     assert!(
@@ -5387,7 +5385,7 @@ fn sim_gate_killing_a_murderer_is_free() {
 
 /// The event tier every mini-game scenario authors at.
 fn sim_level() -> EventLevel {
-    or_abort(EventLevel::new(3))
+    or_fail(EventLevel::new(3))
 }
 
 /// Seats a Dark Knight at `level` carrying `wallet` zen with a `charges`-charge
@@ -5398,8 +5396,8 @@ fn seat_ticketed_entrant(world: &mut World, level: u16, wallet: u64, charges: u8
     let index = world.seat_character(dark_knight(level, 300, tile(10, 10)));
     world.set_wallet(index, zen(wallet));
     let ticket_ref = devil_square_ticket_ref(world.atlas());
-    let ticket = devil_square_ticket(ticket_ref, charges, or_abort(ItemLevel::new(2)));
-    let placed = world.place_in_bag(index, ticket, or_abort(Footprint::new(1, 1)), cell(0, 0));
+    let ticket = devil_square_ticket(ticket_ref, charges, or_fail(ItemLevel::new(2)));
+    let placed = world.place_in_bag(index, ticket, or_fail(Footprint::new(1, 1)), cell(0, 0));
     assert!(
         matches!(placed, PlaceOutcome::Placed { .. }),
         "the ticket seats into the entrant's bag: {placed:?}"
@@ -5413,14 +5411,14 @@ fn seat_ticketed_entrant(world: &mut World, level: u16, wallet: u64, charges: u8
 /// fires at offset zero).
 fn advance_to_playing(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
     let MiniGamePhase::Open { closes_at, .. } = world.mini_session(s).phase else {
-        return or_abort(Err(format!(
+        return or_fail(Err(format!(
             "expected Open, got {:?}",
             world.mini_session(s).phase
         )));
     };
     world.advance_mini_session(s, closes_at);
     let MiniGamePhase::Closing { starts_at } = world.mini_session(s).phase else {
-        return or_abort(Err(format!(
+        return or_fail(Err(format!(
             "expected Closing, got {:?}",
             world.mini_session(s).phase
         )));
@@ -5432,7 +5430,7 @@ fn advance_to_playing(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
 /// phase) and returns the end events.
 fn advance_to_end(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
     let MiniGamePhase::Playing { ends_at, .. } = world.mini_session(s).phase else {
-        return or_abort(Err(format!(
+        return or_fail(Err(format!(
             "expected Playing, got {:?}",
             world.mini_session(s).phase
         )));
@@ -5444,7 +5442,7 @@ fn advance_to_end(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
 /// returns the dispose events (the alive warp-outs, then `Disposed`).
 fn advance_to_dispose(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
     let MiniGamePhase::Ended { disposes_at, .. } = world.mini_session(s).phase else {
-        return or_abort(Err(format!(
+        return or_fail(Err(format!(
             "expected Ended, got {:?}",
             world.mini_session(s).phase
         )));
@@ -5454,7 +5452,7 @@ fn advance_to_dispose(world: &mut World, s: usize) -> Vec<MiniGameEvent> {
 
 /// The lifecycle state of wave `number` in the session at `s`.
 fn wave_state(world: &World, s: usize, number: WaveNumber) -> WaveState {
-    or_abort(
+    or_fail(
         world
             .mini_session(s)
             .waves
@@ -5473,7 +5471,7 @@ fn first_live_of_wave(
     s: usize,
     number: WaveNumber,
 ) -> mu_core::data::minigame::SessionMonsterId {
-    or_abort(
+    or_fail(
         world
             .mini_session(s)
             .monsters
@@ -5640,7 +5638,7 @@ fn a_full_mini_game_event_plays_enter_to_payout_through_the_paper_host() {
         );
         assert_eq!(world.character(entrant).zen().get(), 75_000);
         let bag = world.inventory(entrant);
-        let ticket = or_abort(bag.placed().first().ok_or("the ticket survives one entry"));
+        let ticket = or_fail(bag.placed().first().ok_or("the ticket survives one entry"));
         assert_eq!(ticket.item.durability.current(), 1);
     }
 
@@ -5665,20 +5663,20 @@ fn a_full_mini_game_event_plays_enter_to_payout_through_the_paper_host() {
     let [id0, id1, id2] = {
         let live = &world.mini_session(s).monsters.live;
         [
-            or_abort(live.first().ok_or("live 0")).id,
-            or_abort(live.get(1).ok_or("live 1")).id,
-            or_abort(live.get(2).ok_or("live 2")).id,
+            or_fail(live.first().ok_or("live 0")).id,
+            or_fail(live.get(1).ok_or("live 1")).id,
+            or_fail(live.get(2).ok_or("live 2")).id,
         ]
     };
     world.report_mini_kill(s, id0, RosterSlot(1), Score(3), kill_tick);
     world.report_mini_kill(s, id1, RosterSlot(1), Score(3), kill_tick);
     world.report_mini_kill(s, id2, RosterSlot(0), Score(3), kill_tick);
     assert_eq!(
-        or_abort(world.mini_session(s).member(RosterSlot(1)).ok_or("slot 1")).score,
+        or_fail(world.mini_session(s).member(RosterSlot(1)).ok_or("slot 1")).score,
         Score(6)
     );
     assert_eq!(
-        or_abort(world.mini_session(s).member(RosterSlot(0)).ok_or("slot 0")).score,
+        or_fail(world.mini_session(s).member(RosterSlot(0)).ok_or("slot 0")).score,
         Score(3)
     );
 
@@ -5698,7 +5696,7 @@ fn a_full_mini_game_event_plays_enter_to_payout_through_the_paper_host() {
     };
     let ranked: Vec<(u8, u16)> = rows.iter().map(|row| (row.slot.0, row.rank.0)).collect();
     assert_eq!(ranked, vec![(1, 1), (0, 2), (2, 3)]);
-    let award1 = or_abort(
+    let award1 = or_fail(
         outcome
             .awards
             .iter()
@@ -5851,7 +5849,7 @@ fn a_waived_death_ejected_before_the_end_leaves_the_roster_and_wins_no_grant() {
     assert_eq!(world.character(e1).experience(), exp1, "no exp dock");
     world.report_mini_death(s, RosterSlot(1));
     assert_eq!(
-        or_abort(world.mini_session(s).member(RosterSlot(1)).ok_or("slot 1")).status,
+        or_fail(world.mini_session(s).member(RosterSlot(1)).ok_or("slot 1")).status,
         RosterStatus::Dead
     );
 
@@ -5934,7 +5932,7 @@ fn a_death_in_the_final_beat_finishes_dead_flagged_before_the_eject() {
     // The dead-but-present finisher takes ONLY the Dead-gated reward; the alive
     // one ONLY the Alive-gated reward — the Dead money credited through persist.
     let outcome = world.pay_out_mini_rewards(s, Tick(15_000));
-    let dead_award = or_abort(
+    let dead_award = or_fail(
         outcome
             .awards
             .iter()
@@ -5945,7 +5943,7 @@ fn a_death_in_the_final_beat_finishes_dead_flagged_before_the_eject() {
         dead_award.grants,
         vec![GrantDecision::Money { amount: Zen(300) }]
     );
-    let alive_award = or_abort(
+    let alive_award = or_fail(
         outcome
             .awards
             .iter()
@@ -6052,7 +6050,7 @@ fn a_declared_winner_ends_the_event_early_and_takes_the_winner_reward() {
     );
 
     let outcome = world.pay_out_mini_rewards(s, early);
-    let winner_award = or_abort(
+    let winner_award = or_fail(
         outcome
             .awards
             .iter()
@@ -6065,7 +6063,7 @@ fn a_declared_winner_ends_the_event_early_and_takes_the_winner_reward() {
             amount: Zen(10_000)
         }]
     );
-    let loser_award = or_abort(
+    let loser_award = or_fail(
         outcome
             .awards
             .iter()
@@ -6154,7 +6152,7 @@ fn overlapping_waves_and_wave_scoped_respawn_hold_through_the_persist_seam() {
     let slain = first_live_of_wave(&world, s, WaveNumber(1));
     world.report_mini_kill(s, slain, RosterSlot(0), Score(1), starts_at);
     assert_eq!(world.mini_session(s).monsters.live.len(), 3);
-    let due = or_abort(
+    let due = or_fail(
         world
             .mini_session(s)
             .waves
@@ -6187,7 +6185,7 @@ fn overlapping_waves_and_wave_scoped_respawn_hold_through_the_persist_seam() {
         Score(1),
         Tick(wave1_end.0.saturating_sub(1)),
     );
-    let due = or_abort(
+    let due = or_fail(
         world
             .mini_session(s)
             .waves
@@ -6239,7 +6237,7 @@ fn sim_gate_a_grind_to_220_lets_the_account_create_a_magic_gladiator() {
 
     // Award exactly enough to cross to level 220 — the reached level is the
     // server-decided output of the leveling service, never a client claim.
-    let total_for_220 = or_abort(world.atlas().exp_curve().level(220))
+    let total_for_220 = or_fail(world.atlas().exp_curve().level(220))
         .total_to_hold()
         .0;
     let gained = Exp(total_for_220 - world.character(player).experience().0);
@@ -6264,9 +6262,9 @@ fn sim_gate_a_grind_to_220_lets_the_account_create_a_magic_gladiator() {
     );
 
     // The earned-set survives the paper-host persist seam byte-for-byte.
-    let before = or_abort(serde_json::to_string(&earned));
+    let before = or_fail(serde_json::to_string(&earned));
     let reloaded = persist(earned);
-    assert_eq!(before, or_abort(serde_json::to_string(&reloaded)));
+    assert_eq!(before, or_fail(serde_json::to_string(&reloaded)));
 
     // The authoritative creation gate reads the reloaded earned-set: Magic
     // Gladiator is now Creatable; Dark Lord stays Locked at its data threshold.
@@ -6281,7 +6279,7 @@ fn sim_gate_a_grind_to_220_lets_the_account_create_a_magic_gladiator() {
     assert_eq!(
         creation_verdict(CharacterClass::DarkLord, &reloaded, world.atlas().classes()),
         CreationVerdict::Locked {
-            required: or_abort(Level::new(250))
+            required: or_fail(Level::new(250))
         }
     );
 }
@@ -6310,7 +6308,7 @@ fn sim_gate_a_multi_level_award_earns_both_gated_classes_in_one_step() {
     // One award large enough to vault from 219 past the Dark Lord gate at 250.
     // `apply_growth` returns a single `LevelsGained` carrying the top level
     // reached — the server-decided output, never a client claim.
-    let total_for_255 = or_abort(world.atlas().exp_curve().level(255))
+    let total_for_255 = or_fail(world.atlas().exp_curve().level(255))
         .total_to_hold()
         .0;
     let gained = Exp(total_for_255 - world.character(knight).experience().0);
@@ -6394,7 +6392,7 @@ fn sim_gate_a_created_dark_knight_enters_world_on_lorencia_wielding_its_small_ax
 
     // The seated worn set holds the Small Axe in the left hand at full
     // durability — a fresh Dark Knight spawns already wielding its starter.
-    let axe = or_abort(
+    let axe = or_fail(
         world
             .equipment(knight)
             .get(EquipmentSlot::LeftHand)
@@ -6428,7 +6426,7 @@ fn sim_gate_a_created_dark_knight_enters_world_on_lorencia_wielding_its_small_ax
 fn a_walked_placement_survives_the_persist_seam() {
     let mut world = World::new(21, MapNumber(0));
     let run = walkable_run(world.atlas(), MapNumber(0), 6);
-    let start = or_abort(run.first().copied().ok_or("the run has a first tile"));
+    let start = or_fail(run.first().copied().ok_or("the run has a first tile"));
     let seated = dark_knight(30, 150, start);
 
     // Never touched by the walk below — the walk moves the seated copy.
@@ -6449,7 +6447,7 @@ fn a_walked_placement_survives_the_persist_seam() {
     }
     // The run is horizontal, so walking it only would end on the spawn facing.
     // Turning back west is what makes a dropped facing observable.
-    let back = or_abort(
+    let back = or_fail(
         run.get(run.len() - 2)
             .copied()
             .ok_or("the run has a last-but-one tile"),
@@ -6497,7 +6495,7 @@ fn a_placement_on_a_new_map_is_discovered_by_the_writeback() {
     let hero = world.seat_character(dark_knight(
         30,
         150,
-        or_abort(home.first().copied().ok_or("Lorencia has a walkable tile")),
+        or_fail(home.first().copied().ok_or("Lorencia has a walkable tile")),
     ));
 
     assert!(
@@ -6512,7 +6510,7 @@ fn a_placement_on_a_new_map_is_discovered_by_the_writeback() {
     // A real walkable tile on Devias, found from the shipped terrain.
     let devias = walkable_run(world.atlas(), MapNumber(2), 1);
     let landing = Placement {
-        position: or_abort(devias.first().copied().ok_or("Devias has a walkable tile")).to_world(),
+        position: or_fail(devias.first().copied().ok_or("Devias has a walkable tile")).to_world(),
         map: MapNumber(2),
         ..world.character(hero).placement()
     };
@@ -6544,7 +6542,7 @@ fn the_writeback_reseats_the_whole_placement_across_maps_and_modes() {
     let hero = world.seat_character(dark_knight(
         30,
         150,
-        or_abort(home.first().copied().ok_or("Lorencia has a walkable tile")),
+        or_fail(home.first().copied().ok_or("Lorencia has a walkable tile")),
     ));
 
     let before = world.character(hero).placement();
@@ -6553,7 +6551,7 @@ fn the_writeback_reseats_the_whole_placement_across_maps_and_modes() {
     // Icarus is the sky map, so Flying is its authentic traversal mode.
     let icarus = walkable_run(world.atlas(), MapNumber(10), 1);
     let landing = Placement {
-        position: or_abort(icarus.first().copied().ok_or("Icarus has a walkable tile")).to_world(),
+        position: or_fail(icarus.first().copied().ok_or("Icarus has a walkable tile")).to_world(),
         facing: Facing::POS_Y,
         movement: Movement::Flying,
         map: MapNumber(10),
@@ -6582,12 +6580,12 @@ fn the_writeback_reseats_the_whole_placement_across_maps_and_modes() {
 /// never rebuilds a domain value from edited wire.
 fn without_placement(character_wire: &str) -> String {
     let mut value: serde_json::Value =
-        or_abort(serde_json::from_str(character_wire).map_err(|_| "character wire is json"));
-    let object = or_abort(
+        or_fail(serde_json::from_str(character_wire).map_err(|_| "character wire is json"));
+    let object = or_fail(
         value
             .as_object_mut()
             .ok_or("a serialized character is a json object"),
     );
     object.remove("placement");
-    or_abort(serde_json::to_string(object).map_err(|_| "the scrubbed object re-serializes"))
+    or_fail(serde_json::to_string(object).map_err(|_| "the scrubbed object re-serializes"))
 }

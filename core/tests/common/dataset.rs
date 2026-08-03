@@ -5,16 +5,13 @@
 //! Two ports out: [`real_static_data`] hands the un-parsed [`StaticData`] to
 //! negative tests that corrupt a record before [`Atlas::parse`];
 //! [`real_atlas`] hands everything else the parsed [`Atlas`]. Load failures
-//! route through [`or_abort`] — the checked-in dataset makes them infallible
-//! (proven by `data_files.rs`), so an `Err` here is a broken checkout, not a
-//! test condition, and no banned suppressor is needed outside a `#[test]`
-//! body.
+//! route through [`or_fail`]; the checked-in dataset makes them infallible
+//! (proven by `data_files.rs`).
 //!
 //! Compiled in two shapes: as `common::dataset` inside the simulation suite's
 //! `common` module, and directly via `#[path]` by test binaries that need the
 //! dataset without the simulation plumbing.
 
-use std::io::Write;
 use std::path::PathBuf;
 
 use serde::de::DeserializeOwned;
@@ -37,19 +34,15 @@ use mu_core::data::spawns::Spawn;
 use mu_core::data::special_drops::SpecialDropRecord;
 use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 
-/// Resolves a `Result` the real checked-in dataset makes infallible: the
-/// files load and parse, so an `Err` here is a broken checkout, not a test
-/// condition. Reports it and aborts — a lint-clean divergence, since
-/// `unwrap`/`expect`/`panic` are forbidden outside `#[test]` bodies and this
-/// harness code is shared, not a test function.
-pub fn or_abort<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
+/// Resolves a `Result` the calling test's own setup makes impossible — a load
+/// of the checked-in dataset is one such case, a fixture lookup the scenario
+/// just seeded is another. Fails the calling test, so a harness fault names the
+/// test it broke and leaves the rest of the binary running.
+#[cfg(test)]
+pub fn or_fail<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
     match result {
         Ok(value) => value,
-        Err(error) => {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "mu-core dataset harness: load failure: {error}");
-            std::process::abort()
-        }
+        Err(error) => panic!("mu-core test harness: {error}"),
     }
 }
 
@@ -64,8 +57,8 @@ fn data_path(name: &str) -> PathBuf {
 
 /// Reads and deserializes a real data file into its `DataFile<T>`.
 fn load<T: DeserializeOwned>(name: &str) -> DataFile<T> {
-    let text = or_abort(std::fs::read_to_string(data_path(name)));
-    or_abort(serde_json::from_str(&text))
+    let text = or_fail(std::fs::read_to_string(data_path(name)));
+    or_fail(serde_json::from_str(&text))
 }
 
 /// The 11 real terrain sidecars (`data/terrain/<map>.bin`, maps `0..=10`).
@@ -79,7 +72,7 @@ fn load_terrain() -> Vec<MapTerrain> {
             path.push(format!("{map}.bin"));
             MapTerrain {
                 map: MapNumber(map),
-                bytes: or_abort(TerrainBytes::new(or_abort(std::fs::read(&path)))),
+                bytes: or_fail(TerrainBytes::new(or_fail(std::fs::read(&path)))),
             }
         })
         .collect()
@@ -118,5 +111,5 @@ pub fn real_static_data() -> StaticData {
 /// [`Atlas::parse`].
 #[must_use]
 pub fn real_atlas() -> Atlas {
-    or_abort(Atlas::parse(real_static_data()))
+    or_fail(Atlas::parse(real_static_data()))
 }

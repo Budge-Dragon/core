@@ -5,7 +5,7 @@
 //! cap), the fresh-account gate over all eight roster classes, the
 //! evolution-only and always-open precedence, and the wire round-trips.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body so
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body so
 //! `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -18,10 +18,10 @@ use mu_core::data::classes::ClassTable;
 use mu_core::events::account::{ClassUnlocked, CreationVerdict};
 use mu_core::services::account::{creation_verdict, unlock_classes_for_level};
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 
 fn level(value: u16) -> Level {
-    or_abort(Level::new(value))
+    or_fail(Level::new(value))
 }
 
 /// The real shipped class table.
@@ -155,12 +155,9 @@ fn a_class_unlocked_event_round_trips_its_wire_form() {
     let event = ClassUnlocked {
         class: CharacterClass::DarkLord,
     };
-    let wire = or_abort(serde_json::to_string(&event));
+    let wire = or_fail(serde_json::to_string(&event));
     assert_eq!(wire, r#"{"class":"dark_lord"}"#);
-    assert_eq!(
-        or_abort(serde_json::from_str::<ClassUnlocked>(&wire)),
-        event
-    );
+    assert_eq!(or_fail(serde_json::from_str::<ClassUnlocked>(&wire)), event);
 }
 
 // --- P3: the authoritative creation gate --------------------------------------
@@ -332,9 +329,9 @@ fn each_creation_verdict_shape_round_trips_its_wire_form() {
         ),
     ];
     for (verdict, wire) in cases {
-        assert_eq!(or_abort(serde_json::to_string(&verdict)), wire);
+        assert_eq!(or_fail(serde_json::to_string(&verdict)), wire);
         assert_eq!(
-            or_abort(serde_json::from_str::<CreationVerdict>(wire)),
+            or_fail(serde_json::from_str::<CreationVerdict>(wire)),
             verdict
         );
     }

@@ -12,7 +12,6 @@
 //! one that runs under wasmtime while the property tests run on the native legs.
 
 use core::num::NonZeroU32;
-use std::io::Write;
 
 use rand_core::RngCore;
 
@@ -22,17 +21,13 @@ use mu_core::services::chance::{
     WeightedTable, draw_cardinal, draw_heading, uniform_in_inclusive, weighted_pick,
 };
 
-/// Aborts on an impossible error (a nonzero literal failing `NonZeroU32::new`),
-/// matching the integration-suite convention so no banned suppressor is needed
-/// outside a `#[test]` body.
-fn or_abort<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
+/// Resolves an impossible error (a nonzero literal failing `NonZeroU32::new`).
+/// Fails the calling test, matching the integration-suite convention.
+#[cfg(test)]
+fn or_fail<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
     match result {
         Ok(value) => value,
-        Err(error) => {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "wasm_determinism: {error}");
-            std::process::abort()
-        }
+        Err(error) => panic!("wasm_determinism: {error}"),
     }
 }
 
@@ -73,7 +68,7 @@ impl RngCore for SplitMix64 {
 }
 
 fn nz(value: u32) -> NonZeroU32 {
-    or_abort(NonZeroU32::new(value).ok_or("test bound must be nonzero"))
+    or_fail(NonZeroU32::new(value).ok_or("test bound must be nonzero"))
 }
 
 const SEED: u64 = 0x1234_5678_9ABC_DEF0;
@@ -198,7 +193,7 @@ fn fixed_weapon() -> ItemDefinition {
         height: 3,
         drops_from_monsters: true,
         drop_level: 10,
-        max_item_level: or_abort(ItemLevel::new(15)),
+        max_item_level: or_fail(ItemLevel::new(15)),
         durability: 20,
         price: ItemPrice::Formula,
         kind: ItemKind::Weapon {
@@ -248,7 +243,7 @@ fn kinded_profile(
     rates: (u16, u16),
     chances: u8,
 ) -> CombatProfile {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "kind": kind,
         "level": level,
         "physical": {"min": span.0, "max": span.1},
@@ -289,7 +284,7 @@ fn a_fixed_skill_strike_serializes_identically_across_targets() {
     let attacker = fixed_profile(50, (33, 50), 0, (10_000, 0), 20);
     let target = fixed_profile(20, (1, 2), 30, (0, 0), 0);
     let basis = StrikeBasis::Skill {
-        span: or_abort(Interval::new(56u16, 92u16)),
+        span: or_fail(Interval::new(56u16, 92u16)),
         excellent_order: ExcellentOrder::DefenseThenMultiply,
         multiplier_per_mille: 2030,
     };
@@ -301,7 +296,7 @@ fn a_fixed_skill_strike_serializes_identically_across_targets() {
     // augmented max 92 with defense zeroed (the level floor 5 doesn't bind),
     // × 2030/1000 = 186.
     assert_eq!(
-        or_abort(serde_json::to_string(&outcome)),
+        or_fail(serde_json::to_string(&outcome)),
         r#"{"kind":"landed","hit":{"damage":186,"quality":"critical","modifiers":["defense_ignored"]}}"#
     );
 }
@@ -311,12 +306,12 @@ fn a_fixed_item_roll_serializes_identically_across_targets() {
     let mut rng = SplitMix64::new(SEED);
     let instance = roll_dropped_item(
         &fixed_weapon(),
-        or_abort(ItemLevel::new(9)),
+        or_fail(ItemLevel::new(9)),
         ItemRarity::Excellent,
         &always(),
         &mut rng,
     );
-    let serialized = or_abort(serde_json::to_string(&instance));
+    let serialized = or_fail(serde_json::to_string(&instance));
     assert_eq!(
         serialized,
         r#"{"item":{"group":0,"number":3},"level":9,"roll":{"kind":"excellent","options":{"set":"weapon","options":["health_after_kill","damage_per_level","excellent_damage_chance"]}},"normal_option":{"option":"physical_damage","level":3},"luck":"lucky","skill":"with_skill","durability":{"current":49,"max":49},"augment":{"kind":"none"}}"#
@@ -340,7 +335,7 @@ use mu_core::services::skills::{DamagingSkillRef, Designation, SkillRouting, cas
 /// through the wire (the only door an external test has) so the fixture needs
 /// no filesystem.
 fn fixed_caster() -> Character {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "class": "dark_knight",
         "level": 50,
         "experience": 0,
@@ -377,12 +372,12 @@ fn fixed_target(tile: (u8, u8)) -> CombatTarget {
     )
 }
 
-/// The damaging reference of a hand-built skill; a non-damaging shape aborts.
+/// The damaging reference of a hand-built skill; a non-damaging shape fails the test.
 fn fixed_damaging(skill: &Skill) -> DamagingSkillRef<'_> {
     match route(skill) {
         SkillRouting::Damaging(reference) => reference,
         SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
-            or_abort(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
+            or_fail(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
         }
     }
 }
@@ -390,7 +385,7 @@ fn fixed_damaging(skill: &Skill) -> DamagingSkillRef<'_> {
 /// An Earthshake-shaped area skill (caster circle r=5, directional push, the
 /// inert lightning tag), hand-built through the wire.
 fn fixed_earthshake() -> Skill {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "number": 62,
         "source_version": "075",
         "attack_damage": 150,
@@ -410,7 +405,7 @@ fn fixed_earthshake() -> Skill {
 
 /// A lunge-shaped weapon skill, hand-built through the wire.
 fn fixed_lunge() -> Skill {
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "number": 19,
         "source_version": "075",
         "attack_damage": 0,
@@ -453,7 +448,7 @@ fn a_fixed_earthshake_cast_serializes_identically_across_targets() {
     // tag rolls no element word; the push draws nothing and throws the (12,10)
     // target due east to (15,10).
     assert_eq!(
-        or_abort(serde_json::to_string(&outcome)),
+        or_fail(serde_json::to_string(&outcome)),
         r#"{"kind":"cast","caster_placement":{"position":{"x":688128,"y":688128},"facing":{"x":1,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":489,"quality":"normal","modifiers":[]},"health":{"current":99511,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":1015808,"y":688128},"facing":{"x":65536,"y":0},"movement":"grounded","map":0}}]}"#
     );
 }
@@ -482,7 +477,7 @@ fn a_fixed_diagonal_earthshake_cast_serializes_identically_across_targets() {
     );
     assert_eq!(vitals.ability.current(), 350, "the quake's 50 AG is spent");
     assert_eq!(
-        or_abort(serde_json::to_string(&outcome)),
+        or_fail(serde_json::to_string(&outcome)),
         r#"{"kind":"cast","caster_placement":{"position":{"x":688128,"y":688128},"facing":{"x":1,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":489,"quality":"normal","modifiers":[]},"health":{"current":99511,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":1023759,"y":1023759},"facing":{"x":46341,"y":46341},"movement":"grounded","map":0}}]}"#
     );
 }
@@ -514,7 +509,7 @@ fn a_fixed_lunge_cast_serializes_identically_across_targets() {
     // displacement is the cross-target contract, reproduced bit-for-bit on
     // native and wasm.
     assert_eq!(
-        or_abort(serde_json::to_string(&outcome)),
+        or_fail(serde_json::to_string(&outcome)),
         r#"{"kind":"cast","caster_placement":{"position":{"x":819200,"y":688128},"facing":{"x":131072,"y":0},"movement":"grounded","map":0},"hits":[{"kind":"landed","target_index":0,"hit":{"damage":89,"quality":"normal","modifiers":[]},"health":{"current":99911,"max":100000},"active_effects":[],"inflicted":null,"displacement":{"position":{"x":854089,"y":632649},"facing":{"x":34889,"y":-55479},"movement":"grounded","map":0}}]}"#
     );
 }
@@ -542,7 +537,7 @@ fn safe_pocket(tiles: &[(u8, u8)]) -> TerrainGrid {
     let mut safe = [0u64; 1024];
     for &(x, y) in tiles {
         let bit = (usize::from(y) << 8) | usize::from(x);
-        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        let word = or_fail(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word |= 1u64 << (bit & 63);
     }
     TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
@@ -570,7 +565,7 @@ fn fixed_ground_stamps_and_the_reaper_are_identical_across_targets() {
     // A monster kill at tick 100 on the 50 ms cadence with the authentic
     // 60 s duration: appearance 120 (the 1 s beat), despawn 1320, the claim
     // window closing at 320 — pure integer arithmetic, no draw.
-    let tick = or_abort(TickDuration::new(50));
+    let tick = or_fail(TickDuration::new(50));
     let stamp = stamp_item(DropOrigin::MonsterKill, Tick(100), DurationMs(60_000), tick);
     assert_eq!(stamp.appearance, Tick(120));
     assert_eq!(stamp.despawn, Tick(1320));
@@ -603,7 +598,7 @@ fn fixed_ground_stamps_and_the_reaper_are_identical_across_targets() {
     assert!(gone_items.is_empty());
     assert!(gone_zen.is_empty());
     assert_eq!(
-        or_abort(serde_json::to_string(&events)),
+        or_fail(serde_json::to_string(&events)),
         r#"[{"kind":"item_despawned","position":{"x":688128,"y":688128},"map":0,"item":{"group":0,"number":3}},{"kind":"zen_despawned","position":{"x":688128,"y":688128},"map":0,"amount":40000}]"#
     );
 }
@@ -611,7 +606,7 @@ fn fixed_ground_stamps_and_the_reaper_are_identical_across_targets() {
 #[test]
 fn fixed_pickup_gates_are_identical_across_targets() {
     // The reach gate, the claim window, and the store step — all RNG-free.
-    let footprint = or_abort(Footprint::new(1, 3));
+    let footprint = or_fail(Footprint::new(1, 3));
     let anchor = Cell { row: 0, col: 0 };
     let item_pos = TileCoord::new(10, 10).to_world();
     let ground = WorldItem {
@@ -680,14 +675,10 @@ fn fixed_pickup_gates_are_identical_across_targets() {
         map: MapNumber(0),
         despawn: Tick(1320),
     };
-    let (balance, outcome) = pickup_zen(
-        pile.clone(),
-        or_abort(CarriedZen::new(0)),
-        far,
-        MapNumber(0),
-    );
+    let (balance, outcome) =
+        pickup_zen(pile.clone(), or_fail(CarriedZen::new(0)), far, MapNumber(0));
     assert_eq!(outcome, ZenPickupOutcome::OutOfReach { world_zen: pile });
-    assert_eq!(balance, or_abort(CarriedZen::new(0)));
+    assert_eq!(balance, or_fail(CarriedZen::new(0)));
 }
 
 #[test]
@@ -712,7 +703,7 @@ fn a_fixed_cast_from_a_safe_tile_is_rejected_identically_across_targets() {
     );
     assert_eq!(vitals.ability.current(), 400, "nothing spent");
     assert_eq!(
-        or_abort(serde_json::to_string(&outcome)),
+        or_fail(serde_json::to_string(&outcome)),
         r#"{"kind":"rejected","reason":"caster_in_safezone"}"#
     );
     assert_eq!(rng.next_u64(), SplitMix64::new(SEED).next_u64());
@@ -729,7 +720,7 @@ fn a_fixed_zen_split_excludes_the_safe_stander_identically_across_targets() {
     });
     let fact = |slot: u8, tile: (u8, u8)| MemberFact {
         slot: MemberSlot(slot),
-        level: or_abort(Level::new(30)),
+        level: or_fail(Level::new(30)),
         experience: Exp(0),
         vitality: Vitality::Alive,
         map: MapNumber(0),
@@ -746,24 +737,24 @@ fn a_fixed_zen_split_excludes_the_safe_stander_identically_across_targets() {
     let other_wallets = [
         SlotWallet {
             slot: MemberSlot(1),
-            wallet: or_abort(CarriedZen::new(0)),
+            wallet: or_fail(CarriedZen::new(0)),
         },
         SlotWallet {
             slot: MemberSlot(2),
-            wallet: or_abort(CarriedZen::new(0)),
+            wallet: or_fail(CarriedZen::new(0)),
         },
     ];
     let result = split_zen_pickup(
         &pile,
         &party,
         fact(0, (10, 10)),
-        or_abort(CarriedZen::new(0)),
+        or_fail(CarriedZen::new(0)),
         &others,
         &other_wallets,
         &grid,
     );
     assert_eq!(
-        or_abort(serde_json::to_string(&result.credits)),
+        or_fail(serde_json::to_string(&result.credits)),
         r#"[{"slot":0,"wallet":50000},{"slot":2,"wallet":50000}]"#
     );
     assert!(result.to_ground.is_empty());
@@ -788,16 +779,13 @@ fn target_kind_serializes_to_its_snake_case_tag_across_targets() {
     // The combat category rides the wire as a bare snake_case string, identical on
     // native and wasm, and round-trips on every variant.
     assert_eq!(
-        or_abort(serde_json::to_string(&TargetKind::Player)),
+        or_fail(serde_json::to_string(&TargetKind::Player)),
         r#""player""#
     );
-    assert_eq!(
-        or_abort(serde_json::to_string(&TargetKind::Npc)),
-        r#""npc""#
-    );
+    assert_eq!(or_fail(serde_json::to_string(&TargetKind::Npc)), r#""npc""#);
     for kind in [TargetKind::Player, TargetKind::Npc] {
-        let wire = or_abort(serde_json::to_string(&kind));
-        assert_eq!(or_abort(serde_json::from_str::<TargetKind>(&wire)), kind);
+        let wire = or_fail(serde_json::to_string(&kind));
+        assert_eq!(or_fail(serde_json::from_str::<TargetKind>(&wire)), kind);
     }
 }
 
@@ -833,12 +821,12 @@ fn an_all_npc_area_cast_strikes_the_npc_and_replays_byte_for_byte() {
             );
         }
         SkillOutcome::Rejected { .. } => {
-            or_abort(Err::<(), _>("the funded field cast resolves"));
+            or_fail(Err::<(), _>("the funded field cast resolves"));
         }
     }
     assert_eq!(
-        or_abort(serde_json::to_string(&outcome)),
-        or_abort(serde_json::to_string(&run(SEED))),
+        or_fail(serde_json::to_string(&outcome)),
+        or_fail(serde_json::to_string(&run(SEED))),
         "the incidental all-NPC area cast replays byte-for-byte under a fixed seed"
     );
 }
@@ -909,7 +897,7 @@ use mu_core::services::reputation::{
 /// The suite tick base: 50 ms per tick — the same cadence the reputation
 /// transitions convert their online-hour step against.
 fn pk_tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 #[test]
@@ -919,19 +907,19 @@ fn pk_stage_serializes_to_its_snake_case_tag_across_targets() {
         (PkStage::FirstStage, r#""first_stage""#),
         (PkStage::SecondStage, r#""second_stage""#),
     ] {
-        assert_eq!(or_abort(serde_json::to_string(&stage)), wire);
-        assert_eq!(or_abort(serde_json::from_str::<PkStage>(wire)), stage);
+        assert_eq!(or_fail(serde_json::to_string(&stage)), wire);
+        assert_eq!(or_fail(serde_json::from_str::<PkStage>(wire)), stage);
     }
 }
 
 #[test]
 fn standing_and_reputation_wire_forms_are_identical_across_targets() {
     assert_eq!(
-        or_abort(serde_json::to_string(&Standing::Clean)),
+        or_fail(serde_json::to_string(&Standing::Clean)),
         r#"{"kind":"clean"}"#
     );
     assert_eq!(
-        or_abort(serde_json::to_string(&Standing::Flagged {
+        or_fail(serde_json::to_string(&Standing::Flagged {
             stage: PkStage::FirstStage,
             decays_at: Tick(903),
         })),
@@ -940,14 +928,14 @@ fn standing_and_reputation_wire_forms_are_identical_across_targets() {
 
     // A clean reputation is the flat standing-plus-tally pair.
     assert_eq!(
-        or_abort(serde_json::to_string(&Reputation::clean())),
+        or_fail(serde_json::to_string(&Reputation::clean())),
         r#"{"standing":{"kind":"clean"},"kills":0}"#
     );
     // A flagged reputation carrying a lifetime tally round-trips byte-for-byte.
     let flagged =
         r#"{"standing":{"kind":"flagged","stage":"second_stage","decays_at":903},"kills":2}"#;
-    let reputation = or_abort(serde_json::from_str::<Reputation>(flagged));
-    assert_eq!(or_abort(serde_json::to_string(&reputation)), flagged);
+    let reputation = or_fail(serde_json::from_str::<Reputation>(flagged));
+    assert_eq!(or_fail(serde_json::to_string(&reputation)), flagged);
 }
 
 #[test]
@@ -982,8 +970,8 @@ fn pk_event_wire_forms_are_identical_across_targets() {
         ),
     ];
     for (event, wire) in cases {
-        assert_eq!(or_abort(serde_json::to_string(&event)), wire);
-        assert_eq!(or_abort(serde_json::from_str::<PkEvent>(wire)), event);
+        assert_eq!(or_fail(serde_json::to_string(&event)), wire);
+        assert_eq!(or_fail(serde_json::from_str::<PkEvent>(wire)), event);
     }
 }
 
@@ -1047,24 +1035,24 @@ use mu_core::services::account::unlock_classes_for_level;
 /// runtime filesystem (it runs under wasmtime), reconstituted through the same
 /// parse gate a host loads it by.
 fn embedded_classes() -> ClassTable {
-    let file: DataFile<ClassRecord> = or_abort(serde_json::from_str(include_str!(
+    let file: DataFile<ClassRecord> = or_fail(serde_json::from_str(include_str!(
         "../../data/classes.json"
     )));
-    or_abort(ClassTable::try_from(file.records))
+    or_fail(ClassTable::try_from(file.records))
 }
 
 #[test]
 fn unlock_classes_for_level_is_identical_across_targets() {
     let classes = embedded_classes();
-    let reached = or_abort(AccountLevel::new(251));
+    let reached = or_fail(AccountLevel::new(251));
     let run = || unlock_classes_for_level(UnlockedClasses::empty(), reached, &classes);
     let (set_a, events_a) = run();
     let (set_b, events_b) = run();
 
     // Same inputs, no seed: identical earned-set and identical announcement order.
     assert_eq!(
-        or_abort(serde_json::to_string(&set_a)),
-        or_abort(serde_json::to_string(&set_b))
+        or_fail(serde_json::to_string(&set_a)),
+        or_fail(serde_json::to_string(&set_b))
     );
     assert_eq!(events_a, events_b);
 
@@ -1082,7 +1070,7 @@ fn unlock_classes_for_level_is_identical_across_targets() {
         ]
     );
     assert_eq!(
-        or_abort(serde_json::to_string(&set_a)),
+        or_fail(serde_json::to_string(&set_a)),
         r#"["magic_gladiator","dark_lord"]"#
     );
 }
@@ -1106,12 +1094,12 @@ use serde::de::DeserializeOwned;
 /// wasmtime. Mirrors the native `common::dataset::real_static_data` field list.
 fn embedded_atlas() -> Atlas {
     fn file<T: DeserializeOwned>(text: &str) -> mu_core::data::common::DataFile<T> {
-        or_abort(serde_json::from_str(text))
+        or_fail(serde_json::from_str(text))
     }
     fn terrain(map: u8, bytes: &[u8]) -> MapTerrain {
         MapTerrain {
             map: MapNumber(map),
-            bytes: or_abort(TerrainBytes::new(bytes.to_vec())),
+            bytes: or_fail(TerrainBytes::new(bytes.to_vec())),
         }
     }
     let data = StaticData {
@@ -1147,7 +1135,7 @@ fn embedded_atlas() -> Atlas {
             terrain(10, include_bytes!("../../data/terrain/10.bin")),
         ],
     };
-    or_abort(Atlas::parse(data))
+    or_fail(Atlas::parse(data))
 }
 
 #[test]
@@ -1162,7 +1150,7 @@ fn a_created_dark_knight_serializes_identically_across_targets() {
     let mut rng = SplitMix64::new(SEED);
     let created = create_character(CharacterClass::DarkKnight, &atlas, &mut rng);
     assert_eq!(
-        or_abort(serde_json::to_string(&created)),
+        or_fail(serde_json::to_string(&created)),
         r#"{"character":{"class":"dark_knight","level":1,"experience":0,"stats":{"kind":"standard","strength":28,"agility":20,"vitality":25,"energy":10},"unspent_points":0,"zen":0,"placement":{"position":{"x":9142272,"y":7831552},"facing":{"x":0,"y":1},"movement":"grounded","map":0},"vitals":{"health":{"current":112,"max":112},"mana":{"current":20,"max":20},"ability":{"current":25,"max":25}},"active_effects":[],"life":{"kind":"alive"},"reputation":{"standing":{"kind":"clean"},"kills":0},"discovered":[0]},"equipment":{"left_hand":{"item":{"group":1,"number":0},"level":0,"roll":{"kind":"normal"},"normal_option":null,"luck":"plain","skill":"no_skill","durability":{"current":18,"max":18},"augment":{"kind":"none"}}}}"#
     );
 }

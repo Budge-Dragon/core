@@ -8,7 +8,7 @@
 //! its success-flag conjunctions and application seams, and the
 //! [`DeathPenalty`] Waived/Applied contrast at the death-service boundary.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]`
+//! Load failures route through `or_fail`; every assertion is a `#[test]`
 //! body so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -51,13 +51,13 @@ use mu_core::services::minigame::{
     report_leave, report_session_kill, resolve_rewards,
 };
 
-use dataset::{or_abort, real_atlas, real_static_data};
+use dataset::{or_fail, real_atlas, real_static_data};
 use rng::TestRng;
 
 /// The suite tick cadence: 100 ms, so one second is 10 ticks and one minute
 /// 600 — the shipped `game_config.json` cadence.
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(100))
+    or_fail(TickDuration::new(100))
 }
 
 /// The real Devil's Invitation record — the shipped DS event ticket.
@@ -68,11 +68,11 @@ const TICKET_ITEM: ItemRef = ItemRef {
 
 /// The plus-level the authored definitions demand the ticket at.
 fn required_ticket_level() -> ItemLevel {
-    or_abort(ItemLevel::new(2))
+    or_fail(ItemLevel::new(2))
 }
 
 fn event_level() -> EventLevel {
-    or_abort(EventLevel::new(3))
+    or_fail(EventLevel::new(3))
 }
 
 fn key() -> MiniGameKey {
@@ -83,14 +83,14 @@ fn key() -> MiniGameKey {
 }
 
 fn bracket(min: u16, max: u16) -> Interval<Level> {
-    or_abort(Interval::new(
-        or_abort(Level::new(min)),
-        or_abort(Level::new(max)),
+    or_fail(Interval::new(
+        or_fail(Level::new(min)),
+        or_fail(Level::new(max)),
     ))
 }
 
 fn area(x1: u8, y1: u8, x2: u8, y2: u8) -> TileArea {
-    or_abort(TileArea::new(x1, y1, x2, y2))
+    or_fail(TileArea::new(x1, y1, x2, y2))
 }
 
 /// The real map-9 spawn-gate 58 rectangle — fully walkable, the entrance.
@@ -115,12 +115,12 @@ fn wave(
 ) -> SpawnWave {
     SpawnWave {
         number: WaveNumber(number),
-        window: or_abort(Interval::new(DurationMs(start_ms), DurationMs(end_ms))),
+        window: or_fail(Interval::new(DurationMs(start_ms), DurationMs(end_ms))),
         respawn,
         areas: vec![WaveSpawnArea {
             monster: MonsterNumber(monster),
             area: floor,
-            quantity: or_abort(NonZeroU16::new(quantity).ok_or("quantity is nonzero")),
+            quantity: or_fail(NonZeroU16::new(quantity).ok_or("quantity is nonzero")),
         }],
     }
 }
@@ -145,9 +145,9 @@ fn definition(
             item_level: required_ticket_level(),
         },
         entrance_fee: Zen(25_000),
-        players: or_abort(PlayerBounds::new(
-            or_abort(NonZeroU16::new(min_players).ok_or("min is nonzero")),
-            or_abort(NonZeroU16::new(max_players).ok_or("max is nonzero")),
+        players: or_fail(PlayerBounds::new(
+            or_fail(NonZeroU16::new(min_players).ok_or("min is nonzero")),
+            or_fail(NonZeroU16::new(max_players).ok_or("max is nonzero")),
         )),
         enter_duration: PhaseSpan::floored(DurationMs(300_000)),
         game_duration: PhaseSpan::floored(DurationMs(1_200_000)),
@@ -167,12 +167,12 @@ fn definition(
 fn atlas_with(definitions: Vec<MiniGameDefinition>) -> Atlas {
     let mut data = real_static_data();
     data.mini_games.records = definitions;
-    or_abort(Atlas::parse(data))
+    or_fail(Atlas::parse(data))
 }
 
 /// The authored definition's resolved handle.
 fn handle(atlas: &Atlas) -> MiniGameHandle<'_> {
-    or_abort(
+    or_fail(
         atlas
             .mini_game(MiniGameKind::DevilSquare, event_level())
             .ok_or("the authored definition resolves"),
@@ -199,15 +199,15 @@ fn character(class: CharacterClass, level: u16, zen: u64, effects: &Value) -> Ch
             "strength": 30, "agility": 30, "vitality": 30, "energy": 30
         })
     };
-    or_abort(serde_json::from_value(json!({
-        "class": or_abort(serde_json::to_value(class)),
+    or_fail(serde_json::from_value(json!({
+        "class": or_fail(serde_json::to_value(class)),
         "level": level,
         "experience": 0,
         "stats": stats,
         "unspent_points": 0,
         "zen": zen,
         "placement": {
-            "position": or_abort(serde_json::to_value(TileCoord::new(137, 95).to_world())),
+            "position": or_fail(serde_json::to_value(TileCoord::new(137, 95).to_world())),
             "facing": {"x": 0, "y": 1},
             "movement": "grounded",
             "map": 9
@@ -238,18 +238,18 @@ fn ticket(charges: u8, level: ItemLevel) -> ItemInstance {
         normal_option: None,
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
-        durability: or_abort(Durability::new(charges, 5)),
+        durability: or_fail(Durability::new(charges, 5)),
         augment: CraftedAugment::None,
     }
 }
 
 /// A bag holding exactly `instance` at its origin cell.
 fn bag_with(instance: ItemInstance) -> Inventory {
-    or_abort(
+    or_fail(
         Inventory::empty(8, 8)
             .place(
                 Cell { row: 0, col: 0 },
-                or_abort(Footprint::new(1, 1)),
+                or_fail(Footprint::new(1, 1)),
                 instance,
             )
             .map_err(|(_, _, rejection)| format!("the fixture bag has room: {rejection:?}")),
@@ -262,7 +262,7 @@ fn entrant() -> Character {
     character(CharacterClass::DarkKnight, 60, 100_000, &a_buff())
 }
 
-/// Admits the baseline entrant with a fresh 2-charge ticket, or aborts — the
+/// Admits the baseline entrant with a fresh 2-charge ticket, or fails the test — the
 /// roster-seeding shortcut for the lifecycle tests.
 fn admit(
     session: MiniGameSession,
@@ -275,7 +275,7 @@ fn admit(
     let (session, admitted, _bag, outcome) =
         enter_mini_game(session, handle, entrant, bag, &mut rng);
     let EnterOutcome::Entered { slot, .. } = outcome else {
-        return or_abort(Err(format!("expected admission, got {outcome:?}")));
+        return or_fail(Err(format!("expected admission, got {outcome:?}")));
     };
     (session, admitted, slot)
 }
@@ -310,7 +310,7 @@ fn ended(
         .with_winner(winner)
         .with_phase(MiniGamePhase::Ended {
             disposes_at: Tick(999_999),
-            snapshot: PlayerCount(or_abort(u16::try_from(members.len()))),
+            snapshot: PlayerCount(or_fail(u16::try_from(members.len()))),
             remaining: Ticks(remaining),
         })
 }
@@ -318,7 +318,7 @@ fn ended(
 fn entry(rank: Option<u16>, flags: Vec<SuccessFlag>, reward: RewardKind) -> RewardEntry {
     RewardEntry {
         rank: rank.map(Rank),
-        flags: or_abort(SuccessFlags::new(flags)),
+        flags: or_fail(SuccessFlags::new(flags)),
         reward,
     }
 }
@@ -456,7 +456,7 @@ fn special_classes_are_gated_by_the_reduced_bracket() {
 fn a_wrong_level_or_spent_ticket_rejects_with_nothing_spent() {
     let atlas = atlas_with(vec![definition(2, 3, Vec::new(), Vec::new())]);
     let handle = handle(&atlas);
-    let wrong_level = ticket(2, or_abort(ItemLevel::new(1)));
+    let wrong_level = ticket(2, or_fail(ItemLevel::new(1)));
     let spent = ticket(0, required_ticket_level());
     for instance in [wrong_level, spent] {
         let who = entrant();
@@ -492,12 +492,12 @@ fn a_hunted_entrant_is_barred_and_a_clean_one_enters() {
     let bag = bag_with(ticket(2, required_ticket_level()));
     // A first-stage murderer, seeded through the wire gate — the entry bar
     // reads the entrant's own authoritative reputation, not a host claim.
-    let mut wire = or_abort(serde_json::to_value(entrant()));
+    let mut wire = or_fail(serde_json::to_value(entrant()));
     wire["reputation"] = json!({
         "standing": {"kind": "flagged", "stage": "first_stage", "decays_at": 9},
         "kills": 1
     });
-    let hunted: Character = or_abort(serde_json::from_value(wire));
+    let hunted: Character = or_fail(serde_json::from_value(wire));
     let mut rng = TestRng::new(1);
     let (_, who_after, bag_after, outcome) = enter_mini_game(
         open_session(),
@@ -1244,7 +1244,7 @@ fn rank_gated_rewards_stay_on_their_ranks() {
 #[test]
 fn status_flags_gate_rewards_by_the_finishers_fate() {
     let group = RewardDropGroup {
-        items: or_abort(mu_core::components::collections::OneOrMore::new(vec![
+        items: or_fail(mu_core::components::collections::OneOrMore::new(vec![
             ItemRef {
                 group: 0,
                 number: 0,
@@ -1438,7 +1438,7 @@ fn an_item_drop_grant_lands_a_world_item_at_the_finishers_feet() {
     let atlas = real_atlas();
     let finisher = character(CharacterClass::DarkKnight, 60, 0, &no_effects());
     let group = RewardDropGroup {
-        items: or_abort(mu_core::components::collections::OneOrMore::new(vec![
+        items: or_fail(mu_core::components::collections::OneOrMore::new(vec![
             ItemRef {
                 group: 0,
                 number: 0,
@@ -1568,7 +1568,7 @@ fn an_in_event_death_waives_the_penalty_the_same_transition_docks_elsewhere() {
     // Plenty of exp headroom above the level-60 floor and a real zen balance,
     // so the Applied dock is observably non-zero.
     let exp = atlas.exp_curve().level(61).unwrap().total_to_hold().0 - 1;
-    let victim: Character = or_abort(serde_json::from_value(json!({
+    let victim: Character = or_fail(serde_json::from_value(json!({
         "class": "dark_knight",
         "level": 60,
         "experience": exp,
@@ -1576,7 +1576,7 @@ fn an_in_event_death_waives_the_penalty_the_same_transition_docks_elsewhere() {
         "unspent_points": 0,
         "zen": 100_000,
         "placement": {
-            "position": or_abort(serde_json::to_value(TileCoord::new(137, 95).to_world())),
+            "position": or_fail(serde_json::to_value(TileCoord::new(137, 95).to_world())),
             "facing": {"x": 0, "y": 1},
             "movement": "grounded",
             "map": 9

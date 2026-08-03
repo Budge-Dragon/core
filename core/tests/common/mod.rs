@@ -35,7 +35,7 @@ use mu_core::services::effects::mobility;
 use mu_core::services::monster_ai::decide_monster_action;
 use mu_core::services::spawn::populate_map;
 
-use dataset::or_abort;
+use dataset::or_fail;
 pub use dataset::real_atlas;
 pub use rng::TestRng;
 
@@ -46,7 +46,7 @@ pub const ONE_TILE: StepMagnitude = StepMagnitude::ONE_TILE;
 /// The simulation tick length shared by the whole suite: 50 ms.
 #[must_use]
 pub fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// The host-side behavior join: a monster number to the `MobBehavior` of the

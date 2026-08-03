@@ -8,7 +8,7 @@
 //! jewelry — pendant and both rings — never appears even when seated in the
 //! worn set.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body
 //! so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]

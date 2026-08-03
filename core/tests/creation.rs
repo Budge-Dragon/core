@@ -11,7 +11,7 @@
 //! same verdict the by-construction direct-seat path produces (OpenMU's
 //! `AddInitialItem` plugins seat straight into the slot).
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body so
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body so
 //! `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -41,7 +41,7 @@ use mu_core::services::inventory::{Wearer, equip};
 use mu_core::services::movement::resolve_spawn_gate_landing;
 use mu_core::services::profile::character_profile;
 
-use dataset::{or_abort, real_atlas, real_static_data};
+use dataset::{or_fail, real_atlas, real_static_data};
 use rng::TestRng;
 
 /// An arbitrary fixed stream every scenario shares.
@@ -246,9 +246,9 @@ fn fresh_vitals_are_byte_identical_to_a_level_one_respawn() {
     let atlas = real_atlas();
     for class in CREATABLE {
         let created = create(&atlas, class, SEED);
-        let mut value = or_abort(serde_json::to_value(&created.character));
+        let mut value = or_fail(serde_json::to_value(&created.character));
         value["life"] = serde_json::json!({"kind": "dead", "respawn_at": 0});
-        let dead: Character = or_abort(serde_json::from_value(value));
+        let dead: Character = or_fail(serde_json::from_value(value));
         let (revived, _) = respawn(dead, &atlas, &mut TestRng::new(99));
         assert_eq!(
             revived.vitals(),
@@ -268,7 +268,7 @@ fn a_fresh_character_lands_on_its_home_town_walkable_gate_grounded() {
         assert_eq!(placement.movement, Movement::Grounded, "{class:?} grounded");
 
         // The landing is one of the home town gate's parse-proven walkable tiles.
-        let (gate, _env) = or_abort(
+        let (gate, _env) = or_fail(
             atlas
                 .town_gate_for_map(home_map(class))
                 .ok_or("home map owns a town gate"),
@@ -327,7 +327,7 @@ fn two_seeds_land_a_dark_knight_on_walkable_lorencia_tiles() {
     let b = create(&atlas, CharacterClass::DarkKnight, 999);
     assert_eq!(a.character.placement().map, MapNumber(0));
     assert_eq!(b.character.placement().map, MapNumber(0));
-    let (gate, _env) = or_abort(
+    let (gate, _env) = or_fail(
         atlas
             .town_gate_for_map(MapNumber(0))
             .ok_or("lorencia owns a town gate"),
@@ -369,8 +369,8 @@ fn every_worn_starter_item_is_plain_level_zero_and_at_full_base_durability() {
     for class in CREATABLE {
         let created = create(&atlas, class, SEED);
         for (item, slot) in expected_kit(class) {
-            let worn = or_abort(created.equipment.get(slot).ok_or("worn slot occupied"));
-            let def = or_abort(atlas.item(item).ok_or("kit item defined"));
+            let worn = or_fail(created.equipment.get(slot).ok_or("worn slot occupied"));
+            let def = or_fail(atlas.item(item).ok_or("kit item defined"));
             assert_eq!(worn.item, item, "{class:?} {slot:?} identity");
             assert_eq!(worn.level, ItemLevel::ZERO, "{class:?} {slot:?} level 0");
             assert!(
@@ -405,7 +405,7 @@ fn every_worn_starter_item_is_plain_level_zero_and_at_full_base_durability() {
 fn the_starter_arrows_carry_the_full_ammunition_round_count() {
     let atlas = real_atlas();
     let created = create(&atlas, CharacterClass::FairyElf, SEED);
-    let arrows = or_abort(
+    let arrows = or_fail(
         created
             .equipment
             .get(EquipmentSlot::LeftHand)
@@ -446,7 +446,7 @@ fn each_starter_kit_matches_the_authentic_equip_gate_verdict() {
             stats: created.character.stats(),
         };
         for entry in atlas.starting_kit(class).iter() {
-            let def = or_abort(
+            let def = or_fail(
                 atlas
                     .item(entry.item_instance.item)
                     .ok_or("resolved kit item is defined"),
@@ -496,7 +496,7 @@ fn a_starter_kit_naming_no_item_fails_atlas_load() {
     // The FK-resolution proof: a kit reference to a nonexistent item is a load
     // failure, never a runtime absence.
     let mut data = real_static_data();
-    let mut value = or_abort(serde_json::to_value(&data.classes));
+    let mut value = or_fail(serde_json::to_value(&data.classes));
     // Corrupt the Dark Knight record (index 2 in roster order) to name an item
     // that no definition carries.
     value["records"][2]["starting_kit"] = serde_json::json!([{
@@ -504,7 +504,7 @@ fn a_starter_kit_naming_no_item_fails_atlas_load() {
         "item_level": 0,
         "slot": "left_hand"
     }]);
-    data.classes = or_abort(serde_json::from_value(value));
+    data.classes = or_fail(serde_json::from_value(value));
 
     let err = Atlas::parse(data).unwrap_err();
     assert!(

@@ -5,13 +5,13 @@
 //! kill-locked ownership window admits the owner, refuses the stranger, and
 //! frees the drop when it elapses.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]`
+//! Load failures route through `or_fail`; every assertion is a `#[test]`
 //! body so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
 mod dataset;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use mu_core::components::drop_claim::{DropClaim, PickerStanding};
 use mu_core::components::inventory::{Cell, Footprint, Inventory};
 use mu_core::components::item_instance::{
@@ -36,12 +36,12 @@ const SWORD: ItemRef = ItemRef {
 
 /// The host's 50 ms tick cadence.
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// A fresh instance of real item `id` at plus-level zero, full gauge.
 fn instance_of(atlas: &Atlas, id: ItemRef) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
         level: ItemLevel::ZERO,
@@ -56,8 +56,8 @@ fn instance_of(atlas: &Atlas, id: ItemRef) -> ItemInstance {
 
 /// Real item `id`'s cell footprint, read from the atlas.
 fn footprint_of(atlas: &Atlas, id: ItemRef) -> Footprint {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
-    or_abort(Footprint::new(def.width, def.height))
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
+    or_fail(Footprint::new(def.width, def.height))
 }
 
 /// A real sword laid at tile `(x, y)` on map 0 with the clocks of `stamp`.
@@ -294,7 +294,7 @@ fn a_real_zen_pile_is_free_to_a_stranger_in_window_and_gates_on_the_same_reach()
         map: MapNumber(0),
         despawn: stamp.despawn,
     };
-    let wallet = or_abort(mu_core::components::units::CarriedZen::new(0));
+    let wallet = or_fail(mu_core::components::units::CarriedZen::new(0));
 
     // A stranger inside what would be an item's window takes the pile whole —
     // zen carries no claim.
@@ -307,7 +307,7 @@ fn a_real_zen_pile_is_free_to_a_stranger_in_window_and_gates_on_the_same_reach()
     assert_eq!(outcome, ZenPickupOutcome::PickedUp);
     assert_eq!(
         balance,
-        or_abort(mu_core::components::units::CarriedZen::new(1_234))
+        or_fail(mu_core::components::units::CarriedZen::new(1_234))
     );
 
     // Beyond three tiles it is OutOfReach, the pile handed back.

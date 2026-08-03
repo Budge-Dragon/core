@@ -9,7 +9,7 @@
 //! and mirrors the death suite's Applied-vs-Waived contrast: the same victim
 //! docked under a monster killer proves the waiver is load-bearing.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body.
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body.
 
 #[path = "common/dataset.rs"]
 mod dataset;
@@ -29,17 +29,17 @@ use mu_core::services::combat::{StrikeBasis, resolve_attack};
 use mu_core::services::death::{combat_death_penalty, resolve_death, respawn};
 use mu_core::services::profile::character_profile;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use rng::TestRng;
 
 /// The suite tick base: 50 ms, so the 3000 ms respawn delay is 60 whole ticks.
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// Total experience the curve requires to hold `lvl`, read from the real table.
 fn total(atlas: &Atlas, lvl: u16) -> u64 {
-    or_abort(atlas.exp_curve().level(lvl)).total_to_hold().0
+    or_fail(atlas.exp_curve().level(lvl)).total_to_hold().0
 }
 
 /// A gearless Dark Knight built the only way a character can be — by
@@ -68,7 +68,7 @@ fn dark_knight(level: u16, exp: u64, zen: u64, map: u8) -> Character {
         "active_effects": [],
         "life": {"kind": "alive"},
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// Whether a death event is one of the two experience/zen penalty docks — the
@@ -185,7 +185,7 @@ fn a_player_kill_costs_the_victim_nothing_and_rewards_the_killer_nothing() {
     );
 
     let landing = alive.placement();
-    let grid = or_abort(
+    let grid = or_fail(
         atlas
             .terrain_grid(landing.map)
             .ok_or("the respawn map has a terrain grid"),

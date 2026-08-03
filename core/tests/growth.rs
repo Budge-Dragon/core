@@ -5,7 +5,7 @@
 //! behaviors (discard at the cap, land-on-cap with leftover), purity and
 //! determinism, and that the party-split award routes through the very same rule.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body so
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body so
 //! `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -26,16 +26,16 @@ use mu_core::services::experience::apply_experience;
 use mu_core::services::party::{MemberFact, distribute_kill_experience};
 use mu_core::services::profile::character_profile;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use rng::TestRng;
 
 fn level(value: u16) -> Level {
-    or_abort(Level::new(value))
+    or_fail(Level::new(value))
 }
 
 /// Total experience the curve requires to hold `lvl`, read from the real table.
 fn total_to_hold(atlas: &Atlas, lvl: u16) -> u64 {
-    or_abort(atlas.exp_curve().level(lvl)).total_to_hold().0
+    or_fail(atlas.exp_curve().level(lvl)).total_to_hold().0
 }
 
 /// The four classic trainable stats as a wire value.
@@ -102,7 +102,7 @@ fn character(
         },
         "vitals": vitals,
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// A gearless Dark Knight (5 stat points per level) at `lvl`/`exp`.
@@ -165,8 +165,8 @@ fn a_single_level_crossing_banks_five_points_refills_and_carries_experience() {
 
     // The grown character round-trips through the wire (the class↔stats gate
     // re-proves on load).
-    let wire = or_abort(serde_json::to_string(&grown));
-    let reloaded: Character = or_abort(serde_json::from_str(&wire));
+    let wire = or_fail(serde_json::to_string(&grown));
+    let reloaded: Character = or_fail(serde_json::from_str(&wire));
     assert_eq!(reloaded, grown);
 }
 
@@ -457,8 +457,8 @@ fn apply_experience_is_pure_and_deterministic() {
 
     // Byte-identical outputs on identical inputs.
     assert_eq!(
-        or_abort(serde_json::to_string(&grown_a)),
-        or_abort(serde_json::to_string(&grown_b)),
+        or_fail(serde_json::to_string(&grown_a)),
+        or_fail(serde_json::to_string(&grown_b)),
     );
     assert_eq!(events_a, events_b);
     // The input character is unmutated — still equals a fresh clone.
@@ -489,7 +489,7 @@ fn a_party_award_applied_matches_a_solo_apply_of_the_same_gained() {
         &all_unsafe,
         &mut party_rng,
     );
-    let member_award = or_abort(
+    let member_award = or_fail(
         awards
             .iter()
             .find(|award| award.slot == MemberSlot(0))
@@ -508,13 +508,13 @@ fn a_party_award_applied_matches_a_solo_apply_of_the_same_gained() {
     let (grown_b, _events_b) = apply_experience(member.clone(), gained, &atlas);
     // Deterministic and byte-identical.
     assert_eq!(
-        or_abort(serde_json::to_string(&grown_a)),
-        or_abort(serde_json::to_string(&grown_b)),
+        or_fail(serde_json::to_string(&grown_a)),
+        or_fail(serde_json::to_string(&grown_b)),
     );
 
     // The service's crossing agrees with the party's own `level_ups` observable:
     // the grown level is the top of the award's ascending list.
-    let top = or_abort(member_award.level_ups.last().ok_or("a crossed level")).level;
+    let top = or_fail(member_award.level_ups.last().ok_or("a crossed level")).level;
     assert_eq!(grown_a.level(), top);
     match events_a.first() {
         Some(GrowthEvent::LevelsGained { reached, .. }) => assert_eq!(*reached, top),

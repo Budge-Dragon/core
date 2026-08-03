@@ -6,7 +6,7 @@
 //! target filter, the basic/trap suppression, the guard exemption), every
 //! tile discovered from the shipped terrain rather than hard-coded.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]`
+//! Load failures route through `or_fail`; every assertion is a `#[test]`
 //! body so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -14,7 +14,7 @@ mod dataset;
 #[path = "common/rng.rs"]
 mod rng;
 
-use dataset::{or_abort, real_atlas, real_static_data};
+use dataset::{or_fail, real_atlas, real_static_data};
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::element::{Element, PerElement};
@@ -49,7 +49,7 @@ fn lorencia() -> MapNumber {
 /// The raw terrain bytes of `map`, straight from the shipped sidecar.
 fn raw_terrain(map: MapNumber) -> [u8; TERRAIN_LEN] {
     let data = real_static_data();
-    *or_abort(
+    *or_fail(
         data.terrain
             .into_iter()
             .find(|terrain| terrain.map == map)
@@ -61,7 +61,7 @@ fn raw_terrain(map: MapNumber) -> [u8; TERRAIN_LEN] {
 
 /// Lorencia's parsed unified terrain grid.
 fn lorencia_grid(atlas: &Atlas) -> &TerrainGrid {
-    or_abort(
+    or_fail(
         atlas
             .terrain_grid(lorencia())
             .ok_or("Lorencia has a terrain grid"),
@@ -84,7 +84,7 @@ fn boundary_pair(grid: &TerrainGrid) -> (TileCoord, TileCoord) {
             }
         }
     }
-    or_abort(Err::<(TileCoord, TileCoord), _>(
+    or_fail(Err::<(TileCoord, TileCoord), _>(
         "Lorencia has a field tile bordering its safe core",
     ))
 }
@@ -108,7 +108,7 @@ fn push_lane(grid: &TerrainGrid) -> [TileCoord; 4] {
             }
         }
     }
-    or_abort(Err::<[TileCoord; 4], _>(
+    or_fail(Err::<[TileCoord; 4], _>(
         "Lorencia has a three-tile field lane into its safe core",
     ))
 }
@@ -142,7 +142,7 @@ fn jiggle_spot(grid: &TerrainGrid) -> TileCoord {
             }
         }
     }
-    or_abort(Err::<TileCoord, _>(
+    or_fail(Err::<TileCoord, _>(
         "Lorencia has an open field tile bordering its safe core",
     ))
 }
@@ -158,7 +158,7 @@ fn caster(class: &str, strength: u16, energy: u16, tile: TileCoord) -> Character
         "unspent_points": 0,
         "zen": 0,
         "placement": {
-            "position": or_abort(serde_json::to_value(tile.to_world())),
+            "position": or_fail(serde_json::to_value(tile.to_world())),
             "facing": {"x": 1, "y": 0},
             "movement": "grounded",
             "map": 0
@@ -169,14 +169,14 @@ fn caster(class: &str, strength: u16, energy: u16, tile: TileCoord) -> Character
             "ability": {"current": 100_000, "max": 100_000}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// A deep-health, zero-defense-rate monster target seated at `tile` — every
 /// strike lands, none kills.
 fn seated(tile: TileCoord) -> CombatTarget {
     let combat = MonsterCombat {
-        level: or_abort(Level::new(20)),
+        level: or_fail(Level::new(20)),
         hp: 1_000_000,
         min_phys_damage: 5,
         max_phys_damage: 10,
@@ -207,12 +207,12 @@ fn seated(tile: TileCoord) -> CombatTarget {
     )
 }
 
-/// The damaging reference of a routed skill; a non-damaging route aborts.
+/// The damaging reference of a routed skill; a non-damaging route fails the test.
 fn as_damaging(skill: &Skill) -> DamagingSkillRef<'_> {
     match route(skill) {
         SkillRouting::Damaging(reference) => reference,
         SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
-            or_abort(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
+            or_fail(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
         }
     }
 }
@@ -220,7 +220,7 @@ fn as_damaging(skill: &Skill) -> DamagingSkillRef<'_> {
 /// The first damaging skill matching `predicate`, found from the shipped
 /// catalog — never a hard-coded number.
 fn find_skill<'a>(atlas: &'a Atlas, predicate: impl Fn(&Skill) -> bool, err: &str) -> &'a Skill {
-    or_abort(
+    or_fail(
         atlas
             .skills()
             .find(|skill| matches!(route(skill), SkillRouting::Damaging(_)) && predicate(skill))
@@ -278,7 +278,7 @@ fn lightning_bolt(atlas: &Atlas) -> &Skill {
 /// The first real Guard-role behavior — a town guard's timing/range columns
 /// with its `Patrols` disposition, straight from the shipped roster.
 fn guard_behavior(atlas: &Atlas) -> MobBehavior {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -294,7 +294,7 @@ fn guard_behavior(atlas: &Atlas) -> MobBehavior {
 
 /// The first real basic-monster behavior that can move and attack.
 fn basic_behavior(atlas: &Atlas) -> MobBehavior {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -328,7 +328,7 @@ fn mob_at(tile: TileCoord) -> MonsterInstance {
 }
 
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 // --- The safe-bit census over every shipped sidecar (P3, P4). ------------------
@@ -346,8 +346,8 @@ fn lorencias_town_core_is_the_folded_conjunction_of_its_raw_bytes() {
     let mut safe_tiles = 0u32;
     let mut safe_blocked = 0u32;
     for (index, &attr) in bytes.iter().enumerate() {
-        let x = or_abort(u8::try_from(index % 256));
-        let y = or_abort(u8::try_from(index / 256));
+        let x = or_fail(u8::try_from(index % 256));
+        let y = or_fail(u8::try_from(index / 256));
         let pos = TileCoord::new(x, y).to_world();
         let raw_walkable = attr & 0x06 == 0;
         let raw_safe = raw_walkable && attr & 0x01 != 0;
@@ -376,7 +376,7 @@ fn zero_safezone_maps_answer_not_safe_everywhere_and_exile_keeps_its_copied_pock
     // The Dungeon (map 1) and Devil Square (map 9) sidecars carry no walkable
     // SafeZone tile at all — the whole map answers not-safe.
     for map in [MapNumber(1), MapNumber(9)] {
-        let grid = or_abort(atlas.terrain_grid(map).ok_or("the map has a grid"));
+        let grid = or_fail(atlas.terrain_grid(map).ok_or("the map has a grid"));
         let mut safe_tiles = 0u32;
         for y in 0u8..=u8::MAX {
             for x in 0u8..=u8::MAX {
@@ -390,8 +390,8 @@ fn zero_safezone_maps_answer_not_safe_everywhere_and_exile_keeps_its_copied_pock
 
     // Exile (map 5) keeps its authentic copied-Arena bytes: 447 safe tiles,
     // tile-for-tile identical to Arena's (map 6).
-    let exile = or_abort(atlas.terrain_grid(MapNumber(5)).ok_or("Exile has a grid"));
-    let arena = or_abort(atlas.terrain_grid(MapNumber(6)).ok_or("Arena has a grid"));
+    let exile = or_fail(atlas.terrain_grid(MapNumber(5)).ok_or("Exile has a grid"));
+    let arena = or_fail(atlas.terrain_grid(MapNumber(6)).ok_or("Arena has a grid"));
     let mut exile_safe = 0u32;
     for y in 0u8..=u8::MAX {
         for x in 0u8..=u8::MAX {
@@ -414,7 +414,7 @@ fn every_shipped_map_resolves_one_unified_grid_answering_both_queries() {
     let atlas = real_atlas();
     let mut maps = 0u32;
     for definition in atlas.maps() {
-        let grid = or_abort(
+        let grid = or_fail(
             atlas
                 .terrain_grid(definition.number)
                 .ok_or("every map resolves a unified terrain grid"),
@@ -528,13 +528,13 @@ fn a_real_earthshake_push_stops_at_the_town_core_boundary() {
     let SkillOutcome::Cast { hits, .. } = outcome else {
         panic!("a funded quake resolves");
     };
-    let displacement = match or_abort(hits.first().ok_or("the covered mob is resolved")) {
+    let displacement = match or_fail(hits.first().ok_or("the covered mob is resolved")) {
         TargetHit::Landed { displacement, .. } | TargetHit::Missed { displacement, .. } => {
             *displacement
         }
         TargetHit::Killed { .. } => panic!("a deep-health mob is never killed"),
     };
-    let moved = or_abort(displacement.ok_or("the push moves the mob"));
+    let moved = or_fail(displacement.ok_or("the push moves the mob"));
     assert_eq!(
         moved.position,
         last_field.to_world(),

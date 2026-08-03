@@ -7,13 +7,13 @@
 //! compare, and the zero-column skip. Every expected bar is hand-derived in a
 //! comment from the real definition's columns.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]`
+//! Load failures route through `or_fail`; every assertion is a `#[test]`
 //! body so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
 mod dataset;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use mu_core::components::class::CharacterClass;
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::item_instance::{
@@ -75,10 +75,10 @@ const SKULL_STAFF: ItemRef = ItemRef {
 
 /// A fresh Normal instance of real item `id` at plus-`level`.
 fn item_at(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
-        level: or_abort(ItemLevel::new(level)),
+        level: or_fail(ItemLevel::new(level)),
         roll: RarityRoll::Normal,
         normal_option: None,
         luck: LuckRoll::Plain,
@@ -92,7 +92,7 @@ fn item_at(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
 fn wearer(class: CharacterClass, level: u16, strength: u16, agility: u16) -> Wearer {
     Wearer {
         class,
-        level: or_abort(Level::new(level)),
+        level: or_fail(Level::new(level)),
         stats: Stats::Standard {
             strength,
             agility,
@@ -105,7 +105,7 @@ fn wearer(class: CharacterClass, level: u16, strength: u16, agility: u16) -> Wea
 /// Drives one equip of `item` into `slot` for `who` over an empty worn set and
 /// returns the outcome.
 fn try_equip(atlas: &Atlas, item: ItemInstance, slot: EquipmentSlot, who: &Wearer) -> EquipOutcome {
-    let def = or_abort(atlas.item(item.item).ok_or("unknown item"));
+    let def = or_fail(atlas.item(item.item).ok_or("unknown item"));
     let (_, outcome) = equip(Equipment::empty(), item, def, slot, atlas, who);
     outcome
 }
@@ -114,7 +114,7 @@ fn try_equip(atlas: &Atlas, item: ItemInstance, slot: EquipmentSlot, who: &Weare
 fn assert_rejected(outcome: &EquipOutcome, reason: EquipRejection) {
     match outcome {
         EquipOutcome::Rejected { reason: got, .. } => assert_eq!(*got, reason),
-        EquipOutcome::Equipped { slot } => or_abort(Err::<(), String>(format!(
+        EquipOutcome::Equipped { slot } => or_fail(Err::<(), String>(format!(
             "expected {reason:?}, but the item equipped into {slot:?}"
         ))),
     }
@@ -124,7 +124,7 @@ fn assert_rejected(outcome: &EquipOutcome, reason: EquipRejection) {
 fn assert_equipped(outcome: &EquipOutcome) {
     match outcome {
         EquipOutcome::Equipped { .. } => {}
-        EquipOutcome::Rejected { reason, .. } => or_abort(Err::<(), String>(format!(
+        EquipOutcome::Rejected { reason, .. } => or_fail(Err::<(), String>(format!(
             "expected the equip to land, got {reason:?}"
         ))),
     }
@@ -194,7 +194,7 @@ fn rarity_and_enhancement_raise_a_real_items_bar_through_the_surcharge() {
         let mut kris = item_at(&atlas, KRIS, level);
         kris.roll = RarityRoll::Excellent {
             options: ExcellentOptions::Weapon {
-                options: or_abort(ExcellentWeaponSet::from_options([
+                options: or_fail(ExcellentWeaponSet::from_options([
                     ExcellentWeaponOption::ManaAfterKill,
                 ])),
             },

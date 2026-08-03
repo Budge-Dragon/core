@@ -5,7 +5,7 @@
 //! picker-keeps-the-pile fallback), and the untouched solo `pickup_zen` path
 //! beside it.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body.
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body.
 
 #[path = "common/dataset.rs"]
 mod dataset;
@@ -19,7 +19,7 @@ use mu_core::entities::world_zen::WorldZen;
 use mu_core::services::inventory::{ZenPickupOutcome, pickup_zen};
 use mu_core::services::party::{MemberFact, SlotWallet, split_zen_pickup};
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 
 fn pos(x: u8, y: u8) -> WorldPos {
     TileCoord::new(x, y).to_world()
@@ -35,7 +35,7 @@ fn safe_at(tiles: &[(u8, u8)]) -> TerrainGrid {
     let mut safe = [0u64; 1024];
     for &(x, y) in tiles {
         let bit = (usize::from(y) << 8) | usize::from(x);
-        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        let word = or_fail(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word |= 1u64 << (bit & 63);
     }
     TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
@@ -46,7 +46,7 @@ fn map0() -> MapNumber {
 }
 
 fn wallet(value: u64) -> CarriedZen {
-    or_abort(CarriedZen::new(value))
+    or_fail(CarriedZen::new(value))
 }
 
 fn active(slot: u8) -> PartyMember {
@@ -63,7 +63,7 @@ fn trio() -> PartySession {
 fn fact(slot: u8) -> MemberFact {
     MemberFact {
         slot: MemberSlot(slot),
-        level: or_abort(Level::new(30)),
+        level: or_fail(Level::new(30)),
         experience: Exp(0),
         vitality: Vitality::Alive,
         map: map0(),
@@ -76,7 +76,7 @@ fn wallets(balances: [u64; 3]) -> Vec<SlotWallet> {
         .into_iter()
         .enumerate()
         .map(|(index, balance)| SlotWallet {
-            slot: MemberSlot(or_abort(u8::try_from(index))),
+            slot: MemberSlot(or_fail(u8::try_from(index))),
             wallet: wallet(balance),
         })
         .collect()
@@ -96,9 +96,9 @@ fn a_real_hundred_thousand_pile_splits_equally_with_the_remainder_to_the_picker(
     let _atlas = real_atlas();
     let facts = [fact(0), fact(1), fact(2)];
     let slot_wallets = wallets([0, 0, 0]);
-    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(facts.split_first().ok_or("nonempty facts"));
     let (picker_wallet, other_wallets) =
-        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+        or_fail(slot_wallets.split_first().ok_or("nonempty wallets"));
     let result = split_zen_pickup(
         &pile(100_000),
         &trio(),
@@ -130,9 +130,9 @@ fn an_at_cap_wallet_grounds_its_share_and_conservation_holds_against_the_real_ca
     let facts = [fact(0), fact(1), fact(2)];
     // Slot 1 one below the cap: crediting 33,333 over-caps, so its share grounds.
     let slot_wallets = wallets([0, 1_999_999_999, 0]);
-    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(facts.split_first().ok_or("nonempty facts"));
     let (picker_wallet, other_wallets) =
-        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+        or_fail(slot_wallets.split_first().ok_or("nonempty wallets"));
     let result = split_zen_pickup(
         &pile(100_000),
         &trio(),
@@ -143,7 +143,7 @@ fn an_at_cap_wallet_grounds_its_share_and_conservation_holds_against_the_real_ca
         &all_unsafe(),
     );
     assert_eq!(result.to_ground.len(), 1);
-    let grounded = or_abort(result.to_ground.first().ok_or("one grounded pile"));
+    let grounded = or_fail(result.to_ground.first().ok_or("one grounded pile"));
     assert_eq!(grounded.amount, Zen(33_333));
     assert_eq!(grounded.position, pos(0, 0));
     assert_eq!(grounded.map, map0());
@@ -160,12 +160,12 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
     let _atlas = real_atlas();
     let slot_wallets = wallets([0, 0, 0]);
     let (picker_wallet, other_wallets) =
-        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+        or_fail(slot_wallets.split_first().ok_or("nonempty wallets"));
 
     // Dead slot 2 -> divisor 2, 45,000 each.
     let mut dead = [fact(0), fact(1), fact(2)];
     dead[2].vitality = Vitality::Dead;
-    let (picker, others) = or_abort(dead.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(dead.split_first().ok_or("nonempty facts"));
     let result = split_zen_pickup(
         &pile(90_000),
         &trio(),
@@ -185,7 +185,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
     // Held slot 2 -> divisor 2.
     let held = trio().with_membership(MemberSlot(2), Membership::Held { expires: Tick(1) });
     let facts = [fact(0), fact(1), fact(2)];
-    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(facts.split_first().ok_or("nonempty facts"));
     let result = split_zen_pickup(
         &pile(90_000),
         &held,
@@ -201,7 +201,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
     // Out of range slot 2 -> divisor 2; at 12 tiles -> divisor 3 (inclusive edge).
     let mut far = [fact(0), fact(1), fact(2)];
     far[2].position = pos(13, 0);
-    let (picker, others) = or_abort(far.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(far.split_first().ok_or("nonempty facts"));
     let result = split_zen_pickup(
         &pile(90_000),
         &trio(),
@@ -215,7 +215,7 @@ fn a_dead_held_or_out_of_range_member_is_dropped_from_the_divisor() {
 
     let mut edge = [fact(0), fact(1), fact(2)];
     edge[2].position = pos(12, 0);
-    let (picker, others) = or_abort(edge.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(edge.split_first().ok_or("nonempty facts"));
     let result = split_zen_pickup(
         &pile(90_000),
         &trio(),
@@ -237,9 +237,9 @@ fn the_picker_always_qualifies_so_the_divisor_is_never_zero_and_the_pile_is_neve
     facts[1].vitality = Vitality::Dead;
     facts[2].vitality = Vitality::Dead;
     let slot_wallets = wallets([0, 0, 0]);
-    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(facts.split_first().ok_or("nonempty facts"));
     let (picker_wallet, other_wallets) =
-        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+        or_fail(slot_wallets.split_first().ok_or("nonempty wallets"));
     let result = split_zen_pickup(
         &pile(70_000),
         &trio(),
@@ -260,9 +260,9 @@ fn a_safezone_standing_member_is_not_counted_in_the_divisor() {
     let mut facts = [fact(0), fact(1), fact(2)];
     facts[2].position = pos(5, 0);
     let slot_wallets = wallets([0, 0, 0]);
-    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(facts.split_first().ok_or("nonempty facts"));
     let (picker_wallet, other_wallets) =
-        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+        or_fail(slot_wallets.split_first().ok_or("nonempty wallets"));
 
     // The same locus splits three ways over an all-unsafe grid — the exclusion
     // below is the fifth term, not reach.
@@ -306,9 +306,9 @@ fn an_all_in_safezone_party_credits_the_picker_the_whole_pile() {
     facts[1].position = pos(6, 0);
     facts[2].position = pos(7, 0);
     let slot_wallets = wallets([0, 0, 0]);
-    let (picker, others) = or_abort(facts.split_first().ok_or("nonempty facts"));
+    let (picker, others) = or_fail(facts.split_first().ok_or("nonempty facts"));
     let (picker_wallet, other_wallets) =
-        or_abort(slot_wallets.split_first().ok_or("nonempty wallets"));
+        or_fail(slot_wallets.split_first().ok_or("nonempty wallets"));
     let result = split_zen_pickup(
         &pile(70_000),
         &trio(),

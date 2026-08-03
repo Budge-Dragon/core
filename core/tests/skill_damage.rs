@@ -6,7 +6,7 @@
 //! all proven through the public `cast`/`resolve_attack` ports against the
 //! shipped skill roster and class derivations.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body
 //! so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -16,7 +16,7 @@ mod rng;
 
 use rand_core::RngCore;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::combat_profile::{CombatProfile, CombatTarget};
 use mu_core::components::element::PerElement;
@@ -58,7 +58,7 @@ fn caster(class: &str, strength: u16, energy: u16) -> Character {
         "unspent_points": 0,
         "zen": 0,
         "placement": {
-            "position": or_abort(serde_json::to_value(TileCoord::new(10, 10).to_world())),
+            "position": or_fail(serde_json::to_value(TileCoord::new(10, 10).to_world())),
             "facing": {"x": 1, "y": 0},
             "movement": "grounded",
             "map": 0
@@ -69,7 +69,7 @@ fn caster(class: &str, strength: u16, energy: u16) -> Character {
             "ability": {"current": 100_000, "max": 100_000}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 fn zero_resistances() -> PerElement<Resistance> {
@@ -88,7 +88,7 @@ fn zero_resistances() -> PerElement<Resistance> {
 /// chances — derived through the real monster-profile port.
 fn defender_profile(defense: u16, defense_rate: u16) -> CombatProfile {
     let combat = mu_core::data::monster_definitions::MonsterCombat {
-        level: or_abort(Level::new(20)),
+        level: or_fail(Level::new(20)),
         hp: 1_000_000,
         min_phys_damage: 5,
         max_phys_damage: 10,
@@ -120,13 +120,13 @@ fn all_walkable() -> TerrainGrid {
     TerrainGrid::from_words([u64::MAX; 1024])
 }
 
-/// The damaging reference the router yields; a non-damaging skill aborts (this
+/// The damaging reference the router yields; a non-damaging skill fails the test (this
 /// harness only ever selects damaging records).
 fn damaging_ref(skill: &Skill) -> DamagingSkillRef<'_> {
     match route(skill) {
         SkillRouting::Damaging(reference) => reference,
         SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
-            or_abort(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
+            or_fail(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
         }
     }
 }
@@ -187,7 +187,7 @@ fn first_landed(caster: &Character, skill: &Skill) -> (u64, u32) {
             return (seed, damage);
         }
     }
-    or_abort(Err::<(u64, u32), _>(format!(
+    or_fail(Err::<(u64, u32), _>(format!(
         "skill {:?}: no seed in 0..256 lands a hit",
         skill.number
     )))
@@ -337,7 +337,7 @@ fn the_wizardry_excellent_order_holds_against_real_spans() {
     let wizard = caster("dark_wizard", 40, 100);
     let profile = character_profile(&wizard).0;
     let wiz = profile.wizardry().expect("a Dark Wizard carries wizardry");
-    let skill = or_abort(
+    let skill = or_fail(
         atlas
             .skills()
             .find(|skill| {
@@ -352,9 +352,9 @@ fn the_wizardry_excellent_order_holds_against_real_spans() {
     let target = defender_profile(30, 0);
     let strike = |order: ExcellentOrder| {
         let basis = StrikeBasis::Skill {
-            span: or_abort(Interval::new(
-                or_abort(u16::try_from(aug_min)),
-                or_abort(u16::try_from(aug_max)),
+            span: or_fail(Interval::new(
+                or_fail(u16::try_from(aug_min)),
+                or_fail(u16::try_from(aug_max)),
             )),
             excellent_order: order,
             multiplier_per_mille: 1000,
@@ -385,10 +385,10 @@ fn the_wizardry_excellent_order_holds_against_real_spans() {
 /// The profile with its excellent chance forced through the wire — the only way
 /// an integration test reaches a field the smart constructors own.
 fn with_excellent(profile: &CombatProfile, percent: u8) -> CombatProfile {
-    let mut value = or_abort(serde_json::to_value(profile));
-    let object = or_abort(value.as_object_mut().ok_or("a profile is an object"));
+    let mut value = or_fail(serde_json::to_value(profile));
+    let object = or_fail(value.as_object_mut().ok_or("a profile is an object"));
     object.insert("excellent_chance".to_owned(), serde_json::json!(percent));
-    or_abort(serde_json::from_value(value))
+    or_fail(serde_json::from_value(value))
 }
 
 // --- Per-class SkillMultiplier over the real class table. ----------------------
@@ -396,7 +396,7 @@ fn with_excellent(profile: &CombatProfile, percent: u8) -> CombatProfile {
 /// The first zero-damage physical skill — the bare-weapon-span skill whose only
 /// difference from a plain swing is the class multiplier.
 fn weapon_skill(atlas: &mu_core::data::atlas::Atlas) -> &Skill {
-    or_abort(
+    or_fail(
         atlas
             .skills()
             .find(|skill| {
@@ -447,7 +447,7 @@ fn assert_skill_is_scaled_swing(caster_of: &Character, skill: &Skill, mult: u32)
         );
         return (skill_dmg, plain_dmg);
     }
-    or_abort(Err::<(u32, u32), _>("no seed in 0..64 lands both strikes"))
+    or_fail(Err::<(u32, u32), _>("no seed in 0..64 lands both strikes"))
 }
 
 #[test]
@@ -531,7 +531,7 @@ fn a_monster_plain_swing_never_acquires_a_multiplier_over_real_data() {
     // basis: every landed hit stays at or under its span max — no ~2× class
     // ferocity ever touches a monster's swing.
     let atlas = real_atlas();
-    let (combat, resistances) = or_abort(
+    let (combat, resistances) = or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -625,7 +625,7 @@ fn every_damage_type_branch_draws_the_same_word_count() {
     // and None-[0,0] — advance the RNG by the identical word count.
     let atlas = real_atlas();
     let find = |wanted: DamageType, d_positive: bool| {
-        or_abort(
+        or_fail(
             atlas
                 .skills()
                 .find(|skill| {
@@ -670,7 +670,7 @@ fn every_damage_type_branch_draws_the_same_word_count() {
 fn identical_inputs_and_seeds_replay_byte_identical() {
     let atlas = real_atlas();
     let wizard = caster("dark_wizard", 40, 400);
-    let skill = or_abort(
+    let skill = or_fail(
         atlas
             .skills()
             .find(|skill| {
@@ -693,8 +693,8 @@ fn identical_inputs_and_seeds_replay_byte_identical() {
             &mut TestRng::new(41),
         );
         (
-            or_abort(serde_json::to_string(&vitals)),
-            or_abort(serde_json::to_string(&outcome)),
+            or_fail(serde_json::to_string(&vitals)),
+            or_fail(serde_json::to_string(&outcome)),
         )
     };
     assert_eq!(run(), run());

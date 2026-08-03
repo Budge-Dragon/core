@@ -9,7 +9,7 @@
 //! per-branch RNG draw discipline — all proven through the public `route`/`locate`/`cast`
 //! ports against the shipped skill roster.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body
 //! so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 
 use rand_core::RngCore;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::combat_profile::CombatTarget;
 use mu_core::components::element::PerElement;
@@ -60,7 +60,7 @@ fn caster(class: &str, strength: u16, energy: u16) -> Character {
         "unspent_points": 0,
         "zen": 0,
         "placement": {
-            "position": or_abort(serde_json::to_value(TileCoord::new(10, 10).to_world())),
+            "position": or_fail(serde_json::to_value(TileCoord::new(10, 10).to_world())),
             "facing": {"x": 1, "y": 0},
             "movement": "grounded",
             "map": 0
@@ -71,7 +71,7 @@ fn caster(class: &str, strength: u16, energy: u16) -> Character {
             "ability": {"current": 100_000, "max": 100_000}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 fn resistances(lightning: u8) -> PerElement<Resistance> {
@@ -91,7 +91,7 @@ fn resistances(lightning: u8) -> PerElement<Resistance> {
 /// lightning resistance — derived through the real monster-profile port.
 fn seated(tile: (u8, u8), hp: u32, defense_rate: u16, lightning: u8) -> CombatTarget {
     let combat = mu_core::data::monster_definitions::MonsterCombat {
-        level: or_abort(Level::new(20)),
+        level: or_fail(Level::new(20)),
         hp: 1_000_000,
         min_phys_damage: 5,
         max_phys_damage: 10,
@@ -118,7 +118,7 @@ fn grid_with(walkable: &[(u8, u8)]) -> TerrainGrid {
     let mut words = [0u64; 1024];
     for &(x, y) in walkable {
         let bit = (usize::from(y) << 8) | usize::from(x);
-        let word = or_abort(words.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        let word = or_fail(words.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word |= 1u64 << (bit & 63);
     }
     TerrainGrid::from_words(words)
@@ -130,7 +130,7 @@ fn all_walkable_except(walls: &[(u8, u8)]) -> TerrainGrid {
     let mut words = [u64::MAX; 1024];
     for &(x, y) in walls {
         let bit = (usize::from(y) << 8) | usize::from(x);
-        let word = or_abort(words.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        let word = or_fail(words.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word &= !(1u64 << (bit & 63));
     }
     TerrainGrid::from_words(words)
@@ -142,7 +142,7 @@ fn all_walkable_with_safe(safe_tiles: &[(u8, u8)]) -> TerrainGrid {
     let mut safe = [0u64; 1024];
     for &(x, y) in safe_tiles {
         let bit = (usize::from(y) << 8) | usize::from(x);
-        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        let word = or_fail(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word |= 1u64 << (bit & 63);
     }
     TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
@@ -151,19 +151,19 @@ fn all_walkable_with_safe(safe_tiles: &[(u8, u8)]) -> TerrainGrid {
 /// The real skill record numbered `number` — the §0 ratification table is keyed
 /// by these client numbers, so the per-record pins address them directly.
 fn skill_number(atlas: &Atlas, number: u16) -> &Skill {
-    or_abort(
+    or_fail(
         atlas
             .skill(SkillNumber(number))
             .ok_or(format!("the roster carries skill {number}")),
     )
 }
 
-/// The damaging reference the router yields; a non-damaging skill aborts.
+/// The damaging reference the router yields; a non-damaging skill fails the test.
 fn damaging_ref(skill: &Skill) -> DamagingSkillRef<'_> {
     match route(skill) {
         SkillRouting::Damaging(reference) => reference,
         SkillRouting::Buff(_) | SkillRouting::Heal(_) | SkillRouting::Deferred => {
-            or_abort(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
+            or_fail(Err::<DamagingSkillRef<'_>, _>("expected a damaging skill"))
         }
     }
 }
@@ -247,9 +247,9 @@ fn beam(length_x2: u8, half_width_x2: u8) -> AreaGeometry {
 fn cone(length_x2: u8, num: u64, den: u64) -> AreaGeometry {
     AreaGeometry::Cone {
         length_x2,
-        half_angle: or_abort(mu_core::components::spatial::ConeHalfWidth::new(
+        half_angle: or_fail(mu_core::components::spatial::ConeHalfWidth::new(
             num,
-            or_abort(core::num::NonZeroU64::new(den).ok_or("nonzero denominator")),
+            or_fail(core::num::NonZeroU64::new(den).ok_or("nonzero denominator")),
         )),
     }
 }
@@ -512,10 +512,10 @@ fn a_real_caster_anchored_cast_never_reads_the_aim() {
             "skill {number}: the far aim cannot reject a caster-anchored cast"
         );
         assert_eq!(
-            or_abort(serde_json::to_string(&run(
+            or_fail(serde_json::to_string(&run(
                 TileCoord::new(10, 10).to_world()
             ))),
-            or_abort(serde_json::to_string(&run(
+            or_fail(serde_json::to_string(&run(
                 TileCoord::new(250, 3).to_world()
             ))),
             "skill {number}: the outcome is invariant to the aim"
@@ -942,7 +942,7 @@ fn the_real_earthshake_diagonal_push_refuses_a_safezone_tile_exactly_like_a_wall
 /// The first lunge-shaped skill on the roster — found by pattern, never a
 /// hard-coded index.
 fn lunge_skill(atlas: &Atlas) -> &Skill {
-    or_abort(
+    or_fail(
         atlas
             .skills()
             .find(|skill| {
@@ -1054,7 +1054,7 @@ fn a_real_missed_lunge_still_nudges_its_victim_and_a_killing_lunge_does_not() {
 /// The first lightning-element direct-hit skill on the roster — found by
 /// pattern, never a hard-coded index.
 fn lightning_direct_skill(atlas: &Atlas) -> &Skill {
-    or_abort(
+    or_fail(
         atlas
             .skills()
             .find(|skill| {
@@ -1207,7 +1207,7 @@ fn the_displacement_is_dispatched_per_skill_over_real_data() {
         else {
             panic!("a million-HP target cannot be killed");
         };
-        let moved = or_abort(displacement.ok_or("open ground: the push moves"));
+        let moved = or_fail(displacement.ok_or("open ground: the push moves"));
         let (dx, dy) = tile_delta(start, moved);
         assert_eq!(dx.abs().max(dy.abs()), 3, "seed {seed}: the quake pushes 3");
     }
@@ -1326,8 +1326,8 @@ fn identical_inputs_and_seeds_replay_byte_identical_including_displacements() {
             let (vitals, outcome) =
                 cast_once(&hero, skill, target_aim, &targets, &all_walkable(), seed);
             (
-                or_abort(serde_json::to_string(&vitals)),
-                or_abort(serde_json::to_string(&outcome)),
+                or_fail(serde_json::to_string(&vitals)),
+                or_fail(serde_json::to_string(&outcome)),
             )
         };
         assert_eq!(run(41), run(41), "skill {:?}", skill.number);
@@ -1392,7 +1392,7 @@ fn the_lunge_jiggle_draws_a_variable_surplus_on_missed_and_landed_hits() {
     // (DET-1/3).
     let atlas = real_atlas();
     let lunge = lunge_skill(&atlas);
-    let direct = or_abort(
+    let direct = or_fail(
         atlas
             .skills()
             .find(|skill| {
@@ -1442,7 +1442,7 @@ fn the_lightning_jiggle_draws_element_then_a_variable_surplus_and_immunity_draws
     // nothing extra either (JIG-5 / the §5 table).
     let atlas = real_atlas();
     let bolt = lightning_direct_skill(&atlas);
-    let direct = or_abort(
+    let direct = or_fail(
         atlas
             .skills()
             .find(|skill| {

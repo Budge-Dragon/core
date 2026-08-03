@@ -6,7 +6,7 @@
 //! unchanged strike), and the empty-pool zero-draw rule — all proven through
 //! the public `wear_from_strike` / `resolve_strike_with_wear` ports.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]`
+//! Load failures route through `or_fail`; every assertion is a `#[test]`
 //! body so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -16,7 +16,7 @@ mod rng;
 
 use rand_core::RngCore;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::item_instance::{
     CraftedAugment, Durability, ItemInstance, LuckRoll, RarityRoll, SkillRoll,
@@ -93,7 +93,7 @@ const ARROWS: ItemRef = ItemRef {
 
 /// A fresh full-gauge instance of real item `id`.
 fn item(atlas: &Atlas, id: ItemRef) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
         level: ItemLevel::ZERO,
@@ -110,7 +110,7 @@ fn item(atlas: &Atlas, id: ItemRef) -> ItemInstance {
 fn item_at(atlas: &Atlas, id: ItemRef, current: u8) -> ItemInstance {
     let mut instance = item(atlas, id);
     let max = instance.durability.max();
-    instance.durability = or_abort(Durability::new(current, max));
+    instance.durability = or_fail(Durability::new(current, max));
     instance
 }
 
@@ -171,8 +171,8 @@ fn a_damaging_hit_wears_exactly_one_defensive_item_and_never_the_pendant() {
         let (slot, gauge) = worn_slot(&wear.defender_events[0]);
         assert_ne!(slot, EquipmentSlot::Pendant, "the pendant never wears here");
         assert_ne!(slot, EquipmentSlot::Pet, "no pet is worn");
-        let after = or_abort(wear.defender_worn.get(slot).ok_or("still worn"));
-        let full = or_abort(atlas.item(after.item).ok_or("known item")).durability;
+        let after = or_fail(wear.defender_worn.get(slot).ok_or("still worn"));
+        let full = or_fail(atlas.item(after.item).ok_or("known item")).durability;
         assert_eq!(after.durability.current(), full - 1, "one point lost");
         assert_eq!(gauge, Some(after.durability));
         seen.insert(format!("{slot:?}"));
@@ -209,7 +209,7 @@ fn a_landing_attacker_wears_one_of_weapon_or_pendant_at_the_flat_rate() {
             matches!(slot, EquipmentSlot::RightHand | EquipmentSlot::Pendant),
             "the offensive pool is weapon + pendant, got {slot:?}"
         );
-        let gauge = or_abort(gauge.ok_or("hit 1 never breaks a full item"));
+        let gauge = or_fail(gauge.ok_or("hit 1 never breaks a full item"));
         let full = if slot == EquipmentSlot::RightHand {
             item(&atlas, KRIS).durability
         } else {
@@ -381,7 +381,7 @@ fn the_ledger_rides_the_returned_equipment_across_a_serde_round_trip() {
 
     let mut rng = TestRng::new(1);
     let first = wear_from_strike(&landed(1500), Equipment::empty(), solo, &atlas, &mut rng);
-    let after_first = or_abort(first.defender_worn.get(EquipmentSlot::Helm).ok_or("worn"));
+    let after_first = or_fail(first.defender_worn.get(EquipmentSlot::Helm).ok_or("worn"));
     assert_eq!(
         after_first.durability.current(),
         full,
@@ -389,8 +389,8 @@ fn the_ledger_rides_the_returned_equipment_across_a_serde_round_trip() {
     );
 
     // Persist seam: serialize/deserialize the worn set mid-sequence.
-    let json = or_abort(serde_json::to_string(&first.defender_worn));
-    let reloaded: Equipment = or_abort(serde_json::from_str(&json));
+    let json = or_fail(serde_json::to_string(&first.defender_worn));
+    let reloaded: Equipment = or_fail(serde_json::from_str(&json));
 
     let mut rng = TestRng::new(2);
     let second = wear_from_strike(
@@ -400,7 +400,7 @@ fn the_ledger_rides_the_returned_equipment_across_a_serde_round_trip() {
         &atlas,
         &mut rng,
     );
-    let after_second = or_abort(second.defender_worn.get(EquipmentSlot::Helm).ok_or("worn"));
+    let after_second = or_fail(second.defender_worn.get(EquipmentSlot::Helm).ok_or("worn"));
     assert_eq!(
         after_second.durability.current(),
         full - 1,
@@ -422,7 +422,7 @@ fn the_last_point_breaks_the_item_which_stays_worn() {
             slot: EquipmentSlot::Ring1
         }]
     );
-    let broken = or_abort(wear.defender_worn.get(EquipmentSlot::Ring1).ok_or("worn"));
+    let broken = or_fail(wear.defender_worn.get(EquipmentSlot::Ring1).ok_or("worn"));
     assert_eq!(broken.durability.current(), 0, "broken, not destroyed");
 }
 
@@ -454,7 +454,7 @@ fn the_pet_wears_additionally_and_is_destroyed_at_zero() {
     let wear = wear_from_strike(&landed(2000), Equipment::empty(), set, &atlas, &mut rng);
     let (slot, gauge) = worn_slot(&wear.defender_events[0]);
     assert_eq!(slot, EquipmentSlot::Pet);
-    let gauge = or_abort(gauge.ok_or("the pet accumulated without crossing"));
+    let gauge = or_fail(gauge.ok_or("the pet accumulated without crossing"));
     assert_eq!(
         gauge.current(),
         item(&atlas, GUARDIAN_ANGEL).durability.current()
@@ -478,7 +478,7 @@ fn ammunition_is_consumed_per_swing_and_destroyed_at_zero() {
         &atlas,
         &mut rng,
     );
-    let quiver = or_abort(
+    let quiver = or_fail(
         first
             .attacker_worn
             .get(EquipmentSlot::LeftHand)
@@ -576,7 +576,7 @@ fn resolve_strike_with_wear_composes_the_strike_then_the_wear() {
     // wear_from_strike on the SAME stream, in that order — so no host can
     // diverge the RNG by re-ordering the steps.
     let atlas = real_atlas();
-    let attacker: Character = or_abort(serde_json::from_value(serde_json::json!({
+    let attacker: Character = or_fail(serde_json::from_value(serde_json::json!({
         "class": "dark_knight",
         "level": 50,
         "experience": 0,
@@ -590,7 +590,7 @@ fn resolve_strike_with_wear_composes_the_strike_then_the_wear() {
             "ability": {"current": 400, "max": 400}
         }
     })));
-    let defender: Character = or_abort(serde_json::from_value(serde_json::json!({
+    let defender: Character = or_fail(serde_json::from_value(serde_json::json!({
         "class": "dark_wizard",
         "level": 40,
         "experience": 0,

@@ -7,7 +7,7 @@
 //! Runs against the real dataset because the accelerator resolves the victim's
 //! level through the parsed [`Atlas`]; the shared harness (`common/dataset.rs`)
 //! is the only place a real Atlas is built. Load failures route through
-//! `or_abort`; every assertion is a `#[test]` body.
+//! `or_fail`; every assertion is a `#[test]` body.
 
 #[path = "common/dataset.rs"]
 mod dataset;
@@ -33,12 +33,12 @@ use mu_core::services::reputation::{
     resolve_player_kill,
 };
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use serde_json::json;
 
 /// The suite tick base: 50 ms per tick.
 fn tick() -> TickDuration {
-    or_abort(TickDuration::new(50))
+    or_fail(TickDuration::new(50))
 }
 
 /// One online hour as a tick span — the flat decay step, computed the same way
@@ -56,13 +56,13 @@ fn hours(n: u64) -> Ticks {
 /// A gearless clean character — built the only way an external caller can, by
 /// deserialising its wire form with an explicit clean reputation.
 fn clean_char() -> Character {
-    char_with_reputation(&or_abort(serde_json::to_value(Reputation::clean())))
+    char_with_reputation(&or_fail(serde_json::to_value(Reputation::clean())))
 }
 
 /// A character flagged at `stage` with the given decay deadline and a zero kill
 /// tally, seated through the character's reputation wire field.
 fn flagged_char(stage: PkStage, decays_at: Tick) -> Character {
-    let standing = or_abort(serde_json::to_value(Standing::Flagged { stage, decays_at }));
+    let standing = or_fail(serde_json::to_value(Standing::Flagged { stage, decays_at }));
     char_with_reputation(&json!({ "standing": standing, "kills": 0 }))
 }
 
@@ -76,7 +76,7 @@ fn char_with_reputation(reputation: &serde_json::Value) -> Character {
         "unspent_points": 0,
         "zen": 0,
         "placement": {
-            "position": or_abort(serde_json::to_value(TileCoord::new(180, 120).to_world())),
+            "position": or_fail(serde_json::to_value(TileCoord::new(180, 120).to_world())),
             "facing": {"x": 1, "y": 0},
             "movement": "grounded",
             "map": 0
@@ -88,14 +88,14 @@ fn char_with_reputation(reputation: &serde_json::Value) -> Character {
         },
         "reputation": reputation
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// A live instance of the first fighting monster the dataset carries at exactly
 /// `level` — the accelerator reads only its `number`, so an arbitrary valid
 /// placement and health round it out.
 fn monster_of_level(atlas: &Atlas, level: u16) -> MonsterInstance {
-    let number = or_abort(
+    let number = or_fail(
         atlas
             .monsters()
             .find_map(|definition| match definition.role {
@@ -114,7 +114,7 @@ fn monster_of_level(atlas: &Atlas, level: u16) -> MonsterInstance {
 /// A live instance of the first passive NPC the dataset carries — a level-less
 /// victim the accelerator must treat as a no-op.
 fn passive_npc(atlas: &Atlas) -> MonsterInstance {
-    let number = or_abort(
+    let number = or_fail(
         atlas
             .monsters()
             .find_map(|definition| match definition.role {
@@ -153,8 +153,8 @@ fn instance(number: MonsterNumber) -> MonsterInstance {
 /// well inside the band, so the level floor never bites (no de-level).
 fn banded_char(atlas: &Atlas, level: u16, reputation: &serde_json::Value) -> Character {
     let curve = atlas.exp_curve();
-    let floor = or_abort(curve.level(level)).total_to_hold().0;
-    let next = or_abort(curve.level(level + 1)).total_to_hold().0;
+    let floor = or_fail(curve.level(level)).total_to_hold().0;
+    let next = or_fail(curve.level(level + 1)).total_to_hold().0;
     let experience = floor + (next - floor) / 2;
     let json = json!({
         "class": "dark_knight",
@@ -164,7 +164,7 @@ fn banded_char(atlas: &Atlas, level: u16, reputation: &serde_json::Value) -> Cha
         "unspent_points": 0,
         "zen": 0,
         "placement": {
-            "position": or_abort(serde_json::to_value(TileCoord::new(180, 120).to_world())),
+            "position": or_fail(serde_json::to_value(TileCoord::new(180, 120).to_world())),
             "facing": {"x": 1, "y": 0},
             "movement": "grounded",
             "map": 0
@@ -176,37 +176,37 @@ fn banded_char(atlas: &Atlas, level: u16, reputation: &serde_json::Value) -> Cha
         },
         "reputation": reputation
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// The reputation wire value of a clean character.
 fn clean_reputation() -> serde_json::Value {
-    or_abort(serde_json::to_value(Reputation::clean()))
+    or_fail(serde_json::to_value(Reputation::clean()))
 }
 
 /// The reputation wire value of a character flagged at `stage` (the deadline is
 /// irrelevant to the exp-loss fork, which reads only the stage and level band).
 fn flagged_reputation(stage: PkStage) -> serde_json::Value {
-    let standing = or_abort(serde_json::to_value(Standing::Flagged {
+    let standing = or_fail(serde_json::to_value(Standing::Flagged {
         stage,
         decays_at: Tick(1),
     }));
     json!({ "standing": standing, "kills": 0 })
 }
 
-/// The absolute decay deadline of a flagged standing, aborting on a clean one.
+/// The absolute decay deadline of a flagged standing; a clean one fails the test.
 fn deadline(standing: Standing) -> Tick {
     match standing {
         Standing::Flagged { decays_at, .. } => decays_at,
-        Standing::Clean => or_abort(Err::<Tick, _>("expected a flagged standing")),
+        Standing::Clean => or_fail(Err::<Tick, _>("expected a flagged standing")),
     }
 }
 
 /// The experience a death docked — the `lost` an `ExperienceDocked` carries,
-/// aborting when the death docked no experience (the callers seed a mid-band
+/// failing the test when the death docked no experience (the callers seed a mid-band
 /// level so a dock is always produced).
 fn exp_docked(events: &[DeathEvent]) -> Exp {
-    or_abort(
+    or_fail(
         events
             .iter()
             .find_map(|event| match event {
@@ -343,7 +343,7 @@ fn a_flagged_murderers_monster_death_exp_loss_is_heavier_and_never_de_levels() {
     // and the loss is floored so neither ever de-levels.
     let atlas = real_atlas();
     let level = 100u16;
-    let expected = or_abort(Level::new(level));
+    let expected = or_fail(Level::new(level));
 
     let clean = banded_char(&atlas, level, &clean_reputation());
     let flagged = banded_char(&atlas, level, &flagged_reputation(PkStage::SecondStage));

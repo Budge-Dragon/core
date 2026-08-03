@@ -9,7 +9,7 @@
 //! keep-everything town hop with its single-piece consume, and the one-draw
 //! determinism discipline.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body
 //! so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -42,7 +42,7 @@ use mu_core::events::travel::{
 use mu_core::services::death::respawn;
 use mu_core::services::travel::{resolve_warp, traverse_enter_gate, use_town_portal, warp_menu};
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use rng::TestRng;
 
 /// The Lost Tower entry — level 50, 5,000 zen, the deepest first drop point.
@@ -115,7 +115,7 @@ impl RngCore for CountingRng {
 /// the given discovered set — built the only way a character can be, by
 /// deserialising its wire form (every parse gate re-proves on load).
 fn hero(class: &str, lvl: u16, zen: u64, map: u8, discovered: &[u8]) -> Character {
-    or_abort(serde_json::from_value(json!({
+    or_fail(serde_json::from_value(json!({
         "class": class,
         "level": lvl,
         "experience": 0,
@@ -136,24 +136,24 @@ fn hero(class: &str, lvl: u16, zen: u64, map: u8, discovered: &[u8]) -> Characte
 /// legacy shape whose set the parse gate seeds.
 fn fresh_hero(class: &str, lvl: u16, map: u8) -> Character {
     let with_set = hero(class, lvl, 0, map, &[map]);
-    let mut value = or_abort(serde_json::to_value(&with_set));
-    let object = or_abort(value.as_object_mut().ok_or("character is an object"));
+    let mut value = or_fail(serde_json::to_value(&with_set));
+    let object = or_fail(value.as_object_mut().ok_or("character is an object"));
     object.remove("discovered");
-    or_abort(serde_json::from_value(value))
+    or_fail(serde_json::from_value(value))
 }
 
 /// The hero re-loaded with one top-level wire field replaced — the serde-only
 /// mutation path the suites share (a `Character` has no setters).
 fn with_field(character: &Character, field: &str, value: Value) -> Character {
-    let mut wire = or_abort(serde_json::to_value(character));
-    let object = or_abort(wire.as_object_mut().ok_or("character is an object"));
+    let mut wire = or_fail(serde_json::to_value(character));
+    let object = or_fail(wire.as_object_mut().ok_or("character is an object"));
     object.insert(field.to_owned(), value);
-    or_abort(serde_json::from_value(wire))
+    or_fail(serde_json::from_value(wire))
 }
 
 /// The real warp entry at `index`.
 fn warp_view(atlas: &Atlas, index: u16) -> WarpView<'_> {
-    or_abort(
+    or_fail(
         atlas
             .warp_by_index(WarpIndex(index))
             .ok_or("the real warp list carries the index"),
@@ -168,7 +168,7 @@ fn assert_seated(atlas: &Atlas, landing: &Landing, placement: Placement) {
         landing.area.contains(placement.position),
         "the arrival tile sits inside the target gate area"
     );
-    let grid = or_abort(
+    let grid = or_fail(
         atlas
             .terrain_grid(placement.map)
             .ok_or("map has a terrain grid"),
@@ -186,7 +186,7 @@ fn synthetic_warp(cost: u64, min_level: u16) -> Warp {
     Warp {
         index: WarpIndex(99),
         cost_zen: Zen(cost),
-        min_level: or_abort(Level::new(min_level)),
+        min_level: or_fail(Level::new(min_level)),
         target_gate: GateNumber(0),
         provenance: Provenance {
             source_version: SourceVersion::V075,
@@ -200,7 +200,7 @@ fn synthetic_view(warp: &Warp, map: u8, area: (u8, u8, u8, u8)) -> WarpView<'_> 
         warp,
         landing: Landing {
             map: MapNumber(map),
-            area: or_abort(TileArea::new(area.0, area.1, area.2, area.3)).to_world(),
+            area: or_fail(TileArea::new(area.0, area.1, area.2, area.3)).to_world(),
             facing: None,
         },
     }
@@ -208,7 +208,7 @@ fn synthetic_view(warp: &Warp, map: u8, area: (u8, u8, u8, u8)) -> WarpView<'_> 
 
 /// The first walkable tile on `map`, scanned row-major from the real grid.
 fn first_walkable_tile(atlas: &Atlas, map: u8) -> (u8, u8) {
-    let grid = or_abort(
+    let grid = or_fail(
         atlas
             .terrain_grid(MapNumber(map))
             .ok_or("map has a terrain grid"),
@@ -220,12 +220,12 @@ fn first_walkable_tile(atlas: &Atlas, map: u8) -> (u8, u8) {
             }
         }
     }
-    or_abort(Err::<(u8, u8), &str>("the map has a walkable tile"))
+    or_fail(Err::<(u8, u8), &str>("the map has a walkable tile"))
 }
 
 /// The enter gate whose trigger covers the given tile.
 fn gate_at(atlas: &Atlas, map: u8, x: u8, y: u8) -> EnterGateView<'_> {
-    or_abort(
+    or_fail(
         atlas
             .enter_gate_at(MapNumber(map), TileCoord::new(x, y).to_world())
             .ok_or("an enter gate covers the tile"),
@@ -234,7 +234,7 @@ fn gate_at(atlas: &Atlas, map: u8, x: u8, y: u8) -> EnterGateView<'_> {
 
 /// A real item instance of `id` carrying `pieces` in its gauge.
 fn stack(atlas: &Atlas, id: ItemRef, pieces: u8) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
         level: ItemLevel::ZERO,
@@ -242,16 +242,16 @@ fn stack(atlas: &Atlas, id: ItemRef, pieces: u8) -> ItemInstance {
         normal_option: None,
         luck: LuckRoll::Plain,
         skill: SkillRoll::NoSkill,
-        durability: or_abort(Durability::new(pieces, def.durability)),
+        durability: or_fail(Durability::new(pieces, def.durability)),
         augment: CraftedAugment::None,
     }
 }
 
 /// An 8×8 bag holding a `pieces`-strong stack of `id` anchored at [`CELL`].
 fn bag_with(atlas: &Atlas, id: ItemRef, pieces: u8) -> Inventory {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
-    let footprint = or_abort(Footprint::new(def.width, def.height));
-    or_abort(
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
+    let footprint = or_fail(Footprint::new(def.width, def.height));
+    or_fail(
         Inventory::empty(8, 8)
             .place(CELL, footprint, stack(atlas, id, pieces))
             .map_err(|(_, _, reason)| reason),
@@ -266,7 +266,7 @@ fn pieces_at(inventory: &Inventory) -> Option<u8> {
 }
 
 fn zen(value: u64) -> CarriedZen {
-    or_abort(CarriedZen::new(value))
+    or_fail(CarriedZen::new(value))
 }
 
 // --- Warp check order: discovery → level → wings → zen, charged last, atomic.
@@ -427,8 +427,8 @@ fn a_dead_character_is_refused_not_alive_before_any_other_check() {
 
     assert_eq!(outcome, WarpTravelOutcome::NotAlive);
     assert_eq!(
-        or_abort(serde_json::to_string(&unchanged)),
-        or_abort(serde_json::to_string(&traveler)),
+        or_fail(serde_json::to_string(&unchanged)),
+        or_fail(serde_json::to_string(&traveler)),
         "the input is returned byte-identical"
     );
 }
@@ -829,7 +829,7 @@ fn the_lock_walk_in_unlock_loop_over_real_data() {
     // LOCKED: the menu names discovery as the ONLY unmet requirement, and the
     // command agrees.
     let menu = warp_menu(&traveler, &atlas, Wings::None);
-    let status = or_abort(
+    let status = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
@@ -874,7 +874,7 @@ fn the_lock_walk_in_unlock_loop_over_real_data() {
 
     // UNLOCKED: the menu flips and the same entry now warps, fee debited.
     let menu = warp_menu(&on_tower, &atlas, Wings::None);
-    let status = or_abort(
+    let status = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
@@ -960,7 +960,7 @@ fn a_locked_entry_carries_the_complete_reason_set_in_check_order() {
 
     // Lost Tower: undiscovered, under-leveled, unaffordable — all three, in
     // check order.
-    let tower = or_abort(
+    let tower = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
@@ -981,7 +981,7 @@ fn a_locked_entry_carries_the_complete_reason_set_in_check_order() {
     }
 
     // Lorencia: discovered and level-15 >= 10 — only the fee is unmet.
-    let home = or_abort(
+    let home = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LORENCIA_ENTRY))
             .ok_or("the menu lists the Lorencia entry"),
@@ -1076,7 +1076,7 @@ fn the_class_effective_requirement_is_identical_in_projection_and_command() {
     let gladiator = hero("magic_gladiator", 30, 10_000, 0, &[0, 4]);
 
     let menu = warp_menu(&gladiator, &atlas, Wings::None);
-    let tower = or_abort(
+    let tower = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
@@ -1102,7 +1102,7 @@ fn the_class_effective_requirement_is_identical_in_projection_and_command() {
     // the fraction exactly as the command applies it.
     let older = hero("magic_gladiator", 40, 10_000, 0, &[0, 4]);
     let menu = warp_menu(&older, &atlas, Wings::None);
-    let tower = or_abort(
+    let tower = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
@@ -1117,7 +1117,7 @@ fn a_stale_menu_cannot_buy_a_warp_the_character_no_longer_qualifies_for() {
 
     // The snapshot says Available...
     let menu = warp_menu(&funded, &atlas, Wings::None);
-    let tower = or_abort(
+    let tower = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(LOST_TOWER_ENTRY))
             .ok_or("the menu lists the Lost Tower entry"),
@@ -1173,7 +1173,7 @@ fn a_field_scroll_lands_in_the_towns_gate_alive_with_vitals_and_buffs_intact() {
     match outcome {
         TownPortalOutcome::Arrived { placement } => {
             assert_eq!(placement.map, MapNumber(0), "Lorencia, Dungeon's town");
-            let (gate, _env) = or_abort(
+            let (gate, _env) = or_fail(
                 atlas
                     .town_gate_for_map(MapNumber(1))
                     .ok_or("Dungeon resolves a town gate"),
@@ -1279,8 +1279,8 @@ fn a_dead_characters_scroll_does_nothing_and_is_not_consumed() {
 
     assert_eq!(outcome, TownPortalOutcome::NotAlive);
     assert_eq!(
-        or_abort(serde_json::to_string(&unchanged)),
-        or_abort(serde_json::to_string(&dead)),
+        or_fail(serde_json::to_string(&unchanged)),
+        or_fail(serde_json::to_string(&dead)),
         "the input is returned byte-identical"
     );
     assert_eq!(pieces_at(&bag), Some(1), "the scroll stack is whole");
@@ -1344,7 +1344,7 @@ fn the_town_gate_arrival_is_total_for_every_real_map_and_the_fallback() {
         );
         match outcome {
             TownPortalOutcome::Arrived { placement } => {
-                let grid = or_abort(
+                let grid = or_fail(
                     atlas
                         .terrain_grid(placement.map)
                         .ok_or("the town map has a terrain grid"),
@@ -1484,8 +1484,8 @@ fn identical_inputs_and_seed_produce_a_byte_identical_character() {
     );
     assert_eq!(outcome_a, outcome_b);
     assert_eq!(
-        or_abort(serde_json::to_string(&a)),
-        or_abort(serde_json::to_string(&b)),
+        or_fail(serde_json::to_string(&a)),
+        or_fail(serde_json::to_string(&b)),
         "same placement, same wallet, same discovered set"
     );
 
@@ -1506,8 +1506,8 @@ fn identical_inputs_and_seed_produce_a_byte_identical_character() {
     );
     assert_eq!(outcome_a, outcome_b);
     assert_eq!(
-        or_abort(serde_json::to_string(&a)),
-        or_abort(serde_json::to_string(&b))
+        or_fail(serde_json::to_string(&a)),
+        or_fail(serde_json::to_string(&b))
     );
 }
 
@@ -1770,7 +1770,7 @@ fn a_quadruply_failing_icarus_entry_lists_all_four_reasons_in_check_order() {
     let novice = hero("dark_knight", 100, 5_000, 0, &[0]);
 
     let menu = warp_menu(&novice, &atlas, Wings::None);
-    let icarus = or_abort(
+    let icarus = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(ICARUS_ENTRY))
             .ok_or("the menu lists the Icarus entry"),
@@ -1791,13 +1791,13 @@ fn a_quadruply_failing_icarus_entry_lists_all_four_reasons_in_check_order() {
         WarpAvailability::Available => panic!("a quadruply-failing entry is locked"),
     }
     assert_eq!(
-        or_abort(serde_json::to_string(&icarus.availability)),
+        or_fail(serde_json::to_string(&icarus.availability)),
         r#"{"kind":"locked","reasons":[{"kind":"not_discovered"},{"kind":"level_too_low","required":170},{"kind":"cannot_fly"},{"kind":"insufficient_zen","cost":10000}]}"#
     );
 
     // WF-PROJ-3: the same hero's Tarkan entry never carries CannotFly — a
     // Ground destination has no wings reason.
-    let tarkan = or_abort(
+    let tarkan = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(TARKAN_ENTRY))
             .ok_or("the menu lists the Tarkan entry"),
@@ -1826,7 +1826,7 @@ fn cannot_fly_is_the_sole_lock_for_a_qualified_wingless_hero_and_wings_flip_it()
     let elf = hero("fairy_elf", 200, 50_000, 0, &[0, 10]);
 
     let menu = warp_menu(&elf, &atlas, Wings::None);
-    let icarus = or_abort(
+    let icarus = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(ICARUS_ENTRY))
             .ok_or("the menu lists the Icarus entry"),
@@ -1840,7 +1840,7 @@ fn cannot_fly_is_the_sole_lock_for_a_qualified_wingless_hero_and_wings_flip_it()
     }
 
     let menu = warp_menu(&elf, &atlas, Wings::Equipped);
-    let icarus = or_abort(
+    let icarus = or_fail(
         menu.iter()
             .find(|status| status.index == WarpIndex(ICARUS_ENTRY))
             .ok_or("the menu lists the Icarus entry"),

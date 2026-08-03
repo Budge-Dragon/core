@@ -10,16 +10,8 @@
 //! the loot service's `Drop::Item` bridges cleanly into the roll, and every
 //! rolled item's footprint places into an empty grid and equips into exactly the
 //! slots its kind permits.
-//!
-//! This file carries its own dataset loader (the movement suite's `common`
-//! helpers are unused here); load failures route through `or_abort` so no banned
-//! suppressor is needed outside a `#[test]` body.
-
-use std::io::Write;
-use std::path::PathBuf;
 
 use rand_core::RngCore;
-use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::class::CharacterClass;
@@ -42,24 +34,10 @@ use mu_core::components::spatial::Facing;
 use mu_core::components::stats::Stats;
 use mu_core::components::tile::TileCoord;
 use mu_core::components::units::{ChancePer10000, Exp, ItemLevel, Level, MapNumber, Tick};
-use mu_core::data::ancient_sets::AncientSet;
-use mu_core::data::atlas::{Atlas, StaticData};
-use mu_core::data::box_drops::BoxDrop;
-use mu_core::data::chaos_mixes::ChaosMix;
-use mu_core::data::classes::ClassRecord;
-use mu_core::data::common::DataFile;
-use mu_core::data::exp_tables::ExpTable;
-use mu_core::data::game_config::{EquipmentSlot, GameConfig};
-use mu_core::data::gates_warps::GateWarpRecord;
+use mu_core::data::atlas::Atlas;
+use mu_core::data::game_config::EquipmentSlot;
 use mu_core::data::item_definitions::{ItemDefinition, ItemKind, WeaponHandling};
-use mu_core::data::map_definitions::MapDefinition;
-use mu_core::data::monster_definitions::MonsterDefinition;
-use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::option_roll::OptionRollPolicy;
-use mu_core::data::skills::Skill;
-use mu_core::data::spawns::Spawn;
-use mu_core::data::special_drops::SpecialDropRecord;
-use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::inventory::{EquipOutcome, EquipRejection};
 use mu_core::events::loot::Drop;
@@ -70,71 +48,10 @@ use mu_core::services::inventory::{
 use mu_core::services::item_roll::roll_dropped_item;
 use mu_core::services::loot::resolve_kill_drops;
 
-// --- Self-contained dataset harness (load failures abort, never unwrap). ---
+#[path = "common/dataset.rs"]
+mod dataset;
 
-fn or_abort<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(error) => {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "item_roll_integration harness: {error}");
-            std::process::abort()
-        }
-    }
-}
-
-fn data_path(name: &str) -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("..");
-    path.push("data");
-    path.push(format!("{name}.json"));
-    path
-}
-
-fn load<T: DeserializeOwned>(name: &str) -> DataFile<T> {
-    let text = or_abort(std::fs::read_to_string(data_path(name)));
-    or_abort(serde_json::from_str(&text))
-}
-
-fn load_terrain() -> Vec<MapTerrain> {
-    (0u8..=10)
-        .map(|map| {
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.push("..");
-            path.push("data");
-            path.push("terrain");
-            path.push(format!("{map}.bin"));
-            MapTerrain {
-                map: MapNumber(map),
-                bytes: or_abort(TerrainBytes::new(or_abort(std::fs::read(&path)))),
-            }
-        })
-        .collect()
-}
-
-fn real_atlas() -> Atlas {
-    let data = StaticData {
-        maps: load::<MapDefinition>("map_definitions"),
-        gates_warps: load::<GateWarpRecord>("gates_warps"),
-        monsters: load::<MonsterDefinition>("monster_definitions"),
-        spawns: load::<Spawn>("spawns"),
-        skills: load::<Skill>("skills"),
-        items: load::<ItemDefinition>("item_definitions"),
-        box_drops: load::<BoxDrop>("box_drops"),
-        special_drops: load::<SpecialDropRecord>("special_drops"),
-        ancient_sets: load::<AncientSet>("ancient_sets"),
-        chaos_mixes: load::<ChaosMix>("chaos_mixes"),
-        shops: load::<MerchantShop>("npc_shops"),
-        classes: load::<ClassRecord>("classes"),
-        exp_tables: load::<ExpTable>("exp_tables"),
-        game_config: load::<GameConfig>("game_config"),
-        mini_games: DataFile {
-            records: Vec::new(),
-        },
-        terrain: load_terrain(),
-    };
-    or_abort(Atlas::parse(data))
-}
+use dataset::{or_fail, real_atlas};
 
 /// Deterministic `SplitMix64` — the shared replayable stream.
 struct TestRng {
@@ -205,14 +122,14 @@ impl RngCore for ForcedCategoryRng {
 fn category_word_for(target: u32) -> u32 {
     let denom = u64::from(ChancePer10000::DENOMINATOR);
     let word = (u64::from(2 * target + 1) << 32) / (2 * denom);
-    or_abort(u32::try_from(word))
+    or_fail(u32::try_from(word))
 }
 
 /// A level-100 victim on Lorencia standing in for a real kill; only its number,
 /// map, and level drive drop resolution.
 fn drop_victim(atlas: &Atlas) -> MonsterInstance {
     MonsterInstance {
-        number: or_abort(atlas.monsters().next().ok_or("the dataset ships monsters")).number,
+        number: or_fail(atlas.monsters().next().ok_or("the dataset ships monsters")).number,
         placement: Placement {
             position: TileCoord::new(10, 10).to_world(),
             facing: Facing::POS_X,
@@ -356,7 +273,7 @@ const ROSTER: [CharacterClass; 8] = [
 fn maxed(class: CharacterClass) -> Wearer {
     Wearer {
         class,
-        level: or_abort(Level::new(400)),
+        level: or_fail(Level::new(400)),
         stats: Stats::Standard {
             strength: u16::MAX,
             agility: u16::MAX,
@@ -530,8 +447,8 @@ fn a_fixed_roll_is_bit_for_bit_deterministic() {
     let ia = roll_dropped_item(def, level, ItemRarity::Excellent, &always(), &mut a);
     let ib = roll_dropped_item(def, level, ItemRarity::Excellent, &always(), &mut b);
     assert_eq!(
-        or_abort(serde_json::to_string(&ia)),
-        or_abort(serde_json::to_string(&ib)),
+        or_fail(serde_json::to_string(&ia)),
+        or_fail(serde_json::to_string(&ib)),
         "identical serialized instances"
     );
     assert_eq!(a.next_u64(), b.next_u64(), "identical word consumption");
@@ -590,7 +507,7 @@ fn loot_drop_item_bridges_into_the_roll() {
 fn every_droppable_footprint_places_into_an_empty_grid() {
     let atlas = real_atlas();
     for def in droppable(&atlas) {
-        let footprint = or_abort(Footprint::new(def.width, def.height));
+        let footprint = or_fail(Footprint::new(def.width, def.height));
         let mut rng = TestRng::new(1);
         let instance = roll_dropped_item(
             def,
@@ -780,7 +697,7 @@ fn the_normal_drop_pool_still_carries_excellent_incapable_kinds() {
 
 /// The first shipped definition whose kind matches `want`.
 fn find_kind(atlas: &Atlas, want: impl Fn(&ItemKind) -> bool) -> &ItemDefinition {
-    or_abort(
+    or_fail(
         atlas
             .items()
             .find(|def| want(&def.kind))
@@ -832,7 +749,7 @@ fn a_two_handed_weapon_requires_a_free_paired_hand() {
         one_handed,
         EquipmentSlot::RightHand,
         &atlas,
-        &or_abort(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
+        &or_fail(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
     );
     assert!(matches!(occupied, EquipOutcome::Equipped { .. }));
 
@@ -842,7 +759,7 @@ fn a_two_handed_weapon_requires_a_free_paired_hand() {
         two_handed,
         EquipmentSlot::LeftHand,
         &atlas,
-        &or_abort(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
+        &or_fail(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
     );
     assert!(
         matches!(
@@ -867,7 +784,7 @@ fn a_two_handed_weapon_equips_into_a_fully_empty_pair() {
         two_handed,
         EquipmentSlot::LeftHand,
         &atlas,
-        &or_abort(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
+        &or_fail(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
     );
     assert!(matches!(
         outcome,
@@ -890,7 +807,7 @@ fn an_offhand_cannot_join_a_hand_paired_with_a_two_hander() {
         two_handed,
         EquipmentSlot::LeftHand,
         &atlas,
-        &or_abort(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
+        &or_fail(an_eligible_wearer(two_handed).ok_or("two-hander has a class")),
     );
     let (equipment, outcome) = equip(
         equipment,
@@ -898,7 +815,7 @@ fn an_offhand_cannot_join_a_hand_paired_with_a_two_hander() {
         shield,
         EquipmentSlot::RightHand,
         &atlas,
-        &or_abort(an_eligible_wearer(shield).ok_or("shield has a class")),
+        &or_fail(an_eligible_wearer(shield).ok_or("shield has a class")),
     );
     assert!(
         matches!(
@@ -923,7 +840,7 @@ fn a_bow_admits_ammunition_beside_it_but_never_a_shield() {
     let arrows = find_kind(&atlas, |kind| matches!(kind, ItemKind::Arrows { .. }));
     let shield = find_kind(&atlas, |kind| matches!(kind, ItemKind::Shield { .. }));
     let one_handed = find_kind(&atlas, is_one_handed_weapon);
-    let elf = or_abort(an_eligible_wearer(bow).ok_or("bow has a class"));
+    let elf = or_fail(an_eligible_wearer(bow).ok_or("bow has a class"));
 
     // Bow first, then ammunition into the paired hand.
     let (equipment, worn_bow) = equip(
@@ -988,7 +905,7 @@ fn a_bow_admits_ammunition_beside_it_but_never_a_shield() {
         shield,
         EquipmentSlot::LeftHand,
         &atlas,
-        &or_abort(an_eligible_wearer(shield).ok_or("shield has a class")),
+        &or_fail(an_eligible_wearer(shield).ok_or("shield has a class")),
     );
     assert!(matches!(
         refused,
@@ -1013,7 +930,7 @@ fn a_bow_admits_ammunition_beside_it_but_never_a_shield() {
         one_handed,
         EquipmentSlot::RightHand,
         &atlas,
-        &or_abort(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
+        &or_fail(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
     );
     assert!(matches!(
         refused,
@@ -1036,7 +953,7 @@ fn two_one_handed_items_fill_both_hands() {
         one_handed,
         EquipmentSlot::LeftHand,
         &atlas,
-        &or_abort(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
+        &or_fail(an_eligible_wearer(one_handed).ok_or("one-hander has a class")),
     );
     assert!(matches!(first, EquipOutcome::Equipped { .. }));
     let (equipment, second) = equip(
@@ -1045,7 +962,7 @@ fn two_one_handed_items_fill_both_hands() {
         shield,
         EquipmentSlot::RightHand,
         &atlas,
-        &or_abort(an_eligible_wearer(shield).ok_or("shield has a class")),
+        &or_fail(an_eligible_wearer(shield).ok_or("shield has a class")),
     );
     assert!(
         matches!(second, EquipOutcome::Equipped { .. }),
@@ -1059,7 +976,7 @@ fn two_one_handed_items_fill_both_hands() {
 fn equipping_an_occupied_slot_is_rejected() {
     let atlas = real_atlas();
     let helm = find_kind(&atlas, |kind| matches!(kind, ItemKind::Helm { .. }));
-    let wearer = or_abort(an_eligible_wearer(helm).ok_or("helm has a class"));
+    let wearer = or_fail(an_eligible_wearer(helm).ok_or("helm has a class"));
 
     let (equipment, first) = equip(
         Equipment::empty(),
@@ -1144,7 +1061,7 @@ fn reconcile_equipment_rejects_a_worn_item_whose_options_contradict_its_definiti
     let mut forged_instance = instance_of(weapon, 1);
     forged_instance.roll = RarityRoll::Excellent {
         options: ExcellentOptions::Armor {
-            options: or_abort(ExcellentArmorSet::from_options([
+            options: or_fail(ExcellentArmorSet::from_options([
                 ExcellentArmorOption::MaxHealth,
             ])),
         },
@@ -1205,7 +1122,7 @@ fn live_equip_rejects_a_malformed_item_through_the_shared_proof() {
     let mut forged = instance_of(weapon, 1);
     forged.roll = RarityRoll::Excellent {
         options: ExcellentOptions::Armor {
-            options: or_abort(ExcellentArmorSet::from_options([
+            options: or_fail(ExcellentArmorSet::from_options([
                 ExcellentArmorOption::MaxHealth,
             ])),
         },
@@ -1235,7 +1152,7 @@ fn reconcile_inventory_rejects_a_tampered_footprint_and_passes_a_faithful_one() 
     let atlas = real_atlas();
     let weapon = find_kind(&atlas, is_one_handed_weapon);
     let anchor = Cell { row: 0, col: 0 };
-    let faithful = or_abort(Footprint::new(weapon.width, weapon.height));
+    let faithful = or_fail(Footprint::new(weapon.width, weapon.height));
     // A footprint that cannot equal the real dimensions — the shrink-to-pack-more
     // cheat.
     let (tampered_w, tampered_h) = if weapon.width != 1 || weapon.height != 1 {
@@ -1243,7 +1160,7 @@ fn reconcile_inventory_rejects_a_tampered_footprint_and_passes_a_faithful_one() 
     } else {
         (2, 1)
     };
-    let tampered = or_abort(Footprint::new(tampered_w, tampered_h));
+    let tampered = or_fail(Footprint::new(tampered_w, tampered_h));
 
     let (faithful_inv, _) = place_item(
         Inventory::empty(15, 8),

@@ -9,16 +9,8 @@
 //! levels computed from the item dataset, and the money-drop coupling — every
 //! oracle is derived by hand from the rules and the data, never re-transcribed
 //! from a production expression.
-//!
-//! This file carries its own dataset loader rather than sharing `common` (whose
-//! ambient-simulation helpers are unused here); load failures route through
-//! `or_abort` so no banned suppressor is needed outside a `#[test]` body.
-
-use std::io::Write;
-use std::path::PathBuf;
 
 use rand_core::RngCore;
-use serde::de::DeserializeOwned;
 
 use mu_core::components::active_effect::ActiveEffects;
 use mu_core::components::combat_profile::CombatTarget;
@@ -33,25 +25,12 @@ use mu_core::components::tile::{TerrainGrid, TileCoord};
 use mu_core::components::units::{
     DurationMs, Exp, ItemLevel, Level, MapNumber, Resistance, Tick, TickDuration, Zen,
 };
-use mu_core::data::ancient_sets::AncientSet;
-use mu_core::data::atlas::{Atlas, StaticData};
-use mu_core::data::box_drops::BoxDrop;
-use mu_core::data::chaos_mixes::ChaosMix;
-use mu_core::data::classes::ClassRecord;
-use mu_core::data::common::{DataFile, ItemRef, MonsterNumber};
-use mu_core::data::exp_tables::ExpTable;
-use mu_core::data::game_config::GameConfig;
-use mu_core::data::gates_warps::GateWarpRecord;
-use mu_core::data::item_definitions::ItemDefinition;
-use mu_core::data::map_definitions::MapDefinition;
+use mu_core::data::atlas::Atlas;
+use mu_core::data::common::{ItemRef, MonsterNumber};
 use mu_core::data::monster_definitions::{
-    MobBehavior, MonsterCombat, MonsterDefinition, MonsterRole, SafezoneDisposition,
+    MobBehavior, MonsterCombat, MonsterRole, SafezoneDisposition,
 };
-use mu_core::data::npc_shops::MerchantShop;
 use mu_core::data::skills::Skill;
-use mu_core::data::spawns::Spawn;
-use mu_core::data::special_drops::SpecialDropRecord;
-use mu_core::data::terrain::{MapTerrain, TerrainBytes};
 use mu_core::entities::character::Character;
 use mu_core::entities::monster_instance::MonsterInstance;
 use mu_core::events::combat::AttackOutcome;
@@ -68,71 +47,10 @@ use mu_core::services::monster_ai::{AiTarget, decide_monster_action};
 use mu_core::services::profile::{character_profile, monster_profile};
 use mu_core::services::skills::{DamagingSkillRef, Designation, SkillRouting, cast, route};
 
-// --- Self-contained dataset harness (load failures abort, never unwrap). ---
+#[path = "common/dataset.rs"]
+mod dataset;
 
-fn or_abort<T, E: std::fmt::Display>(result: Result<T, E>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(error) => {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "combat_simulation harness: load failure: {error}");
-            std::process::abort()
-        }
-    }
-}
-
-fn data_path(name: &str) -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("..");
-    path.push("data");
-    path.push(format!("{name}.json"));
-    path
-}
-
-fn load<T: DeserializeOwned>(name: &str) -> DataFile<T> {
-    let text = or_abort(std::fs::read_to_string(data_path(name)));
-    or_abort(serde_json::from_str(&text))
-}
-
-fn load_terrain() -> Vec<MapTerrain> {
-    (0u8..=10)
-        .map(|map| {
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.push("..");
-            path.push("data");
-            path.push("terrain");
-            path.push(format!("{map}.bin"));
-            MapTerrain {
-                map: MapNumber(map),
-                bytes: or_abort(TerrainBytes::new(or_abort(std::fs::read(&path)))),
-            }
-        })
-        .collect()
-}
-
-fn real_atlas() -> Atlas {
-    let data = StaticData {
-        maps: load::<MapDefinition>("map_definitions"),
-        gates_warps: load::<GateWarpRecord>("gates_warps"),
-        monsters: load::<MonsterDefinition>("monster_definitions"),
-        spawns: load::<Spawn>("spawns"),
-        skills: load::<Skill>("skills"),
-        items: load::<ItemDefinition>("item_definitions"),
-        box_drops: load::<BoxDrop>("box_drops"),
-        special_drops: load::<SpecialDropRecord>("special_drops"),
-        ancient_sets: load::<AncientSet>("ancient_sets"),
-        chaos_mixes: load::<ChaosMix>("chaos_mixes"),
-        shops: load::<MerchantShop>("npc_shops"),
-        classes: load::<ClassRecord>("classes"),
-        exp_tables: load::<ExpTable>("exp_tables"),
-        game_config: load::<GameConfig>("game_config"),
-        mini_games: DataFile {
-            records: Vec::new(),
-        },
-        terrain: load_terrain(),
-    };
-    or_abort(Atlas::parse(data))
-}
+use dataset::{or_fail, real_atlas};
 
 /// Deterministic `SplitMix64` — the shared replayable stream.
 struct TestRng {
@@ -173,7 +91,7 @@ impl RngCore for TestRng {
 
 /// A plausible gearless Dark Knight killer at the given level, strength, and tile.
 fn dark_knight(level: u16, strength: u16, tile: TileCoord) -> Character {
-    let position = or_abort(serde_json::to_value(tile.to_world()));
+    let position = or_fail(serde_json::to_value(tile.to_world()));
     let json = serde_json::json!({
         "class": "dark_knight",
         "level": level,
@@ -188,7 +106,7 @@ fn dark_knight(level: u16, strength: u16, tile: TileCoord) -> Character {
             "ability": {"current": 400, "max": 400}
         }
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// The first fighting monster at or below `max_level`, with its combat block and
@@ -197,7 +115,7 @@ fn low_level_monster(
     atlas: &Atlas,
     max_level: u16,
 ) -> (MonsterNumber, MonsterCombat, PerElement<Resistance>) {
-    or_abort(
+    or_fail(
         atlas
             .monsters()
             .find_map(|definition| match &definition.role {
@@ -270,7 +188,7 @@ fn lightning_bolt() -> Skill {
         "learn": {"level": 0, "energy": 0, "command": 0},
         "classes": []
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 fn town_tile(tile: TileCoord) -> Placement {
@@ -305,7 +223,7 @@ fn open_field_run(grid: &TerrainGrid, length: usize) -> Vec<TileCoord> {
             }
         }
     }
-    or_abort(Err::<Vec<TileCoord>, _>(
+    or_fail(Err::<Vec<TileCoord>, _>(
         "Lorencia has no open-field run of that length",
     ))
 }
@@ -425,8 +343,8 @@ fn a_shoved_monster_re_chases_its_attacker() {
         .clone();
 
     let field = open_field_run(&grid, 8);
-    let caster_tile = *or_abort(field.first().ok_or("the field run has a first tile"));
-    let monster_tile = *or_abort(field.get(3).ok_or("the field run has a fourth tile"));
+    let caster_tile = *or_fail(field.first().ok_or("the field run has a first tile"));
+    let monster_tile = *or_fail(field.get(3).ok_or("the field run has a fourth tile"));
     let caster = dark_knight(50, 200, caster_tile);
     let target = CombatTarget::new(
         monster_profile(&combat, &zero_resistances(), combat.level),
@@ -786,8 +704,8 @@ fn a_landed_lightning_strike_jiggles_its_target_within_one_tile_per_axis() {
     let (_, combat, _) = low_level_monster(&atlas, 20);
     let grid = atlas.terrain_grid(MapNumber(0)).unwrap().clone();
     let field = open_field_run(&grid, 8);
-    let caster_tile = *or_abort(field.first().ok_or("the field run has a first tile"));
-    let target_tile = *or_abort(field.get(1).ok_or("the field run has a second tile"));
+    let caster_tile = *or_fail(field.first().ok_or("the field run has a first tile"));
+    let target_tile = *or_fail(field.get(1).ok_or("the field run has a second tile"));
     let caster = dark_knight(50, 200, caster_tile);
     let start = target_tile.to_world();
     let target = CombatTarget::new(

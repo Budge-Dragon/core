@@ -8,13 +8,13 @@
 //! empty-`Equipment` identity (E4). Every expected figure is hand-derived in a
 //! comment from the spec §0.5 formulas over the real definitions.
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]`
+//! Load failures route through `or_fail`; every assertion is a `#[test]`
 //! body so `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
 mod dataset;
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use mu_core::components::element::Element;
 use mu_core::components::equipment::{Equipment, EquipmentSlot};
 use mu_core::components::item_instance::{
@@ -123,10 +123,10 @@ const DINORANT: ItemRef = ItemRef {
 
 /// A fresh full-gauge Normal instance of real item `id` at plus-`level`.
 fn item_at(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
-    let def = or_abort(atlas.item(id).ok_or("unknown item"));
+    let def = or_fail(atlas.item(id).ok_or("unknown item"));
     ItemInstance {
         item: id,
-        level: or_abort(ItemLevel::new(level)),
+        level: or_fail(ItemLevel::new(level)),
         roll: RarityRoll::Normal,
         normal_option: None,
         luck: LuckRoll::Plain,
@@ -140,7 +140,7 @@ fn item_at(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
 fn broken(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
     let mut instance = item_at(atlas, id, level);
     let max = instance.durability.max();
-    instance.durability = or_abort(Durability::new(0, max));
+    instance.durability = or_fail(Durability::new(0, max));
     instance
 }
 
@@ -148,7 +148,7 @@ fn broken(atlas: &Atlas, id: ItemRef, level: u8) -> ItemInstance {
 /// test has — with the exact stats each hand-derivation reads.
 fn character(class: &str, level: u16, str_agi_vit_ene: (u16, u16, u16, u16)) -> Character {
     let (strength, agility, vitality, energy) = str_agi_vit_ene;
-    or_abort(serde_json::from_value(serde_json::json!({
+    or_fail(serde_json::from_value(serde_json::json!({
         "class": class,
         "level": level,
         "experience": 0,
@@ -250,8 +250,8 @@ fn a_real_wing_adds_defense_and_carries_its_percents_at_their_fold_positions() {
     let worn = Equipment::empty().with(EquipmentSlot::Wings, item_at(&atlas, WINGS_OF_SATAN, 2));
     let equipped = equipped_profile(&hero, &worn, &atlas);
     assert_eq!(equipped.defense(), 33);
-    assert_eq!(equipped.wing_damage_pct(), or_abort(Percent::new(16)));
-    assert_eq!(equipped.wing_absorb_pct(), or_abort(Percent::new(16)));
+    assert_eq!(equipped.wing_damage_pct(), or_fail(Percent::new(16)));
+    assert_eq!(equipped.wing_absorb_pct(), or_fail(Percent::new(16)));
     assert_eq!(equipped.incoming_damage_reduction(), Percent::ZERO);
 }
 
@@ -403,7 +403,7 @@ fn a_real_weapon_with_option_and_luck_widens_the_span_and_the_critical_chance() 
         (equipped.physical().min(), equipped.physical().max()),
         (70, 97)
     );
-    assert_eq!(equipped.critical_chance(), or_abort(Percent::new(5)));
+    assert_eq!(equipped.critical_chance(), or_fail(Percent::new(5)));
 }
 
 #[test]
@@ -418,7 +418,7 @@ fn an_excellent_real_weapon_folds_implicit_per_level_and_the_damage_multiplier()
     let mut sword = item_at(&atlas, SHORT_SWORD, 3);
     sword.roll = RarityRoll::Excellent {
         options: ExcellentOptions::Weapon {
-            options: or_abort(ExcellentWeaponSet::from_options([
+            options: or_fail(ExcellentWeaponSet::from_options([
                 ExcellentWeaponOption::DamagePct,
                 ExcellentWeaponOption::DamagePerLevel,
             ])),
@@ -435,14 +435,14 @@ fn an_excellent_real_weapon_folds_implicit_per_level_and_the_damage_multiplier()
     let mut chance_sword = item_at(&atlas, SHORT_SWORD, 0);
     chance_sword.roll = RarityRoll::Excellent {
         options: ExcellentOptions::Weapon {
-            options: or_abort(ExcellentWeaponSet::from_options([
+            options: or_fail(ExcellentWeaponSet::from_options([
                 ExcellentWeaponOption::ExcellentDamageChance,
             ])),
         },
     };
     let worn = Equipment::empty().with(EquipmentSlot::RightHand, chance_sword);
     let equipped = equipped_profile(&hero, &worn, &atlas);
-    assert_eq!(equipped.excellent_chance(), or_abort(Percent::new(10)));
+    assert_eq!(equipped.excellent_chance(), or_fail(Percent::new(10)));
 }
 
 #[test]
@@ -456,7 +456,7 @@ fn excellent_armor_damage_decrease_folds_to_the_pre_floor_field() {
         let mut piece = item_at(&atlas, id, 0);
         piece.roll = RarityRoll::Excellent {
             options: ExcellentOptions::Armor {
-                options: or_abort(ExcellentArmorSet::from_options([
+                options: or_fail(ExcellentArmorSet::from_options([
                     ExcellentArmorOption::DamageDecrease,
                 ])),
             },
@@ -465,14 +465,14 @@ fn excellent_armor_damage_decrease_folds_to_the_pre_floor_field() {
     };
     let one = Equipment::empty().with(EquipmentSlot::Armor, dd(ARMOR));
     let equipped = equipped_profile(&hero, &one, &atlas);
-    assert_eq!(equipped.incoming_dd_pct(), or_abort(Percent::new(4)));
+    assert_eq!(equipped.incoming_dd_pct(), or_fail(Percent::new(4)));
     assert_eq!(equipped.incoming_damage_reduction(), Percent::ZERO);
 
     let two = Equipment::empty()
         .with(EquipmentSlot::Armor, dd(ARMOR))
         .with(EquipmentSlot::Helm, dd(HELM));
     let equipped = equipped_profile(&hero, &two, &atlas);
-    assert_eq!(equipped.incoming_dd_pct(), or_abort(Percent::new(8)));
+    assert_eq!(equipped.incoming_dd_pct(), or_fail(Percent::new(8)));
 }
 
 #[test]
@@ -528,7 +528,7 @@ fn a_worn_pet_folds_its_data_carried_bonuses() {
     let equipped = equipped_profile(&hero, &angel, &atlas);
     assert_eq!(
         equipped.incoming_damage_reduction(),
-        or_abort(Percent::new(20))
+        or_fail(Percent::new(20))
     );
     assert_eq!(equipped.physical(), gearless.physical());
     assert_eq!(equipped.defense(), gearless.defense());
@@ -537,7 +537,7 @@ fn a_worn_pet_folds_its_data_carried_bonuses() {
     let equipped = equipped_profile(&hero, &dinorant, &atlas);
     assert_eq!(
         equipped.incoming_damage_reduction(),
-        or_abort(Percent::new(10))
+        or_fail(Percent::new(10))
     );
     assert_eq!(equipped.physical(), gearless.physical());
 }

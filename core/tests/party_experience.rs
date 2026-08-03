@@ -5,7 +5,7 @@
 //! qualification exclusions (dead / off-map / out-of-range / safezone-standing
 //! shrink the pool).
 //!
-//! Load failures route through `or_abort`; every assertion is a `#[test]` body so
+//! Load failures route through `or_fail`; every assertion is a `#[test]` body so
 //! `unwrap` is exempt.
 
 #[path = "common/dataset.rs"]
@@ -26,7 +26,7 @@ use mu_core::services::chance::uniform_in_inclusive;
 use mu_core::services::experience::award_kill_experience;
 use mu_core::services::party::{MemberFact, distribute_kill_experience};
 
-use dataset::{or_abort, real_atlas};
+use dataset::{or_fail, real_atlas};
 use rng::TestRng;
 
 fn pos(x: u8, y: u8) -> WorldPos {
@@ -43,7 +43,7 @@ fn safe_at(tiles: &[(u8, u8)]) -> TerrainGrid {
     let mut safe = [0u64; 1024];
     for &(x, y) in tiles {
         let bit = (usize::from(y) << 8) | usize::from(x);
-        let word = or_abort(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
+        let word = or_fail(safe.get_mut(bit >> 6).ok_or("tile bit within the grid"));
         *word |= 1u64 << (bit & 63);
     }
     TerrainGrid::from_bitsets([u64::MAX; 1024], safe)
@@ -54,7 +54,7 @@ fn map0() -> MapNumber {
 }
 
 fn level(value: u16) -> Level {
-    or_abort(Level::new(value))
+    or_fail(Level::new(value))
 }
 
 fn active(slot: u8) -> PartyMember {
@@ -98,7 +98,7 @@ fn knight(lvl: u16, exp: u64) -> Character {
         "placement": {"position": {"x": 0, "y": 0}, "facing": {"x": 1, "y": 0}, "movement": "grounded", "map": 0},
         "vitals": {"health": {"current": 500, "max": 500}, "mana": {"current": 400, "max": 400}, "ability": {"current": 400, "max": 400}}
     });
-    or_abort(serde_json::from_value(json))
+    or_fail(serde_json::from_value(json))
 }
 
 /// The first seed whose one jitter draw over the atlas band resolves to exactly
@@ -111,7 +111,7 @@ fn seed_with_jitter(atlas: &Atlas, target: u16) -> u64 {
             return seed;
         }
     }
-    or_abort(Err::<u64, _>("no seed in range produced the target jitter"))
+    or_fail(Err::<u64, _>("no seed in range produced the target jitter"))
 }
 
 #[test]
@@ -275,7 +275,7 @@ fn the_solo_q_of_one_path_is_byte_identical_to_award_kill_experience() {
             award_kill_experience(&killer, level(victim), &atlas, &mut solo_rng);
 
         assert_eq!(party_awards.len(), 1, "only the killer qualifies");
-        let award = or_abort(party_awards.first().ok_or("one award"));
+        let award = or_fail(party_awards.first().ok_or("one award"));
         assert_eq!(award.slot, MemberSlot(0));
         assert_eq!(
             award.gained, gained,
@@ -426,7 +426,7 @@ fn a_share_crossing_a_curve_boundary_lists_the_crossed_levels_ascending() {
     let party = active_party(2);
     // Seat slot 1 one experience point below the total needed to hold level 6, so
     // any positive share carries it into level 6 (and possibly beyond).
-    let boundary = or_abort(atlas.exp_curve().level(6)).total_to_hold().0;
+    let boundary = or_fail(atlas.exp_curve().level(6)).total_to_hold().0;
     let killer_fact = fact(0, 30, 0);
     let others = [fact(1, 5, boundary.saturating_sub(1))];
     let mut rng = TestRng::new(seed_with_jitter(&atlas, 120));
@@ -440,7 +440,7 @@ fn a_share_crossing_a_curve_boundary_lists_the_crossed_levels_ascending() {
         &all_unsafe(),
         &mut rng,
     );
-    let slot1 = or_abort(
+    let slot1 = or_fail(
         awards
             .iter()
             .find(|a| a.slot == MemberSlot(1))
